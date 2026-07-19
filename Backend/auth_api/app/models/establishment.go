@@ -1,7 +1,7 @@
 package models
 
 type Establishment struct {
-	ID                   uint   `gorm:"primaryKey" json:"id"`
+	ID                   uint   `gorm:"primaryKey;default:(-)" json:"id"`
 	Name                 string `json:"name"`
 	HorarioFuncionamento string `json:"horarioFuncionamento"`
 	Description          string `json:"description"`

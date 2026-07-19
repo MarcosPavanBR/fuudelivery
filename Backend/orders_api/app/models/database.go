@@ -32,7 +32,7 @@ func ConnectPostgresDatabase() {
 	var err error
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		database, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
+		database, err = gorm.Open(postgres.Open(dsn), &gorm.Config{PrepareStmt: false})
 		if err == nil {
 			break
 		}

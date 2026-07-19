@@ -3,6 +3,7 @@ package handlers
 import (
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 
 	"github.com/carloshomar/vercardapio/auth_api/app/dto"
 	"github.com/carloshomar/vercardapio/auth_api/app/middlewares"
@@ -15,19 +16,15 @@ func CreateUser(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to parse request body"})
 	}
 
-	user := models.User{
-		Name:  request.Name,
-		Email: request.Email,
-	}
-
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(request.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to hash password"})
 	}
-	user.Password = string(hashedPassword)
 
-	if err := models.DB.Create(&user).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create user"})
+	user := models.User{
+		Name:     request.Name,
+		Email:    request.Email,
+		Password: string(hashedPassword),
 	}
 
 	establishment := models.Establishment{
@@ -43,16 +40,24 @@ func CreateUser(c *fiber.Ctx) error {
 		LocationString:      request.Establishment.LocationString,
 	}
 
-	if err := models.DB.Create(&establishment).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create establishment"})
+	err = models.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&user).Error; err != nil {
+			return err
+		}
+		establishment.OwnerID = user.ID
+		if err := tx.Create(&establishment).Error; err != nil {
+			return err
+		}
+		user.EstablishmentID = establishment.ID
+		if err := tx.Save(&user).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create user and establishment"})
 	}
 
-	user.EstablishmentID = establishment.ID
-	if err := models.DB.Save(&user).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update user"})
-	}
-
-	// Generate JWT token
 	tokenString, err := middlewares.GenerateJWT(&user, &establishment)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to generate JWT token"})

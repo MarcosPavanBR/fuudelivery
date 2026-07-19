@@ -24,17 +24,22 @@ const ToggleSwitch = ({ label, onChange, checked }) => {
             onChange={toggleChecked}
           />
           <div
-            className={`w-12 h-6 ${
-              !isChecked ? "bg-gray-400" : "bg-green-500"
-            } rounded-full shadow-inner`}
-          ></div>
+            className="w-10 h-5 rounded-full shadow-inner transition-colors duration-200"
+            style={{
+              background: isChecked
+                ? "linear-gradient(135deg, #EA1D2C, #C41420)"
+                : "#D1D5DB",
+            }}
+          />
           <div
-            className={`absolute w-6 h-6 bg-white rounded-full shadow inset-y-0 left-0 ${
-              isChecked ? "transform translate-x-full bg-primary" : ""
+            className={`absolute w-4 h-4 bg-white rounded-full shadow top-0.5 transition-transform duration-200 ${
+              isChecked ? "translate-x-[22px]" : "translate-x-0.5"
             }`}
-          ></div>
+          />
         </div>
-        <div className="ml-3 text-gray-700 font-medium">{label}</div>
+        {label && (
+          <span className="ml-2 text-sm font-medium text-gray-700">{label}</span>
+        )}
       </label>
     </div>
   );

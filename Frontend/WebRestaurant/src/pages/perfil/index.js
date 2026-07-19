@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import MenuLayout from "../../components/Menu";
 import { useAuth } from "../../context/AuthContext";
 import api from "../../services/api";
-import { FiLoader, FiSave } from "react-icons/fi";
+import { FiLoader, FiSave, FiUser, FiMapPin, FiImage, FiPalette } from "react-icons/fi";
 import { toast } from "react-toastify";
 import Texts from "../../constants/Texts";
 import restaurantModel from "../../services/restaurant.model";
@@ -10,33 +10,21 @@ import BusinessHoursEditor from "../../components/BusinessHoursEditor";
 
 function Perfil() {
   const { getUser } = useAuth();
-
   const [establishment, setEstablishment] = useState({});
   const [user, setUser] = useState({});
   const [loading, setLoading] = useState(false);
 
   const handlerEstablishment = (target) => {
-    setEstablishment({
-      ...establishment,
-      [target.name]: target.value,
-    });
+    setEstablishment({ ...establishment, [target.name]: target.value });
   };
 
   const init = async () => {
     setLoading(true);
     try {
-      const { data } = await api.get(
-        "/api/auth/establishments/" + getUser().id
-      );
-
+      const { data } = await api.get("/establishments/" + getUser().id);
       setEstablishment(data);
-
       const usert = getUser();
-
-      setUser({
-        name: usert.name,
-        email: usert.email,
-      });
+      setUser({ name: usert.name, email: usert.email });
     } catch (e) {
       console.log(e);
     }
@@ -46,275 +34,131 @@ function Perfil() {
   async function submit(e) {
     e.preventDefault();
     setLoading(true);
-
-    const resp = await restaurantModel.updateEstablishment(
-      getUser().establishment_id,
-      establishment
-    );
-    if (resp) {
-      toast.success(Texts.restaurant_update);
-    } else {
-      toast.error(Texts.restaurant_error);
-    }
+    const resp = await restaurantModel.updateEstablishment(getUser().establishment_id, establishment);
+    if (resp) toast.success(Texts.restaurant_update);
+    else toast.error(Texts.restaurant_error);
     setLoading(false);
   }
 
-  useEffect(() => {
-    init();
-  }, []);
+  useEffect(() => { init(); }, []);
 
   return (
     <MenuLayout>
-      {loading ? (
-        <div className="flex w-full items-center justify-center h-32 text-center">
-          <div>
-            <FiLoader size={20} color="blue" />
+      {loading && (
+        <div className="flex items-center justify-center h-32">
+          <FiLoader className="animate-spin h-6 w-6" style={{ color: "#EA1D2C" }} />
+        </div>
+      )}
+
+      <form className="space-y-6 animate-fade-in" onSubmit={submit}>
+        {/* User Section */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-card p-6">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="p-2.5 rounded-xl bg-red-50">
+              <FiUser className="h-5 w-5" style={{ color: "#EA1D2C" }} />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900">Usuário</h3>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Nome</label>
+              <input disabled value={user.name} className="block w-full px-4 py-2.5 bg-gray-100 border border-gray-200 rounded-xl text-sm text-gray-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">E-mail</label>
+              <input disabled value={user.email} className="block w-full px-4 py-2.5 bg-gray-100 border border-gray-200 rounded-xl text-sm text-gray-500" />
+            </div>
           </div>
         </div>
-      ) : null}
-      <div className="flex flex-wrap mt-2">
-        <h4 className="px-6 font-bold">Usuário</h4>
-      </div>
-      <form className="w-full px-6 mt-4" onSubmit={submit}>
-        <div className="flex flex-wrap -mx-3 mb-6">
-          <div className="w-full md:w-1/2 px-3 mb-6 md:mb-0">
-            <label
-              htmlFor="name"
-              className="block uppercase tracking-wide text-gray-700 text-xs font-bold mb-2"
-            >
-              Nome
-            </label>
-            <input
-              className="appearance-none block w-full bg-gray-200 text-gray-700 border border-gray-200 rounded py-3 px-4 leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
-              id="grid-first-name"
-              type="text"
-              name="name"
-              placeholder="Jane"
-              disabled
-              maxLength={200}
-              required
-              value={user.name}
-            />
+
+        {/* Establishment Section */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-card p-6">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="p-2.5 rounded-xl bg-red-50">
+              <FiPalette className="h-5 w-5" style={{ color: "#EA1D2C" }} />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900">Estabelecimento</h3>
           </div>
-          <div className="w-full md:w-1/2 px-3">
-            <label
-              htmlFor="email"
-              className="block uppercase tracking-wide text-gray-700 text-xs font-bold mb-2"
-            >
-              E-mail
-            </label>
-            <input
-              className="appearance-none block w-full bg-gray-200 text-gray-700 border border-gray-200 rounded py-3 px-4 leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
-              id="grid-last-name"
-              name="email"
-              type="email"
-              required
-              disabled
-              placeholder="Doe"
-              value={user.email}
-            />
-          </div>
-        </div>
-        <div className="flex flex-wrap -mx-3 mb-6 mt-10">
-          <h4 className="px-3 font-bold">Estabelecimento</h4>
-        </div>
-        <div className="flex flex-wrap -mx-3 mb-2">
-          <div className="w-full md:w-1/2 px-3 mb-6 md:mb-0">
-            <label
-              htmlFor="name"
-              className="block uppercase tracking-wide text-gray-700 text-xs font-bold mb-2"
-            >
-              Nome do Estabelecimento
-            </label>
-            <input
-              className="appearance-none block w-full bg-gray-200 text-gray-700 border border-gray-200 rounded py-3 px-4 leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
-              type="text"
-              name="name"
-              maxLength={80}
-              required
-              onChange={({ target }) => handlerEstablishment(target)}
-              value={establishment.name}
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Nome</label>
+              <input name="name" maxLength={80} required onChange={({ target }) => handlerEstablishment(target)} value={establishment.name}
+                className="block w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Descrição</label>
+              <input name="description" maxLength={150} required onChange={({ target }) => handlerEstablishment(target)} value={establishment.description}
+                className="block w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Cor Primária</label>
+              <input type="color" name="primary_color" required onChange={({ target }) => handlerEstablishment(target)} value={establishment.primary_color}
+                className="w-full h-12 rounded-xl border border-gray-200 cursor-pointer" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Cor Secundária</label>
+              <input type="color" name="secondary_color" required onChange={({ target }) => handlerEstablishment(target)} value={establishment.secondary_color}
+                className="w-full h-12 rounded-xl border border-gray-200 cursor-pointer" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Dist. Máxima (km)</label>
+              <input type="number" min={1} max={100} name="max_distance_delivery" required onChange={({ target }) => handlerEstablishment(target)} value={establishment.max_distance_delivery}
+                className="block w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Horário Funcionamento</label>
+              <input name="horarioFuncionamento" maxLength={50} required onChange={({ target }) => handlerEstablishment(target)} value={establishment.horarioFuncionamento}
+                className="block w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white" />
+            </div>
           </div>
 
-          <div className="w-full md:w-1/2 px-3 mb-6 md:mb-0">
-            <label
-              htmlFor="description"
-              className="block uppercase tracking-wide text-gray-700 text-xs font-bold mb-2"
-            >
-              Descrição
-            </label>
-            <input
-              className="appearance-none block w-full bg-gray-200 text-gray-700 border border-gray-200 rounded py-3 px-4 leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
-              type="text"
-              required
-              maxLength={150}
-              name="description"
-              onChange={({ target }) => handlerEstablishment(target)}
-              value={establishment.description}
-            />
+          <div className="mt-4">
+            <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">URL Logo</label>
+            <input name="image" required onChange={({ target }) => handlerEstablishment(target)} value={establishment.image}
+              className="block w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white" placeholder="https://..." />
           </div>
         </div>
-        <div className="flex flex-wrap -mx-3 mb-2 mt-6">
-          <div className="w-full md:w-1/4 px-3 mb-6 md:mb-0">
-            <label
-              htmlFor="primary_color"
-              className="block uppercase tracking-wide text-gray-700 text-xs font-bold mb-2"
-            >
-              Cor Primária
-            </label>
-            <input
-              className="appearance-none py-6 block w-full bg-gray-200 text-gray-700 border border-gray-200 rounded leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
-              type="color"
-              required
-              name="primary_color"
-              onChange={({ target }) => handlerEstablishment(target)}
-              value={establishment.primary_color}
-              style={{ backgroundColor: establishment.primary_color }}
-            />
-          </div>
 
-          <div className="w-full md:w-1/4 px-3 mb-6 md:mb-0">
-            <label
-              htmlFor="secondary_color"
-              className="block uppercase tracking-wide text-gray-700 text-xs font-bold mb-2"
-            >
-              Cor Secundária
-            </label>
-            <input
-              className="appearance-none py-6 block w-full bg-gray-200 text-gray-700 border border-gray-200 rounded leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
-              type="color"
-              required
-              name="secondary_color"
-              onChange={({ target }) => handlerEstablishment(target)}
-              value={establishment.secondary_color}
-              style={{ backgroundColor: establishment.secondary_color }}
-            />
+        {/* Address Section */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-card p-6">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="p-2.5 rounded-xl bg-red-50">
+              <FiMapPin className="h-5 w-5" style={{ color: "#EA1D2C" }} />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900">Endereço</h3>
           </div>
-
-          <div className="w-full md:w-1/4 px-3 mb-6 md:mb-0">
-            <label
-              htmlFor="max_distance_delivery"
-              className="block uppercase tracking-wide text-gray-700 text-xs font-bold mb-2"
-            >
-              Distância máxima de entrega (km)
-            </label>
-            <input
-              className="appearance-none block w-full bg-gray-200 text-gray-700 border border-gray-200 rounded py-3 px-4 leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
-              type="number"
-              min={1}
-              max={100}
-              required
-              name="max_distance_delivery"
-              onChange={({ target }) => handlerEstablishment(target)}
-              value={establishment.max_distance_delivery}
-            />
+          <div className="mb-4">
+            <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Endereço Completo</label>
+            <input name="location_string" maxLength={250} required onChange={({ target }) => handlerEstablishment(target)} value={establishment.location_string}
+              className="block w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white" />
           </div>
-
-          <div className="w-full md:w-1/4 px-3 mb-6 md:mb-0">
-            <label
-              htmlFor="horarioFuncionamento"
-              className="block uppercase tracking-wide text-gray-700 text-xs font-bold mb-2"
-            >
-              Horario de Funcionário
-            </label>
-            <input
-              className="appearance-none block w-full bg-gray-200 text-gray-700 border border-gray-200 rounded py-3 px-4 leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
-              type="text"
-              name="horarioFuncionamento"
-              maxLength={50}
-              required
-              onChange={({ target }) => handlerEstablishment(target)}
-              value={establishment.horarioFuncionamento}
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Latitude</label>
+              <input type="number" name="lat" required disabled onChange={({ target }) => handlerEstablishment(target)} value={establishment.lat}
+                className="block w-full px-4 py-2.5 bg-gray-100 border border-gray-200 rounded-xl text-sm text-gray-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Longitude</label>
+              <input type="number" name="long" required disabled onChange={({ target }) => handlerEstablishment(target)} value={establishment.long}
+                className="block w-full px-4 py-2.5 bg-gray-100 border border-gray-200 rounded-xl text-sm text-gray-500" />
+            </div>
           </div>
         </div>
-        <div className="flex flex-wrap -mx-3 mb-4 mt-4">
-          <div className="w-full px-3 mb-6 md:mb-0">
-            <label
-              htmlFor="image"
-              className="block uppercase tracking-wide text-gray-700 text-xs font-bold mb-2"
-            >
-              URL Logo
-            </label>
-            <input
-              className="appearance-none block w-full bg-gray-200 text-gray-700 border border-gray-200 rounded py-3 px-4 leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
-              type="text"
-              name="image"
-              required
-              onChange={({ target }) => handlerEstablishment(target)}
-              value={establishment.image}
-            />
-          </div>
-        </div>
-        <div className="flex flex-wrap -mx-3 mb-2 mt-6">
-          <div className="flex flex-wrap mt-4 mb-4">
-            <h4 className="px-3 font-bold">Endereço</h4>
-          </div>
 
-          <div className="w-full px-3 mb-6 md:mb-0">
-            <label
-              htmlFor="location_string"
-              className="block uppercase tracking-wide text-gray-700 text-xs font-bold mb-2"
-            >
-              Endereço Completo
-            </label>
-            <input
-              className="appearance-none block w-full bg-gray-200 text-gray-700 border border-gray-200 rounded py-3 px-4 leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
-              type="text"
-              name="location_string"
-              required
-              maxLength={250}
-              onChange={({ target }) => handlerEstablishment(target)}
-              value={establishment.location_string}
-            />
-          </div>
-        </div>{" "}
+        {/* Business Hours */}
         <BusinessHoursEditor establishmentId={getUser().establishment_id} />
-        <div className="flex flex-wrap -mx-3 mb-2 mt-4">
-          <div className="w-full md:w-1/2 px-3 mb-6 md:mb-0">
-            <label
-              htmlFor="lat"
-              className="block uppercase tracking-wide text-gray-700 text-xs font-bold mb-2"
-            >
-              lat
-            </label>
-            <input
-              className="appearance-none block w-full bg-gray-200 text-gray-700 border border-gray-200 rounded py-3 px-4 leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
-              type="number"
-              name="lat"
-              required
-              disabled
-              onChange={({ target }) => handlerEstablishment(target)}
-              value={establishment.lat}
-            />
-          </div>
 
-          <div className="w-full md:w-1/2 px-3 mb-6 md:mb-0">
-            <label
-              htmlFor="long"
-              className="block uppercase tracking-wide text-gray-700 text-xs font-bold mb-2"
-            >
-              long
-            </label>
-            <input
-              className="appearance-none block w-full bg-gray-200 text-gray-700 border border-gray-200 rounded py-3 px-4 leading-tight focus:outline-none focus:bg-white focus:border-gray-500"
-              type="number"
-              name="long"
-              required
-              disabled
-              onChange={({ target }) => handlerEstablishment(target)}
-              value={establishment.long}
-            />
-          </div>
-        </div>
-        <div className="mt-4 w-full">
+        {/* Save Button */}
+        <div className="flex justify-end">
           <button
             type="submit"
             disabled={loading}
-            className="flex float-end items-center justify-center bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white font-bold py-2 px-4 rounded"
+            className="flex items-center gap-2 px-6 py-3 rounded-xl text-white font-semibold text-sm transition-all duration-200 hover:shadow-lg disabled:opacity-50"
+            style={{ background: "linear-gradient(135deg, #EA1D2C, #C41420)" }}
           >
-            <FiSave className="h-5 w-5 mr-1" /> Salvar
+            <FiSave className="h-5 w-5" />
+            Salvar Alterações
           </button>
         </div>
       </form>

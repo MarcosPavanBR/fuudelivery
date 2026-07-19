@@ -7,15 +7,17 @@ import {
   FiHome,
   FiPower,
   FiSettings,
+  FiMenu,
+  FiChevronLeft,
 } from "react-icons/fi";
-import { FaBiking, FaStore, FaStoreSlash } from "react-icons/fa";
+import { FaStore, FaStoreSlash } from "react-icons/fa";
 import { useAuth } from "../context/AuthContext";
 import ToggleSwitch from "../components/ToggleSwitch";
 import { toast } from "react-toastify";
 import Texts from "../constants/Texts";
 import api from "../services/api";
 import helper from "../helpers/helper";
-import { MdDeliveryDining, MdOutlineDeliveryDining } from "react-icons/md";
+import Logo from "./Logo";
 import ThemeToggle from "./ThemeToggle";
 
 const TopMenu = ({ toggleMenu, isOpen }) => {
@@ -24,7 +26,7 @@ const TopMenu = ({ toggleMenu, isOpen }) => {
 
   const handlerBnt = async (res) => {
     try {
-      await api.put("/api/auth/establishments/status/handler/" + user.id);
+      await api.put("/establishments/status/handler/" + user.id);
       await refreshOpenawait();
     } catch (e) {
       console.log(e);
@@ -34,38 +36,52 @@ const TopMenu = ({ toggleMenu, isOpen }) => {
   };
 
   return (
-    <div className="bg-menu1 text-white py-4">
-      <div className="mx-auto flex justify-between items-center px-4">
-        <div className="text-xl font-bold">
-          {!helper.isMobile() ? getUser()?.establishment_name : null}
+    <div
+      className="sticky top-0 z-30 border-b"
+      style={{
+        background: "var(--bg-card, #FFFFFF)",
+        borderColor: "var(--border-color, #E5E7EB)",
+      }}
+    >
+      <div className="flex justify-between items-center px-6 py-3">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={toggleMenu}
+            className="p-2 rounded-lg hover:bg-gray-100 transition-colors lg:hidden"
+          >
+            {isOpen ? (
+              <FiChevronLeft className="h-5 w-5" />
+            ) : (
+              <FiMenu className="h-5 w-5" />
+            )}
+          </button>
+          <div className="hidden lg:block">
+            <h2
+              className="text-lg font-bold"
+              style={{ color: "var(--text-primary, #1A1A1A)" }}
+            >
+              {getUser()?.establishment_name}
+            </h2>
+          </div>
         </div>
 
-        <div className="flex items-center w-auto gap-16">
-          <div className="flex row justify-center items-center gap-2 w-20">
-            <div>
-              <FaStoreSlash color={"white"} size={24} />
-            </div>
-            <div className="ml-2">
-              <ToggleSwitch checked={openEstablishment} onChange={handlerBnt} />
-            </div>
-            <div>
-              <FaStore color="white" size={24} />
-            </div>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-50">
+            <div
+              className="w-2 h-2 rounded-full"
+              style={{
+                background: openEstablishment ? "#10B981" : "#9CA3AF",
+              }}
+            />
+            <span
+              className="text-xs font-medium"
+              style={{ color: "var(--text-secondary, #666)" }}
+            >
+              {openEstablishment ? "Aberto" : "Fechado"}
+            </span>
+            <ToggleSwitch checked={openEstablishment} onChange={handlerBnt} />
           </div>
-
-          <div className="flex items-center gap-4">
-            <ThemeToggle />
-            <div>
-              {isOpen ? (
-                <FiEye className="h-6 w-6 cursor-pointer" onClick={toggleMenu} />
-              ) : (
-                <FiEyeOff
-                  className="h-6 w-6 cursor-pointer"
-                  onClick={toggleMenu}
-                />
-              )}
-            </div>
-          </div>
+          <ThemeToggle />
         </div>
       </div>
     </div>
@@ -74,87 +90,104 @@ const TopMenu = ({ toggleMenu, isOpen }) => {
 
 const SideMenu = ({ isOpen }) => {
   const { logout } = useAuth();
+
   const MENUS = [
     {
       title: Texts.meus_pedidos,
       href: "/",
-      icon: (
-        <FiHome className={`h-6 w-6 ${isOpen ? "mr-4" : ""} cursor-pointer`} />
-      ),
+      icon: <FiHome className="h-5 w-5" />,
     },
     {
-      title: "Gestor de Cardápio",
+      title: "Cardápio",
       href: "/gestor-cardapio",
-      icon: (
-        <FiBox className={`h-6 w-6 ${isOpen ? "mr-4" : ""} cursor-pointer`} />
-      ),
+      icon: <FiBox className="h-5 w-5" />,
     },
     {
       title: "Delivery",
       href: "/taxas",
       icon: (
-        <MdOutlineDeliveryDining
-          className={`h-7 w-7 ${isOpen ? "mr-4" : ""} cursor-pointer`}
-        />
+        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12 6 12 12 16 14" />
+        </svg>
       ),
     },
     {
       title: "Ajustes",
       href: "/perfil",
-      icon: (
-        <FiSettings
-          className={`h-6 w-6 ${isOpen ? "mr-4" : ""} cursor-pointer`}
-        />
-      ),
-    },
-
-    {
-      title: "Relatórios",
-      icon: (
-        <FiHardDrive
-          className={`h-6 w-6 ${isOpen ? "mr-4" : ""} cursor-pointer`}
-        />
-      ),
-    },
-
-    {
-      title: "Sair",
-      bottom: true,
-      icon: (
-        <FiPower className={`h-6 w-6 ${isOpen ? "mr-4" : ""} cursor-pointer`} />
-      ),
-      onPress: logout,
+      icon: <FiSettings className="h-5 w-5" />,
     },
   ];
+
   return (
     <div
-      className={`fixed bg-menu2 text-white h-screen  ${
-        isOpen ? "w-60" : "w-25"
-      } flex flex-col`}
+      className={`fixed top-0 left-0 h-full z-40 flex flex-col transition-all duration-300 ease-in-out ${
+        isOpen ? "w-64" : "w-[72px]"
+      }`}
+      style={{
+        background: "linear-gradient(180deg, #1A1A1A 0%, #111111 100%)",
+        boxShadow: "4px 0 24px rgba(0,0,0,0.15)",
+      }}
     >
-      <div className="text-xl font-bold py-4 px-6"></div>
-      <ul className="mt-8">
-        {MENUS.map((i) => (
-          <li
-            className={`mb-6 flex items-center ${i.bottom ? "mt-14" : ""} ${
-              isOpen ? "justify-start ml-4" : "justify-center"
-            }`}
-            onClick={() =>
-              i.onPress ? i.onPress() : (window.location.href = i.href || "#")
-            }
-          >
-            {i.icon}
-            {isOpen && (
+      {/* Logo */}
+      <div
+        className={`flex items-center border-b border-white/10 ${
+          isOpen ? "px-5 py-5" : "px-4 py-5 justify-center"
+        }`}
+      >
+        {isOpen ? (
+          <Logo size={36} variant="white" />
+        ) : (
+          <Logo size={32} variant="mark" />
+        )}
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 py-4 px-3 overflow-y-auto">
+        <ul className="space-y-1">
+          {MENUS.map((item, idx) => (
+            <li key={idx}>
               <a
-                href={i.href || "#"}
-                className="hover:text-gray-400 font-bold ml-2"
+                href={item.href}
+                className={`flex items-center gap-3 rounded-xl transition-all duration-200 group ${
+                  isOpen ? "px-4 py-3" : "px-0 py-3 justify-center"
+                } ${
+                  window.location.hash === "#" + item.href
+                    ? "text-white"
+                    : "text-gray-400 hover:text-white"
+                }`}
+                style={
+                  window.location.hash === "#" + item.href
+                    ? {
+                        background: "linear-gradient(135deg, #EA1D2C, #C41420)",
+                      }
+                    : {}
+                }
+                title={!isOpen ? item.title : undefined}
               >
-                {i.title}
+                <span className="flex-shrink-0">{item.icon}</span>
+                {isOpen && (
+                  <span className="text-sm font-medium">{item.title}</span>
+                )}
               </a>
-            )}
-          </li>
-        ))}
-      </ul>
+            </li>
+          ))}
+        </ul>
+      </nav>
+
+      {/* Logout */}
+      <div className="px-3 pb-4">
+        <button
+          onClick={logout}
+          className={`flex items-center gap-3 w-full rounded-xl px-4 py-3 text-gray-400 hover:text-white hover:bg-white/10 transition-all duration-200 ${
+            !isOpen ? "justify-center px-0" : ""
+          }`}
+          title={!isOpen ? "Sair" : undefined}
+        >
+          <FiPower className="h-5 w-5 flex-shrink-0" />
+          {isOpen && <span className="text-sm font-medium">Sair</span>}
+        </button>
+      </div>
     </div>
   );
 };
@@ -162,7 +195,9 @@ const SideMenu = ({ isOpen }) => {
 const MenuLayout = ({ children }) => {
   const tagitem = "ISOPEN";
   const getItem = localStorage.getItem(tagitem);
-  const [isOpen, setIsOpen] = useState(getItem ? getItem == "true" : false);
+  const [isOpen, setIsOpen] = useState(
+    getItem ? getItem === "true" : true
+  );
 
   const toggleMenu = () => {
     const res = !isOpen;
@@ -171,19 +206,15 @@ const MenuLayout = ({ children }) => {
   };
 
   return (
-    <div className="flex flex–row">
-      <div className={isOpen ? "mr-60" : "mr-10"}>
-        <SideMenu isOpen={isOpen} />
-      </div>
+    <div className="flex min-h-screen" style={{ background: "var(--bg-secondary, #F5F5F5)" }}>
+      <SideMenu isOpen={isOpen} />
 
-      <div className="w-full">
+      <div
+        className="flex-1 flex flex-col transition-all duration-300"
+        style={{ marginLeft: isOpen ? "256px" : "72px" }}
+      >
         <TopMenu toggleMenu={toggleMenu} isOpen={isOpen} />
-
-        <div
-          className={`w-full overflow-x-hidden mx-auto mt-4 justify-center mb-4`}
-        >
-          {children}
-        </div>
+        <main className="flex-1 p-6 overflow-x-hidden">{children}</main>
       </div>
     </div>
   );

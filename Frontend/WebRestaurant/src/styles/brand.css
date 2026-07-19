@@ -1,19 +1,19 @@
 :root {
+  --color-primary: #EA1D2C;
+  --color-primary-dark: #C41420;
+  --color-primary-light: #FEF2F2;
   --color-primary-50: #FEF2F2;
   --color-primary-100: #FEE2E2;
   --color-primary-200: #FECACA;
   --color-primary-300: #FCA5A5;
   --color-primary-400: #F87171;
-  --color-primary-500: #EF4444;
+  --color-primary-500: #EA1D2C;
   --color-primary-600: #DC2626;
-  --color-primary-700: #B91C1C;
+  --color-primary-700: #C41420;
   --color-primary-800: #991B1B;
   --color-primary-900: #7F1D1D;
-  --color-primary: #DC2626;
-  --color-primary-dark: #B91C1C;
-  --color-primary-light: #FEE2E2;
 
-  --color-secondary: #F59E0B;
+  --color-secondary: #F7A11E;
   --color-secondary-400: #FBBF24;
   --color-secondary-light: #FFFBEB;
 
@@ -30,48 +30,27 @@
 
   --color-success: #10B981;
   --color-warning: #F59E0B;
-  --color-error: #DC2626;
+  --color-error: #EA1D2C;
   --color-info: #3B82F6;
 
-  --font-display: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-  --font-body: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-  --font-mono: 'SF Mono', 'Fira Code', monospace;
+  --font-display: 'Inter', 'Segoe UI', sans-serif;
+  --font-body: 'Inter', 'Segoe UI', sans-serif;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 4px 8px rgba(220, 38, 38, 0.15);
-  --shadow-xl: 0 8px 16px rgba(0, 0, 0, 0.15);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 24px rgba(234, 29, 44, 0.12);
+  --shadow-xl: 0 12px 32px rgba(0, 0, 0, 0.12);
 
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
 }
 
 body {
   font-family: var(--font-body);
   color: var(--color-neutral-800);
   background: var(--color-neutral-50);
-}
-
-.btn-primary {
-  background: var(--color-primary);
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: var(--radius-md);
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.btn-primary:hover {
-  background: var(--color-primary-dark);
-}
-
-.btn-primary:disabled {
-  background: var(--color-neutral-300);
-  cursor: not-allowed;
 }
 
 .fuudelivery-header {
@@ -86,6 +65,7 @@ body {
 .fuudelivery-header h1 {
   font-size: 22px;
   letter-spacing: 0.5px;
+  font-weight: 800;
 }
 
 .fuudelivery-header .fuud {
@@ -93,7 +73,7 @@ body {
   font-weight: 900;
 }
 
-.fuudelivery-header .elivery {
+.fuudelivery-header .delivery {
   color: var(--color-neutral-800);
   font-weight: 700;
 }

@@ -33,7 +33,7 @@ services:
     staticPublishPath: Frontend/WebRestaurant/dist
     envVars:
       - key: REACT_APP_API_URL
-        value: https://fuudelivery-api.onrender.com
+        value: https://fuudelivery-api-8y6l.onrender.com
 
   - type: redis
     name: fuudelivery-redis

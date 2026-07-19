@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/mongo"
@@ -32,7 +33,15 @@ func ConnectPostgresDatabase() {
 	var err error
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		database, err = gorm.Open(postgres.Open(dsn), &gorm.Config{PrepareStmt: false})
+		pgDSN := dsn
+		if !strings.Contains(pgDSN, "default_query_exec_mode") {
+			if strings.Contains(pgDSN, "?") {
+				pgDSN += "&default_query_exec_mode=simple_protocol"
+			} else {
+				pgDSN += "?default_query_exec_mode=simple_protocol"
+			}
+		}
+		database, err = gorm.Open(postgres.Open(pgDSN), &gorm.Config{PrepareStmt: false})
 		if err == nil {
 			break
 		}

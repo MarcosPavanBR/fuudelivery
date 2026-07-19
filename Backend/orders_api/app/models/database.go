@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"time"
 
@@ -67,22 +68,26 @@ func ConnectMongoDatabase() {
 	mongoDB := os.Getenv("MONGO_DATABASE")
 
 	if mongoURI == "" {
-		panic("MONGO_URI não configurado")
+		log.Println("MONGO_URI não configurado, MongoDB indisponível")
+		return
 	}
 
-	clientOptions := options.Client().ApplyURI(mongoURI)
-	client, err := mongo.Connect(context.Background(), clientOptions)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	clientOptions := options.Client().ApplyURI(mongoURI).SetServerSelectionTimeout(30 * time.Second)
+	client, err := mongo.Connect(ctx, clientOptions)
 	if err != nil {
-		panic(fmt.Sprintf("Falha ao conectar ao banco de dados MongoDB: %v", err))
+		log.Printf("Falha ao conectar ao MongoDB: %v", err)
+		return
 	}
 
-	err = client.Ping(context.Background(), nil)
+	err = client.Ping(ctx, nil)
 	if err != nil {
-		panic(fmt.Sprintf("Falha ao pingar o servidor MongoDB: %v", err))
+		log.Printf("Falha ao pingar MongoDB (server continuará, mas MongoDB pode estar indisponível): %v", err)
 	}
-
-	fmt.Println("Conexão com o MongoDB estabelecida com sucesso!")
 
 	MongoClient = client
 	MongoDabase = client.Database(mongoDB)
+	log.Println("Conexão com o MongoDB estabelecida com sucesso!")
 }

@@ -41,10 +41,12 @@ func CreateUser(c *fiber.Ctx) error {
 	}
 
 	err = models.DB.Transaction(func(tx *gorm.DB) error {
+		tx.Raw("SELECT nextval('users_id_seq')").Scan(&user.ID)
 		if err := tx.Create(&user).Error; err != nil {
 			return err
 		}
 		establishment.OwnerID = user.ID
+		tx.Raw("SELECT nextval('establishments_id_seq')").Scan(&establishment.ID)
 		if err := tx.Create(&establishment).Error; err != nil {
 			return err
 		}

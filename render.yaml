@@ -43,7 +43,7 @@ services:
     name: fuudelivery-admin
     env: static
     buildCommand: cd Frontend/WebAdmin && npm install && npm run build
-    staticPublishPath: Frontend/WebAdmin/build
+    staticPublishPath: Frontend/WebAdmin/dist
     routes:
       - type: rewrite
         source: /*

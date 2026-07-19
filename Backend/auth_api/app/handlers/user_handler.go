@@ -49,7 +49,12 @@ func CreateUser(c *fiber.Ctx) error {
 			tx.Rollback()
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
-		_, err = tx.Exec("INSERT INTO users (id, name, email, password, \"createdAt\", \"updatedAt\") VALUES ($1, $2, $3, $4, NOW(), NOW())", userID, user.Name, user.Email, user.Password)
+		var roleVal string
+		tx.QueryRow("SELECT enumlabel FROM pg_enum WHERE enumtypid = '\"Role\"'::regtype LIMIT 1").Scan(&roleVal)
+		if roleVal == "" {
+			roleVal = "user"
+		}
+		_, err = tx.Exec("INSERT INTO users (id, name, email, password, role, \"createdAt\", \"updatedAt\") VALUES ($1, $2, $3, $4, $5, NOW(), NOW())", userID, user.Name, user.Email, user.Password, roleVal)
 		if err != nil {
 			tx.Rollback()
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})

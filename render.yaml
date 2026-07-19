@@ -39,6 +39,19 @@ services:
       - key: REACT_APP_API_URL
         value: https://fuudelivery-api-8y6l.onrender.com
 
+  - type: web
+    name: fuudelivery-admin
+    env: static
+    buildCommand: cd Frontend/WebAdmin && npm install && npm run build
+    staticPublishPath: Frontend/WebAdmin/build
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: REACT_APP_API_URL
+        value: https://fuudelivery-api-8y6l.onrender.com
+
   - type: redis
     name: fuudelivery-redis
     plan: free

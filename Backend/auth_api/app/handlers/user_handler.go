@@ -41,17 +41,15 @@ func CreateUser(c *fiber.Ctx) error {
 	}
 
 	err = models.DB.Transaction(func(tx *gorm.DB) error {
-		tx.Raw("SELECT nextval('users_id_seq')").Scan(&user.ID)
-		if err := tx.Create(&user).Error; err != nil {
+		if err := tx.Raw("INSERT INTO users (name, email, password) VALUES (?, ?, ?) RETURNING id", user.Name, user.Email, user.Password).Scan(&user.ID).Error; err != nil {
 			return err
 		}
 		establishment.OwnerID = user.ID
-		tx.Raw("SELECT nextval('establishments_id_seq')").Scan(&establishment.ID)
-		if err := tx.Create(&establishment).Error; err != nil {
+		if err := tx.Raw("INSERT INTO establishments (name, description, owner_id, lat, long, location_string, max_distance_delivery) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id", establishment.Name, establishment.Description, establishment.OwnerID, establishment.Lat, establishment.Long, establishment.LocationString, establishment.MaxDistanceDelivery).Scan(&establishment.ID).Error; err != nil {
 			return err
 		}
 		user.EstablishmentID = establishment.ID
-		if err := tx.Save(&user).Error; err != nil {
+		if err := tx.Model(&user).Update("establishment_id", user.EstablishmentID).Error; err != nil {
 			return err
 		}
 		return nil

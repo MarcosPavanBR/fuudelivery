@@ -3,7 +3,6 @@ package handlers
 import (
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 
 	"github.com/carloshomar/vercardapio/auth_api/app/dto"
 	"github.com/carloshomar/vercardapio/auth_api/app/middlewares"
@@ -40,20 +39,31 @@ func CreateUser(c *fiber.Ctx) error {
 		LocationString:      request.Establishment.LocationString,
 	}
 
-	err = models.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Raw("INSERT INTO users (name, email, password) VALUES (?, ?, ?) RETURNING id", user.Name, user.Email, user.Password).Scan(&user.ID).Error; err != nil {
-			return err
+	sqlDB, _ := models.DB.DB()
+	tx, _ := sqlDB.Begin()
+	if tx != nil {
+		var userID, estID uint
+		err = tx.QueryRow("INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id", user.Name, user.Email, user.Password).Scan(&userID)
+		if err != nil {
+			tx.Rollback()
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
-		establishment.OwnerID = user.ID
-		if err := tx.Raw("INSERT INTO establishments (name, description, owner_id, lat, long, location_string, max_distance_delivery) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id", establishment.Name, establishment.Description, establishment.OwnerID, establishment.Lat, establishment.Long, establishment.LocationString, establishment.MaxDistanceDelivery).Scan(&establishment.ID).Error; err != nil {
-			return err
+		user.ID = userID
+		establishment.OwnerID = userID
+		err = tx.QueryRow("INSERT INTO establishments (name, description, owner_id, lat, long, location_string, max_distance_delivery) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id", establishment.Name, establishment.Description, establishment.OwnerID, establishment.Lat, establishment.Long, establishment.LocationString, establishment.MaxDistanceDelivery).Scan(&estID)
+		if err != nil {
+			tx.Rollback()
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
-		user.EstablishmentID = establishment.ID
-		if err := tx.Model(&user).Update("establishment_id", user.EstablishmentID).Error; err != nil {
-			return err
+		establishment.ID = estID
+		user.EstablishmentID = estID
+		_, err = tx.Exec("UPDATE users SET establishment_id = $1 WHERE id = $2", estID, userID)
+		if err != nil {
+			tx.Rollback()
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
-		return nil
-	})
+		tx.Commit()
+	}
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}

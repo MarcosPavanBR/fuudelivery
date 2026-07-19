@@ -6,9 +6,9 @@ import (
 	"log"
 	"time"
 
-	"github.com/carloshomar/vercardapio/app/dto"
-	"github.com/carloshomar/vercardapio/app/models"
-	"github.com/carloshomar/vercardapio/app/services"
+	"github.com/carloshomar/vercardapio/payment_api/app/dto"
+	"github.com/carloshomar/vercardapio/payment_api/app/models"
+	"github.com/carloshomar/vercardapio/payment_api/app/services"
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
@@ -29,36 +29,41 @@ func GeneratePIX(c *fiber.Ctx) error {
 		name = "Cliente"
 	}
 
+	phone := req.CustomerPhone
+	if phone == "" {
+		phone = ""
+	}
+
 	description := fmt.Sprintf("Pedido %s", req.OrderID)
 
-	mpResp, err := services.CreatePIXPayment(req.Amount, description, email, name)
+	client := services.NewAbacatePayClient()
+	chargeReq := services.PIXChargeRequest{
+		Amount:      req.Amount,
+		Description: description,
+	}
+	chargeReq.Customer.Name = name
+	chargeReq.Customer.Email = email
+	chargeReq.Customer.Phone = phone
+
+	apiResp, err := client.CreatePIXCharge(chargeReq)
 	if err != nil {
-		log.Printf("Error creating PIX payment via MP: %v", err)
+		log.Printf("Error creating PIX payment via AbacatePay: %v", err)
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to create PIX payment"})
 	}
 
-	var qrCodeBase64, copyPaste, ticketURL string
-	if mpResp.PointOfInteraction != nil && mpResp.PointOfInteraction.TransactionData != nil {
-		qrCodeBase64 = mpResp.PointOfInteraction.TransactionData.QRCodeBase64
-		copyPaste = mpResp.PointOfInteraction.TransactionData.CopyPaste
-		ticketURL = mpResp.PointOfInteraction.TransactionData.TicketURL
-	}
-
 	payment := models.Payment{
-		ID:           primitive.NewObjectID(),
-		OrderID:      req.OrderID,
-		CustomerID:   req.CustomerID,
+		ID:              primitive.NewObjectID(),
+		OrderID:         req.OrderID,
+		CustomerID:      req.CustomerID,
 		EstablishmentID: req.EstablishmentID,
-		Amount:       req.Amount,
-		Method:       "pix",
-		Status:       mpResp.Status,
-		PixQRCode:    "",
-		PixCopyPaste: copyPaste,
-		QRCodeBase64: qrCodeBase64,
-		TicketURL:    ticketURL,
-		MPPaymentID:  mpResp.ID,
-		MPStatus:     mpResp.Status,
-		CreatedAt:    time.Now(),
+		Amount:          req.Amount,
+		Method:          "pix",
+		Status:          "PENDING",
+		PixQRCode:       apiResp.QRCode,
+		PixCopyPaste:    apiResp.CopyPaste,
+		QRCodeBase64:    apiResp.QRCodeBase64,
+		AbacatePayID:    apiResp.ID,
+		CreatedAt:       time.Now(),
 	}
 
 	_, err = models.MongoDabase.Collection("payments").InsertOne(context.Background(), payment)
@@ -68,13 +73,12 @@ func GeneratePIX(c *fiber.Ctx) error {
 
 	response := dto.PaymentResponse{
 		PaymentID:    payment.ID.Hex(),
-		Status:       mpResp.Status,
-		PixQRCode:    "",
-		PixCopyPaste: copyPaste,
-		QRCodeBase64: qrCodeBase64,
-		TicketURL:    ticketURL,
-		MPPaymentID:  mpResp.ID,
-		Message:      "PIX payment created via Mercado Pago",
+		Status:       "PENDING",
+		PixQRCode:    apiResp.QRCode,
+		PixCopyPaste: apiResp.CopyPaste,
+		QRCodeBase64: apiResp.QRCodeBase64,
+		AbacatePayID: apiResp.ID,
+		Message:      "PIX payment created via AbacatePay",
 	}
 
 	return c.Status(201).JSON(response)

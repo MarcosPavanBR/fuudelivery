@@ -2,7 +2,7 @@ import axios from "axios";
 import Strings from "../constants/Strings";
 
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || "http://localhost:3000",
+  baseURL: "https://fuudelivery-api-8y6l.onrender.com",
   timeout: 15000,
   headers: {
     "Content-Type": "application/json",

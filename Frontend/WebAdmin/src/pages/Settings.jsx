@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { FiSettings, FiUser, FiBell, FiShield, FiSave, FiLoader, FiEye, FiEyeOff, FiBuilding2, FiGlobe, FiKey, FiCreditCard, FiTrash2, FiPlus } from "react-icons/fi";
+import { FiSettings, FiUser, FiBell, FiShield, FiSave, FiLoader, FiEye, FiEyeOff, FiBuilding2, FiGlobe, FiKey, FiCreditCard, FiTrash2, FiPlus, FiLogOut } from "react-icons/fi";
 import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
 import { toast } from "react-toastify";

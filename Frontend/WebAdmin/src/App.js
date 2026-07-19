@@ -1,15 +1,15 @@
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
-import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
-import Establishments from "./pages/Establishments";
-import Users from "./pages/Users";
-import Orders from "./pages/Orders";
-import DeliveryMen from "./pages/DeliveryMen";
-import Payments from "./pages/Payments";
-import Settings from "./pages/Settings";
-import Layout from "./components/Layout";
+import Login from "./pages/Login.jsx";
+import Dashboard from "./pages/Dashboard.jsx";
+import Establishments from "./pages/Establishments.jsx";
+import Users from "./pages/Users.jsx";
+import Orders from "./pages/Orders.jsx";
+import DeliveryMen from "./pages/DeliveryMen.jsx";
+import Payments from "./pages/Payments.jsx";
+import Settings from "./pages/Settings.jsx";
+import Layout from "./components/Layout.jsx";
 import { FiLoader } from "react-icons/fi";
 
 const ProtectedRoute = ({ children }) => {

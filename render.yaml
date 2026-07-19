@@ -2,7 +2,7 @@ services:
   - type: web
     name: fuudelivery-api
     env: go
-    buildCommand: cd cmd/fuudelivery && go build -o server .
+    buildCommand: cd cmd/fuudelivery && go build -o ../../server .
     startCommand: ./server
     envVars:
       - key: PORT

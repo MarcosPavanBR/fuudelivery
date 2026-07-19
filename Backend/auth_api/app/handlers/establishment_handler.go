@@ -3,7 +3,7 @@ package handlers
 import (
 	"time"
 
-	"github.com/carloshomar/vercardapio/app/models"
+	"github.com/carloshomar/vercardapio/auth_api/app/models"
 	"github.com/gofiber/fiber/v2"
 )
 

@@ -2,39 +2,28 @@ package handlers
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/json"
 	"log"
-	"math/big"
 	"os"
 	"time"
 
-	"github.com/carloshomar/vercardapio/app/models"
+	"github.com/carloshomar/vercardapio/payment_api/app/models"
 	"github.com/gofiber/fiber/v2"
 	"github.com/streadway/amqp"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
-
-func randomString(length int) string {
-	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	result := make([]byte, length)
-	for i := range result {
-		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
-		result[i] = charset[n.Int64()]
-	}
-	return string(result)
-}
 
 func publishToOrderQueue(body []byte) error {
 	dsn := os.Getenv("RABBIT_CONNECTION")
 	if dsn == "" {
-		panic("RABBIT_CONNECTION nao configurado")
+		log.Println("[QUEUE] RabbitMQ não configurado, mensagem ignorada")
+		return nil
 	}
 
 	queueName := os.Getenv("RABBIT_ORDER_QUEUE")
 	if queueName == "" {
-		panic("RABBIT_ORDER_QUEUE nao configurado")
+		log.Println("[QUEUE] RABBIT_ORDER_QUEUE não configurado, mensagem ignorada")
+		return nil
 	}
 
 	conn, err := amqp.Dial(dsn)
@@ -78,47 +67,33 @@ func publishToOrderQueue(body []byte) error {
 	return nil
 }
 
-func updateLocalPaymentStatusByID(paymentID int64, status string) {
-	filter := bson.M{"mp_payment_id": paymentID}
-	update := bson.M{"$set": bson.M{"mp_status": status, "status": status}}
-	_, err := models.MongoDabase.Collection("payments").UpdateOne(context.Background(), filter, update)
-	if err != nil {
-		log.Printf("Error updating local payment status for MP ID %d: %v", paymentID, err)
-	}
-}
-
-func updateLocalPaymentStatus(paymentID string, status string) {
-	objID, err := primitive.ObjectIDFromHex(paymentID)
-	if err != nil {
-		log.Printf("Invalid payment ID format: %s", paymentID)
-		return
-	}
+func updateLocalPaymentStatus(abacatepayID string, status string) {
 	now := time.Now()
 	updateFields := bson.M{
 		"status": status,
 	}
-	if status == "approved" || status == "CONFIRMED" {
+	if status == "paid" || status == "CONFIRMED" {
 		updateFields["confirmed_at"] = now
 	}
 
-	_, err = models.MongoDabase.Collection("payments").UpdateOne(
+	_, err := models.MongoDabase.Collection("payments").UpdateOne(
 		context.Background(),
-		bson.M{"_id": objID},
+		bson.M{"abacatepay_id": abacatepayID},
 		bson.M{"$set": updateFields},
 	)
 	if err != nil {
-		log.Printf("Failed to update payment %s: %v", paymentID, err)
+		log.Printf("Failed to update payment %s: %v", abacatepayID, err)
 	}
 }
 
-func publishPaymentApproved(paymentID int64) {
+func publishPaymentApproved(abacatepayID string) {
 	var payment models.Payment
 	err := models.MongoDabase.Collection("payments").FindOne(
 		context.Background(),
-		bson.M{"mp_payment_id": paymentID},
+		bson.M{"abacatepay_id": abacatepayID},
 	).Decode(&payment)
 	if err != nil {
-		log.Printf("Payment not found for MP ID %d: %v", paymentID, err)
+		log.Printf("Payment not found for AbacatePay ID %s: %v", abacatepayID, err)
 		return
 	}
 
@@ -145,48 +120,60 @@ func publishPaymentApproved(paymentID int64) {
 
 	_, err = models.MongoDabase.Collection("payments").UpdateOne(
 		context.Background(),
-		bson.M{"mp_payment_id": paymentID},
+		bson.M{"abacatepay_id": abacatepayID},
 		bson.M{"$set": bson.M{
-			"status":      "CONFIRMED",
-			"split_rules": splitRules,
+			"status":       "CONFIRMED",
+			"split_rules":  splitRules,
 			"confirmed_at": now,
 		}},
 	)
 	if err != nil {
-		log.Printf("Failed to save split rules for MP ID %d: %v", paymentID, err)
+		log.Printf("Failed to save split rules for AbacatePay ID %s: %v", abacatepayID, err)
 	}
 }
 
 func HandlePaymentWebhook(c *fiber.Ctx) error {
 	var webhookData struct {
-		PaymentID string `json:"payment_id"`
-		Status    string `json:"status"`
-		Message   string `json:"message,omitempty"`
+		Event   string `json:"event"`
+		ID      string `json:"id"`
+		Charge  struct {
+			ID     string  `json:"id"`
+			Status string  `json:"status"`
+			Amount float64 `json:"amount"`
+		} `json:"charge"`
 	}
 
 	if err := c.BodyParser(&webhookData); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid webhook payload"})
 	}
 
-	if webhookData.PaymentID == "" || webhookData.Status == "" {
-		return c.Status(400).JSON(fiber.Map{"error": "payment_id and status are required"})
+	if webhookData.Event == "" {
+		return c.Status(400).JSON(fiber.Map{"error": "event is required"})
 	}
 
-	objID, err := primitive.ObjectIDFromHex(webhookData.PaymentID)
-	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid payment_id format"})
+	chargeID := webhookData.Charge.ID
+	if chargeID == "" {
+		return c.Status(400).JSON(fiber.Map{"error": "charge.id is required"})
 	}
 
-	var payment models.Payment
-	err = models.MongoDabase.Collection("payments").FindOne(context.Background(), bson.M{"_id": objID}).Decode(&payment)
-	if err != nil {
-		return c.Status(404).JSON(fiber.Map{"error": "Payment not found"})
+	abacatepayStatus := ""
+	switch webhookData.Event {
+	case "charge.paid":
+		abacatepayStatus = "CONFIRMED"
+	case "charge.expired":
+		abacatepayStatus = "EXPIRED"
+	case "charge.refunded":
+		abacatepayStatus = "REFUNDED"
+	case "charge.cancelled":
+		abacatepayStatus = "CANCELLED"
+	default:
+		abacatepayStatus = webhookData.Charge.Status
 	}
 
-	updateLocalPaymentStatus(webhookData.PaymentID, webhookData.Status)
+	updateLocalPaymentStatus(chargeID, abacatepayStatus)
 
-	if webhookData.Status == "CONFIRMED" || webhookData.Status == "approved" {
-		publishPaymentApproved(payment.MPPaymentID)
+	if abacatepayStatus == "CONFIRMED" {
+		publishPaymentApproved(chargeID)
 	}
 
 	return c.Status(200).JSON(fiber.Map{

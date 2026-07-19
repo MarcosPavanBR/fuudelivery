@@ -1,4 +1,4 @@
-module github.com/carloshomar/vercardapio
+module github.com/carloshomar/vercardapio/payment_api
 
 go 1.23.0
 

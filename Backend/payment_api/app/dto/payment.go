@@ -1,6 +1,6 @@
 package dto
 
-import "github.com/carloshomar/vercardapio/app/models"
+import "github.com/carloshomar/vercardapio/payment_api/app/models"
 
 type PaymentRequest struct {
 	OrderID          string  `json:"order_id"`
@@ -23,6 +23,7 @@ type PaymentResponse struct {
 	QRCodeBase64  string  `json:"qr_code_base64,omitempty"`
 	TicketURL     string  `json:"ticket_url,omitempty"`
 	MPPaymentID   int64   `json:"mp_payment_id,omitempty"`
+	AbacatePayID  string  `json:"abacatepay_id,omitempty"`
 	Message       string  `json:"message"`
 }
 

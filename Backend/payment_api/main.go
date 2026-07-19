@@ -13,8 +13,8 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/streadway/amqp"
 
-	"github.com/carloshomar/vercardapio/app/models"
-	"github.com/carloshomar/vercardapio/app/routes"
+	"github.com/carloshomar/vercardapio/payment_api/app/models"
+	"github.com/carloshomar/vercardapio/payment_api/app/routes"
 )
 
 var clients = make(map[int64]*websocket.Conn)

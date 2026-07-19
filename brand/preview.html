@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FUUDELIVERY - Brand Preview</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #F9FAFB; color: #1F2937; }
+
+  .hero {
+    background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%);
+    padding: 80px 40px;
+    text-align: center;
+    color: white;
+  }
+
+  .hero-box {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 96px; height: 78px; background: white; border-radius: 16px;
+    margin-bottom: 24px; box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    flex-direction: column; gap: 6px;
+  }
+  .hero-box .lid { width: 60px; height: 8px; background: #B91C1C; border-radius: 3px; }
+  .hero-box .l1 { width: 48px; height: 5px; background: #DC2626; border-radius: 2px; }
+  .hero-box .l2 { width: 32px; height: 5px; background: #DC2626; border-radius: 2px; opacity: 0.6; }
+
+  .hero h1 { font-size: 64px; letter-spacing: 2px; }
+  .hero .fuud { font-weight: 900; }
+  .hero .elivery { font-weight: 700; opacity: 0.9; }
+  .hero .divider { width: 80px; height: 4px; background: #FBBF24; border-radius: 2px; margin: 16px auto; }
+  .hero .tagline { font-size: 16px; letter-spacing: 8px; opacity: 0.7; font-weight: 500; }
+
+  .palette { padding: 60px 40px; max-width: 900px; margin: 0 auto; }
+  .palette h2 { font-size: 24px; margin-bottom: 24px; font-weight: 700; }
+  .colors { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
+  .color-swatch { border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .color-swatch .swatch { height: 80px; }
+  .color-swatch .info { padding: 8px 12px; background: white; }
+  .color-swatch .info .name { font-size: 12px; font-weight: 600; }
+  .color-swatch .info .hex { font-size: 11px; color: #6B7280; }
+
+  .typography { padding: 60px 40px; max-width: 900px; margin: 0 auto; }
+  .typography h2 { font-size: 24px; margin-bottom: 24px; font-weight: 700; }
+  .font-sample { margin-bottom: 16px; }
+  .font-sample .label { font-size: 12px; color: #6B7280; margin-bottom: 4px; }
+
+  .status-section { padding: 60px 40px; max-width: 900px; margin: 0 auto; }
+  .status-section h2 { font-size: 24px; margin-bottom: 24px; font-weight: 700; }
+  .status-grid { display: flex; flex-wrap: wrap; gap: 12px; }
+  .status-tag { padding: 8px 20px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+  .status-tag.await { background: #FEF3C7; color: #B45309; }
+  .status-tag.approved { background: #DBEAFE; color: #1D4ED8; }
+  .status-tag.collect { background: #EDE9FE; color: #6D28D9; }
+  .status-tag.waiting { background: #FEE2E2; color: #B91C1C; }
+  .status-tag.delivering { background: #D1FAE5; color: #047857; }
+  .status-tag.done { background: #F3F4F6; color: #4B5563; }
+
+  .logo-compare { padding: 60px 40px; max-width: 900px; margin: 0 auto; }
+  .logo-compare h2 { font-size: 24px; margin-bottom: 24px; font-weight: 700; }
+  .logo-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .logo-card {
+    background: white; border-radius: 12px; padding: 32px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid #E5E7EB;
+    display: flex; align-items: center; justify-content: center; min-height: 140px;
+  }
+  .logo-card.dark { background: #1F2937; }
+  .logo-card .logo-text { font-size: 32px; letter-spacing: 1px; }
+  .logo-card .logo-text .f { font-weight: 900; color: #DC2626; }
+  .logo-card .logo-text .e { font-weight: 700; color: #1F2937; }
+  .logo-card.dark .logo-text .e { color: white; opacity: 0.9; }
+  .logo-card.dark .logo-text .f { color: white; }
+
+  .badge-icon {
+    display: inline-flex; width: 36px; height: 30px; background: #DC2626;
+    border-radius: 6px; align-items: center; justify-content: center;
+    flex-direction: column; gap: 2px; padding-top: 2px;
+  }
+  .badge-icon .bl { width: 24px; height: 4px; background: #B91C1C; border-radius: 1px; }
+  .badge-icon .bl1 { width: 22px; height: 3px; background: white; border-radius: 1px; }
+  .badge-icon .bl2 { width: 16px; height: 3px; background: white; border-radius: 1px; opacity: 0.7; }
+
+  .file-list { padding: 60px 40px; max-width: 900px; margin: 0 auto; }
+  .file-list h2 { font-size: 24px; margin-bottom: 24px; font-weight: 700; }
+  .file-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px; background: white; border-radius: 8px;
+    border: 1px solid #E5E7EB; margin-bottom: 8px;
+  }
+  .file-item .dot { width: 8px; height: 8px; border-radius: 4px; background: #DC2626; flex-shrink: 0; }
+  .file-item .path { font-size: 14px; color: #374151; font-family: 'SF Mono', monospace; }
+  .file-item .dest { font-size: 13px; color: #6B7280; }
+
+  footer { text-align: center; padding: 40px; color: #6B7280; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-box">
+    <div class="lid"></div>
+    <div class="l1"></div>
+    <div class="l2"></div>
+  </div>
+  <h1>
+    <span class="fuud">FUUD</span>
+    <span class="elivery">ELIVERY</span>
+  </h1>
+  <div class="divider"></div>
+  <div class="tagline">SABOR · RAPIDEZ · CONFIANÇA</div>
+</div>
+
+<div class="palette">
+  <h2>Paleta de Cores</h2>
+  <div class="colors">
+    <div class="color-swatch"><div class="swatch" style="background:#DC2626"></div><div class="info"><div class="name">Primary</div><div class="hex">#DC2626</div></div></div>
+    <div class="color-swatch"><div class="swatch" style="background:#B91C1C"></div><div class="info"><div class="name">Primary Dark</div><div class="hex">#B91C1C</div></div></div>
+    <div class="color-swatch"><div class="swatch" style="background:#FEE2E2"></div><div class="info"><div class="name">Primary Light</div><div class="hex">#FEE2E2</div></div></div>
+    <div class="color-swatch"><div class="swatch" style="background:#EF4444"></div><div class="info"><div class="name">Primary 500</div><div class="hex">#EF4444</div></div></div>
+    <div class="color-swatch"><div class="swatch" style="background:#FBBF24"></div><div class="info"><div class="name">Secondary</div><div class="hex">#FBBF24</div></div></div>
+    <div class="color-swatch"><div class="swatch" style="background:#F59E0B"></div><div class="info"><div class="name">Secondary Dark</div><div class="hex">#F59E0B</div></div></div>
+    <div class="color-swatch"><div class="swatch" style="background:#1F2937"></div><div class="info"><div class="name">Text</div><div class="hex">#1F2937</div></div></div>
+    <div class="color-swatch"><div class="swatch" style="background:#6B7280"></div><div class="info"><div class="name">Text Secondary</div><div class="hex">#6B7280</div></div></div>
+    <div class="color-swatch"><div class="swatch" style="background:#10B981"></div><div class="info"><div class="name">Success</div><div class="hex">#10B981</div></div></div>
+    <div class="color-swatch"><div class="swatch" style="background:#3B82F6"></div><div class="info"><div class="name">Info</div><div class="hex">#3B82F6</div></div></div>
+  </div>
+</div>
+
+<div class="typography">
+  <h2>Tipografia</h2>
+  <div class="font-sample"><div class="label">Weight 900 (Black) — 48px</div><div style="font-size:48px;font-weight:900">FUUDELIVERY</div></div>
+  <div class="font-sample"><div class="label">Weight 700 (Bold) — 32px</div><div style="font-size:32px;font-weight:700">FUUDELIVERY</div></div>
+  <div class="font-sample"><div class="label">Weight 600 (Semibold) — 20px</div><div style="font-size:20px;font-weight:600">Sabor · Rapidez · Confiança</div></div>
+  <div class="font-sample"><div class="label">Weight 400 (Regular) — 16px</div><div style="font-size:16px">Peça sua comida favorita agora mesmo.</div></div>
+  <div class="font-sample"><div class="label">Weight 500, letter-spacing 6px — tagline</div><div style="font-size:13px;font-weight:500;letter-spacing:6px;color:#6B7280">SABOR · RAPIDEZ · CONFIANÇA</div></div>
+</div>
+
+<div class="status-section">
+  <h2>Status dos Pedidos</h2>
+  <div class="status-grid">
+    <span class="status-tag await">Aguardando Aprovação</span>
+    <span class="status-tag approved">Preparando</span>
+    <span class="status-tag collect">A caminho da coleta</span>
+    <span class="status-tag waiting">Aguardando coleta</span>
+    <span class="status-tag delivering">Em rota de entrega</span>
+    <span class="status-tag done">Entregue</span>
+  </div>
+</div>
+
+<div class="logo-compare">
+  <h2>Logotipos</h2>
+  <div class="logo-cards">
+    <div class="logo-card">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="badge-icon"><div class="bl"></div><div class="bl1"></div><div class="bl2"></div></div>
+        <div class="logo-text"><span class="f">FUUD</span><span class="e">ELIVERY</span></div>
+      </div>
+    </div>
+    <div class="logo-card dark">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="badge-icon" style="background:white"><div class="bl" style="background:#DC2626"></div><div class="bl1" style="background:#DC2626"></div><div class="bl2" style="background:#DC2626;opacity:0.6"></div></div>
+        <div class="logo-text"><span class="f">FUUD</span><span class="e">ELIVERY</span></div>
+      </div>
+    </div>
+  </div>
+  <p style="text-align:center;color:#6B7280;font-size:14px;margin-top:12px">Versão claro · Versão escuro</p>
+</div>
+
+<div class="file-list">
+  <h2>Arquivos para Substituir</h2>
+  <div class="file-item"><div class="dot"></div><div><div class="path">Frontend/AppComida/constants/Colors.ts</div><div class="dest">Paleta de cores FUUDELIVERY</div></div></div>
+  <div class="file-item"><div class="dot"></div><div><div class="path">Frontend/AppComida/constants/Texts.ts</div><div class="dest">Textos atualizados + novos campos</div></div></div>
+  <div class="file-item"><div class="dot"></div><div><div class="path">Frontend/AppComida/components/HeaderMain.tsx</div><div class="dest">Header com logo FUUDELIVERY</div></div></div>
+  <div class="file-item"><div class="dot"></div><div><div class="path">Frontend/AppComida/services/api.tsx</div><div class="dest">Corrige JWT — adiciona "Bearer"</div></div></div>
+  <div class="file-item"><div class="dot"></div><div><div class="path">Frontend/AppComida/config/config.tsx</div><div class="dest">Config com novo estabelecimento</div></div></div>
+  <div class="file-item"><div class="dot"></div><div><div class="path">Frontend/AppComida/app/establishment.tsx</div><div class="dest">Tela com busca e visual reformulado</div></div></div>
+  <div class="file-item"><div class="dot"></div><div><div class="path">Frontend/AppComida/app/splash.tsx</div><div class="dest">Tela de splash animada</div></div></div>
+  <div class="file-item"><div class="dot"></div><div><div class="path">Frontend/AppEntrega/constants/Colors.ts</div><div class="dest">Mesma paleta do AppComida</div></div></div>
+  <div class="file-item"><div class="dot"></div><div><div class="path">Frontend/AppEntrega/services/api.tsx</div><div class="dest">Corrige JWT — adiciona "Bearer"</div></div></div>
+  <div class="file-item"><div class="dot"></div><div><div class="path">Frontend/WebRestaurant/src/services/api.js</div><div class="dest">Consistência no JWT</div></div></div>
+  <div class="file-item"><div class="dot"></div><div><div class="path">Frontend/WebRestaurant/src/styles/brand.css</div><div class="dest">CSS Variables + classes utilitárias</div></div></div>
+</div>
+
+<footer>
+  FUUDELIVERY — Feito com dedicação para entregar o melhor sabor
+</footer>
+
+</body>
+</html>

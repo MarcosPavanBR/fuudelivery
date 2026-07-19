@@ -1,0 +1,210 @@
+services:
+  api-gateway:
+    image: nginx:latest
+    container_name: api-gateway
+    ports:
+      - "80:80"
+    networks:
+      - gateway-network
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./jwt-auth.lua:/etc/nginx/jwt-auth.lua:ro
+    depends_on:
+      - auth-api
+      - orders-api
+      - delivery-api
+      - payment-api
+      - chat-api
+    platform: linux/arm64 # Use this line if you are on an ARM64 architecture (like M1/M2 Macs)
+
+  auth-api:
+    build:
+      context: ./auth_api
+      dockerfile: Dockerfile
+    container_name: auth-api
+    env_file:
+      - ./auth_api/.env
+    environment:
+      - DB_CONNECTION_STRING=user=admin password=pass dbname=users_db sslmode=disable host=users-db
+    depends_on:
+      - users-db
+    networks:
+      - gateway-network
+    ports:
+      - "3000"
+
+  users-db:
+    image: postgres:latest
+    container_name: users-db
+    networks:
+      - gateway-network
+    environment:
+      - POSTGRES_DB=users_db
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=pass
+    ports:
+      - "5432:5432"
+
+  orders-api:
+    build:
+      context: ./orders_api
+      dockerfile: Dockerfile
+    container_name: orders-api
+    env_file:
+      - ./orders_api/.env
+    depends_on:
+      - orders-mongo
+      - orders-db
+      - rabbitmq
+    environment:
+      - DB_CONNECTION_STRING=user=admin password=pass dbname=orders_db sslmode=disable host=orders-db port=5433
+      - MONGO_URI=mongodb://admin:pass@orders-mongo:27017
+      - MONGO_DATABASE=orders_mongo_db
+      - RABBIT_CONNECTION=amqp://guest:guest@rabbitmq:5672/
+      - RABBIT_DELIVERY_QUEUE=MS_DELIVERY_QUEUE
+      - RABBIT_ORDER_QUEUE=RABBIT_ORDER_QUEUE
+      - URL_GET_ESTABLISHMENT_ID=http://api-gateway/api/auth/establishments/%d
+    networks:
+      - gateway-network
+    ports:
+      - "3000"
+
+  orders-db:
+    image: postgres:latest
+    container_name: orders-db
+    networks:
+      - gateway-network
+    environment:
+      - POSTGRES_DB=orders_db
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=pass
+    ports:
+      - "5433:5433"
+    command: -p 5433
+
+  orders-mongo:
+    image: mongo:latest
+    command: mongod --auth
+    container_name: orders-mongo
+    networks:
+      - gateway-network
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=pass
+      - MONGO_INITDB_DATABASE=orders_mongo_db
+    ports:
+      - "27017:27017"
+
+  delivery-api:
+    build:
+      context: ./delivery_api
+      dockerfile: Dockerfile
+    container_name: delivery-api
+    env_file:
+      - ./delivery_api/.env
+    depends_on:
+      - delivery-mongo
+      - rabbitmq
+    environment:
+      - RABBIT_CONNECTION=amqp://guest:guest@rabbitmq:5672/
+      - RABBIT_DELIVERY_QUEUE=MS_DELIVERY_QUEUE
+      - RABBIT_ORDER_QUEUE=RABBIT_ORDER_QUEUE
+      - MONGO_URI=mongodb://admin:pass@delivery-mongo:27017
+      - MONGO_DATABASE=delivery_mongo_db
+    networks:
+      - gateway-network
+    ports:
+      - "3000"
+
+  delivery-mongo:
+    image: mongo:latest
+    command: mongod --auth
+    container_name: delivery-mongo
+    networks:
+      - gateway-network
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=pass
+      - MONGO_INITDB_DATABASE=delivery_mongo_db
+    ports:
+      - "27018:27017"
+
+  payment-api:
+    build:
+      context: ./payment_api
+      dockerfile: Dockerfile
+    container_name: payment-api
+    env_file:
+      - ./payment_api/.env
+    depends_on:
+      - payment-mongo
+      - rabbitmq
+    environment:
+      - MONGO_URI=mongodb://admin:pass@payment-mongo:27017
+      - PAYMENT_MONGO_DATABASE=payment_mongo_db
+      - RABBIT_CONNECTION=amqp://guest:guest@rabbitmq:5672/
+      - RABBIT_ORDER_QUEUE=RABBIT_ORDER_QUEUE
+      - RABBIT_PAYMENT_QUEUE=MS_PAYMENT_QUEUE
+      - PIX_KEY=appdelivery@pix.com
+      - MERCHANT_NAME=AppDelivery
+      - MERCHANT_CITY=SaoPaulo
+    networks:
+      - gateway-network
+    ports:
+      - "3000"
+
+  payment-mongo:
+    image: mongo:latest
+    command: mongod --auth
+    container_name: payment-mongo
+    networks:
+      - gateway-network
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=pass
+      - MONGO_INITDB_DATABASE=payment_mongo_db
+    ports:
+      - "27019:27017"
+
+  chat-api:
+    build:
+      context: ./chat_api
+      dockerfile: Dockerfile
+    container_name: chat-api
+    env_file:
+      - ./chat_api/.env
+    depends_on:
+      - chat-mongo
+    environment:
+      - MONGO_URI=mongodb://admin:pass@chat-mongo:27017
+      - MONGO_DATABASE=chat_mongo_db
+    networks:
+      - gateway-network
+    ports:
+      - "3000"
+
+  chat-mongo:
+    image: mongo:latest
+    command: mongod --auth
+    container_name: chat-mongo
+    networks:
+      - gateway-network
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=pass
+      - MONGO_INITDB_DATABASE=chat_mongo_db
+    ports:
+      - "27020:27017"
+
+  rabbitmq:
+    image: rabbitmq:management
+    container_name: rabbitmq
+    networks:
+      - gateway-network
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+networks:
+  gateway-network:
+    driver: bridge

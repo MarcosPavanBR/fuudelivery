@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#DC2626;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#991B1B;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FBBF24;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#F59E0B;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="240" fill="url(#grad)"/>
+  <circle cx="256" cy="256" r="230" fill="none" stroke="#FCA5A5" stroke-width="3" opacity="0.3"/>
+
+  <!-- Delivery scooter simplified -->
+  <g transform="translate(256, 290)">
+    <!-- Back wheel -->
+    <circle cx="-60" cy="30" r="35" fill="none" stroke="white" stroke-width="7"/>
+    <circle cx="-60" cy="30" r="8" fill="white"/>
+    <!-- Front wheel -->
+    <circle cx="60" cy="30" r="35" fill="none" stroke="white" stroke-width="7"/>
+    <circle cx="60" cy="30" r="8" fill="white"/>
+    <!-- Body -->
+    <path d="M-40 30 L-10 30 L10 -20 L55 -20 L65 -5 L75 5 L75 30 L60 30" stroke="white" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+
+  <!-- Delivery box -->
+  <g transform="translate(256, 160)">
+    <rect x="-45" y="-45" width="90" height="75" rx="12" fill="white" opacity="0.95"/>
+    <rect x="-45" y="-45" width="90" height="75" rx="12" fill="none" stroke="#991B1B" stroke-width="3"/>
+    <!-- Lid -->
+    <path d="M-45 -45 L-35 -60 L35 -60 L45 -45" fill="white" stroke="#991B1B" stroke-width="3"/>
+    <!-- Stripes -->
+    <line x1="-28" y1="-22" x2="28" y2="-22" stroke="#DC2626" stroke-width="4" stroke-linecap="round"/>
+    <line x1="-28" y1="-5" x2="28" y2="-5" stroke="#DC2626" stroke-width="4" stroke-linecap="round"/>
+    <line x1="-28" y1="12" x2="15" y2="12" stroke="#DC2626" stroke-width="4" stroke-linecap="round"/>
+    <!-- Star -->
+    <path d="M0 -12 L3 -6 L9 -6 L5 -1 L7 5 L0 2 L-7 5 L-5 -1 L-9 -6 L-3 -6 Z" fill="#FBBF24"/>
+  </g>
+
+  <!-- F letter mark -->
+  <g transform="translate(256, 100)">
+    <text x="0" y="0" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="48" font-weight="900" fill="white" text-anchor="middle" opacity="0.15">F</text>
+  </g>
+</svg>

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 180" fill="none">
+  <!-- FUUDELIVERY light version for dark backgrounds -->
+  <g transform="translate(40, 40)">
+    <!-- Scooter icon in white -->
+    <circle cx="95" cy="85" r="22" fill="white" opacity="0.15"/>
+    <path d="M30 85 L50 85 L65 40 L95 40 L105 55 L115 65 L115 85 L105 85" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <circle cx="115" cy="85" r="18" fill="none" stroke="white" stroke-width="4"/>
+    <rect x="40" y="15" width="42" height="35" rx="6" fill="white" opacity="0.9"/>
+    <line x1="48" y1="28" x2="74" y2="28" stroke="#DC2626" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="48" y1="38" x2="66" y2="38" stroke="#DC2626" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M40 15 L44 6 L82 6 L82 15" fill="white" stroke="white" stroke-width="2"/>
+    <path d="M61 22 L63 18 L65 22 L69 22 L66 25 L67 29 L63 27 L59 29 L60 25 L57 22 Z" fill="#FBBF24"/>
+  </g>
+
+  <g transform="translate(180, 50)">
+    <text x="0" y="55" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="58" font-weight="900" fill="white" letter-spacing="1">FUUD</text>
+    <rect x="0" y="67" width="85" height="5" rx="2.5" fill="#FBBF24"/>
+    <text x="85" y="55" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="58" font-weight="700" fill="white" opacity="0.9" letter-spacing="1">ELIVERY</text>
+    <text x="0" y="90" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="500" fill="white" opacity="0.6" letter-spacing="6">SABOR · RAPIDEZ · CONFIANÇA</text>
+  </g>
+</svg>

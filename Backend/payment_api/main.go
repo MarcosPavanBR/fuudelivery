@@ -151,9 +151,11 @@ func startQueueListener() {
 			log.Printf("Mensagem recebida da fila %s: %s", queueName, string(msg.Body))
 
 			// Notify connected WebSocket clients about payment status update
+			clientsMu.Lock()
 			for _, client := range clients {
 				client.WriteMessage(websocket.TextMessage, msg.Body)
 			}
+			clientsMu.Unlock()
 		}
 	}
 }

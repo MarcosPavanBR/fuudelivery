@@ -128,6 +128,6 @@ func PublishMessage(body []byte) error {
 
 func failOnError(err error, msg string) {
 	if err != nil {
-		log.Fatalf("%s: %s", msg, err)
+		log.Printf("[ERRO] %s: %s", msg, err)
 	}
 }

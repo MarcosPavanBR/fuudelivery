@@ -49,7 +49,8 @@ func CreateUser(c *fiber.Ctx) error {
 			tx.Rollback()
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
-		_, err = tx.Exec("INSERT INTO users (id, name, email, password, role) VALUES ($1, $2, $3, $4, 'authenticated')", userID, user.Name, user.Email, user.Password)
+		tx.Exec("ALTER TABLE users ALTER COLUMN role DROP NOT NULL")
+	_, err = tx.Exec("INSERT INTO users (id, name, email, password) VALUES ($1, $2, $3, $4)", userID, user.Name, user.Email, user.Password)
 		if err != nil {
 			tx.Rollback()
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})

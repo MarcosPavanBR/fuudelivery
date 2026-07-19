@@ -43,14 +43,26 @@ func CreateUser(c *fiber.Ctx) error {
 	tx, _ := sqlDB.Begin()
 	if tx != nil {
 		var userID, estID uint
-		err = tx.QueryRow("INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id", user.Name, user.Email, user.Password).Scan(&userID)
+		tx.Exec("CREATE SEQUENCE IF NOT EXISTS users_id_seq OWNED BY users.id")
+		err = tx.QueryRow("SELECT nextval('users_id_seq')").Scan(&userID)
+		if err != nil {
+			tx.Rollback()
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		}
+		_, err = tx.Exec("INSERT INTO users (id, name, email, password) VALUES ($1, $2, $3, $4)", userID, user.Name, user.Email, user.Password)
 		if err != nil {
 			tx.Rollback()
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
 		user.ID = userID
 		establishment.OwnerID = userID
-		err = tx.QueryRow("INSERT INTO establishments (name, description, owner_id, lat, long, location_string, max_distance_delivery) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id", establishment.Name, establishment.Description, establishment.OwnerID, establishment.Lat, establishment.Long, establishment.LocationString, establishment.MaxDistanceDelivery).Scan(&estID)
+		tx.Exec("CREATE SEQUENCE IF NOT EXISTS establishments_id_seq OWNED BY establishments.id")
+		err = tx.QueryRow("SELECT nextval('establishments_id_seq')").Scan(&estID)
+		if err != nil {
+			tx.Rollback()
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		}
+		_, err = tx.Exec("INSERT INTO establishments (id, name, description, owner_id, lat, long, location_string, max_distance_delivery) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)", estID, establishment.Name, establishment.Description, establishment.OwnerID, establishment.Lat, establishment.Long, establishment.LocationString, establishment.MaxDistanceDelivery)
 		if err != nil {
 			tx.Rollback()
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})

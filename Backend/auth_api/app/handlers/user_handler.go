@@ -55,7 +55,7 @@ func CreateUser(c *fiber.Ctx) error {
 		return nil
 	})
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create user and establishment"})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	tokenString, err := middlewares.GenerateJWT(&user, &establishment)

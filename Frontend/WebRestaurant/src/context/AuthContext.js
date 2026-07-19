@@ -33,7 +33,7 @@ export const AuthProvider = ({ children }) => {
 
   // Só conecta WebSocket após login válido
 
-  const [wsUrl, setWsUrl] = useState(null);useEffect(()=>{if(user?.sub){setWsUrl(api.getUri().replace('http','ws')+'/api/order/ws/'+user.sub+'?token='+localStorage.getItem(Strings.token_jwt))}},[user]);const { sendJsonMessage, lastMessage } = useWebSocket(wsUrl, {
+  const [wsUrl, setWsUrl] = useState(null);useEffect(()=>{if(user?.sub){setWsUrl(api.getUri().replace('http','ws')+'/ws/'+user.sub+'?token='+localStorage.getItem(Strings.token_jwt))}},[user]);const { sendJsonMessage, lastMessage } = useWebSocket(wsUrl, {
     reconnectInterval: 1000,
     retryOnError: true,
     reconnectAttempts: 5,
@@ -91,7 +91,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const response = await api.post("api/auth/users/login", {
+      const response = await api.post("users/login", {
         email,
         password,
       });
@@ -116,7 +116,7 @@ export const AuthProvider = ({ children }) => {
 
     try {
       const { data } = await api.get(
-        "/api/auth/establishments/" + getUser().id
+        "/establishments/" + getUser().id
       );
 
       setOpenEstablishment(data?.open_data ?? false);

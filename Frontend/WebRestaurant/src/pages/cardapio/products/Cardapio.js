@@ -3,11 +3,9 @@ import MenuLayout from "../../../components/Menu";
 import CardapioList from "../../../components/CardapioList";
 import SearchInput from "../../../components/SearchInput";
 import AddButton from "../../../components/AddButton";
-
 import { useAuth } from "../../../context/AuthContext";
 import Strings from "../../../constants/Strings";
 import Texts from "../../../constants/Texts";
-
 import productsModel from "../../../services/products.model";
 import { FiLoader } from "react-icons/fi";
 
@@ -27,26 +25,17 @@ const Cardapio = () => {
   }
 
   async function onRefreshItens(item) {
-    if (item && selectedItem) {
-      setSelectedItem(item);
-    }
+    if (item && selectedItem) setSelectedItem(item);
     await start();
   }
 
   async function save(item) {
     const value = items.map((e) => {
       if (e.ID === item.id) {
-        return {
-          ...e,
-          Name: item.name,
-          Description: item.description,
-          Price: item.price,
-          Image: item.image,
-        };
+        return { ...e, Name: item.name, Description: item.description, Price: item.price, Image: item.image };
       }
       return e;
     });
-
     setItems(value);
   }
 
@@ -54,27 +43,30 @@ const Cardapio = () => {
     start();
   }, []);
 
-  const handleSearch = (term) => {
-    setSearchTerm(term);
-  };
+  const handleSearch = (term) => setSearchTerm(term);
 
   return (
     <MenuLayout>
-      <div className="ml-6">
-        <h3 className="font-bold">{Texts.gestor_cardapio}</h3>
-        <span className="font-light italic text-xs">{Texts.cardapio_desc}</span>
+      <div className="mb-6">
+        <h3 className="text-lg font-bold text-gray-900">{Texts.gestor_cardapio}</h3>
+        <p className="text-sm text-gray-500 mt-1">{Texts.cardapio_desc}</p>
       </div>
-      <div className="">
-        <div className="mb-6 ml-4 pr-6 mt-4 flex row-auto gap-2 w-full justify-between">
-          <SearchInput onSearch={handleSearch} />
-          <AddButton
-            onClick={() => {
-              setEditModalOpen(true);
-              setSelectedItem(Strings.initial_order());
-            }}
-          />
-        </div>
 
+      <div className="flex items-center gap-3 mb-6">
+        <SearchInput onSearch={handleSearch} />
+        <AddButton
+          onClick={() => {
+            setEditModalOpen(true);
+            setSelectedItem(Strings.initial_order());
+          }}
+        />
+      </div>
+
+      {load ? (
+        <div className="flex items-center justify-center h-32">
+          <FiLoader className="animate-spin h-6 w-6" style={{ color: "#EA1D2C" }} />
+        </div>
+      ) : (
         <CardapioList
           items={items.filter((item) =>
             item?.Name?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -86,14 +78,7 @@ const Cardapio = () => {
           onSave={save}
           onRefreshItens={onRefreshItens}
         />
-      </div>
-      {load ? (
-        <div className="flex w-full items-center justify-center h-32 text-center">
-          <div>
-            <FiLoader size={20} color="blue" />
-          </div>
-        </div>
-      ) : null}
+      )}
     </MenuLayout>
   );
 };

@@ -3,7 +3,7 @@ import api from "./api";
 
 async function handlerVinculoProdutoAdicional(productID, additionalID) {
   try {
-    const { data } = await api.post("/api/order/additional/product", {
+    const { data } = await api.post("/additional/product", {
       productID: parseInt(productID),
       additionalID: parseInt(additionalID),
     });
@@ -16,7 +16,7 @@ async function handlerVinculoProdutoAdicional(productID, additionalID) {
 
 async function getAdditionals(id) {
   try {
-    const { data } = await api.get("/api/order/additional/" + id);
+    const { data } = await api.get("/additional/" + id);
     return data;
   } catch (e) {
     console.log(e);
@@ -28,7 +28,7 @@ async function updateAdditional(items, editItem) {
   try {
     const body = { ...editItem, Price: parseFloat(editItem.Price ?? 0) };
     const { data } = await api.put(
-      "/api/order/additional/" + editItem.ID,
+      "/additional/" + editItem.ID,
       body
     );
     const finalItem = items.map((e) => {
@@ -51,7 +51,7 @@ async function createAdditional(items, editItem, establishmentId) {
       EstablishmentId: establishmentId,
       Price: parseFloat(editItem.Price ?? 0),
     };
-    const { data } = await api.post("/api/order/additional", body);
+    const { data } = await api.post("/additional", body);
 
     return [data, ...items.filter((e) => e.ID && e.ID !== Strings.id_default)];
   } catch (e) {
@@ -62,7 +62,7 @@ async function createAdditional(items, editItem, establishmentId) {
 
 async function deleteAdditional(items, id) {
   try {
-    const { data } = await api.delete("/api/order/additional/" + id);
+    const { data } = await api.delete("/additional/" + id);
 
     return [...items.filter((e) => e.ID !== id)];
   } catch (e) {

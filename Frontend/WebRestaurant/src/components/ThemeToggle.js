@@ -1,6 +1,6 @@
-import React from "react";
-import { FiMoon, FiSun } from "react-icons/fi";
+import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import { FiMoon, FiSun } from "react-icons/fi";
 
 const ThemeToggle = () => {
   const { theme, toggleTheme } = useAuth();
@@ -8,21 +8,11 @@ const ThemeToggle = () => {
   return (
     <button
       onClick={toggleTheme}
-      style={{
-        background: "transparent",
-        border: "none",
-        cursor: "pointer",
-        color: "#FFF",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 8,
-        borderRadius: 8,
-        transition: "background 0.2s",
-      }}
+      className="p-2.5 rounded-xl transition-all duration-200 hover:bg-gray-100"
+      style={{ color: theme === "dark" ? "#F7A11E" : "#6B7280" }}
       title={theme === "light" ? "Modo escuro" : "Modo claro"}
     >
-      {theme === "light" ? <FiMoon size={20} /> : <FiSun size={20} />}
+      {theme === "light" ? <FiMoon className="h-5 w-5" /> : <FiSun className="h-5 w-5" />}
     </button>
   );
 };

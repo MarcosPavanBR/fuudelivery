@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/carloshomar/vercardapio/app/services"
+	"github.com/carloshomar/vercardapio/payment_api/app/services"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -39,10 +39,8 @@ func MercadoPagoWebhook(c *fiber.Ctx) error {
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to get payment status"})
 		}
 
-		updateLocalPaymentStatusByID(paymentID, paymentStatus.Status)
-
 		if paymentStatus.Status == "approved" {
-			publishPaymentApproved(paymentID)
+			publishPaymentApproved(fmt.Sprintf("%d", paymentID))
 		}
 	}
 

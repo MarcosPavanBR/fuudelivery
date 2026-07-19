@@ -27,6 +27,7 @@ type Payment struct {
 	TicketURL       string             `bson:"ticket_url,omitempty" json:"ticket_url,omitempty"`
 	MPPaymentID     int64              `bson:"mp_payment_id,omitempty" json:"mp_payment_id,omitempty"`
 	MPStatus        string             `bson:"mp_status,omitempty" json:"mp_status,omitempty"`
+	AbacatePayID    string             `bson:"abacatepay_id,omitempty" json:"abacatepay_id,omitempty"`
 	CardLastDigits  string             `bson:"card_last_digits,omitempty" json:"card_last_digits,omitempty"`
 	CardToken       string             `bson:"card_token,omitempty" json:"card_token,omitempty"`
 	Installments    int                `bson:"installments,omitempty" json:"installments,omitempty"`

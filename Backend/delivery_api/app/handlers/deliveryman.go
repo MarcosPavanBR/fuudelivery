@@ -9,8 +9,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson"
 
-	"github.com/carloshomar/vercardapio/app/dto"
-	"github.com/carloshomar/vercardapio/app/models"
+	"github.com/carloshomar/vercardapio/delivery_api/app/dto"
+	"github.com/carloshomar/vercardapio/delivery_api/app/models"
 )
 
 func GetOrdersByDeliverymanID(c *fiber.Ctx) error {

@@ -1,0 +1,315 @@
+package main
+
+import (
+	"log"
+	"os"
+	"os/signal"
+	"strconv"
+	"sync"
+	"syscall"
+	"time"
+
+	"github.com/gofiber/contrib/websocket"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/joho/godotenv"
+
+	// Models (database initialization)
+	"github.com/carloshomar/vercardapio/auth_api/app/models"
+	ordersModels "github.com/carloshomar/vercardapio/orders_api/app/models"
+	deliveryModels "github.com/carloshomar/vercardapio/delivery_api/app/models"
+	paymentModels "github.com/carloshomar/vercardapio/payment_api/app/models"
+	chatModels "github.com/carloshomar/vercardapio/chat_api/app/models"
+
+	// Handlers
+	authHandlers "github.com/carloshomar/vercardapio/auth_api/app/handlers"
+	ordersHandlers "github.com/carloshomar/vercardapio/orders_api/app/handlers"
+	deliveryHandlers "github.com/carloshomar/vercardapio/delivery_api/app/handlers"
+	paymentHandlers "github.com/carloshomar/vercardapio/payment_api/app/handlers"
+	chatHandlers "github.com/carloshomar/vercardapio/chat_api/app/handlers"
+
+	// Middleware
+	"github.com/carloshomar/vercardapio/auth_api/app/middlewares"
+
+	// Queue
+	"github.com/carloshomar/fuudelivery/pkg/queue"
+	"github.com/carloshomar/fuudelivery/pkg/health"
+)
+
+// WebSocket client management (shared across services)
+var wsClients = make(map[int64]*websocket.Conn)
+var wsClientsMu sync.Mutex
+
+func sendMessageToClient(clientID int64, message []byte) error {
+	wsClientsMu.Lock()
+	defer wsClientsMu.Unlock()
+	if client, ok := wsClients[clientID]; ok {
+		return client.WriteMessage(websocket.TextMessage, message)
+	}
+	log.Printf("[WS] Message for client %d: %s", clientID, string(message))
+	return nil
+}
+
+func protectedRoute(c *fiber.Ctx) error {
+	_, err := middlewares.ValidateJWT(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+	}
+	return c.Next()
+}
+
+func setupWebSocketRoutes(app *fiber.App) {
+	// Orders WebSocket
+	app.Use("/ws", func(c *fiber.Ctx) error {
+		if websocket.IsWebSocketUpgrade(c) {
+			c.Locals("allowed", true)
+			return c.Next()
+		}
+		return fiber.ErrUpgradeRequired
+	})
+
+	app.Get("/ws/:id", websocket.New(func(c *websocket.Conn) {
+		clientIDStr := c.Params("id")
+		clientID, _ := strconv.ParseInt(clientIDStr, 10, 64)
+
+		wsClientsMu.Lock()
+		wsClients[clientID] = c
+		wsClientsMu.Unlock()
+
+		defer func() {
+			wsClientsMu.Lock()
+			delete(wsClients, clientID)
+			wsClientsMu.Unlock()
+		}()
+
+		var (
+			mt  int
+			msg []byte
+			err error
+		)
+		for {
+			if mt, msg, err = c.ReadMessage(); err != nil {
+				log.Println("read:", err)
+				break
+			}
+			log.Printf("recv: %s", msg)
+			if err = c.WriteMessage(mt, msg); err != nil {
+				log.Println("write:", err)
+				break
+			}
+		}
+	}))
+
+	// Chat WebSocket
+	app.Get("/ws/chat/:orderId/:userId/:userType", websocket.New(chatHandlers.HandleChatWebSocket))
+}
+
+func setupAuthRoutes(app *fiber.App) {
+	app.Post("/users/register", authHandlers.CreateUser)
+	app.Post("/users/login", authHandlers.Login)
+	app.Get("/users/:id", protectedRoute, authHandlers.GetUser)
+
+	app.Get("/establishments", authHandlers.ListEstablishments)
+	app.Put("/establishments/status/handler/:id", authHandlers.HandlerEstablishmentStatus)
+	app.Get("/establishments/:id", authHandlers.GetEstablishments)
+	app.Put("/establishments/:id", authHandlers.UpdateEstablishment)
+	app.Get("/establishments/:id/users", protectedRoute, authHandlers.GetUserByEstablishment)
+
+	app.Get("/establishments/:id/hours", authHandlers.GetBusinessHours)
+	app.Post("/establishments/hours", authHandlers.UpsertBusinessHours)
+	app.Post("/establishments/hours/bulk", authHandlers.BulkUpdateBusinessHours)
+	app.Get("/establishments/:id/is-open", authHandlers.CheckEstablishmentOpen)
+
+	app.Post("/delivery-man/login", authHandlers.LoginDeliveryMan)
+	app.Post("/delivery-man/register", authHandlers.CreateDeliveryMan)
+}
+
+func setupOrdersRoutes(app *fiber.App) {
+	app.Get("/ping", ordersHandlers.Ping)
+	app.Get("/products/all/:establishmentId", ordersHandlers.GetByEstablishmentIdWithRelations)
+	app.Get("/products/:establishmentId", ordersHandlers.GetByEstablishmentId)
+
+	app.Post("/products/create", ordersHandlers.CreateProduct)
+	app.Delete("/products/delete/:id", ordersHandlers.DeleteProduct)
+	app.Post("/products/multi-create", ordersHandlers.CreateMultProducts)
+	app.Put("/products/update/:id", ordersHandlers.UpdateProduct)
+
+	app.Post("/categories/create", ordersHandlers.CreateCategories)
+	app.Get("/categories/:establishmentId", ordersHandlers.GetCategories)
+	app.Post("/categories/product", ordersHandlers.CreateProductCategorie)
+	app.Delete("/categories/:id", ordersHandlers.DeleteCategory)
+	app.Put("/categories/:id", ordersHandlers.UpdateCategory)
+	app.Get("/categories/product/:establishmentId", ordersHandlers.GetCategoriesWithProducts)
+
+	app.Post("/additional", ordersHandlers.CreateAdditional)
+	app.Get("/additional/:id", ordersHandlers.ListAdditional)
+	app.Put("/additional/:id", ordersHandlers.UpdateAdditional)
+	app.Delete("/additional/:id", ordersHandlers.DeleteAdditional)
+	app.Post("/additional/product", ordersHandlers.CreateProductToAdditional)
+
+	app.Post("/delivery", ordersHandlers.InsertDelivery)
+	app.Post("/delivery/calculate-delivery-value", ordersHandlers.CalculateDeliveryValue)
+	app.Get("/delivery/value/:establishmentId", ordersHandlers.GetDeliveryByEstablishmentID)
+
+	app.Post("/orders", func(c *fiber.Ctx) error {
+		return ordersHandlers.CreateOrder(c, sendMessageToClient)
+	})
+	app.Put("/orders/status", func(c *fiber.Ctx) error {
+		return ordersHandlers.UpdateOrderStatus(c, sendMessageToClient)
+	})
+	app.Get("/orders/repeat/:orderId", ordersHandlers.RepeatOrder)
+	app.Get("/orders/list-phone/:phone", ordersHandlers.ListOrdersByPhone)
+	app.Get("/orders/:establishmentId", ordersHandlers.ListOrdersByEstablishmentID)
+	app.Get("/orders/:establishmentId/:phoneNumber", ordersHandlers.ListOrdersByEstablishmentIDAndPhone)
+
+	app.Post("/coupons", ordersHandlers.CreateCoupon)
+	app.Post("/coupons/validate", ordersHandlers.ValidateCoupon)
+	app.Post("/coupons/apply", ordersHandlers.ApplyCoupon)
+	app.Get("/coupons", ordersHandlers.ListCoupons)
+	app.Get("/coupons/:id", ordersHandlers.GetCoupon)
+	app.Delete("/coupons/:id", ordersHandlers.DeleteCoupon)
+	app.Post("/coupons/referral", ordersHandlers.GenerateReferralCoupon)
+	app.Post("/coupons/calculate", ordersHandlers.CalculateDiscount)
+
+	app.Get("/qrcode/:establishmentId", ordersHandlers.GenerateTableQRCode)
+	app.Post("/orders/schedule", ordersHandlers.ScheduleOrder)
+	app.Post("/notifications/register", ordersHandlers.RegisterPushToken)
+
+	app.Post("/loyalty/earn", ordersHandlers.EarnPoints)
+	app.Post("/loyalty/redeem", ordersHandlers.RedeemPoints)
+	app.Get("/loyalty/balance/:phone", ordersHandlers.GetLoyaltyBalance)
+	app.Get("/loyalty/history/:phone", ordersHandlers.GetLoyaltyHistory)
+	app.Get("/loyalty/calculate", ordersHandlers.CalculateLoyaltyDiscount)
+
+	app.Post("/reviews", ordersHandlers.CreateReview)
+	app.Get("/reviews/establishment/:id", ordersHandlers.GetEstablishmentReviews)
+	app.Get("/reviews/product/:id", ordersHandlers.GetProductReviews)
+	app.Put("/reviews/respond/:id", ordersHandlers.RespondToReview)
+	app.Get("/reviews/user/:phone", ordersHandlers.GetUserReviews)
+	app.Get("/reviews/rating/:establishmentId", ordersHandlers.GetEstablishmentRating)
+
+	app.Post("/orders/pickup-code/generate", ordersHandlers.GeneratePickupCode)
+	app.Post("/orders/pickup-code/validate", ordersHandlers.ValidatePickupCode)
+	app.Get("/orders/pickup-code/:id", ordersHandlers.GetPickupCode)
+}
+
+func setupDeliveryRoutes(app *fiber.App) {
+	app.Get("/solicitation-orders", deliveryHandlers.GetApprovedSolicitations)
+	app.Put("/solicitation-orders/hand-shake", deliveryHandlers.HandShakeDeliveryman)
+	app.Get("/deliveryman/has-active/:id", deliveryHandlers.GetOrdersByDeliverymanID)
+	app.Post("/deliveryman/status", func(c *fiber.Ctx) error {
+		return deliveryHandlers.UpdateOrderStatusByDeliverymanID(c, sendMessageToClient)
+	})
+	app.Get("/deliveryman/extrato/:id", deliveryHandlers.GetExtrato)
+}
+
+func setupPaymentRoutes(app *fiber.App) {
+	app.Post("/payments/pix/generate", paymentHandlers.GeneratePIX)
+	app.Post("/payments/card/tokenize", paymentHandlers.TokenizeCard)
+	app.Post("/payments/card/charge", paymentHandlers.ChargeCard)
+	app.Post("/payments/process", paymentHandlers.ProcessPayment)
+	app.Post("/payments/split", paymentHandlers.ProcessSplit)
+	app.Post("/payments/webhook", paymentHandlers.HandlePaymentWebhook)
+	app.Post("/payments/mercadopago/webhook", paymentHandlers.MercadoPagoWebhook)
+	app.Get("/wallet/balance/:user_id", paymentHandlers.GetBalance)
+	app.Post("/wallet/topup", paymentHandlers.TopUp)
+	app.Post("/wallet/deduct", paymentHandlers.DeductFromWallet)
+}
+
+func setupChatRoutes(app *fiber.App) {
+	app.Get("/chat/messages/:orderId", chatHandlers.GetMessages)
+	app.Post("/chat/message", chatHandlers.SendMessage)
+	app.Put("/chat/read/:orderId/:userId", chatHandlers.MarkAsRead)
+}
+
+func main() {
+	godotenv.Load()
+
+	// Initialize databases
+	models.ConnectDatabase()
+	ordersModels.ConnectPostgresDatabase()
+	ordersModels.ConnectMongoDatabase()
+	deliveryModels.ConnectMongoDatabase()
+	paymentModels.ConnectMongoDatabase()
+	chatModels.ConnectMongoDatabase()
+
+	// Initialize message queue
+	queue.Init()
+
+	// Create Fiber app
+	app := fiber.New(fiber.Config{
+		Prefork:       false,
+		CaseSensitive: true,
+		StrictRouting: false,
+	})
+
+	// Middleware
+	app.Use(logger.New())
+	app.Use(recover.New())
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: "*",
+		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
+		AllowHeaders: "Origin,Content-Type,Accept,Authorization",
+	}))
+
+	// Health check
+	app.Get("/health", func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{
+			"status":  "ok",
+			"service": "fuudelivery",
+			"version": "1.0.0",
+			"checks": fiber.Map{
+				"postgres": health.DatabaseCheck(models.DB),
+				"mongodb":  health.MongoCheck(ordersModels.MongoClient),
+			},
+			"time": time.Now().UTC(),
+		})
+	})
+
+	// Mount all routes
+	setupWebSocketRoutes(app)
+	setupAuthRoutes(app)
+	setupOrdersRoutes(app)
+	setupDeliveryRoutes(app)
+	setupPaymentRoutes(app)
+	setupChatRoutes(app)
+
+	// Start queue listeners in background
+	go startQueueListeners()
+
+	// Graceful shutdown
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "3000"
+	}
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-c
+		log.Println("Shutting down...")
+		app.ShutdownWithTimeout(10 * time.Second)
+	}()
+
+	log.Printf("FUUDELIVERY server starting on port %s", port)
+	if err := app.Listen(":" + port); err != nil {
+		log.Fatalf("Server error: %v", err)
+	}
+}
+
+func startQueueListeners() {
+	queue.Subscribe("order_updates", func(msg []byte) {
+		log.Printf("[QUEUE] Order update: %s", string(msg))
+	})
+
+	queue.Subscribe("delivery_updates", func(msg []byte) {
+		log.Printf("[QUEUE] Delivery update: %s", string(msg))
+	})
+
+	queue.Subscribe("payment_updates", func(msg []byte) {
+		log.Printf("[QUEUE] Payment update: %s", string(msg))
+	})
+}

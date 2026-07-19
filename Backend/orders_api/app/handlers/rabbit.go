@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/carloshomar/vercardapio/app/dto"
-	"github.com/carloshomar/vercardapio/app/models"
+	"github.com/carloshomar/vercardapio/orders_api/app/dto"
+	"github.com/carloshomar/vercardapio/orders_api/app/models"
 	"github.com/streadway/amqp"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -71,15 +71,16 @@ func ReceiveMessage(msg string, sendMessageToClient func(clientID int64, message
 }
 
 func PublishMessage(body []byte) error {
-	// Conectar ao servidor RabbitMQ
 	dsn := os.Getenv("RABBIT_CONNECTION")
 	if dsn == "" {
-		panic("RABBIT_CONNECTION não configurado")
+		log.Println("[QUEUE] RabbitMQ não configurado, mensagem ignorada")
+		return nil
 	}
 
 	queueName := os.Getenv("RABBIT_DELIVERY_QUEUE")
 	if queueName == "" {
-		panic("RABBIT_DELIVERY_QUEUE não configurado")
+		log.Println("[QUEUE] RABBIT_DELIVERY_QUEUE não configurado, mensagem ignorada")
+		return nil
 	}
 
 	conn, err := amqp.Dial(dsn)

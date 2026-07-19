@@ -4,8 +4,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/carloshomar/vercardapio/app/dto"
-	"github.com/carloshomar/vercardapio/app/models"
+	"github.com/carloshomar/vercardapio/orders_api/app/dto"
+	"github.com/carloshomar/vercardapio/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
 )
 

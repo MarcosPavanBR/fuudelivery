@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: fuudelivery-api
+    env: go
+    buildCommand: cd cmd/fuudelivery && go build -o server .
+    startCommand: ./server
+    envVars:
+      - key: PORT
+        value: "3000"
+      - key: GO_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: fuudelivery-redis
+          property: connectionString
+      - key: SUPABASE_DATABASE_URL
+        sync: false
+      - key: SUPABASE_DATABASE_URL_DIRECT
+        sync: false
+      - key: MONGODB_ATLAS_URI
+        sync: false
+      - key: ABACATE_PAY_API_KEY
+        sync: false
+    healthCheckPath: /health
+
+  - type: web
+    name: fuudelivery-web
+    env: static
+    buildCommand: cd Frontend/WebRestaurant && npm install && npm run build
+    staticPublishPath: Frontend/WebRestaurant/dist
+    envVars:
+      - key: REACT_APP_API_URL
+        value: https://fuudelivery-api.onrender.com
+
+  - type: redis
+    name: fuudelivery-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru

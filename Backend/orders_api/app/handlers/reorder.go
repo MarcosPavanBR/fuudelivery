@@ -6,7 +6,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"github.com/carloshomar/vercardapio/app/models"
+	"github.com/carloshomar/vercardapio/orders_api/app/models"
 )
 
 func RepeatOrder(c *fiber.Ctx) error {

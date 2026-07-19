@@ -1,9 +1,9 @@
 package handlers
 
 import (
-	"github.com/carloshomar/vercardapio/app/dto"
-	"github.com/carloshomar/vercardapio/app/middlewares"
-	"github.com/carloshomar/vercardapio/app/models"
+	"github.com/carloshomar/vercardapio/auth_api/app/dto"
+	"github.com/carloshomar/vercardapio/auth_api/app/middlewares"
+	"github.com/carloshomar/vercardapio/auth_api/app/models"
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/crypto/bcrypt"
 )

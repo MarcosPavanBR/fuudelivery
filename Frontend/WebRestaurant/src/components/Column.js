@@ -4,27 +4,39 @@ import Task from "./Task";
 
 const Column = ({ column, tasks }) => {
   return (
-    <div
-      className="w-[95%] p-4 bg-gray-200 rounded-md ml-4 mr-2 shadow-lg mt-0 sm:mt-4 md:mt-4 lg:mt-4"
-      style={{ backgroundColor: column.background }}
-    >
-      <h3 className="text-lg font-semibold mb-4 text-white ">{column.title}</h3>
-      <div style={{ overflowY: "auto" }}>
-        <Droppable droppableId={column.id} key={column.id}>
-          {(provided) => (
-            <div
-              className="flex flex-col h-[30vh] sm:h-[75vh] md:h-[75vh] lg:h-[75vh]"
-              ref={provided.innerRef}
-              {...provided.droppableProps}
-            >
-              {tasks.map((task, index) => (
-                <Task key={task.id} task={task} index={index} />
-              ))}
-              {provided.placeholder}
-            </div>
-          )}
-        </Droppable>
+    <div className="flex flex-col rounded-2xl overflow-hidden border border-gray-100 bg-gray-50/50 shadow-card">
+      {/* Column Header */}
+      <div
+        className="px-5 py-4 flex items-center justify-between"
+        style={{
+          background: column.background,
+        }}
+      >
+        <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+          {column.title}
+        </h3>
+        <span className="bg-white/20 text-white text-xs font-bold px-2.5 py-1 rounded-full">
+          {tasks.length}
+        </span>
       </div>
+
+      {/* Tasks */}
+      <Droppable droppableId={column.id} key={column.id}>
+        {(provided, snapshot) => (
+          <div
+            ref={provided.innerRef}
+            {...provided.droppableProps}
+            className={`flex-1 p-3 space-y-3 min-h-[200px] max-h-[70vh] overflow-y-auto transition-colors duration-200 ${
+              snapshot.isDraggingOver ? "bg-gray-100" : ""
+            }`}
+          >
+            {tasks.map((task, index) => (
+              <Task key={task.id} task={task} index={index} />
+            ))}
+            {provided.placeholder}
+          </div>
+        )}
+      </Droppable>
     </div>
   );
 };

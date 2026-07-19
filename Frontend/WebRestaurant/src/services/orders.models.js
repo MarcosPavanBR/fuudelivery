@@ -2,7 +2,7 @@ import api from "./api";
 
 async function getOrders(id) {
   try {
-    const { data } = await api.get("/api/order/orders/" + id);
+    const { data } = await api.get("/orders/" + id);
 
     return data
       .filter((e) => {
@@ -29,7 +29,7 @@ async function getOrders(id) {
 
 async function alterStatus(droppableId, draggableId) {
   try {
-    const { data } = await api.put("/api/order/orders/status", {
+    const { data } = await api.put("/orders/status", {
       id: draggableId,
       status: droppableId,
     });

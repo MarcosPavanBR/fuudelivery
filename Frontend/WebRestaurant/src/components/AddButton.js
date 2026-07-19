@@ -5,9 +5,12 @@ const AddButton = ({ onClick, text = "Novo" }) => {
   return (
     <button
       onClick={onClick}
-      className="flex items-center justify-center bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded"
+      className="flex items-center justify-center gap-2 text-white font-semibold py-2.5 px-5 rounded-xl transition-all duration-200 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
+      style={{
+        background: "linear-gradient(135deg, #EA1D2C, #C41420)",
+      }}
     >
-      <FiPlus className="h-5 w-5 mr-1" />
+      <FiPlus className="h-5 w-5" />
       {text}
     </button>
   );

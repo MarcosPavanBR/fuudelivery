@@ -17,40 +17,46 @@ const CardapioList = ({
   };
 
   return (
-    <ul className="pl-4 pr-4 pb-4">
-      {items.map((item, index) => (
-        <li
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 px-4 animate-fade-in">
+      {items.map((item) => (
+        <div
           key={item.ID}
-          className={`cursor-pointer select-none py-4 shadow-sm ${
-            index === 0 ? "pt-0" : null
-          }`}
+          className="bg-white rounded-2xl border border-gray-100 shadow-card hover:shadow-card-hover transition-all duration-300 cursor-pointer overflow-hidden group"
           onClick={() => handleEditClick(item)}
         >
-          <div className="flex space-x-3 pl-2">
-            {item.Image ? (
+          {item.Image && (
+            <div className="h-40 overflow-hidden">
               <img
                 src={item?.Image}
-                className=" h-20 w-20 rounded-md object-cover border-2 border-primary"
+                alt={item?.Name}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               />
-            ) : null}
-
-            <div className="flex-1 space-y-1">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium">{item?.Name}</h3>
-                <p className="text-lg text-gray-500 mr-2 mt-2 font-medium">
-                  {helper.formatCurrency(item.Price)}
-                </p>
-              </div>
-              <div className="mt-2">
-                {item?.Categories.map((e) => (
-                  <span class="bg-blue-100 text-blue-800 text-sm font-medium me-2 p-1 rounded cursor-pointer">
+            </div>
+          )}
+          <div className="p-4">
+            <div className="flex items-start justify-between mb-2">
+              <h3 className="font-bold text-gray-900 group-hover:text-red-600 transition-colors">
+                {item?.Name}
+              </h3>
+              <span className="font-bold text-lg whitespace-nowrap" style={{ color: "#EA1D2C" }}>
+                {helper.formatCurrency(item.Price)}
+              </span>
+            </div>
+            {item?.Categories?.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {item.Categories.map((e, i) => (
+                  <span
+                    key={i}
+                    className="text-xs font-medium px-2.5 py-1 rounded-full"
+                    style={{ background: "#FEF2F2", color: "#EA1D2C" }}
+                  >
                     {e.Name}
                   </span>
                 ))}
               </div>
-            </div>
+            )}
           </div>
-        </li>
+        </div>
       ))}
       <CardapioEditModal
         isOpen={editModalOpen}
@@ -59,7 +65,7 @@ const CardapioList = ({
         onSave={onSave}
         onRefreshItens={onRefreshItens}
       />
-    </ul>
+    </div>
   );
 };
 

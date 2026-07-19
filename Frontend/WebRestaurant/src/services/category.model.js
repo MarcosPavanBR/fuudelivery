@@ -3,7 +3,7 @@ import api from "./api";
 
 async function getCategories(id) {
   try {
-    const { data } = await api.get("/api/order/categories/" + id);
+    const { data } = await api.get("/categories/" + id);
 
     return data;
   } catch (e) {
@@ -19,7 +19,7 @@ async function createCategory(items, editItem, establishmentId) {
       ID: null,
       EstablishmentId: establishmentId,
     };
-    const { data } = await api.post("api/order/categories/create", body);
+    const { data } = await api.post("categories/create", body);
 
     return [
       { ID: data.Id, ...data },
@@ -38,7 +38,7 @@ async function updateCategory(items, editItem, establishmentId) {
       EstablishmentId: establishmentId,
     };
     const { data } = await api.put(
-      "/api/order/categories/" + editItem.ID,
+      "/categories/" + editItem.ID,
       body
     );
     return items.map((e) => {
@@ -52,7 +52,7 @@ async function updateCategory(items, editItem, establishmentId) {
 
 async function handlerVinculoProdutoCategoria(productID, categoryId) {
   try {
-    const { data } = await api.post("/api/order/categories/product", {
+    const { data } = await api.post("/categories/product", {
       productID: parseInt(productID),
       categoryId: parseInt(categoryId),
     });
@@ -65,7 +65,7 @@ async function handlerVinculoProdutoCategoria(productID, categoryId) {
 
 async function deleteCategory(items, id) {
   try {
-    const { data } = await api.delete("/api/order/categories/" + id);
+    const { data } = await api.delete("/categories/" + id);
 
     return [...items.filter((e) => e.ID !== id)];
   } catch (e) {

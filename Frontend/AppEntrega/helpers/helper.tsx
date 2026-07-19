@@ -224,3 +224,6 @@ export default {
   formatDate,
   formatDateNoHour,
 };
+
+export const getApiUrl = () => 
+  process.env.EXPO_PUBLIC_API_URL || "https://fuudelivery-api-8y6l.onrender.com";

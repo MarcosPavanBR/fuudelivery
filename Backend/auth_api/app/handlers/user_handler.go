@@ -49,7 +49,7 @@ func CreateUser(c *fiber.Ctx) error {
 			tx.Rollback()
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
-		_, err = tx.Exec("INSERT INTO users (id, name, email, password) VALUES ($1, $2, $3, $4)", userID, user.Name, user.Email, user.Password)
+		_, err = tx.Exec("INSERT INTO users (id, name, email, password, role) VALUES ($1, $2, $3, $4, 'owner')", userID, user.Name, user.Email, user.Password)
 		if err != nil {
 			tx.Rollback()
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})

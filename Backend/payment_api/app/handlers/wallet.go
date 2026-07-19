@@ -79,19 +79,13 @@ func DeductFromWallet(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Amount must be greater than zero"})
 	}
 
-	var wallet models.Wallet
-	err := models.MongoDabase.Collection("wallets").FindOne(context.Background(), bson.M{"user_id": req.UserID}).Decode(&wallet)
-	if err != nil {
-		return c.Status(404).JSON(fiber.Map{"error": "Wallet not found"})
-	}
-
-	if wallet.Balance < req.Amount {
-		return c.Status(400).JSON(fiber.Map{"error": "Insufficient balance"})
-	}
-
-	_, err = models.MongoDabase.Collection("wallets").UpdateOne(
+	// Atomic deduction: only succeeds if balance >= amount (no race condition)
+	result, err := models.MongoDabase.Collection("wallets").UpdateOne(
 		context.Background(),
-		bson.M{"user_id": req.UserID},
+		bson.M{
+			"user_id": req.UserID,
+			"balance": bson.M{"$gte": req.Amount},
+		},
 		bson.M{
 			"$inc":  bson.M{"balance": -req.Amount},
 			"$set":  bson.M{"last_updated": time.Now()},
@@ -101,6 +95,11 @@ func DeductFromWallet(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to deduct from wallet"})
 	}
 
+	if result.ModifiedCount == 0 {
+		return c.Status(400).JSON(fiber.Map{"error": "Insufficient balance or wallet not found"})
+	}
+
+	var wallet models.Wallet
 	models.MongoDabase.Collection("wallets").FindOne(context.Background(), bson.M{"user_id": req.UserID}).Decode(&wallet)
 
 	return c.Status(200).JSON(fiber.Map{

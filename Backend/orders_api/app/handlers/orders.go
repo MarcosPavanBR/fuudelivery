@@ -360,7 +360,7 @@ func ListOrdersByPhone(c *fiber.Ctx) error {
 	}
 
 	collection := models.MongoDabase.Collection("orders")
-	options := options.Find().SetSort(bson.D{{"lastModified", -1}})
+	options := options.Find().SetSort(bson.D{{Key: "lastModified", Value: -1}})
 	cursor, err := collection.Find(context.Background(), filter, options)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao buscar pedidos"})

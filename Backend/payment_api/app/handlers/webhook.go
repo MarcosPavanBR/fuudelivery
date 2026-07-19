@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/carloshomar/vercardapio/payment_api/app/models"
+	"github.com/carloshomar/vercardapio/payment_api/app/services"
 	"github.com/gofiber/fiber/v2"
 	"github.com/streadway/amqp"
 	"go.mongodb.org/mongo-driver/bson"
@@ -156,18 +157,27 @@ func HandlePaymentWebhook(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "charge.id is required"})
 	}
 
+	// Verify charge status with AbacatePay API (don't trust webhook body)
+	client := services.NewAbacatePayClient()
+	apiCharge, err := client.GetCharge(chargeID)
+	if err != nil {
+		log.Printf("Failed to verify charge %s with AbacatePay: %v", chargeID, err)
+		return c.Status(502).JSON(fiber.Map{"error": "Failed to verify charge"})
+	}
+
+	apiStatus, _ := apiCharge["status"].(string)
 	abacatepayStatus := ""
-	switch webhookData.Event {
-	case "charge.paid":
+	switch apiStatus {
+	case "paid", "CONFIRMED":
 		abacatepayStatus = "CONFIRMED"
-	case "charge.expired":
+	case "expired":
 		abacatepayStatus = "EXPIRED"
-	case "charge.refunded":
+	case "refunded":
 		abacatepayStatus = "REFUNDED"
-	case "charge.cancelled":
+	case "cancelled":
 		abacatepayStatus = "CANCELLED"
 	default:
-		abacatepayStatus = webhookData.Charge.Status
+		abacatepayStatus = apiStatus
 	}
 
 	updateLocalPaymentStatus(chargeID, abacatepayStatus)

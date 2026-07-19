@@ -100,7 +100,7 @@ func CreatePIXPayment(amount float64, description, email, name string) (*MPPayme
 	return &paymentResp, nil
 }
 
-func CreateCardPayment(amount float64, description, token, email string, installments int, paymentMethodID string) (*MPPaymentResponse, error) {
+func CreateCardPayment(amount float64, description, token, email string, installments int, paymentMethodID string, idempotencyKey string) (*MPPaymentResponse, error) {
 	creds := GetMPCredentials()
 
 	payload := MPPaymentRequest{
@@ -120,7 +120,7 @@ func CreateCardPayment(amount float64, description, token, email string, install
 	req, _ := http.NewRequest("POST", "https://api.mercadopago.com/v1/payments", bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+creds.AccessToken)
-	req.Header.Set("X-Idempotency-Key", generateUUID())
+	req.Header.Set("X-Idempotency-Key", idempotencyKey)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)

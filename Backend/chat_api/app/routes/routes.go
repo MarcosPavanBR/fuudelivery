@@ -1,7 +1,7 @@
 package routes
 
 import (
-	"github.com/carloshomar/vercardapio/app/handlers"
+	"github.com/carloshomar/vercardapio/chat_api/app/handlers"
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 )

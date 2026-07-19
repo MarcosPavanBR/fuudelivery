@@ -5,8 +5,8 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/joho/godotenv"
-	"github.com/carloshomar/vercardapio/app/models"
-	"github.com/carloshomar/vercardapio/app/routes"
+	"github.com/carloshomar/vercardapio/auth_api/app/models"
+	"github.com/carloshomar/vercardapio/auth_api/app/routes"
 )
 
 func main() {

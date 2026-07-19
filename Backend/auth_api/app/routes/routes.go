@@ -1,8 +1,8 @@
 package routes
 
 import (
-	"github.com/carloshomar/vercardapio/app/handlers"
-	"github.com/carloshomar/vercardapio/app/middlewares"
+	"github.com/carloshomar/vercardapio/auth_api/app/handlers"
+	"github.com/carloshomar/vercardapio/auth_api/app/middlewares"
 	"github.com/gofiber/fiber/v2"
 )
 

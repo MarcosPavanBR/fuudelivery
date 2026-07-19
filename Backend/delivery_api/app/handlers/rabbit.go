@@ -14,15 +14,16 @@ func failOnError(err error, msg string) {
 }
 
 func PublishMessage(body []byte) error {
-	// Conectar ao servidor RabbitMQ
 	dsn := os.Getenv("RABBIT_CONNECTION")
 	if dsn == "" {
-		panic("RABBIT_CONNECTION não configurado")
+		log.Println("[QUEUE] RabbitMQ não configurado, mensagem ignorada")
+		return nil
 	}
 
 	queueName := os.Getenv("RABBIT_ORDER_QUEUE")
 	if queueName == "" {
-		panic("RABBIT_ORDER_QUEUE não configurado")
+		log.Println("[QUEUE] RABBIT_ORDER_QUEUE não configurado, mensagem ignorada")
+		return nil
 	}
 
 	conn, err := amqp.Dial(dsn)

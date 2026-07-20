@@ -23,7 +23,7 @@ const TopMenu = ({ toggleMenu, isOpen }) => {
 
   const handlerBnt = async (res) => {
     try {
-      await api.put("/establishments/status/handler/" + user.id);
+      await api.put("/establishments/status/handler/" + (user?.establishment_id || user?.id));
       await refreshOpen();
     } catch (e) {
       console.log(e);

@@ -8,15 +8,16 @@ import Texts from "../../constants/Texts";
 
 function Taxes() {
   const { getUser } = useAuth();
+  const estId = getUser()?.establishment_id || getUser()?.establishment?.id || getUser()?.sub;
 
   const [body, setBody] = useState({
-    establishmentId: getUser().id,
+    establishmentId: estId,
     fixedTaxa: 0,
     perKm: 0,
   });
 
   const start = async () => {
-    const resp = await deliveryModel.getDeilvery(getUser().id);
+    const resp = await deliveryModel.getDeilvery(estId);
     setBody({
       fixedTaxa: resp?.FixedTaxa ?? 0,
       perKm: resp?.PerKm ?? 0,

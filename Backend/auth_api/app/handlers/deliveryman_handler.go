@@ -8,6 +8,14 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+func ListAllDeliveryMen(c *fiber.Ctx) error {
+	var deliveryMen []models.DeliveryMan
+	if err := models.DB.Find(&deliveryMen).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to query delivery men"})
+	}
+	return c.JSON(deliveryMen)
+}
+
 func LoginDeliveryMan(c *fiber.Ctx) error {
 	var request dto.LoginRequest
 	if err := c.BodyParser(&request); err != nil {

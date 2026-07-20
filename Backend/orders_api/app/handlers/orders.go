@@ -347,6 +347,28 @@ func ListOrdersByEstablishmentIDAndPhone(c *fiber.Ctx) error {
 	return c.JSON(orders)
 }
 
+func ListAllOrders(c *fiber.Ctx) error {
+	collection := models.MongoDabase.Collection("orders")
+
+	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}}).SetLimit(500)
+	cursor, err := collection.Find(context.Background(), bson.M{}, opts)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao buscar pedidos"})
+	}
+	defer cursor.Close(context.Background())
+
+	var orders []map[string]interface{}
+	if err := cursor.All(context.Background(), &orders); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao decodificar resultados"})
+	}
+
+	if orders == nil {
+		orders = []map[string]interface{}{}
+	}
+
+	return c.JSON(orders)
+}
+
 func ListOrdersByPhone(c *fiber.Ctx) error {
 	phoneNumberEncoded := c.Params("phone")
 

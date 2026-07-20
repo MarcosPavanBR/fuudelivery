@@ -109,6 +109,7 @@ func setupWebSocketRoutes(app *fiber.App) {
 func setupAuthRoutes(app *fiber.App) {
 	app.Post("/users/register", authHandlers.CreateUser)
 	app.Post("/users/login", authHandlers.Login)
+	app.Get("/users", protectedRoute, authHandlers.ListAllUsers)
 	app.Get("/users/:id", protectedRoute, authHandlers.GetUser)
 	app.Put("/users/:id/password", protectedRoute, authHandlers.ChangePassword)
 
@@ -125,6 +126,7 @@ func setupAuthRoutes(app *fiber.App) {
 
 	app.Post("/delivery-man/login", authHandlers.LoginDeliveryMan)
 	app.Post("/delivery-man/register", authHandlers.CreateDeliveryMan)
+	app.Get("/delivery-man", protectedRoute, authHandlers.ListAllDeliveryMen)
 }
 
 func setupOrdersRoutes(app *fiber.App) {
@@ -160,6 +162,7 @@ func setupOrdersRoutes(app *fiber.App) {
 	app.Put("/orders/status", protectedRoute, func(c *fiber.Ctx) error {
 		return ordersHandlers.UpdateOrderStatus(c, sendMessageToClient)
 	})
+	app.Get("/orders/all", protectedRoute, ordersHandlers.ListAllOrders)
 	app.Get("/orders/repeat/:orderId", ordersHandlers.RepeatOrder)
 	app.Get("/orders/list-phone/:phone", ordersHandlers.ListOrdersByPhone)
 	app.Get("/orders/:establishmentId", ordersHandlers.ListOrdersByEstablishmentID)
@@ -207,6 +210,7 @@ func setupDeliveryRoutes(app *fiber.App) {
 }
 
 func setupPaymentRoutes(app *fiber.App) {
+	app.Get("/payments/all", protectedRoute, paymentHandlers.ListAllPayments)
 	app.Post("/payments/pix/generate", protectedRoute, paymentHandlers.GeneratePIX)
 	app.Post("/payments/card/tokenize", protectedRoute, paymentHandlers.TokenizeCard)
 	app.Post("/payments/card/charge", protectedRoute, paymentHandlers.ChargeCard)

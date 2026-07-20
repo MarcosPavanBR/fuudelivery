@@ -96,6 +96,14 @@ func CreateUser(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"user": request, "token": tokenString})
 }
 
+func ListAllUsers(c *fiber.Ctx) error {
+	var users []models.User
+	if err := models.DB.Find(&users).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to query users"})
+	}
+	return c.JSON(users)
+}
+
 func Login(c *fiber.Ctx) error {
 	var request dto.LoginRequest
 	if err := c.BodyParser(&request); err != nil {

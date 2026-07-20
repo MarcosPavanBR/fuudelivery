@@ -18,7 +18,7 @@ export default function Payments() {
 
   const loadPayments = async () => {
     try {
-      const { data } = await api.get("/payments");
+      const { data } = await api.get("/payments/all");
       const list = data || [];
       setPayments(list);
       setStats({

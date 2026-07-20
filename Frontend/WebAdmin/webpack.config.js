@@ -1,5 +1,6 @@
 const path = require("path");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
+const CopyPlugin = require("copy-webpack-plugin");
 
 module.exports = {
   entry: "./src/index.js",
@@ -20,7 +21,7 @@ module.exports = {
         use: {
           loader: "babel-loader",
           options: {
-            presets: ["@babel/preset-react"],
+            presets: ["@babel/preset-env", "@babel/preset-react"],
           },
         },
       },
@@ -28,7 +29,7 @@ module.exports = {
         test: /\.css$/,
         use: [
           "style-loader",
-          "css-loader",
+          { loader: "css-loader", options: { esModule: false } },
           {
             loader: "postcss-loader",
             options: {
@@ -44,6 +45,11 @@ module.exports = {
   plugins: [
     new HtmlWebpackPlugin({
       template: "./public/index.html",
+    }),
+    new CopyPlugin({
+      patterns: [
+        { from: "public/_redirects", to: ".", noErrorOnMissing: true },
+      ],
     }),
   ],
   resolve: {

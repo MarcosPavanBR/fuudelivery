@@ -19,6 +19,7 @@ type Payment struct {
 	CustomerID      int64              `bson:"customer_id" json:"customer_id"`
 	EstablishmentID int64              `bson:"establishment_id" json:"establishment_id"`
 	Amount          float64            `bson:"amount" json:"amount"`
+	DeliveryAmount  float64            `bson:"delivery_amount,omitempty" json:"delivery_amount,omitempty"`
 	Method          string             `bson:"method" json:"method"`
 	Status          string             `bson:"status" json:"status"`
 	PixQRCode       string             `bson:"pix_qr_code,omitempty" json:"pix_qr_code,omitempty"`

@@ -62,6 +62,44 @@ func GenerateJWT(user *models.User, establishment *models.Establishment) (string
 	return tokenString, nil
 }
 
+func GetUserIDFromToken(c *fiber.Ctx) (int64, error) {
+	token, err := ValidateJWT(c)
+	if err != nil {
+		return 0, err
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return 0, fiber.NewError(fiber.StatusUnauthorized, "Invalid token claims")
+	}
+
+	idFloat, ok := claims["id"].(float64)
+	if !ok {
+		return 0, fiber.NewError(fiber.StatusUnauthorized, "User ID not found in token")
+	}
+
+	return int64(idFloat), nil
+}
+
+func GetEstablishmentIDFromToken(c *fiber.Ctx) (int64, error) {
+	token, err := ValidateJWT(c)
+	if err != nil {
+		return 0, err
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return 0, fiber.NewError(fiber.StatusUnauthorized, "Invalid token claims")
+	}
+
+	estIDFloat, ok := claims["establishment_id"].(float64)
+	if !ok {
+		return 0, fiber.NewError(fiber.StatusForbidden, "Establishment ID not found in token")
+	}
+
+	return int64(estIDFloat), nil
+}
+
 func GenerateJWTDeliveryMan(user *models.DeliveryMan) (string, error) {
 	expirationTime := time.Now().UTC().Add(time.Hour * 24 * 7).Unix()
 

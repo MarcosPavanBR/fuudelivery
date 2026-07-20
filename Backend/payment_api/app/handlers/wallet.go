@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"context"
+	"log"
 	"time"
 
+	"github.com/carloshomar/vercardapio/auth_api/app/middlewares"
 	"github.com/carloshomar/vercardapio/payment_api/app/dto"
 	"github.com/carloshomar/vercardapio/payment_api/app/models"
 	"github.com/gofiber/fiber/v2"
@@ -29,6 +31,11 @@ func GetBalance(c *fiber.Ctx) error {
 }
 
 func TopUp(c *fiber.Ctx) error {
+	tokenUserID, err := middlewares.GetUserIDFromToken(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+	}
+
 	var req dto.WalletTopUpRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
@@ -38,10 +45,41 @@ func TopUp(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Amount must be greater than zero"})
 	}
 
+	if req.PaymentID == "" {
+		return c.Status(400).JSON(fiber.Map{"error": "payment_id is required for wallet top-up"})
+	}
+
+	if tokenUserID != req.UserID {
+		log.Printf("[WALLET] TopUp rejected: token user %d != body user %d", tokenUserID, req.UserID)
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot top up another user's wallet"})
+	}
+
+	var payment models.Payment
+	err = models.MongoDabase.Collection("payments").FindOne(
+		context.Background(),
+		bson.M{"abacatepay_id": req.PaymentID},
+	).Decode(&payment)
+	if err != nil {
+		log.Printf("[WALLET] TopUp rejected: payment %s not found (user=%d)", req.PaymentID, req.UserID)
+		return c.Status(404).JSON(fiber.Map{"error": "Payment not found"})
+	}
+
+	if payment.Status != "CONFIRMED" {
+		log.Printf("[WALLET] TopUp rejected: payment %s status=%s, expected CONFIRMED", req.PaymentID, payment.Status)
+		return c.Status(402).JSON(fiber.Map{"error": "Payment not confirmed", "status": payment.Status})
+	}
+
+	if payment.CustomerID != req.UserID {
+		log.Printf("[WALLET] TopUp rejected: payment %s belongs to user %d, requested by user %d", req.PaymentID, payment.CustomerID, req.UserID)
+		return c.Status(403).JSON(fiber.Map{"error": "Payment does not belong to this user"})
+	}
+
+	amountToCredit := payment.Amount
+
 	filter := bson.M{"user_id": req.UserID}
 	update := bson.M{
-		"$inc":  bson.M{"balance": req.Amount},
-		"$set":  bson.M{"last_updated": time.Now()},
+		"$inc": bson.M{"balance": amountToCredit},
+		"$set": bson.M{"last_updated": time.Now()},
 		"$setOnInsert": bson.M{
 			"_id":       primitive.NewObjectID(),
 			"user_id":   req.UserID,
@@ -50,26 +88,46 @@ func TopUp(c *fiber.Ctx) error {
 	}
 
 	opts := options.Update().SetUpsert(true)
-	_, err := models.MongoDabase.Collection("wallets").UpdateOne(context.Background(), filter, update, opts)
+	_, err = models.MongoDabase.Collection("wallets").UpdateOne(context.Background(), filter, update, opts)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to top up wallet"})
 	}
 
+	ledgerEntry := bson.M{
+		"_id":           primitive.NewObjectID(),
+		"user_id":       req.UserID,
+		"type":          "credit",
+		"amount":        amountToCredit,
+		"payment_id":    req.PaymentID,
+		"balance_after": 0,
+		"description":   "Wallet top-up via confirmed payment",
+		"created_at":    time.Now(),
+	}
+	models.MongoDabase.Collection("wallet_ledger").InsertOne(context.Background(), ledgerEntry)
+
 	var wallet models.Wallet
 	models.MongoDabase.Collection("wallets").FindOne(context.Background(), filter).Decode(&wallet)
+
+	log.Printf("[WALLET] TopUp OK: user=%d amount=%.2f payment=%s new_balance=%.2f", req.UserID, amountToCredit, req.PaymentID, wallet.Balance)
 
 	return c.Status(200).JSON(fiber.Map{
 		"user_id":      req.UserID,
 		"balance":      wallet.Balance,
-		"amount_added": req.Amount,
+		"amount_added": amountToCredit,
 		"message":      "Wallet topped up successfully",
 	})
 }
 
 func DeductFromWallet(c *fiber.Ctx) error {
+	tokenUserID, err := middlewares.GetUserIDFromToken(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+	}
+
 	var req struct {
-		UserID int64   `json:"user_id"`
-		Amount float64 `json:"amount"`
+		UserID  int64   `json:"user_id"`
+		Amount  float64 `json:"amount"`
+		OrderID string  `json:"order_id,omitempty"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
@@ -79,7 +137,11 @@ func DeductFromWallet(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Amount must be greater than zero"})
 	}
 
-	// Atomic deduction: only succeeds if balance >= amount (no race condition)
+	if tokenUserID != req.UserID {
+		log.Printf("[WALLET] Deduct rejected: token user %d != body user %d", tokenUserID, req.UserID)
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot deduct from another user's wallet"})
+	}
+
 	result, err := models.MongoDabase.Collection("wallets").UpdateOne(
 		context.Background(),
 		bson.M{
@@ -87,8 +149,8 @@ func DeductFromWallet(c *fiber.Ctx) error {
 			"balance": bson.M{"$gte": req.Amount},
 		},
 		bson.M{
-			"$inc":  bson.M{"balance": -req.Amount},
-			"$set":  bson.M{"last_updated": time.Now()},
+			"$inc": bson.M{"balance": -req.Amount},
+			"$set": bson.M{"last_updated": time.Now()},
 		},
 	)
 	if err != nil {
@@ -101,6 +163,20 @@ func DeductFromWallet(c *fiber.Ctx) error {
 
 	var wallet models.Wallet
 	models.MongoDabase.Collection("wallets").FindOne(context.Background(), bson.M{"user_id": req.UserID}).Decode(&wallet)
+
+	ledgerEntry := bson.M{
+		"_id":           primitive.NewObjectID(),
+		"user_id":       req.UserID,
+		"type":          "debit",
+		"amount":        req.Amount,
+		"order_id":      req.OrderID,
+		"balance_after": wallet.Balance,
+		"description":   "Wallet deduction",
+		"created_at":    time.Now(),
+	}
+	models.MongoDabase.Collection("wallet_ledger").InsertOne(context.Background(), ledgerEntry)
+
+	log.Printf("[WALLET] Deduct OK: user=%d amount=%.2f new_balance=%.2f", req.UserID, req.Amount, wallet.Balance)
 
 	return c.Status(200).JSON(fiber.Map{
 		"user_id":         req.UserID,

@@ -7,6 +7,7 @@ type PaymentRequest struct {
 	CustomerID       int64   `json:"customer_id"`
 	EstablishmentID  int64   `json:"establishment_id"`
 	Amount           float64 `json:"amount"`
+	DeliveryAmount   float64 `json:"delivery_amount,omitempty"`
 	Method           string  `json:"method"`
 	CardToken        string  `json:"card_token,omitempty"`
 	Installments     int     `json:"installments,omitempty"`
@@ -42,9 +43,10 @@ type CardTokenizeRequest struct {
 }
 
 type WalletTopUpRequest struct {
-	UserID int64   `json:"user_id"`
-	Amount float64 `json:"amount"`
-	Method string  `json:"method"`
+	UserID    int64   `json:"user_id"`
+	Amount    float64 `json:"amount"`
+	Method    string  `json:"method"`
+	PaymentID string  `json:"payment_id"`
 }
 
 type SplitPaymentRequest struct {

@@ -196,7 +196,7 @@ func defaultSplitRules(payment *models.Payment) []models.SplitRule {
 	total := payment.Amount
 	platformFee := total * 0.05
 	establishmentAmount := total * 0.85
-	deliveryAmount := 0.0
+	deliveryAmount := payment.DeliveryAmount
 	customerCredit := total - platformFee - establishmentAmount - deliveryAmount
 
 	if customerCredit < 0 {

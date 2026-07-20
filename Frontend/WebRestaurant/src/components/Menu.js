@@ -8,6 +8,7 @@ import {
   FiChevronLeft,
   FiX,
 } from "react-icons/fi";
+import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import ToggleSwitch from "../components/ToggleSwitch";
 import { toast } from "react-toastify";
@@ -17,13 +18,13 @@ import Logo from "./Logo";
 import ThemeToggle from "./ThemeToggle";
 
 const TopMenu = ({ toggleMenu, isOpen }) => {
-  const { getUser, openEstablishment, refreshOpenawait } = useAuth();
+  const { getUser, openEstablishment, refreshOpen } = useAuth();
   const user = getUser();
 
   const handlerBnt = async (res) => {
     try {
       await api.put("/establishments/status/handler/" + user.id);
-      await refreshOpenawait();
+      await refreshOpen();
     } catch (e) {
       console.log(e);
     }
@@ -86,6 +87,7 @@ const TopMenu = ({ toggleMenu, isOpen }) => {
 
 const SideMenu = ({ isOpen, isMobile, onClose }) => {
   const { logout } = useAuth();
+  const location = useLocation();
 
   const MENUS = [
     {
@@ -152,16 +154,16 @@ const SideMenu = ({ isOpen, isMobile, onClose }) => {
             <ul className="space-y-1">
               {MENUS.map((item, idx) => (
                 <li key={idx}>
-                  <a
-                    href={item.href}
+                  <Link
+                    to={item.href}
                     onClick={handleNavClick}
                     className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
-                      window.location.hash === "#" + item.href
+                      location.pathname === item.href
                         ? "text-white"
                         : "text-gray-400 hover:text-white"
                     }`}
                     style={
-                      window.location.hash === "#" + item.href
+                      location.pathname === item.href
                         ? {
                             background: "linear-gradient(135deg, #EA1D2C, #C41420)",
                           }
@@ -170,7 +172,7 @@ const SideMenu = ({ isOpen, isMobile, onClose }) => {
                   >
                     <span className="flex-shrink-0">{item.icon}</span>
                     <span className="text-sm font-medium">{item.title}</span>
-                  </a>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -216,17 +218,17 @@ const SideMenu = ({ isOpen, isMobile, onClose }) => {
         <ul className="space-y-1">
           {MENUS.map((item, idx) => (
             <li key={idx}>
-              <a
-                href={item.href}
+              <Link
+                to={item.href}
                 className={`flex items-center gap-3 rounded-xl transition-all duration-200 group ${
                   isOpen ? "px-4 py-3" : "px-0 py-3 justify-center"
                 } ${
-                  window.location.hash === "#" + item.href
+                  location.pathname === item.href
                     ? "text-white"
                     : "text-gray-400 hover:text-white"
                 }`}
                 style={
-                  window.location.hash === "#" + item.href
+                  location.pathname === item.href
                     ? {
                         background: "linear-gradient(135deg, #EA1D2C, #C41420)",
                       }
@@ -238,7 +240,7 @@ const SideMenu = ({ isOpen, isMobile, onClose }) => {
                 {isOpen && (
                   <span className="text-sm font-medium">{item.title}</span>
                 )}
-              </a>
+              </Link>
             </li>
           ))}
         </ul>

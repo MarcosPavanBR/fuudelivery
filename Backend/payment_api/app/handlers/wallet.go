@@ -93,20 +93,22 @@ func TopUp(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to top up wallet"})
 	}
 
+	var wallet models.Wallet
+	models.MongoDabase.Collection("wallets").FindOne(context.Background(), filter).Decode(&wallet)
+
 	ledgerEntry := bson.M{
 		"_id":           primitive.NewObjectID(),
 		"user_id":       req.UserID,
 		"type":          "credit",
 		"amount":        amountToCredit,
 		"payment_id":    req.PaymentID,
-		"balance_after": 0,
+		"balance_after": wallet.Balance,
 		"description":   "Wallet top-up via confirmed payment",
 		"created_at":    time.Now(),
 	}
-	models.MongoDabase.Collection("wallet_ledger").InsertOne(context.Background(), ledgerEntry)
-
-	var wallet models.Wallet
-	models.MongoDabase.Collection("wallets").FindOne(context.Background(), filter).Decode(&wallet)
+	if _, ledgerErr := models.MongoDabase.Collection("wallet_ledger").InsertOne(context.Background(), ledgerEntry); ledgerErr != nil {
+		log.Printf("[WALLET] WARNING: Failed to write ledger for user=%d: %v", req.UserID, ledgerErr)
+	}
 
 	log.Printf("[WALLET] TopUp OK: user=%d amount=%.2f payment=%s new_balance=%.2f", req.UserID, amountToCredit, req.PaymentID, wallet.Balance)
 
@@ -174,7 +176,9 @@ func DeductFromWallet(c *fiber.Ctx) error {
 		"description":   "Wallet deduction",
 		"created_at":    time.Now(),
 	}
-	models.MongoDabase.Collection("wallet_ledger").InsertOne(context.Background(), ledgerEntry)
+	if _, ledgerErr := models.MongoDabase.Collection("wallet_ledger").InsertOne(context.Background(), ledgerEntry); ledgerErr != nil {
+		log.Printf("[WALLET] WARNING: Failed to write ledger for user=%d: %v", req.UserID, ledgerErr)
+	}
 
 	log.Printf("[WALLET] Deduct OK: user=%d amount=%.2f new_balance=%.2f", req.UserID, req.Amount, wallet.Balance)
 

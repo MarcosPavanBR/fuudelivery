@@ -160,7 +160,7 @@ export default function Dashboard() {
                         <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
                           {order.status}
                         </span>
-                      ))}
+                      )))}
                     </td>
                     <td className="px-6 py-4 font-semibold text-gray-900">
                       R$ {order.total?.toFixed(2) || "0,00"}
@@ -169,7 +169,7 @@ export default function Dashboard() {
                       {order.createdAt ? new Date(order.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "-"}
                     </td>
                   </tr>
-                ))}
+                )))}
             </tbody>
           </table>
         </div>

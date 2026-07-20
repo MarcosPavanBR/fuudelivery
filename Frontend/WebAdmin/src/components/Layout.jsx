@@ -52,7 +52,7 @@ export default function Layout() {
       )}
 
       <aside
-        className={`fixed lg:static inset-y-0 left-0 z-50 flex flex-col transition-all duration-300 ease-in-out ${
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col transition-all duration-300 ease-in-out ${
           sidebarOpen ? "w-64" : "w-20"
         } ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
         style={{
@@ -123,7 +123,7 @@ export default function Layout() {
         </div>
       </aside>
 
-      <div className={`flex-1 flex flex-col transition-all duration-300 lg:ml-0 ${sidebarOpen ? "lg:ml-64" : "lg:ml-20"}`}>
+      <div className={`flex-1 flex flex-col transition-all duration-300 ${sidebarOpen ? "lg:ml-64" : "lg:ml-20"}`}>
         <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/80 backdrop-blur-sm">
           <div className="flex items-center justify-between px-6 py-4">
             <div className="flex items-center gap-4">

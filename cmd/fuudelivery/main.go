@@ -110,6 +110,7 @@ func setupAuthRoutes(app *fiber.App) {
 	app.Post("/users/register", authHandlers.CreateUser)
 	app.Post("/users/login", authHandlers.Login)
 	app.Get("/users/:id", protectedRoute, authHandlers.GetUser)
+	app.Put("/users/:id/password", protectedRoute, authHandlers.ChangePassword)
 
 	app.Get("/establishments", authHandlers.ListEstablishments)
 	app.Get("/establishments/:id", authHandlers.GetEstablishments)
@@ -213,13 +214,13 @@ func setupPaymentRoutes(app *fiber.App) {
 	app.Post("/payments/split", protectedRoute, paymentHandlers.ProcessSplit)
 	app.Post("/payments/webhook", paymentHandlers.HandlePaymentWebhook)
 	app.Post("/payments/mercadopago/webhook", paymentHandlers.MercadoPagoWebhook)
-	app.Get("/wallet/balance/:user_id", paymentHandlers.GetBalance)
+	app.Get("/wallet/balance/:user_id", protectedRoute, paymentHandlers.GetBalance)
 	app.Post("/wallet/topup", protectedRoute, paymentHandlers.TopUp)
 	app.Post("/wallet/deduct", protectedRoute, paymentHandlers.DeductFromWallet)
 }
 
 func setupChatRoutes(app *fiber.App) {
-	app.Get("/chat/messages/:orderId", chatHandlers.GetMessages)
+	app.Get("/chat/messages/:orderId", protectedRoute, chatHandlers.GetMessages)
 	app.Post("/chat/message", protectedRoute, chatHandlers.SendMessage)
 	app.Put("/chat/read/:orderId/:userId", protectedRoute, chatHandlers.MarkAsRead)
 }

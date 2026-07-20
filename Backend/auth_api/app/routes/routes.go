@@ -10,6 +10,7 @@ func SetupRoutes(app *fiber.App) {
 	app.Post("/users/register", handlers.CreateUser)
 	app.Post("/users/login", handlers.Login)
 	app.Get("/users/:id", ProtectedRoute, handlers.GetUser)
+	app.Put("/users/:id/password", ProtectedRoute, handlers.ChangePassword)
 
 	app.Get("/establishments", handlers.ListEstablishments)
 	app.Put("/establishments/status/handler/:id", handlers.HandlerEstablishmentStatus)

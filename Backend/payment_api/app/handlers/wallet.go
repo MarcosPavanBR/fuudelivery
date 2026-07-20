@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -15,11 +16,25 @@ import (
 )
 
 func GetBalance(c *fiber.Ctx) error {
+	tokenUserID, err := middlewares.GetUserIDFromToken(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+	}
+
 	userIDStr := c.Params("user_id")
 
+	var reqUserID int64
+	if _, scanErr := fmt.Sscanf(userIDStr, "%d", &reqUserID); scanErr != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid user_id"})
+	}
+
+	if tokenUserID != reqUserID {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot view another user's balance"})
+	}
+
 	var wallet models.Wallet
-	err := models.MongoDabase.Collection("wallets").FindOne(context.Background(), bson.M{"user_id": userIDStr}).Decode(&wallet)
-	if err != nil {
+	findErr := models.MongoDabase.Collection("wallets").FindOne(context.Background(), bson.M{"user_id": userIDStr}).Decode(&wallet)
+	if findErr != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Wallet not found", "balance": 0})
 	}
 
@@ -74,6 +89,11 @@ func TopUp(c *fiber.Ctx) error {
 		return c.Status(403).JSON(fiber.Map{"error": "Payment does not belong to this user"})
 	}
 
+	if payment.WalletCreditedAt != nil {
+		log.Printf("[WALLET] TopUp rejected: payment %s already used for wallet credit at %v", req.PaymentID, payment.WalletCreditedAt)
+		return c.Status(409).JSON(fiber.Map{"error": "Payment already used for wallet top-up"})
+	}
+
 	amountToCredit := payment.Amount
 
 	filter := bson.M{"user_id": req.UserID}
@@ -92,6 +112,13 @@ func TopUp(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to top up wallet"})
 	}
+
+	now := time.Now()
+	models.MongoDabase.Collection("payments").UpdateOne(
+		context.Background(),
+		bson.M{"abacatepay_id": req.PaymentID},
+		bson.M{"$set": bson.M{"wallet_credited_at": now}},
+	)
 
 	var wallet models.Wallet
 	models.MongoDabase.Collection("wallets").FindOne(context.Background(), filter).Decode(&wallet)

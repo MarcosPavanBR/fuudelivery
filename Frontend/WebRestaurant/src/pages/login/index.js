@@ -29,7 +29,7 @@ const LoginPage = () => {
     setLoading(false);
   };
 
-  if (cadastro) return <SignupPage />;
+  if (cadastro) return <SignupPage onBack={() => setCadastro(false)} />;
 
   return (
     <div className="min-h-screen flex">

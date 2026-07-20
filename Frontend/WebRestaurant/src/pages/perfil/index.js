@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import MenuLayout from "../../components/Menu";
 import { useAuth } from "../../context/AuthContext";
 import api from "../../services/api";
-import { FiLoader, FiSave, FiUser, FiMapPin, FiImage, FiPalette } from "react-icons/fi";
+import { FiLoader, FiSave, FiUser, FiMapPin, FiImage, FiPalette, FiLock } from "react-icons/fi";
 import { toast } from "react-toastify";
 import Texts from "../../constants/Texts";
 import restaurantModel from "../../services/restaurant.model";
@@ -68,6 +68,16 @@ function Perfil() {
               <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">E-mail</label>
               <input disabled value={user.email} className="block w-full px-4 py-2.5 bg-gray-100 border border-gray-200 rounded-xl text-sm text-gray-500" />
             </div>
+          </div>
+          <div className="mt-4">
+            <a
+              href="/#/alterar-senha"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-gray-200 hover:bg-gray-50 transition-colors"
+              style={{ color: "#EA1D2C" }}
+            >
+              <FiLock className="h-4 w-4" />
+              Alterar Senha
+            </a>
           </div>
         </div>
 

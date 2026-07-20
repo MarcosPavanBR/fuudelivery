@@ -57,6 +57,7 @@ func GeneratePIX(c *fiber.Ctx) error {
 		CustomerID:      req.CustomerID,
 		EstablishmentID: req.EstablishmentID,
 		Amount:          req.Amount,
+		DeliveryAmount:  req.DeliveryAmount,
 		Method:          "pix",
 		Status:          "PENDING",
 		PixQRCode:       apiResp.QRCode,

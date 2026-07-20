@@ -47,7 +47,7 @@ export default function Layout() {
         {/* Logo */}
         <div
           className={`flex items-center border-b border-white/10 transition-all duration-300 ${
-            sidebarOpen ? "px-5 py-5" : "px-4 py-5 justify-center"`
+            sidebarOpen ? "px-5 py-5" : "px-4 py-5 justify-center"
           }`}
         >
           <svg
@@ -101,14 +101,11 @@ export default function Layout() {
               <li key={item.path}>
                 <NavLink
                   to={item.path}
-                  className={({ isActive }) => `
-                    flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group
-                    ${isActive
-                      ? "text-white font-semibold"
-                      : "text-gray-400 hover:text-white hover:bg-white/10"
-                    }
-                    ${!sidebarOpen ? "justify-center px-0" : ""}
-                  `}
+                  className={({ isActive }) =>
+                    "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group " +
+                    (isActive ? "text-white font-semibold" : "text-gray-400 hover:text-white hover:bg-white/10") +
+                    (!sidebarOpen ? " justify-center px-0" : "")
+                  }
                   title={!sidebarOpen ? item.label : undefined}
                 >
                   <span className="flex-shrink-0"><item.icon className="h-5 w-5" /></span>

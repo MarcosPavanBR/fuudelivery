@@ -43,7 +43,7 @@ services:
     name: fuudelivery-admin
     env: static
     buildCommand: cd Frontend/WebAdmin && npm install --legacy-peer-deps && npm run build
-    staticPublishPath: Frontend/WebAdmin/dist
+    staticPublishPath: Frontend/WebAdmin/build
     routes:
       - type: rewrite
         source: /*

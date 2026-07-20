@@ -35,4 +35,5 @@ type Payment struct {
 	SplitRules      []SplitRule        `bson:"split_rules" json:"split_rules"`
 	CreatedAt       time.Time          `bson:"created_at" json:"created_at"`
 	ConfirmedAt     *time.Time         `bson:"confirmed_at,omitempty" json:"confirmed_at,omitempty"`
+	WalletCreditedAt *time.Time        `bson:"wallet_credited_at,omitempty" json:"wallet_credited_at,omitempty"`
 }

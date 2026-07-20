@@ -112,14 +112,14 @@ func setupAuthRoutes(app *fiber.App) {
 	app.Get("/users/:id", protectedRoute, authHandlers.GetUser)
 
 	app.Get("/establishments", authHandlers.ListEstablishments)
-	app.Put("/establishments/status/handler/:id", authHandlers.HandlerEstablishmentStatus)
 	app.Get("/establishments/:id", authHandlers.GetEstablishments)
-	app.Put("/establishments/:id", authHandlers.UpdateEstablishment)
+	app.Put("/establishments/status/handler/:id", protectedRoute, authHandlers.HandlerEstablishmentStatus)
+	app.Put("/establishments/:id", protectedRoute, authHandlers.UpdateEstablishment)
 	app.Get("/establishments/:id/users", protectedRoute, authHandlers.GetUserByEstablishment)
 
 	app.Get("/establishments/:id/hours", authHandlers.GetBusinessHours)
-	app.Post("/establishments/hours", authHandlers.UpsertBusinessHours)
-	app.Post("/establishments/hours/bulk", authHandlers.BulkUpdateBusinessHours)
+	app.Post("/establishments/hours", protectedRoute, authHandlers.UpsertBusinessHours)
+	app.Post("/establishments/hours/bulk", protectedRoute, authHandlers.BulkUpdateBusinessHours)
 	app.Get("/establishments/:id/is-open", authHandlers.CheckEstablishmentOpen)
 
 	app.Post("/delivery-man/login", authHandlers.LoginDeliveryMan)
@@ -131,32 +131,32 @@ func setupOrdersRoutes(app *fiber.App) {
 	app.Get("/products/all/:establishmentId", ordersHandlers.GetByEstablishmentIdWithRelations)
 	app.Get("/products/:establishmentId", ordersHandlers.GetByEstablishmentId)
 
-	app.Post("/products/create", ordersHandlers.CreateProduct)
-	app.Delete("/products/delete/:id", ordersHandlers.DeleteProduct)
-	app.Post("/products/multi-create", ordersHandlers.CreateMultProducts)
-	app.Put("/products/update/:id", ordersHandlers.UpdateProduct)
+	app.Post("/products/create", protectedRoute, ordersHandlers.CreateProduct)
+	app.Delete("/products/delete/:id", protectedRoute, ordersHandlers.DeleteProduct)
+	app.Post("/products/multi-create", protectedRoute, ordersHandlers.CreateMultProducts)
+	app.Put("/products/update/:id", protectedRoute, ordersHandlers.UpdateProduct)
 
-	app.Post("/categories/create", ordersHandlers.CreateCategories)
+	app.Post("/categories/create", protectedRoute, ordersHandlers.CreateCategories)
 	app.Get("/categories/:establishmentId", ordersHandlers.GetCategories)
-	app.Post("/categories/product", ordersHandlers.CreateProductCategorie)
-	app.Delete("/categories/:id", ordersHandlers.DeleteCategory)
-	app.Put("/categories/:id", ordersHandlers.UpdateCategory)
+	app.Post("/categories/product", protectedRoute, ordersHandlers.CreateProductCategorie)
+	app.Delete("/categories/:id", protectedRoute, ordersHandlers.DeleteCategory)
+	app.Put("/categories/:id", protectedRoute, ordersHandlers.UpdateCategory)
 	app.Get("/categories/product/:establishmentId", ordersHandlers.GetCategoriesWithProducts)
 
-	app.Post("/additional", ordersHandlers.CreateAdditional)
+	app.Post("/additional", protectedRoute, ordersHandlers.CreateAdditional)
 	app.Get("/additional/:id", ordersHandlers.ListAdditional)
-	app.Put("/additional/:id", ordersHandlers.UpdateAdditional)
-	app.Delete("/additional/:id", ordersHandlers.DeleteAdditional)
-	app.Post("/additional/product", ordersHandlers.CreateProductToAdditional)
+	app.Put("/additional/:id", protectedRoute, ordersHandlers.UpdateAdditional)
+	app.Delete("/additional/:id", protectedRoute, ordersHandlers.DeleteAdditional)
+	app.Post("/additional/product", protectedRoute, ordersHandlers.CreateProductToAdditional)
 
-	app.Post("/delivery", ordersHandlers.InsertDelivery)
-	app.Post("/delivery/calculate-delivery-value", ordersHandlers.CalculateDeliveryValue)
+	app.Post("/delivery", protectedRoute, ordersHandlers.InsertDelivery)
+	app.Post("/delivery/calculate-delivery-value", protectedRoute, ordersHandlers.CalculateDeliveryValue)
 	app.Get("/delivery/value/:establishmentId", ordersHandlers.GetDeliveryByEstablishmentID)
 
-	app.Post("/orders", func(c *fiber.Ctx) error {
+	app.Post("/orders", protectedRoute, func(c *fiber.Ctx) error {
 		return ordersHandlers.CreateOrder(c, sendMessageToClient)
 	})
-	app.Put("/orders/status", func(c *fiber.Ctx) error {
+	app.Put("/orders/status", protectedRoute, func(c *fiber.Ctx) error {
 		return ordersHandlers.UpdateOrderStatus(c, sendMessageToClient)
 	})
 	app.Get("/orders/repeat/:orderId", ordersHandlers.RepeatOrder)
@@ -164,64 +164,64 @@ func setupOrdersRoutes(app *fiber.App) {
 	app.Get("/orders/:establishmentId", ordersHandlers.ListOrdersByEstablishmentID)
 	app.Get("/orders/:establishmentId/:phoneNumber", ordersHandlers.ListOrdersByEstablishmentIDAndPhone)
 
-	app.Post("/coupons", ordersHandlers.CreateCoupon)
+	app.Post("/coupons", protectedRoute, ordersHandlers.CreateCoupon)
 	app.Post("/coupons/validate", ordersHandlers.ValidateCoupon)
-	app.Post("/coupons/apply", ordersHandlers.ApplyCoupon)
+	app.Post("/coupons/apply", protectedRoute, ordersHandlers.ApplyCoupon)
 	app.Get("/coupons", ordersHandlers.ListCoupons)
 	app.Get("/coupons/:id", ordersHandlers.GetCoupon)
-	app.Delete("/coupons/:id", ordersHandlers.DeleteCoupon)
-	app.Post("/coupons/referral", ordersHandlers.GenerateReferralCoupon)
+	app.Delete("/coupons/:id", protectedRoute, ordersHandlers.DeleteCoupon)
+	app.Post("/coupons/referral", protectedRoute, ordersHandlers.GenerateReferralCoupon)
 	app.Post("/coupons/calculate", ordersHandlers.CalculateDiscount)
 
 	app.Get("/qrcode/:establishmentId", ordersHandlers.GenerateTableQRCode)
-	app.Post("/orders/schedule", ordersHandlers.ScheduleOrder)
-	app.Post("/notifications/register", ordersHandlers.RegisterPushToken)
+	app.Post("/orders/schedule", protectedRoute, ordersHandlers.ScheduleOrder)
+	app.Post("/notifications/register", protectedRoute, ordersHandlers.RegisterPushToken)
 
-	app.Post("/loyalty/earn", ordersHandlers.EarnPoints)
-	app.Post("/loyalty/redeem", ordersHandlers.RedeemPoints)
+	app.Post("/loyalty/earn", protectedRoute, ordersHandlers.EarnPoints)
+	app.Post("/loyalty/redeem", protectedRoute, ordersHandlers.RedeemPoints)
 	app.Get("/loyalty/balance/:phone", ordersHandlers.GetLoyaltyBalance)
 	app.Get("/loyalty/history/:phone", ordersHandlers.GetLoyaltyHistory)
 	app.Get("/loyalty/calculate", ordersHandlers.CalculateLoyaltyDiscount)
 
-	app.Post("/reviews", ordersHandlers.CreateReview)
+	app.Post("/reviews", protectedRoute, ordersHandlers.CreateReview)
 	app.Get("/reviews/establishment/:id", ordersHandlers.GetEstablishmentReviews)
 	app.Get("/reviews/product/:id", ordersHandlers.GetProductReviews)
-	app.Put("/reviews/respond/:id", ordersHandlers.RespondToReview)
+	app.Put("/reviews/respond/:id", protectedRoute, ordersHandlers.RespondToReview)
 	app.Get("/reviews/user/:phone", ordersHandlers.GetUserReviews)
 	app.Get("/reviews/rating/:establishmentId", ordersHandlers.GetEstablishmentRating)
 
-	app.Post("/orders/pickup-code/generate", ordersHandlers.GeneratePickupCode)
-	app.Post("/orders/pickup-code/validate", ordersHandlers.ValidatePickupCode)
+	app.Post("/orders/pickup-code/generate", protectedRoute, ordersHandlers.GeneratePickupCode)
+	app.Post("/orders/pickup-code/validate", protectedRoute, ordersHandlers.ValidatePickupCode)
 	app.Get("/orders/pickup-code/:id", ordersHandlers.GetPickupCode)
 }
 
 func setupDeliveryRoutes(app *fiber.App) {
 	app.Get("/solicitation-orders", deliveryHandlers.GetApprovedSolicitations)
-	app.Put("/solicitation-orders/hand-shake", deliveryHandlers.HandShakeDeliveryman)
+	app.Put("/solicitation-orders/hand-shake", protectedRoute, deliveryHandlers.HandShakeDeliveryman)
 	app.Get("/deliveryman/has-active/:id", deliveryHandlers.GetOrdersByDeliverymanID)
-	app.Post("/deliveryman/status", func(c *fiber.Ctx) error {
+	app.Post("/deliveryman/status", protectedRoute, func(c *fiber.Ctx) error {
 		return deliveryHandlers.UpdateOrderStatusByDeliverymanID(c, sendMessageToClient)
 	})
 	app.Get("/deliveryman/extrato/:id", deliveryHandlers.GetExtrato)
 }
 
 func setupPaymentRoutes(app *fiber.App) {
-	app.Post("/payments/pix/generate", paymentHandlers.GeneratePIX)
-	app.Post("/payments/card/tokenize", paymentHandlers.TokenizeCard)
-	app.Post("/payments/card/charge", paymentHandlers.ChargeCard)
-	app.Post("/payments/process", paymentHandlers.ProcessPayment)
-	app.Post("/payments/split", paymentHandlers.ProcessSplit)
+	app.Post("/payments/pix/generate", protectedRoute, paymentHandlers.GeneratePIX)
+	app.Post("/payments/card/tokenize", protectedRoute, paymentHandlers.TokenizeCard)
+	app.Post("/payments/card/charge", protectedRoute, paymentHandlers.ChargeCard)
+	app.Post("/payments/process", protectedRoute, paymentHandlers.ProcessPayment)
+	app.Post("/payments/split", protectedRoute, paymentHandlers.ProcessSplit)
 	app.Post("/payments/webhook", paymentHandlers.HandlePaymentWebhook)
 	app.Post("/payments/mercadopago/webhook", paymentHandlers.MercadoPagoWebhook)
 	app.Get("/wallet/balance/:user_id", paymentHandlers.GetBalance)
-	app.Post("/wallet/topup", paymentHandlers.TopUp)
-	app.Post("/wallet/deduct", paymentHandlers.DeductFromWallet)
+	app.Post("/wallet/topup", protectedRoute, paymentHandlers.TopUp)
+	app.Post("/wallet/deduct", protectedRoute, paymentHandlers.DeductFromWallet)
 }
 
 func setupChatRoutes(app *fiber.App) {
 	app.Get("/chat/messages/:orderId", chatHandlers.GetMessages)
-	app.Post("/chat/message", chatHandlers.SendMessage)
-	app.Put("/chat/read/:orderId/:userId", chatHandlers.MarkAsRead)
+	app.Post("/chat/message", protectedRoute, chatHandlers.SendMessage)
+	app.Put("/chat/read/:orderId/:userId", protectedRoute, chatHandlers.MarkAsRead)
 }
 
 func main() {

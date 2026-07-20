@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Component } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import Login from "./pages/Login.jsx";
@@ -11,6 +11,34 @@ import Payments from "./pages/Payments.jsx";
 import Settings from "./pages/Settings.jsx";
 import Layout from "./components/Layout.jsx";
 import { FiLoader } from "react-icons/fi";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: 40, fontFamily: "monospace", background: "#fff", minHeight: "100vh" }}>
+          <h1 style={{ color: "#EA1D2C" }}>Erro na aplicação</h1>
+          <pre style={{ whiteSpace: "pre-wrap", marginTop: 16, color: "#333" }}>
+            {this.state.error?.message}
+          </pre>
+          <pre style={{ whiteSpace: "pre-wrap", marginTop: 8, color: "#666", fontSize: 12 }}>
+            {this.state.error?.stack}
+          </pre>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -18,7 +46,7 @@ const ProtectedRoute = ({ children }) => {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <FiLoader className="animate-spin h-8 w-8 text-fuu-red" />
+        <FiLoader className="animate-spin h-8 w-8" style={{ color: "#EA1D2C" }} />
       </div>
     );
   }
@@ -36,7 +64,7 @@ function AppRoutes() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <FiLoader className="animate-spin h-8 w-8 text-fuu-red" />
+        <FiLoader className="animate-spin h-8 w-8" style={{ color: "#EA1D2C" }} />
       </div>
     );
   }
@@ -66,10 +94,13 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <AppRoutes />
-      </AuthProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <AuthProvider>
+          <AppRoutes />
+          <ToastContainer position="top-right" autoClose={3000} />
+        </AuthProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }

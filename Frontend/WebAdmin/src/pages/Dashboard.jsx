@@ -89,23 +89,23 @@ export default function Dashboard() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "Restaurantes Ativos", value: stats.restaurants, icon: FiBuilding2, color: "#EA1D2C", bg: "#FEF2F2" },
-          { label: "Total de Usuários", value: stats.users, icon: FiUsers, color: "#F7A11E", bg: "#FFFBEB" },
-          { label: "Pedidos Hoje", value: stats.todayOrders, icon: FiShoppingBag, color: "#10B981", bg: "#ECFDF5" },
-          { label: "Entregadores Online", value: stats.onlineDrivers, icon: FiTruck, color: "#3B82F6", bg: "#DBEAFE" },
-        ].map((stat, i) => (
-          <div key={i} className="bg-white rounded-2xl p-5 shadow-card hover:shadow-card-hover transition-all duration-300 border border-gray-100">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500">{stat.label}</p>
-                <p className="text-3xl font-bold mt-2 text-gray-900">{stat.value}</p>
-              </div>
-              <div className="p-3 rounded-xl" style={{ background: stat.bg, color: stat.color }}>
-                <stat.icon className="h-6 w-6" />
+          {[
+            { label: "Restaurantes Ativos", value: stats.restaurants, IconComp: FiBuilding2, color: "#EA1D2C", bg: "#FEF2F2" },
+            { label: "Total de Usuarios", value: stats.users, IconComp: FiUsers, color: "#F7A11E", bg: "#FFFBEB" },
+            { label: "Pedidos Hoje", value: stats.todayOrders, IconComp: FiShoppingBag, color: "#10B981", bg: "#ECFDF5" },
+            { label: "Entregadores Online", value: stats.onlineDrivers, IconComp: FiTruck, color: "#3B82F6", bg: "#DBEAFE" },
+          ].map((stat, i) => (
+            <div key={i} className="bg-white rounded-2xl p-5 transition-all duration-300 border border-gray-100">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-500">{stat.label}</p>
+                  <p className="text-3xl font-bold mt-2 text-gray-900">{stat.value}</p>
+                </div>
+                <div className="p-3 rounded-xl" style={{ background: stat.bg, color: stat.color }}>
+                  {stat.IconComp && <stat.IconComp className="h-6 w-6" />}
+                </div>
               </div>
             </div>
-          </div>
         ))}
       </div>
 

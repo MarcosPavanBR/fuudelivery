@@ -15,6 +15,9 @@
     "start": "webpack serve --mode development --open",
     "build": "webpack --mode production"
   },
+  "overrides": {
+    "ajv": "8.17.1"
+  },
   "browserslist": {
     "production": [
       ">0.2%",

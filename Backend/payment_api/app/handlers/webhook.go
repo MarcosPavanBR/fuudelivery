@@ -200,7 +200,18 @@ func defaultSplitRules(payment *models.Payment) []models.SplitRule {
 	customerCredit := total - platformFee - establishmentAmount - deliveryAmount
 
 	if customerCredit < 0 {
+		overage := -customerCredit
 		customerCredit = 0
+		establishmentAmount -= overage
+		if establishmentAmount < 0 {
+			overage = -establishmentAmount
+			establishmentAmount = 0
+			platformFee -= overage
+			if platformFee < 0 {
+				platformFee = 0
+			}
+		}
+		log.Printf("[SPLIT] Warning: deliveryAmount=%.2f exceeds available%%, adjusted establishment=%.2f platform=%.2f", deliveryAmount, establishmentAmount, platformFee)
 	}
 
 	rules := []models.SplitRule{

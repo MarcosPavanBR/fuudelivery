@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { FiUsers, FiShoppingBag, FiTruck, FiDollarSign, FiTrendingUp, FiActivity, FiBuilding2, FiMapPin, FiClock } from "react-icons/fi";
 import api from "../services/api";
 
@@ -174,9 +175,9 @@ export default function Dashboard() {
           </table>
         </div>
         <div className="px-6 py-4 border-t border-gray-100">
-          <a href="/orders" className="text-sm font-medium" style={{ color: "#EA1D2C" }}>
+          <Link to="/orders" className="text-sm font-medium" style={{ color: "#EA1D2C" }}>
             Ver todos os pedidos →
-          </a>
+          </Link>
         </div>
       </div>
     </div>

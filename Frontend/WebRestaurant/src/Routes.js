@@ -6,6 +6,7 @@ import { Routes as ReactRoutes, Route } from "react-router-dom";
 import Cardapio from "./pages/cardapio/products/Cardapio";
 import Perfil from "./pages/perfil";
 import Taxes from "./pages/perfil/taxes";
+import ChangePassword from "./pages/perfil/password";
 
 export default function PrivateRoute() {
   const { user } = useAuth();
@@ -18,6 +19,7 @@ export default function PrivateRoute() {
       <Route path="/gestor-cardapio" element={<Cardapio />} />
       <Route path="/perfil" element={<Perfil />} />
       <Route path="/taxas" element={<Taxes />} />
+      <Route path="/alterar-senha" element={<ChangePassword />} />
     </ReactRoutes>
   );
 }

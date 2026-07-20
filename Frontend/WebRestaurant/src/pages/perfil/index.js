@@ -21,10 +21,13 @@ function Perfil() {
   const init = async () => {
     setLoading(true);
     try {
-      const { data } = await api.get("/establishments/" + getUser().id);
+      const userData = getUser();
+      if (!userData) { setLoading(false); return; }
+      const estId = userData.establishment_id || userData.establishment?.id || userData.sub;
+      if (!estId) { setLoading(false); return; }
+      const { data } = await api.get("/establishments/" + estId);
       setEstablishment(data);
-      const usert = getUser();
-      setUser({ name: usert.name, email: usert.email });
+      setUser({ name: userData.name || "", email: userData.email || "" });
     } catch (e) {
       console.log(e);
     }
@@ -34,7 +37,8 @@ function Perfil() {
   async function submit(e) {
     e.preventDefault();
     setLoading(true);
-    const resp = await restaurantModel.updateEstablishment(getUser().establishment_id, establishment);
+    const estId = getUser()?.establishment_id || getUser()?.establishment?.id || getUser()?.sub;
+    const resp = await restaurantModel.updateEstablishment(estId, establishment);
     if (resp) toast.success(Texts.restaurant_update);
     else toast.error(Texts.restaurant_error);
     setLoading(false);
@@ -157,7 +161,7 @@ function Perfil() {
         </div>
 
         {/* Business Hours */}
-        <BusinessHoursEditor establishmentId={getUser().establishment_id} />
+        <BusinessHoursEditor establishmentId={getUser()?.establishment_id || getUser()?.establishment?.id || getUser()?.sub} />
 
         {/* Save Button */}
         <div className="flex justify-end">

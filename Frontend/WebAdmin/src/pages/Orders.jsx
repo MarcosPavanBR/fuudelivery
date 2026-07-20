@@ -25,7 +25,7 @@ export default function Orders() {
 
   const loadOrders = async () => {
     try {
-      const { data } = await api.get("/orders");
+      const { data } = await api.get("/orders/all");
       setOrders(data || []);
     } catch (e) { console.error(e); toast.error("Erro ao carregar pedidos"); }
     setLoading(false);

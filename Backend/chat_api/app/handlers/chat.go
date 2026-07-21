@@ -1,4 +1,4 @@
-package handlers
+﻿package handlers
 
 import (
 	"context"
@@ -16,6 +16,14 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+
+func mongoCtx() context.Context {
+ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+_ = cancel
+return ctx
+}
+
 
 type Room struct {
 	Clients map[*websocket.Conn]*ClientInfo
@@ -185,7 +193,7 @@ func saveMessage(req dto.ChatMessageRequest) (*models.ChatMessage, error) {
 		msg.MessageType = "text"
 	}
 
-	_, err := collection.InsertOne(context.Background(), msg)
+	_, err := collection.InsertOne(mongoCtx(), msg)
 	if err != nil {
 		return nil, err
 	}
@@ -204,14 +212,14 @@ func GetMessages(c *fiber.Ctx) error {
 	filter := bson.M{"order_id": orderID}
 	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: 1}})
 
-	cursor, err := collection.Find(context.Background(), filter, opts)
+	cursor, err := collection.Find(mongoCtx(), filter, opts)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Erro ao buscar mensagens"})
 	}
-	defer cursor.Close(context.Background())
+	defer cursor.Close(mongoCtx())
 
 	var messages []models.ChatMessage
-	if err := cursor.All(context.Background(), &messages); err != nil {
+	if err := cursor.All(mongoCtx(), &messages); err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Erro ao decodificar mensagens"})
 	}
 
@@ -258,7 +266,7 @@ func MarkAsRead(c *fiber.Ctx) error {
 	}
 	update := bson.M{"$set": bson.M{"read_at": now}}
 
-	_, err = collection.UpdateMany(context.Background(), filter, update)
+	_, err = collection.UpdateMany(mongoCtx(), filter, update)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Erro ao marcar como lido"})
 	}

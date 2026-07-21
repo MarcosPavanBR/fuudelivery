@@ -1,7 +1,6 @@
-package handlers
+﻿package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"log"
 	"os"
@@ -13,6 +12,8 @@ import (
 	"github.com/streadway/amqp"
 	"go.mongodb.org/mongo-driver/bson"
 )
+
+
 
 func publishToOrderQueue(body []byte) error {
 	dsn := os.Getenv("RABBIT_CONNECTION")
@@ -78,7 +79,7 @@ func updateLocalPaymentStatus(abacatepayID string, status string) {
 	}
 
 	_, err := models.MongoDabase.Collection("payments").UpdateOne(
-		context.Background(),
+		mongoCtx(),
 		bson.M{"abacatepay_id": abacatepayID},
 		bson.M{"$set": updateFields},
 	)
@@ -90,7 +91,7 @@ func updateLocalPaymentStatus(abacatepayID string, status string) {
 func publishPaymentApproved(abacatepayID string) {
 	var payment models.Payment
 	err := models.MongoDabase.Collection("payments").FindOne(
-		context.Background(),
+		mongoCtx(),
 		bson.M{"abacatepay_id": abacatepayID},
 	).Decode(&payment)
 	if err != nil {
@@ -120,7 +121,7 @@ func publishPaymentApproved(abacatepayID string) {
 	payment.SplitRules = splitRules
 
 	_, err = models.MongoDabase.Collection("payments").UpdateOne(
-		context.Background(),
+		mongoCtx(),
 		bson.M{"abacatepay_id": abacatepayID},
 		bson.M{"$set": bson.M{
 			"status":       "CONFIRMED",

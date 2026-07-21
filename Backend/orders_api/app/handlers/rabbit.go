@@ -1,7 +1,6 @@
-package handlers
+﻿package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"log"
 	"os"
@@ -13,6 +12,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
+
+
 
 func ReceiveMessage(msg string, sendMessageToClient func(clientID int64, message []byte) error) {
 	var orderMsg dto.RequestPayload
@@ -48,7 +49,7 @@ func ReceiveMessage(msg string, sendMessageToClient func(clientID int64, message
 		}
 	}
 
-	_, err = collection.UpdateOne(context.Background(), filter, update)
+	_, err = collection.UpdateOne(mongoCtx(), filter, update)
 	if err != nil {
 		log.Printf("Erro ao atualizar o documento: %s", err)
 
@@ -56,7 +57,7 @@ func ReceiveMessage(msg string, sendMessageToClient func(clientID int64, message
 
 	if orderMsg.DeliveryMan.Status == "FINISHED" {
 		var order dto.RequestPayload
-		collection.FindOne(context.Background(), filter).Decode(&order)
+		collection.FindOne(mongoCtx(), filter).Decode(&order)
 		order.OrderId = orderID.Hex()
 		orderBytes, err := json.Marshal(&order)
 		if err == nil {

@@ -1,7 +1,6 @@
-package handlers
+﻿package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"log"
 	"math"
@@ -14,6 +13,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
+
+
 
 func CreateSolicitation(msg string, sendMessageToClient func(clientID int64, message []byte) error) error {
 	var orderDTO dto.OrderDTO
@@ -28,7 +29,7 @@ func CreateSolicitation(msg string, sendMessageToClient func(clientID int64, mes
 
 	filter := bson.M{"orderid": orderDTO.OrderId}
 
-	existingSolicitation := collection.FindOne(context.Background(), filter)
+	existingSolicitation := collection.FindOne(mongoCtx(), filter)
 	if existingSolicitation.Err() != nil {
 		if existingSolicitation.Err() != mongo.ErrNoDocuments {
 			log.Printf("Erro ao buscar a solicitação existente: %s", existingSolicitation.Err())
@@ -40,7 +41,7 @@ func CreateSolicitation(msg string, sendMessageToClient func(clientID int64, mes
 		log.Printf("Atualizando pedido %s", orderDTO.OrderId)
 		log.Printf("Para Status: %s", orderDTO.Status)
 
-		_, err := collection.UpdateOne(context.Background(), filter, update)
+		_, err := collection.UpdateOne(mongoCtx(), filter, update)
 		if err != nil {
 			log.Printf("Erro ao atualizar a solicitação: %s", err)
 			return nil
@@ -56,7 +57,7 @@ func CreateSolicitation(msg string, sendMessageToClient func(clientID int64, mes
 		return nil
 	}
 
-	_, err = collection.InsertOne(context.Background(), &orderDTO)
+	_, err = collection.InsertOne(mongoCtx(), &orderDTO)
 	if err != nil {
 		log.Printf("[SOLICITATION] Failed to insert: %v", err)
 		return err
@@ -77,7 +78,7 @@ func HandShakeDeliveryman(c *fiber.Ctx) error {
 	filter := bson.M{"orderid": orderDTO.OrderId}
 
 	var existingOrder dto.OrderDTO
-	err := collection.FindOne(context.Background(), filter).Decode(&existingOrder)
+	err := collection.FindOne(mongoCtx(), filter).Decode(&existingOrder)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
@@ -100,7 +101,7 @@ func HandShakeDeliveryman(c *fiber.Ctx) error {
 
 	update := bson.M{"$set": bson.M{"deliveryman": existingOrder.DeliveryMan}}
 
-	_, err = collection.UpdateOne(context.Background(), filter, update)
+	_, err = collection.UpdateOne(mongoCtx(), filter, update)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Erro ao atualizar a solicitação",
@@ -153,13 +154,13 @@ func GetApprovedSolicitations(c *fiber.Ctx) error {
 		},
 	}
 
-	cur, err := collection.Find(context.Background(), filter)
+	cur, err := collection.Find(mongoCtx(), filter)
 	if err != nil {
 		return err
 	}
-	defer cur.Close(context.Background())
+	defer cur.Close(mongoCtx())
 
-	for cur.Next(context.Background()) {
+	for cur.Next(mongoCtx()) {
 		var orderDTO dto.OrderDTO
 		err := cur.Decode(&orderDTO)
 		if err != nil {

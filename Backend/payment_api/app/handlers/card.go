@@ -1,7 +1,6 @@
-package handlers
+﻿package handlers
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"time"
@@ -12,6 +11,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
+
+
 
 func ChargeCard(c *fiber.Ctx) error {
 	var req struct {
@@ -137,7 +138,7 @@ func ProcessPayment(c *fiber.Ctx) error {
 			ConfirmedAt:     confirmedAt,
 		}
 
-		_, err = models.MongoDabase.Collection("payments").InsertOne(context.Background(), payment)
+		_, err = models.MongoDabase.Collection("payments").InsertOne(mongoCtx(), payment)
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to save payment"})
 		}
@@ -183,7 +184,7 @@ func ProcessPayment(c *fiber.Ctx) error {
 			CreatedAt:       time.Now(),
 		}
 
-		_, err = models.MongoDabase.Collection("payments").InsertOne(context.Background(), payment)
+		_, err = models.MongoDabase.Collection("payments").InsertOne(mongoCtx(), payment)
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to save payment"})
 		}

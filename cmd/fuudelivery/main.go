@@ -60,6 +60,18 @@ func protectedRoute(c *fiber.Ctx) error {
 	return c.Next()
 }
 
+func adminRequired(c *fiber.Ctx) error {
+	_, err := middlewares.ValidateJWT(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+	}
+	role, err := middlewares.GetUserRoleFromToken(c)
+	if err != nil || role != "admin" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Admin access required"})
+	}
+	return c.Next()
+}
+
 func setupWebSocketRoutes(app *fiber.App) {
 	// Orders WebSocket
 	app.Use("/ws", func(c *fiber.Ctx) error {
@@ -109,7 +121,8 @@ func setupWebSocketRoutes(app *fiber.App) {
 func setupAuthRoutes(app *fiber.App) {
 	app.Post("/users/register", authHandlers.CreateUser)
 	app.Post("/users/login", authHandlers.Login)
-	app.Get("/users", protectedRoute, authHandlers.ListAllUsers)
+	app.Post("/admin/bootstrap", authHandlers.BootstrapAdmin)
+	app.Get("/users", adminRequired, authHandlers.ListAllUsers)
 	app.Get("/users/:id", protectedRoute, authHandlers.GetUser)
 	app.Put("/users/:id/password", protectedRoute, authHandlers.ChangePassword)
 
@@ -126,7 +139,7 @@ func setupAuthRoutes(app *fiber.App) {
 
 	app.Post("/delivery-man/login", authHandlers.LoginDeliveryMan)
 	app.Post("/delivery-man/register", authHandlers.CreateDeliveryMan)
-	app.Get("/delivery-man", protectedRoute, authHandlers.ListAllDeliveryMen)
+	app.Get("/delivery-man", adminRequired, authHandlers.ListAllDeliveryMen)
 }
 
 func setupOrdersRoutes(app *fiber.App) {
@@ -162,7 +175,7 @@ func setupOrdersRoutes(app *fiber.App) {
 	app.Put("/orders/status", protectedRoute, func(c *fiber.Ctx) error {
 		return ordersHandlers.UpdateOrderStatus(c, sendMessageToClient)
 	})
-	app.Get("/orders/all", protectedRoute, ordersHandlers.ListAllOrders)
+	app.Get("/orders/all", adminRequired, ordersHandlers.ListAllOrders)
 	app.Get("/orders/repeat/:orderId", ordersHandlers.RepeatOrder)
 	app.Get("/orders/list-phone/:phone", ordersHandlers.ListOrdersByPhone)
 	app.Get("/orders/:establishmentId", ordersHandlers.ListOrdersByEstablishmentID)
@@ -196,7 +209,7 @@ func setupOrdersRoutes(app *fiber.App) {
 
 	app.Post("/orders/pickup-code/generate", protectedRoute, ordersHandlers.GeneratePickupCode)
 	app.Post("/orders/pickup-code/validate", protectedRoute, ordersHandlers.ValidatePickupCode)
-	app.Get("/orders/pickup-code/:id", ordersHandlers.GetPickupCode)
+	app.Get("/orders/pickup-code/:id", protectedRoute, ordersHandlers.GetPickupCode)
 }
 
 func setupDeliveryRoutes(app *fiber.App) {
@@ -210,7 +223,7 @@ func setupDeliveryRoutes(app *fiber.App) {
 }
 
 func setupPaymentRoutes(app *fiber.App) {
-	app.Get("/payments/all", protectedRoute, paymentHandlers.ListAllPayments)
+	app.Get("/payments/all", adminRequired, paymentHandlers.ListAllPayments)
 	app.Post("/payments/pix/generate", protectedRoute, paymentHandlers.GeneratePIX)
 	app.Post("/payments/card/tokenize", protectedRoute, paymentHandlers.TokenizeCard)
 	app.Post("/payments/card/charge", protectedRoute, paymentHandlers.ChargeCard)
@@ -226,7 +239,7 @@ func setupPaymentRoutes(app *fiber.App) {
 func setupChatRoutes(app *fiber.App) {
 	app.Get("/chat/messages/:orderId", protectedRoute, chatHandlers.GetMessages)
 	app.Post("/chat/message", protectedRoute, chatHandlers.SendMessage)
-	app.Put("/chat/read/:orderId/:userId", protectedRoute, chatHandlers.MarkAsRead)
+	app.Put("/chat/read/:orderId", protectedRoute, chatHandlers.MarkAsRead)
 }
 
 func main() {

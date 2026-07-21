@@ -1,7 +1,6 @@
-package handlers
+﻿package handlers
 
 import (
-	"context"
 	"log"
 	"strconv"
 
@@ -11,6 +10,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+
 
 func GetExtrato(c *fiber.Ctx) error {
 	deliverymanIDStr := c.Params("id")
@@ -33,17 +34,17 @@ func GetExtrato(c *fiber.Ctx) error {
 	options := options.Find()
 	options.SetSort(bson.D{{Key: "operationDate", Value: -1}})
 
-	cursor, err := collection.Find(context.Background(), filter, options)
+	cursor, err := collection.Find(mongoCtx(), filter, options)
 	if err != nil {
 		log.Printf("Erro ao consultar os pedidos: %s", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Erro ao consultar os pedidos",
 		})
 	}
-	defer cursor.Close(context.Background())
+	defer cursor.Close(mongoCtx())
 
 	var orders []dto.OrderDTO
-	for cursor.Next(context.Background()) {
+	for cursor.Next(mongoCtx()) {
 		var order dto.OrderDTO
 		if err := cursor.Decode(&order); err != nil {
 			log.Printf("Erro ao decodificar o pedido: %s", err)

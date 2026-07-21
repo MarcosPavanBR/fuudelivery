@@ -1,7 +1,6 @@
-package handlers
+﻿package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"log"
 	"os"
@@ -13,6 +12,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
+
+
 
 func ProcessSplit(c *fiber.Ctx) error {
 	var req dto.SplitPaymentRequest
@@ -26,7 +27,7 @@ func ProcessSplit(c *fiber.Ctx) error {
 	}
 
 	var payment models.Payment
-	err = models.MongoDabase.Collection("payments").FindOne(context.Background(), bson.M{"_id": objID}).Decode(&payment)
+	err = models.MongoDabase.Collection("payments").FindOne(mongoCtx(), bson.M{"_id": objID}).Decode(&payment)
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Payment not found"})
 	}
@@ -45,7 +46,7 @@ func ProcessSplit(c *fiber.Ctx) error {
 	}
 
 	_, err = models.MongoDabase.Collection("payments").UpdateOne(
-		context.Background(),
+		mongoCtx(),
 		bson.M{"_id": objID},
 		bson.M{
 			"$set": bson.M{

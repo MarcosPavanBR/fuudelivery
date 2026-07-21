@@ -1,4 +1,4 @@
-package handlers
+﻿package handlers
 
 import (
 	"bytes"
@@ -12,6 +12,14 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+
+func mongoCtx() context.Context {
+ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+_ = cancel
+return ctx
+}
+
 
 type PushTicket struct {
 	Status string `json:"status"`
@@ -64,7 +72,7 @@ func RegisterPushToken(c *fiber.Ctx) error {
 	update := bson.M{"$set": bson.M{"push_token": req.PushToken, "updated_at": time.Now()}}
 	opts := options.Update().SetUpsert(true)
 
-	_, err := collection.UpdateOne(context.Background(), filter, update, opts)
+	_, err := collection.UpdateOne(mongoCtx(), filter, update, opts)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to register token"})
 	}

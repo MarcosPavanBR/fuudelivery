@@ -1,7 +1,6 @@
-package handlers
+﻿package handlers
 
 import (
-	"context"
 	"time"
 
 	"github.com/carloshomar/vercardapio/orders_api/app/models"
@@ -9,6 +8,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
+
+
 
 type ScheduleRequest struct {
 	OrderID     string `json:"order_id"`
@@ -35,7 +36,7 @@ func ScheduleOrder(c *fiber.Ctx) error {
 	filter := bson.M{"_id": orderID}
 	update := bson.M{"$set": bson.M{"scheduled_at": scheduledTime, "is_scheduled": true}}
 
-	_, err = collection.UpdateOne(context.Background(), filter, update)
+	_, err = collection.UpdateOne(mongoCtx(), filter, update)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to schedule"})
 	}

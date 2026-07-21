@@ -1,7 +1,6 @@
-package handlers
+﻿package handlers
 
 import (
-    "context"
     "crypto/rand"
     "math/big"
     "time"
@@ -11,6 +10,8 @@ import (
     "go.mongodb.org/mongo-driver/bson/primitive"
     "github.com/carloshomar/vercardapio/orders_api/app/models"
 )
+
+
 
 func generateSecureCode() string {
     const charset = "0123456789"
@@ -46,7 +47,7 @@ func GeneratePickupCode(c *fiber.Ctx) error {
         },
     }
 
-    result, err := collection.UpdateOne(context.Background(), filter, update)
+    result, err := collection.UpdateOne(mongoCtx(), filter, update)
     if err != nil || result.ModifiedCount == 0 {
         return c.Status(500).JSON(fiber.Map{"error": "Failed to generate code"})
     }
@@ -76,7 +77,7 @@ func ValidatePickupCode(c *fiber.Ctx) error {
     filter := bson.M{"_id": orderID}
 
     var order bson.M
-    if err := collection.FindOne(context.Background(), filter).Decode(&order); err != nil {
+    if err := collection.FindOne(mongoCtx(), filter).Decode(&order); err != nil {
         return c.Status(404).JSON(fiber.Map{"error": "Order not found"})
     }
 
@@ -111,7 +112,7 @@ func GetPickupCode(c *fiber.Ctx) error {
     filter := bson.M{"_id": oid}
 
     var order bson.M
-    if err := collection.FindOne(context.Background(), filter).Decode(&order); err != nil {
+    if err := collection.FindOne(mongoCtx(), filter).Decode(&order); err != nil {
         return c.Status(404).JSON(fiber.Map{"error": "Order not found"})
     }
 

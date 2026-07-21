@@ -1,7 +1,6 @@
-package handlers
+﻿package handlers
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"time"
@@ -14,6 +13,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+
 
 func GetBalance(c *fiber.Ctx) error {
 	tokenUserID, err := middlewares.GetUserIDFromToken(c)
@@ -33,7 +34,7 @@ func GetBalance(c *fiber.Ctx) error {
 	}
 
 	var wallet models.Wallet
-	findErr := models.MongoDabase.Collection("wallets").FindOne(context.Background(), bson.M{"user_id": userIDStr}).Decode(&wallet)
+	findErr := models.MongoDabase.Collection("wallets").FindOne(mongoCtx(), bson.M{"user_id": userIDStr}).Decode(&wallet)
 	if findErr != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Wallet not found", "balance": 0})
 	}
@@ -71,7 +72,7 @@ func TopUp(c *fiber.Ctx) error {
 
 	var payment models.Payment
 	err = models.MongoDabase.Collection("payments").FindOne(
-		context.Background(),
+		mongoCtx(),
 		bson.M{"abacatepay_id": req.PaymentID},
 	).Decode(&payment)
 	if err != nil {
@@ -108,20 +109,20 @@ func TopUp(c *fiber.Ctx) error {
 	}
 
 	opts := options.Update().SetUpsert(true)
-	_, err = models.MongoDabase.Collection("wallets").UpdateOne(context.Background(), filter, update, opts)
+	_, err = models.MongoDabase.Collection("wallets").UpdateOne(mongoCtx(), filter, update, opts)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to top up wallet"})
 	}
 
 	now := time.Now()
 	models.MongoDabase.Collection("payments").UpdateOne(
-		context.Background(),
+		mongoCtx(),
 		bson.M{"abacatepay_id": req.PaymentID},
 		bson.M{"$set": bson.M{"wallet_credited_at": now}},
 	)
 
 	var wallet models.Wallet
-	models.MongoDabase.Collection("wallets").FindOne(context.Background(), filter).Decode(&wallet)
+	models.MongoDabase.Collection("wallets").FindOne(mongoCtx(), filter).Decode(&wallet)
 
 	ledgerEntry := bson.M{
 		"_id":           primitive.NewObjectID(),
@@ -133,7 +134,7 @@ func TopUp(c *fiber.Ctx) error {
 		"description":   "Wallet top-up via confirmed payment",
 		"created_at":    time.Now(),
 	}
-	if _, ledgerErr := models.MongoDabase.Collection("wallet_ledger").InsertOne(context.Background(), ledgerEntry); ledgerErr != nil {
+	if _, ledgerErr := models.MongoDabase.Collection("wallet_ledger").InsertOne(mongoCtx(), ledgerEntry); ledgerErr != nil {
 		log.Printf("[WALLET] WARNING: Failed to write ledger for user=%d: %v", req.UserID, ledgerErr)
 	}
 
@@ -172,7 +173,7 @@ func DeductFromWallet(c *fiber.Ctx) error {
 	}
 
 	result, err := models.MongoDabase.Collection("wallets").UpdateOne(
-		context.Background(),
+		mongoCtx(),
 		bson.M{
 			"user_id": req.UserID,
 			"balance": bson.M{"$gte": req.Amount},
@@ -191,7 +192,7 @@ func DeductFromWallet(c *fiber.Ctx) error {
 	}
 
 	var wallet models.Wallet
-	models.MongoDabase.Collection("wallets").FindOne(context.Background(), bson.M{"user_id": req.UserID}).Decode(&wallet)
+	models.MongoDabase.Collection("wallets").FindOne(mongoCtx(), bson.M{"user_id": req.UserID}).Decode(&wallet)
 
 	ledgerEntry := bson.M{
 		"_id":           primitive.NewObjectID(),
@@ -203,7 +204,7 @@ func DeductFromWallet(c *fiber.Ctx) error {
 		"description":   "Wallet deduction",
 		"created_at":    time.Now(),
 	}
-	if _, ledgerErr := models.MongoDabase.Collection("wallet_ledger").InsertOne(context.Background(), ledgerEntry); ledgerErr != nil {
+	if _, ledgerErr := models.MongoDabase.Collection("wallet_ledger").InsertOne(mongoCtx(), ledgerEntry); ledgerErr != nil {
 		log.Printf("[WALLET] WARNING: Failed to write ledger for user=%d: %v", req.UserID, ledgerErr)
 	}
 

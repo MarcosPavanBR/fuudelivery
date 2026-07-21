@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/carloshomar/vercardapio/chat_api/app/models"
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
+	"github.com/golang-jwt/jwt/v5"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -84,10 +86,50 @@ func broadcastToRoom(orderID string, sender *websocket.Conn, message []byte) {
 	}
 }
 
+func validateWSJWT(tokenString string) (jwt.MapClaims, error) {
+	if len(tokenString) > 7 {
+		tokenString = tokenString[7:]
+	}
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		return []byte(os.Getenv("JWT_SECRET")), nil
+	})
+	if err != nil || !token.Valid {
+		return nil, err
+	}
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return nil, fiber.NewError(fiber.StatusUnauthorized, "Invalid token claims")
+	}
+	return claims, nil
+}
+
 func HandleChatWebSocket(c *websocket.Conn) {
 	orderID := c.Params("orderId")
 	userIDStr := c.Params("userId")
 	userType := c.Params("userType")
+
+	// Validate JWT from query param
+	token := c.Query("token")
+	if token == "" {
+		log.Printf("[WS-CHAT] Rejected: no token provided for order %s", orderID)
+		c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Authentication required"}}`))
+		return
+	}
+	claims, err := validateWSJWT(token)
+	if err != nil {
+		log.Printf("[WS-CHAT] Rejected: invalid token for order %s: %v", orderID, err)
+		c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Invalid token"}}`))
+		return
+	}
+
+	// Verify userId matches token
+	tokenUserID, _ := claims["id"].(float64)
+	urlUserID, _ := strconv.ParseInt(userIDStr, 10, 64)
+	if int64(tokenUserID) != urlUserID {
+		log.Printf("[WS-CHAT] Rejected: userId mismatch token=%d url=%d", int64(tokenUserID), urlUserID)
+		c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"User ID mismatch"}}`))
+		return
+	}
 
 	userID, err := strconv.ParseInt(userIDStr, 10, 64)
 	if err != nil {
@@ -241,12 +283,24 @@ func SendMessage(c *fiber.Ctx) error {
 
 func MarkAsRead(c *fiber.Ctx) error {
 	orderID := c.Params("orderId")
-	userIDStr := c.Params("userId")
 
-	userID, err := strconv.ParseInt(userIDStr, 10, 64)
-	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "userId inválido"})
+	// Use userId from JWT, not from URL (prevents IDOR)
+	tokenString := c.Get("Authorization")
+	if len(tokenString) > 7 {
+		tokenString = tokenString[7:]
 	}
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		return []byte(os.Getenv("JWT_SECRET")), nil
+	})
+	if err != nil || !token.Valid {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+	}
+	claims := token.Claims.(jwt.MapClaims)
+	userIDFloat, ok := claims["id"].(float64)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "User ID not in token"})
+	}
+	userID := int64(userIDFloat)
 
 	now := time.Now()
 

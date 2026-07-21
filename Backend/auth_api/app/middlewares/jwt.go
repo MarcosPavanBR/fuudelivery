@@ -44,6 +44,7 @@ func GenerateJWT(user *models.User, establishment *models.Establishment) (string
 		"id":    user.ID,
 		"name":  user.Name,
 		"email": user.Email,
+		"role":  user.Role,
 		"exp":   expirationTime,
 	}
 
@@ -98,6 +99,21 @@ func GetEstablishmentIDFromToken(c *fiber.Ctx) (int64, error) {
 	}
 
 	return int64(estIDFloat), nil
+}
+
+func GetUserRoleFromToken(c *fiber.Ctx) (string, error) {
+	token, err := ValidateJWT(c)
+	if err != nil {
+		return "", err
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return "", fiber.NewError(fiber.StatusUnauthorized, "Invalid token claims")
+	}
+
+	role, _ := claims["role"].(string)
+	return role, nil
 }
 
 func GenerateJWTDeliveryMan(user *models.DeliveryMan) (string, error) {

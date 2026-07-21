@@ -26,6 +26,7 @@ func main() {
         Name:     "Admin Fuudelivery",
         Email:    "admin@fuudelivery.com",
         Password: string(hashedPassword),
+        Role:     "admin",
     }
     authModels.DB.Create(&admin)
     

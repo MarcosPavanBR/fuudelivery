@@ -309,6 +309,7 @@ func setupOrdersRoutes(app *fiber.App) {
 
 	app.Post("/delivery", protectedRoute, ordersHandlers.InsertDelivery)
 	app.Post("/delivery/calculate-delivery-value", protectedRoute, ordersHandlers.CalculateDeliveryValue)
+	app.Post("/delivery/calculate-route", protectedRoute, ordersHandlers.CalculateRoute)
 	app.Get("/delivery/value/:establishmentId", ordersHandlers.GetDeliveryByEstablishmentID)
 
 	app.Post("/orders", protectedRoute, func(c *fiber.Ctx) error {

@@ -1,4 +1,4 @@
-import { Linking, Platform, StyleSheet, TouchableOpacity } from "react-native";
+import { Linking, Platform, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
 
 import { Text, View } from "@/components/Themed";
 import Colors from "@/constants/Colors";
@@ -21,8 +21,19 @@ export default function DeliveryMode({ showIcon }: any) {
   const nav = useNavigation();
   const mapViewRef = useRef(null);
   const { inWork, isActiveOrder } = useAuthApi();
-  const [order, setOrder] = useState(inWork?.order[0]);
+  const [selectedIdx, setSelectedIdx] = useState(0);
   const [loading, setLoading] = useState(false);
+
+  const orders = inWork?.order || [];
+  const order = orders[selectedIdx];
+
+  if (!order) {
+    return (
+      <View style={styles.container}>
+        <Text>Nenhum pedido ativo</Text>
+      </View>
+    );
+  }
 
   const establishment = order.establishment;
   const deliveryman = order.deliveryman;
@@ -104,7 +115,9 @@ export default function DeliveryMode({ showIcon }: any) {
   }, [deliveryman.status]);
 
   useEffect(() => {
-    setOrder(inWork.order[0]);
+    if (selectedIdx >= orders.length) {
+      setSelectedIdx(0);
+    }
   }, [inWork]);
 
   return (
@@ -116,6 +129,23 @@ export default function DeliveryMode({ showIcon }: any) {
       }}
     >
       {showIcon ? <View style={styles.viewIcon} /> : null}
+
+      {orders.length > 1 && (
+        <View style={styles.orderTabs}>
+          {orders.map((o: any, idx: number) => (
+            <TouchableOpacity
+              key={o.order_id || idx}
+              style={[styles.orderTab, idx === selectedIdx && styles.orderTabActive]}
+              onPress={() => setSelectedIdx(idx)}
+            >
+              <Text style={[styles.orderTabText, idx === selectedIdx && styles.orderTabTextActive]}>
+                {idx + 1}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
       <View>
         <View style={styles.boxOne}>
           <View style={styles.nameContainer}>
@@ -288,5 +318,33 @@ const styles = StyleSheet.create({
     marginVertical: 30,
     height: 1,
     width: "80%",
+  },
+  orderTabs: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 8,
+    marginBottom: 10,
+  },
+  orderTab: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.light.white,
+    borderWidth: 1,
+    borderColor: Colors.light.tabIconDefault,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  orderTabActive: {
+    backgroundColor: Colors.light.tint,
+    borderColor: Colors.light.tint,
+  },
+  orderTabText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: Colors.light.text,
+  },
+  orderTabTextActive: {
+    color: Colors.light.white,
   },
 });

@@ -7,6 +7,70 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+func CreateEstablishment(c *fiber.Ctx) error {
+	var req struct {
+		Name         string  `json:"name"`
+		Email        string  `json:"email"`
+		Phone        string  `json:"phone"`
+		Address      string  `json:"address"`
+		City         string  `json:"city"`
+		State        string  `json:"state"`
+		ZipCode      string  `json:"zip_code"`
+		Latitude     float64 `json:"latitude"`
+		Longitude    float64 `json:"longitude"`
+		Status       string  `json:"status"`
+		DeliveryFee  float64 `json:"delivery_fee"`
+		MinOrder     float64 `json:"min_order"`
+		DeliveryTime int     `json:"delivery_time"`
+	}
+
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
+	}
+
+	if req.Name == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Name is required"})
+	}
+
+	locationString := req.Address
+	if req.City != "" || req.State != "" {
+		if locationString != "" {
+			locationString += ", "
+		}
+		locationString += req.City
+		if req.State != "" {
+			locationString += " - " + req.State
+		}
+	}
+
+	maxDist := 10.0
+	if req.DeliveryTime > 0 {
+		maxDist = float64(req.DeliveryTime) / 5.0
+	}
+
+	establishment := models.Establishment{
+		Name:                req.Name,
+		Description:         "",
+		Image:               "",
+		PrimaryColor:        "#EA1D2C",
+		SecondaryColor:      "#FFFFFF",
+		Lat:                 req.Latitude,
+		Long:                req.Longitude,
+		LocationString:      locationString,
+		MaxDistanceDelivery: maxDist,
+	}
+
+	result := models.DB.Create(&establishment)
+	if result.Error != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create establishment"})
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"message":       "Establishment created successfully",
+		"establishment": establishment,
+	})
+}
+
 func GetEstablishments(c *fiber.Ctx) error {
 	establishmentId := c.Params("id")
 
@@ -102,4 +166,22 @@ func UpdateEstablishment(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"message": "Establishment updated successfully"})
+}
+
+func DeleteEstablishment(c *fiber.Ctx) error {
+	id := c.Params("id")
+	if id == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid establishment ID"})
+	}
+
+	var establishment models.Establishment
+	if err := models.DB.First(&establishment, id).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Establishment not found"})
+	}
+
+	if err := models.DB.Delete(&establishment).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete establishment"})
+	}
+
+	return c.JSON(fiber.Map{"message": "Establishment deleted successfully"})
 }

@@ -155,8 +155,10 @@ func setupAuthRoutes(app *fiber.App) {
 
 	app.Get("/establishments", authHandlers.ListEstablishments)
 	app.Get("/establishments/:id", authHandlers.GetEstablishments)
+	app.Post("/establishments", adminRequired, authHandlers.CreateEstablishment)
 	app.Put("/establishments/status/handler/:id", protectedRoute, authHandlers.HandlerEstablishmentStatus)
 	app.Put("/establishments/:id", protectedRoute, authHandlers.UpdateEstablishment)
+	app.Delete("/establishments/:id", adminRequired, authHandlers.DeleteEstablishment)
 	app.Get("/establishments/:id/users", protectedRoute, authHandlers.GetUserByEstablishment)
 
 	app.Get("/establishments/:id/hours", authHandlers.GetBusinessHours)

@@ -70,6 +70,55 @@ func InsertDelivery(c *fiber.Ctx) error {
 }
 
 
+func CalculateRoute(c *fiber.Ctx) error {
+	var request struct {
+		OriginLat      float64 `json:"origin_lat"`
+		OriginLng      float64 `json:"origin_lng"`
+		DestLat        float64 `json:"dest_lat"`
+		DestLng        float64 `json:"dest_lng"`
+		EstablishmentID int64  `json:"establishmentId"`
+	}
+
+	if err := c.BodyParser(&request); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
+	}
+
+	if request.EstablishmentID == 0 {
+		request.EstablishmentID = 1
+	}
+
+	var delivery models.Delivery
+	if err := models.DB.Where("establishment_id = ?", request.EstablishmentID).First(&delivery).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch delivery settings"})
+	}
+
+	// Try OSRM first (real driving distance)
+	distanceKm, durationMin, osrmOk := getOSRMDistance(
+		request.OriginLat, request.OriginLng,
+		request.DestLat, request.DestLng,
+	)
+
+	source := "osrm"
+	if !osrmOk {
+		// Fallback to Haversine
+		distanceKm = calculateDistance(
+			request.OriginLat, request.OriginLng,
+			request.DestLat, request.DestLng,
+		)
+		durationMin = (distanceKm / 30.0) * 60.0 // ~30km/h avg speed
+		source = "haversine"
+	}
+
+	deliveryValue := (float32(distanceKm) * delivery.PerKm) + delivery.FixedTaxa
+
+	return c.JSON(fiber.Map{
+		"distance_km":   fmt.Sprintf("%.2f", distanceKm),
+		"duration_min":  fmt.Sprintf("%.1f", durationMin),
+		"delivery_value": deliveryValue,
+		"source":        source,
+	})
+}
+
 func GetDeliveryByEstablishmentID(c *fiber.Ctx) error {
 	// Extrair o establishmentId dos parâmetros da URL
 	establishmentID := c.Params("establishmentId")

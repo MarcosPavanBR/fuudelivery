@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/crypto/bcrypt"
@@ -196,4 +197,34 @@ func ChangePassword(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"message": "Password updated successfully"})
+}
+
+func BootstrapAdmin(c *fiber.Ctx) error {
+	bootstrapSecret := os.Getenv("ADMIN_BOOTSTRAP_SECRET")
+	if bootstrapSecret == "" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Bootstrap not configured"})
+	}
+
+	var req struct {
+		Email  string `json:"email"`
+		Secret string `json:"secret"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request"})
+	}
+
+	if req.Secret != bootstrapSecret {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Invalid secret"})
+	}
+
+	var user models.User
+	if err := models.DB.Where("email = ?", req.Email).First(&user).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
+	}
+
+	if err := models.DB.Model(&user).Update("role", "admin").Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to promote user"})
+	}
+
+	return c.JSON(fiber.Map{"message": fmt.Sprintf("User %s promoted to admin", req.Email)})
 }

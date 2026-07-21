@@ -9,7 +9,6 @@ import (
 func SetupRoutes(app *fiber.App) {
 	// Webhooks - NO auth (called by payment gateways)
 	app.Post("/payments/webhook", handlers.HandlePaymentWebhook)
-	app.Post("/payments/mercadopago/webhook", handlers.MercadoPagoWebhook)
 
 	// Protected routes - require JWT
 	auth := func(c *fiber.Ctx) error {

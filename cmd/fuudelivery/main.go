@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -145,6 +146,116 @@ func setupWebSocketRoutes(app *fiber.App) {
 		}
 		chatHandlers.HandleChatWebSocket(c)
 	}))
+
+	// --- FUU PULSE: Real-time delivery location ---
+	// Store latest location per order (in-memory, ephemeral)
+	type DeliveryLocation struct {
+		Lat       float64 `json:"lat"`
+		Lng       float64 `json:"lng"`
+		OrderID   string  `json:"order_id"`
+		Timestamp int64   `json:"timestamp"`
+	}
+
+	var deliveryLocsMu sync.RWMutex
+	deliveryLocations := make(map[string]*DeliveryLocation)
+	deliveryLocsListeners := make(map[string][]*websocket.Conn)
+	var deliveryLocsListenersMu sync.Mutex
+
+	app.Get("/ws/delivery/:orderId", websocket.New(func(c *websocket.Conn) {
+		orderID := c.Params("orderId")
+		if orderID == "" {
+			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"orderId required"}}`))
+			return
+		}
+
+		c.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf(`{"type":"connected","payload":{"orderId":"%s"}}`, orderID)))
+
+		deliveryLocsListenersMu.Lock()
+		deliveryLocsListeners[orderID] = append(deliveryLocsListeners[orderID], c)
+		deliveryLocsListenersMu.Unlock()
+
+		defer func() {
+			deliveryLocsListenersMu.Lock()
+			listeners := deliveryLocsListeners[orderID]
+			for i, l := range listeners {
+				if l == c {
+					deliveryLocsListeners[orderID] = append(listeners[:i], listeners[i+1:]...)
+					break
+				}
+			}
+			deliveryLocsListenersMu.Unlock()
+		}()
+
+		// Send current location immediately if exists
+		deliveryLocsMu.RLock()
+		if loc, ok := deliveryLocations[orderID]; ok {
+			data, _ := json.Marshal(map[string]interface{}{"type": "location", "payload": loc})
+			c.WriteMessage(websocket.TextMessage, data)
+		}
+		deliveryLocsMu.RUnlock()
+
+		// Keep connection alive; ignore incoming messages
+		for {
+			if _, _, err := c.ReadMessage(); err != nil {
+				break
+			}
+		}
+	}))
+
+	// POST /delivery/location — deliveryman sends their GPS coordinates
+	app.Post("/delivery/location", protectedRoute, func(c *fiber.Ctx) error {
+		tokenUserID, err := middlewares.GetUserIDFromToken(c)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+		}
+
+		var req struct {
+			Lat     float64 `json:"lat"`
+			Lng     float64 `json:"lng"`
+			OrderID string  `json:"order_id"`
+		}
+		if err := c.BodyParser(&req); err != nil {
+			return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
+		}
+
+		if req.OrderID == "" || (req.Lat == 0 && req.Lng == 0) {
+			return c.Status(400).JSON(fiber.Map{"error": "order_id, lat, and lng are required"})
+		}
+
+		// Verify deliveryman is assigned to this order
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		var solicitation struct {
+			DeliveryMan struct {
+				Id int64 `bson:"id"`
+			} `bson:"deliveryman"`
+		}
+		err = deliveryModels.MongoDabase.Collection("solicitations").FindOne(ctx, bson.M{"order_id": req.OrderID}).Decode(&solicitation)
+		if err != nil || solicitation.DeliveryMan.Id != tokenUserID {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Not the assigned deliveryman for this order"})
+		}
+
+		loc := &DeliveryLocation{
+			Lat:       req.Lat,
+			Lng:       req.Lng,
+			OrderID:   req.OrderID,
+			Timestamp: time.Now().UnixMilli(),
+		}
+
+		deliveryLocsMu.Lock()
+		deliveryLocations[req.OrderID] = loc
+		deliveryLocsMu.Unlock()
+
+		// Broadcast to all listeners for this order
+		data, _ := json.Marshal(map[string]interface{}{"type": "location", "payload": loc})
+		deliveryLocsListenersMu.Lock()
+		for _, listener := range deliveryLocsListeners[req.OrderID] {
+			listener.WriteMessage(websocket.TextMessage, data)
+		}
+		deliveryLocsListenersMu.Unlock()
+
+		return c.JSON(fiber.Map{"message": "Location updated", "order_id": req.OrderID})
+	})
 }
 
 func setupAuthRoutes(app *fiber.App) {

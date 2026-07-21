@@ -112,7 +112,10 @@ func UpdateOrderStatusByDeliverymanID(c *fiber.Ctx, sendMessageToClient func(cli
 		})
 	}
 
-	order, _ := GetOrderByID(request.OrderID)
+	order, err := GetOrderByID(request.OrderID)
+	if err != nil || order == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Order not found"})
+	}
 	orderBytes, _ := json.Marshal(order)
 
 	PublishMessage(orderBytes)

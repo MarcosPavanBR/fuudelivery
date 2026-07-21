@@ -88,8 +88,38 @@ func setupWebSocketRoutes(app *fiber.App) {
 	})
 
 	app.Get("/ws/:id", websocket.New(func(c *websocket.Conn) {
+		token := c.Query("token")
+		if token == "" {
+			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Authentication required"}}`))
+			return
+		}
+		parsedToken, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
+			return []byte(os.Getenv("JWT_SECRET")), nil
+		})
+		if err != nil || !parsedToken.Valid {
+			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Invalid token"}}`))
+			return
+		}
+		claims, ok := parsedToken.Claims.(jwt.MapClaims)
+		if !ok {
+			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Invalid token claims"}}`))
+			return
+		}
+		tokenUserID, _ := claims["id"].(float64)
+
 		clientIDStr := c.Params("id")
-		clientID, _ := strconv.ParseInt(clientIDStr, 10, 64)
+		clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
+		if err != nil {
+			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Invalid client ID"}}`))
+			return
+		}
+		if int64(tokenUserID) != clientID {
+			role, _ := claims["role"].(string)
+			if role != "admin" {
+				c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"User ID mismatch"}}`))
+				return
+			}
+		}
 
 		wsClientsMu.Lock()
 		wsClients[clientID] = c
@@ -104,16 +134,16 @@ func setupWebSocketRoutes(app *fiber.App) {
 		var (
 			mt  int
 			msg []byte
-			err error
+			err2 error
 		)
 		for {
-			if mt, msg, err = c.ReadMessage(); err != nil {
-				log.Println("read:", err)
+			if mt, msg, err2 = c.ReadMessage(); err2 != nil {
+				log.Println("read:", err2)
 				break
 			}
 			log.Printf("recv: %s", msg)
-			if err = c.WriteMessage(mt, msg); err != nil {
-				log.Println("write:", err)
+			if err2 = c.WriteMessage(mt, msg); err2 != nil {
+				log.Println("write:", err2)
 				break
 			}
 		}
@@ -162,6 +192,19 @@ func setupWebSocketRoutes(app *fiber.App) {
 	var deliveryLocsListenersMu sync.Mutex
 
 	app.Get("/ws/delivery/:orderId", websocket.New(func(c *websocket.Conn) {
+		token := c.Query("token")
+		if token == "" {
+			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Authentication required"}}`))
+			return
+		}
+		parsedToken, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
+			return []byte(os.Getenv("JWT_SECRET")), nil
+		})
+		if err != nil || !parsedToken.Valid {
+			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Invalid token"}}`))
+			return
+		}
+
 		orderID := c.Params("orderId")
 		if orderID == "" {
 			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"orderId required"}}`))
@@ -320,19 +363,19 @@ func setupOrdersRoutes(app *fiber.App) {
 		return ordersHandlers.UpdateOrderStatus(c, sendMessageToClient)
 	})
 	app.Get("/orders/all", adminRequired, ordersHandlers.ListAllOrders)
-	app.Get("/orders/repeat/:orderId", ordersHandlers.RepeatOrder)
-	app.Get("/orders/list-phone/:phone", ordersHandlers.ListOrdersByPhone)
-	app.Get("/orders/:establishmentId", ordersHandlers.ListOrdersByEstablishmentID)
-	app.Get("/orders/:establishmentId/:phoneNumber", ordersHandlers.ListOrdersByEstablishmentIDAndPhone)
+	app.Get("/orders/repeat/:orderId", protectedRoute, ordersHandlers.RepeatOrder)
+	app.Get("/orders/list-phone/:phone", protectedRoute, ordersHandlers.ListOrdersByPhone)
+	app.Get("/orders/:establishmentId", protectedRoute, ordersHandlers.ListOrdersByEstablishmentID)
+	app.Get("/orders/:establishmentId/:phoneNumber", protectedRoute, ordersHandlers.ListOrdersByEstablishmentIDAndPhone)
 
 	app.Post("/coupons", protectedRoute, ordersHandlers.CreateCoupon)
-	app.Post("/coupons/validate", ordersHandlers.ValidateCoupon)
+	app.Post("/coupons/validate", protectedRoute, ordersHandlers.ValidateCoupon)
 	app.Post("/coupons/apply", protectedRoute, ordersHandlers.ApplyCoupon)
-	app.Get("/coupons", ordersHandlers.ListCoupons)
-	app.Get("/coupons/:id", ordersHandlers.GetCoupon)
+	app.Get("/coupons", protectedRoute, ordersHandlers.ListCoupons)
+	app.Get("/coupons/:id", protectedRoute, ordersHandlers.GetCoupon)
 	app.Delete("/coupons/:id", protectedRoute, ordersHandlers.DeleteCoupon)
 	app.Post("/coupons/referral", protectedRoute, ordersHandlers.GenerateReferralCoupon)
-	app.Post("/coupons/calculate", ordersHandlers.CalculateDiscount)
+	app.Post("/coupons/calculate", protectedRoute, ordersHandlers.CalculateDiscount)
 
 	app.Get("/qrcode/:establishmentId", ordersHandlers.GenerateTableQRCode)
 	app.Post("/orders/schedule", protectedRoute, ordersHandlers.ScheduleOrder)
@@ -340,16 +383,16 @@ func setupOrdersRoutes(app *fiber.App) {
 
 	app.Post("/loyalty/earn", protectedRoute, ordersHandlers.EarnPoints)
 	app.Post("/loyalty/redeem", protectedRoute, ordersHandlers.RedeemPoints)
-	app.Get("/loyalty/balance/:phone", ordersHandlers.GetLoyaltyBalance)
-	app.Get("/loyalty/history/:phone", ordersHandlers.GetLoyaltyHistory)
-	app.Get("/loyalty/calculate", ordersHandlers.CalculateLoyaltyDiscount)
+	app.Get("/loyalty/balance/:phone", protectedRoute, ordersHandlers.GetLoyaltyBalance)
+	app.Get("/loyalty/history/:phone", protectedRoute, ordersHandlers.GetLoyaltyHistory)
+	app.Get("/loyalty/calculate", protectedRoute, ordersHandlers.CalculateLoyaltyDiscount)
 
 	app.Post("/reviews", protectedRoute, ordersHandlers.CreateReview)
-	app.Get("/reviews/establishment/:id", ordersHandlers.GetEstablishmentReviews)
-	app.Get("/reviews/product/:id", ordersHandlers.GetProductReviews)
+	app.Get("/reviews/establishment/:id", protectedRoute, ordersHandlers.GetEstablishmentReviews)
+	app.Get("/reviews/product/:id", protectedRoute, ordersHandlers.GetProductReviews)
 	app.Put("/reviews/respond/:id", protectedRoute, ordersHandlers.RespondToReview)
-	app.Get("/reviews/user/:phone", ordersHandlers.GetUserReviews)
-	app.Get("/reviews/rating/:establishmentId", ordersHandlers.GetEstablishmentRating)
+	app.Get("/reviews/user/:phone", protectedRoute, ordersHandlers.GetUserReviews)
+	app.Get("/reviews/rating/:establishmentId", protectedRoute, ordersHandlers.GetEstablishmentRating)
 
 	app.Post("/orders/pickup-code/generate", protectedRoute, ordersHandlers.GeneratePickupCode)
 	app.Post("/orders/pickup-code/validate", protectedRoute, ordersHandlers.ValidatePickupCode)
@@ -357,13 +400,13 @@ func setupOrdersRoutes(app *fiber.App) {
 }
 
 func setupDeliveryRoutes(app *fiber.App) {
-	app.Get("/solicitation-orders", deliveryHandlers.GetApprovedSolicitations)
+	app.Get("/solicitation-orders", protectedRoute, deliveryHandlers.GetApprovedSolicitations)
 	app.Put("/solicitation-orders/hand-shake", protectedRoute, deliveryHandlers.HandShakeDeliveryman)
-	app.Get("/deliveryman/has-active/:id", deliveryHandlers.GetOrdersByDeliverymanID)
+	app.Get("/deliveryman/has-active/:id", protectedRoute, deliveryHandlers.GetOrdersByDeliverymanID)
 	app.Post("/deliveryman/status", protectedRoute, func(c *fiber.Ctx) error {
 		return deliveryHandlers.UpdateOrderStatusByDeliverymanID(c, sendMessageToClient)
 	})
-	app.Get("/deliveryman/extrato/:id", deliveryHandlers.GetExtrato)
+	app.Get("/deliveryman/extrato/:id", protectedRoute, deliveryHandlers.GetExtrato)
 }
 
 func setupPaymentRoutes(app *fiber.App) {

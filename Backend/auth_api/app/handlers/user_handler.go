@@ -42,8 +42,14 @@ func CreateUser(c *fiber.Ctx) error {
 		LocationString:      request.Establishment.LocationString,
 	}
 
-	sqlDB, _ := models.DB.DB()
-	tx, _ := sqlDB.Begin()
+	sqlDB, err := models.DB.DB()
+	if err != nil || sqlDB == nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Database not available"})
+	}
+	tx, err := sqlDB.Begin()
+	if err != nil || tx == nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to start transaction"})
+	}
 	if tx != nil {
 		var userID, estID uint
 		tx.Exec("CREATE SEQUENCE IF NOT EXISTS users_id_seq OWNED BY users.id")

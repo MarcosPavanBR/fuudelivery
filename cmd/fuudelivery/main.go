@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -14,6 +15,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/joho/godotenv"
 
 	// Models (database initialization)
@@ -114,8 +116,33 @@ func setupWebSocketRoutes(app *fiber.App) {
 		}
 	}))
 
-	// Chat WebSocket
-	app.Get("/ws/chat/:orderId/:userId/:userType", websocket.New(chatHandlers.HandleChatWebSocket))
+	// Chat WebSocket with JWT auth
+	app.Get("/ws/chat/:orderId/:userId/:userType", websocket.New(func(c *websocket.Conn) {
+		token := c.Query("token")
+		if token == "" {
+			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Authentication required"}}`))
+			return
+		}
+		parsedToken, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
+			return []byte(os.Getenv("JWT_SECRET")), nil
+		})
+		if err != nil || !parsedToken.Valid {
+			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Invalid token"}}`))
+			return
+		}
+		claims, ok := parsedToken.Claims.(jwt.MapClaims)
+		if !ok {
+			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Invalid token claims"}}`))
+			return
+		}
+		tokenUserID, _ := claims["id"].(float64)
+		urlUserID, _ := strconv.ParseInt(c.Params("userId"), 10, 64)
+		if int64(tokenUserID) != urlUserID {
+			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"User ID mismatch"}}`))
+			return
+		}
+		chatHandlers.HandleChatWebSocket(c)
+	}))
 }
 
 func setupAuthRoutes(app *fiber.App) {
@@ -239,7 +266,21 @@ func setupPaymentRoutes(app *fiber.App) {
 func setupChatRoutes(app *fiber.App) {
 	app.Get("/chat/messages/:orderId", protectedRoute, chatHandlers.GetMessages)
 	app.Post("/chat/message", protectedRoute, chatHandlers.SendMessage)
-	app.Put("/chat/read/:orderId", protectedRoute, chatHandlers.MarkAsRead)
+	app.Put("/chat/read/:orderId/:userId", protectedRoute, func(c *fiber.Ctx) error {
+		tokenUserID, err := middlewares.GetUserIDFromToken(c)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+		}
+		urlUserIDStr := c.Params("userId")
+		var urlUserID int64
+		if _, scanErr := fmt.Sscanf(urlUserIDStr, "%d", &urlUserID); scanErr != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid userId"})
+		}
+		if tokenUserID != urlUserID {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot mark messages as read for another user"})
+		}
+		return chatHandlers.MarkAsRead(c)
+	})
 }
 
 func main() {

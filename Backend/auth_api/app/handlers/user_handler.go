@@ -99,8 +99,9 @@ func CreateUser(c *fiber.Ctx) error {
 
 func ListAllUsers(c *fiber.Ctx) error {
 	var users []models.User
-	if err := models.DB.Select("id", "name", "email", "establishment_id", "role").Find(&users).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to query users"})
+	result := models.DB.Raw("SELECT id, name, email, establishment_id, COALESCE(role, 'user') as role FROM users").Scan(&users)
+	if result.Error != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to query users: " + result.Error.Error()})
 	}
 	return c.JSON(users)
 }

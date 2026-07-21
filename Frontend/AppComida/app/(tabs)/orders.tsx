@@ -12,6 +12,7 @@ import orderModel from "@/services/order.model";
 import ReorderButton from "@/components/ReorderButton";
 import { useCartApi } from "@/contexts/ApiCartContext";
 import { useNavigation } from "@react-navigation/native";
+import LiveTrackingReadonly from "@/components/LiveTrackingReadonly";
 
 export default function TabTwoScreen() {
   const { getUserData } = useApi();
@@ -142,6 +143,19 @@ export default function TabTwoScreen() {
                       <Text style={styles.detailText}>
                         {e.location.logradouro}, {e.location.numero} - {e.location.bairro}, {e.location.localidade}
                       </Text>
+                    </>
+                  )}
+
+                  {e.status !== "FINISHED" && e.status !== "CANCELLED" && (
+                    <>
+                      <Text style={[styles.sectionTitle, { marginTop: 10 }]}>Rastreamento ao Vivo</Text>
+                      <LiveTrackingReadonly
+                        orderId={orderId}
+                        originLat={e.establishment?.lat}
+                        originLng={e.establishment?.long}
+                        destinationLat={e.location?.coords?.latitude}
+                        destinationLng={e.location?.coords?.longitude}
+                      />
                     </>
                   )}
 

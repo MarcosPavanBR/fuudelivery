@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/joho/godotenv"
+	"go.mongodb.org/mongo-driver/bson"
 
 	// Models (database initialization)
 	"github.com/carloshomar/vercardapio/auth_api/app/models"
@@ -266,7 +268,53 @@ func setupPaymentRoutes(app *fiber.App) {
 }
 
 func setupChatRoutes(app *fiber.App) {
-	app.Get("/chat/messages/:orderId", protectedRoute, chatHandlers.GetMessages)
+	app.Get("/chat/messages/:orderId", protectedRoute, func(c *fiber.Ctx) error {
+		tokenUserID, err := middlewares.GetUserIDFromToken(c)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+		}
+		orderID := c.Params("orderId")
+		if orderID == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "orderId is required"})
+		}
+
+		// 1. Check if user is the customer (order owner)
+		var order ordersModels.Order
+		if qErr := ordersModels.DB.First(&order, orderID).Error; qErr == nil {
+			if uint(tokenUserID) == order.UserID {
+				return chatHandlers.GetMessages(c)
+			}
+			// 2. Check if user is the restaurant owner of the order's establishment
+			var user models.User
+			if uErr := models.DB.First(&user, tokenUserID).Error; uErr == nil {
+				if user.EstablishmentID != 0 && user.EstablishmentID == order.EstablishmentID {
+					return chatHandlers.GetMessages(c)
+				}
+			}
+		}
+
+		// 3. Check if user is the assigned deliveryman for this order
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		var solicitation struct {
+			DeliveryMan struct {
+				Id int64 `bson:"id"`
+			} `bson:"deliveryman"`
+		}
+		_ = deliveryModels.MongoDabase.Collection("solicitations").FindOne(ctx, bson.M{"order_id": orderID}).Decode(&solicitation)
+		if solicitation.DeliveryMan.Id != 0 && solicitation.DeliveryMan.Id == tokenUserID {
+			return chatHandlers.GetMessages(c)
+		}
+
+		// 4. Admin role bypass (for support/audit)
+		role, _ := middlewares.GetUserRoleFromToken(c)
+		if role == "admin" {
+			return chatHandlers.GetMessages(c)
+		}
+
+		log.Printf("[CHAT IDOR] GetMessages denied: user=%d order=%s", tokenUserID, orderID)
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "You are not a participant of this order"})
+	})
 	app.Post("/chat/message", protectedRoute, chatHandlers.SendMessage)
 	app.Put("/chat/read/:orderId/:userId", protectedRoute, func(c *fiber.Ctx) error {
 		tokenUserID, err := middlewares.GetUserIDFromToken(c)

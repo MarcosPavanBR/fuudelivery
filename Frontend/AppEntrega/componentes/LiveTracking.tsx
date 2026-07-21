@@ -4,6 +4,7 @@ import MapView, { Marker, Polyline } from "react-native-maps";
 import * as Location from "expo-location";
 import Colors from "@/constants/Colors";
 import helper from "@/helpers/helper";
+import api from "@/services/api";
 
 interface LiveTrackingProps {
   destinationLat: number;
@@ -69,6 +70,13 @@ export default function LiveTracking({
               }
               return updated;
             });
+
+            // Send GPS to backend for real-time customer tracking
+            api.post("/delivery/location", {
+              lat: loc.coords.latitude,
+              lng: loc.coords.longitude,
+              order_id: orderId,
+            }).catch(() => {});
 
             const distance = helper.calcularDistancia(
               loc.coords.latitude,

@@ -373,7 +373,7 @@ func setupPaymentRoutes(app *fiber.App) {
 	app.Post("/payments/process", protectedRoute, paymentHandlers.ProcessPayment)
 	app.Post("/payments/split", protectedRoute, paymentHandlers.ProcessSplit)
 	app.Post("/payments/webhook", paymentHandlers.HandlePaymentWebhook)
-	app.Post("/payments/mercadopago/webhook", paymentHandlers.MercadoPagoWebhook)
+	// Mercado Pago removed — AbacatePay is the official gateway
 	app.Get("/wallet/balance/:user_id", protectedRoute, paymentHandlers.GetBalance)
 	app.Post("/wallet/topup", protectedRoute, paymentHandlers.TopUp)
 	app.Post("/wallet/deduct", protectedRoute, paymentHandlers.DeductFromWallet)

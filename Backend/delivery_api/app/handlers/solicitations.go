@@ -58,7 +58,8 @@ func CreateSolicitation(msg string, sendMessageToClient func(clientID int64, mes
 
 	_, err = collection.InsertOne(context.Background(), &orderDTO)
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("[SOLICITATION] Failed to insert: %v", err)
+		return err
 	}
 	return nil
 }
@@ -106,7 +107,11 @@ func HandShakeDeliveryman(c *fiber.Ctx) error {
 		})
 	}
 
-	order, _ := GetOrderByID(orderDTO.OrderId)
+	order, err := GetOrderByID(orderDTO.OrderId)
+	if err != nil || order == nil {
+		log.Printf("[SOLICITATION] Order %s not found after handshake", orderDTO.OrderId)
+		return c.JSON(fiber.Map{"message": "Pedido atualizado com sucesso"})
+	}
 	orderBytes, _ := json.Marshal(order)
 
 	PublishMessage(orderBytes)
@@ -123,17 +128,17 @@ func GetApprovedSolicitations(c *fiber.Ctx) error {
 
 	latitude, err := strconv.ParseFloat(lat, 64)
 	if err != nil {
-		return err
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid latitude parameter"})
 	}
 
 	longitude, err := strconv.ParseFloat(long, 64)
 	if err != nil {
-		return err
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid longitude parameter"})
 	}
 
 	limitDist, err := strconv.ParseFloat(limitDistance, 64)
 	if err != nil {
-		return err
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid limitDistance parameter"})
 	}
 
 	var approvedSolicitations []dto.OrderDTO

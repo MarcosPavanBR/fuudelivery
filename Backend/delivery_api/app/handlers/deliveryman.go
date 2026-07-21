@@ -1,10 +1,11 @@
-package handlers
+﻿package handlers
 
 import (
 	"context"
 	"encoding/json"
 	"log"
 	"strconv"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson"
@@ -12,6 +13,14 @@ import (
 	"github.com/carloshomar/vercardapio/delivery_api/app/dto"
 	"github.com/carloshomar/vercardapio/delivery_api/app/models"
 )
+
+
+func mongoCtx() context.Context {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	_ = cancel
+	return ctx
+}
+
 
 func GetOrdersByDeliverymanID(c *fiber.Ctx) error {
 
@@ -36,17 +45,17 @@ func GetOrdersByDeliverymanID(c *fiber.Ctx) error {
 		},
 	}
 
-	cursor, err := collection.Find(context.Background(), filter)
+	cursor, err := collection.Find(mongoCtx(), filter)
 	if err != nil {
 		log.Printf("Erro ao consultar os pedidos: %s", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Erro ao consultar os pedidos",
 		})
 	}
-	defer cursor.Close(context.Background())
+	defer cursor.Close(mongoCtx())
 
 	var orders []dto.OrderDTO
-	for cursor.Next(context.Background()) {
+	for cursor.Next(mongoCtx()) {
 		var order dto.OrderDTO
 		if err := cursor.Decode(&order); err != nil {
 			log.Printf("Erro ao decodificar o pedido: %s", err)
@@ -71,7 +80,7 @@ func GetOrderByID(orderID string) (*dto.OrderDTO, error) {
 	filter := bson.M{"orderid": orderID}
 
 	var order dto.OrderDTO
-	err := collection.FindOne(context.Background(), filter).Decode(&order)
+	err := collection.FindOne(mongoCtx(), filter).Decode(&order)
 	if err != nil {
 		log.Printf("Erro ao consultar o pedido: %s", err)
 		return nil, err
@@ -105,7 +114,7 @@ func UpdateOrderStatusByDeliverymanID(c *fiber.Ctx, sendMessageToClient func(cli
 
 	update := bson.M{"$set": bson.M{"deliveryman.status": request.Deliveryman.Status}}
 
-	_, err := collection.UpdateOne(context.Background(), filter, update)
+	_, err := collection.UpdateOne(mongoCtx(), filter, update)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Erro ao atualizar o status do pedido",

@@ -1,7 +1,6 @@
-package handlers
+﻿package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -19,6 +18,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+
 
 func CreateOrder(c *fiber.Ctx, sendMessageToClient func(clientID int64, message []byte) error) error {
 	var request dto.RequestPayload
@@ -63,7 +64,7 @@ func CreateOrder(c *fiber.Ctx, sendMessageToClient func(clientID int64, message 
 
 	collection := models.MongoDabase.Collection("orders")
 
-	insertResult, err := collection.InsertOne(context.Background(), request)
+	insertResult, err := collection.InsertOne(mongoCtx(), request)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Erro ao inserir a ordem no banco de dados",
@@ -155,7 +156,7 @@ func UpdateOrderStatus(c *fiber.Ctx, sendMessageToClient func(clientID int64, me
 	collection := models.MongoDabase.Collection("orders")
 
 	var order dto.RequestPayload
-	if err := collection.FindOne(context.Background(), filter).Decode(&order); err != nil {
+	if err := collection.FindOne(mongoCtx(), filter).Decode(&order); err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Pedido não encontrado",
 		})
@@ -184,7 +185,7 @@ func UpdateOrderStatus(c *fiber.Ctx, sendMessageToClient func(clientID int64, me
 		},
 	}
 
-	updateResult, err := collection.UpdateOne(context.Background(), filter, update)
+	updateResult, err := collection.UpdateOne(mongoCtx(), filter, update)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Erro ao atualizar ordem no banco de dados",
@@ -201,7 +202,7 @@ func UpdateOrderStatus(c *fiber.Ctx, sendMessageToClient func(clientID int64, me
 
 	if requestBody.Status == "DONE" {
 		code := generateSecureCode()
-		collection.UpdateOne(context.Background(), filter, bson.M{
+		collection.UpdateOne(mongoCtx(), filter, bson.M{
 			"$set": bson.M{
 				"pickup_code":              code,
 				"pickup_code_generated_at": time.Now(),
@@ -240,17 +241,17 @@ func sendStatusPushNotification(order dto.RequestPayload, status string) {
 
 	userPhone := order.User.Phone
 
-	cursor, err := pushTokensCollection.Find(context.Background(), bson.M{"user_phone": userPhone})
+	cursor, err := pushTokensCollection.Find(mongoCtx(), bson.M{"user_phone": userPhone})
 	if err != nil {
 		log.Printf("Erro ao buscar push tokens: %v", err)
 		return
 	}
-	defer cursor.Close(context.Background())
+	defer cursor.Close(mongoCtx())
 
 	var tokens []struct {
 		PushToken string `bson:"push_token"`
 	}
-	if err := cursor.All(context.Background(), &tokens); err != nil {
+	if err := cursor.All(mongoCtx(), &tokens); err != nil {
 		log.Printf("Erro ao decodificar push tokens: %v", err)
 		return
 	}
@@ -286,16 +287,16 @@ func ListOrdersByEstablishmentID(c *fiber.Ctx) error {
 
 	collection := models.MongoDabase.Collection("orders")
 
-	cursor, err := collection.Find(context.Background(), filter)
+	cursor, err := collection.Find(mongoCtx(), filter)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Falha ao buscar pedidos",
 		})
 	}
-	defer cursor.Close(context.Background())
+	defer cursor.Close(mongoCtx())
 
 	var orders []map[string]interface{}
-	if err := cursor.All(context.Background(), &orders); err != nil {
+	if err := cursor.All(mongoCtx(), &orders); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Falha ao decodificar resultados",
 		})
@@ -333,14 +334,14 @@ func ListOrdersByEstablishmentIDAndPhone(c *fiber.Ctx) error {
 	}
 
 	collection := models.MongoDabase.Collection("orders")
-	cursor, err := collection.Find(context.Background(), filter)
+	cursor, err := collection.Find(mongoCtx(), filter)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao buscar pedidos"})
 	}
-	defer cursor.Close(context.Background())
+	defer cursor.Close(mongoCtx())
 
 	var orders []map[string]interface{}
-	if err := cursor.All(context.Background(), &orders); err != nil {
+	if err := cursor.All(mongoCtx(), &orders); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao decodificar resultados"})
 	}
 
@@ -351,14 +352,14 @@ func ListAllOrders(c *fiber.Ctx) error {
 	collection := models.MongoDabase.Collection("orders")
 
 	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}}).SetLimit(500)
-	cursor, err := collection.Find(context.Background(), bson.M{}, opts)
+	cursor, err := collection.Find(mongoCtx(), bson.M{}, opts)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao buscar pedidos"})
 	}
-	defer cursor.Close(context.Background())
+	defer cursor.Close(mongoCtx())
 
 	var orders []map[string]interface{}
-	if err := cursor.All(context.Background(), &orders); err != nil {
+	if err := cursor.All(mongoCtx(), &orders); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao decodificar resultados"})
 	}
 
@@ -383,14 +384,14 @@ func ListOrdersByPhone(c *fiber.Ctx) error {
 
 	collection := models.MongoDabase.Collection("orders")
 	options := options.Find().SetSort(bson.D{{Key: "lastModified", Value: -1}})
-	cursor, err := collection.Find(context.Background(), filter, options)
+	cursor, err := collection.Find(mongoCtx(), filter, options)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao buscar pedidos"})
 	}
-	defer cursor.Close(context.Background())
+	defer cursor.Close(mongoCtx())
 
 	var orders []map[string]interface{}
-	if err := cursor.All(context.Background(), &orders); err != nil {
+	if err := cursor.All(mongoCtx(), &orders); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao decodificar resultados"})
 	}
 

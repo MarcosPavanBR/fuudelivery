@@ -327,6 +327,11 @@ func main() {
 		})
 	})
 
+	// Root health check (for Render when healthCheckPath not configured)
+	app.Get("/", func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{"status": "ok", "service": "fuudelivery"})
+	})
+
 	// Mount all routes
 	setupWebSocketRoutes(app)
 	setupAuthRoutes(app)

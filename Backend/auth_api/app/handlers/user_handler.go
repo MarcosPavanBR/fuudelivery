@@ -200,6 +200,36 @@ func ChangePassword(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "Password updated successfully"})
 }
 
+func DeleteUser(c *fiber.Ctx) error {
+	userID := c.Params("id")
+
+	tokenUserID, err := middlewares.GetUserIDFromToken(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+	}
+
+	var reqUserID uint
+	if _, scanErr := fmt.Sscanf(userID, "%d", &reqUserID); scanErr != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid user ID"})
+	}
+
+	role, _ := middlewares.GetUserRoleFromToken(c)
+	if tokenUserID != int64(reqUserID) && role != "admin" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot delete another user's account"})
+	}
+
+	var user models.User
+	if err := models.DB.First(&user, reqUserID).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
+	}
+
+	if err := models.DB.Delete(&user).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete user"})
+	}
+
+	return c.JSON(fiber.Map{"message": "Account deleted successfully"})
+}
+
 func BootstrapAdmin(c *fiber.Ctx) error {
 	bootstrapSecret := os.Getenv("ADMIN_BOOTSTRAP_SECRET")
 	if bootstrapSecret == "" {

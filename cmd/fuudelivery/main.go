@@ -264,6 +264,7 @@ func setupAuthRoutes(app *fiber.App) {
 	app.Post("/admin/bootstrap", authHandlers.BootstrapAdmin)
 	app.Get("/users", adminRequired, authHandlers.ListAllUsers)
 	app.Get("/users/:id", protectedRoute, authHandlers.GetUser)
+	app.Delete("/users/:id", protectedRoute, authHandlers.DeleteUser)
 	app.Put("/users/:id/password", protectedRoute, authHandlers.ChangePassword)
 
 	app.Get("/establishments", authHandlers.ListEstablishments)

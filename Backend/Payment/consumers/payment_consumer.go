@@ -3,7 +3,6 @@ package consumers
 import (
 	"encoding/json"
 	"log"
-	"time"
 
 	"github.com/streadway/amqp"
 	"github.com/carloshomar/vercardapio/payment/config"
@@ -98,8 +97,4 @@ func (pc *PaymentConsumer) Stop() {
 	if pc.Conn != nil {
 		pc.Conn.Close()
 	}
-}
-
-func init() {
-	_ = time.Now()
 }

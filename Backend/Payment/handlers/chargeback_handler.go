@@ -125,3 +125,26 @@ func (ch *ChargebackHandler) GetEvidences(c *fiber.Ctx) error {
 
 	return c.JSON(evidences)
 }
+
+func (ch *ChargebackHandler) GetStats(c *fiber.Ctx) error {
+	ctx := repository.MongoCtx()
+
+	stats := map[string]interface{}{}
+
+	total, _ := repository.Chargebacks.CountDocuments(ctx, map[string]interface{}{})
+	stats["total"] = total
+
+	pending, _ := repository.Chargebacks.CountDocuments(ctx, map[string]interface{}{"status": "pending"})
+	stats["pending"] = pending
+
+	approved, _ := repository.Chargebacks.CountDocuments(ctx, map[string]interface{}{"status": "approved"})
+	stats["approved"] = approved
+
+	rejected, _ := repository.Chargebacks.CountDocuments(ctx, map[string]interface{}{"status": "rejected"})
+	stats["rejected"] = rejected
+
+	escalated, _ := repository.Chargebacks.CountDocuments(ctx, map[string]interface{}{"status": "escalated"})
+	stats["escalated"] = escalated
+
+	return c.JSON(stats)
+}

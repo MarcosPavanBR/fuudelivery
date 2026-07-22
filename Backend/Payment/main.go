@@ -110,10 +110,10 @@ func main() {
 
 	// === Rotas de Autenticacao (publicas) ===
 	auth := api.Group("/auth")
-	auth.Post("/login", uh.Login)
+	auth.Post("/login", middleware.LoginRateLimit(), uh.Login)
 
 	// === Rotas Protegidas (requerem token JWT) ===
-	payments := api.Group("/payments", middleware.AuthRequired())
+	payments := api.Group("/payments", middleware.AuthRequired(), middleware.PaymentRateLimit())
 	payments.Get("/", ph.ListPayments)
 	payments.Get("/stats", ph.GetStats)
 	payments.Get("/:id", ph.GetPayment)
@@ -137,7 +137,7 @@ func main() {
 	chargebacks.Post("/:id/evidence", ch.AddEvidence)
 	chargebacks.Get("/:id/evidence", ch.GetEvidences)
 
-	wallets := api.Group("/wallets", middleware.AuthRequired())
+	wallets := api.Group("/wallets", middleware.AuthRequired(), middleware.WalletRateLimit())
 	wallets.Get("/:user_id", wh.GetBalance)
 	wallets.Get("/:user_id/transactions", wh.GetTransactions)
 	wallets.Post("/:user_id/credit", wh.Credit)

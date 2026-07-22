@@ -69,6 +69,66 @@ func publishToOrderQueue(body []byte) error {
 	return nil
 }
 
+// publishToPaymentQueue publica uma mensagem na fila de pagamentos do
+// microsserviço Payment Service. Quando um pagamento e confirmado via
+// webhook do AbacatePay, esta funcao e chamada para notificar o
+// Payment Service, que credita o valor na carteira do restaurante.
+// Se RABBIT_CONNECTION ou RABBIT_PAYMENT_QUEUE nao estiverem
+// configurados, a mensagem e ignorada silenciosamente.
+func publishToPaymentQueue(body []byte) error {
+	dsn := os.Getenv("RABBIT_CONNECTION")
+	if dsn == "" {
+		log.Println("[QUEUE] RabbitMQ não configurado, mensagem ignorada (payment queue)")
+		return nil
+	}
+
+	queueName := os.Getenv("RABBIT_PAYMENT_QUEUE")
+	if queueName == "" {
+		log.Println("[QUEUE] RABBIT_PAYMENT_QUEUE não configurado, mensagem ignorada")
+		return nil
+	}
+
+	conn, err := amqp.Dial(dsn)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	ch, err := conn.Channel()
+	if err != nil {
+		return err
+	}
+	defer ch.Close()
+
+	_, err = ch.QueueDeclare(
+		queueName,
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+
+	err = ch.Publish(
+		"",
+		queueName,
+		false,
+		false,
+		amqp.Publishing{
+			ContentType: "application/json",
+			Body:        body,
+		})
+	if err != nil {
+		return err
+	}
+
+	log.Printf("Message published to payment queue %s", queueName)
+	return nil
+}
+
 func updateLocalPaymentStatus(abacatepayID string, status string) {
 	now := time.Now()
 	updateFields := bson.M{
@@ -114,6 +174,20 @@ func publishPaymentApproved(abacatepayID string) {
 	msgBody, _ := json.Marshal(orderMsg)
 	if err := publishToOrderQueue(msgBody); err != nil {
 		log.Printf("Failed to publish payment confirmation to order queue: %v", err)
+	}
+
+	// Publica na fila de pagamentos do Payment Service (microsserviço)
+	// para que ele credite o valor na carteira do restaurante
+	paymentMsg := map[string]interface{}{
+		"order_id":         payment.OrderID,
+		"establishment_id": payment.EstablishmentID,
+		"amount":           payment.Amount,
+		"delivery_amount":  payment.DeliveryAmount,
+		"status":           "approved",
+	}
+	paymentMsgBody, _ := json.Marshal(paymentMsg)
+	if err := publishToPaymentQueue(paymentMsgBody); err != nil {
+		log.Printf("Failed to publish to payment queue: %v", err)
 	}
 
 	publishedAt := now

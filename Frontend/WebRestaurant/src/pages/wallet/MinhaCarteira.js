@@ -1,93 +1,53 @@
-/**
- * MinhaCarteira.js
- * Página simplificada de carteira para o restaurante.
- * Mostra apenas saldo e extrato do restaurante logado.
- * SEM funcionalidade de aprovação — somente visualização.
- */
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../context/AuthContext';
-import { toast } from 'react-toastify';
+import React, { useState, useEffect, useCallback } from "react";
+import { useAuth } from "../../context/AuthContext";
+import {
+  getWallet,
+  getExtract,
+  requestWithdraw,
+  getPaymentHealth,
+} from "../../services/payment.model";
+import {
+  FaWallet,
+  FaArrowUp,
+  FaArrowDown,
+  FaLock,
+  FaMoneyBillWave,
+  FaHistory,
+  FaSpinner,
+  FaExclamationTriangle,
+  FaCheckCircle,
+  FaFileInvoiceDollar,
+  FaUniversity,
+  FaQrcode,
+} from "react-icons/fa";
+import { toast } from "react-toastify";
 
-const API_URL = process.env.REACT_APP_API_URL || 'https://fuudelivery-api-8y6l.onrender.com';
-
-/**
- * Busca dados da carteira do restaurante logado
- */
-async function fetchWallet(token) {
-  const res = await fetch(`${API_URL}/wallet`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-  if (!res.ok) throw new Error('Erro ao carregar carteira');
-  return res.json();
-}
-
-/**
- * Busca transações da carteira do restaurante logado
- */
-async function fetchTransactions(token) {
-  const res = await fetch(`${API_URL}/wallet/transactions`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-  if (!res.ok) throw new Error('Erro ao carregar transações');
-  return res.json();
-}
-
-/**
- * Solicita saque do saldo disponível
- */
-async function requestWithdraw(token, amount) {
-  const res = await fetch(`${API_URL}/wallet/withdraw`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ amount })
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || 'Erro ao solicitar saque');
-  }
-  return res.json();
-}
-
-/** Formata valor em Real */
 function formatCurrency(value) {
-  return `R$ ${(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+  if (value == null) return "R$ 0,00";
+  return `R$ ${Number(value).toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
-/** Formata data para pt-BR */
 function formatDate(dateStr) {
-  if (!dateStr) return '-';
-  return new Date(dateStr).toLocaleString('pt-BR');
+  if (!dateStr) return "\u2014";
+  return new Date(dateStr).toLocaleString("pt-BR");
 }
 
-/** Badge de status */
-function StatusBadge({ status }) {
-  const MAP = {
-    pending: { label: 'Pendente', bg: '#FEF3C7', color: '#B45309' },
-    approved: { label: 'Aprovado', bg: '#ECFDF5', color: '#047857' },
-    processing: { label: 'Processando', bg: '#DBEAFE', color: '#1D4ED8' },
-    completed: { label: 'Concluído', bg: '#ECFDF5', color: '#047857' },
-    rejected: { label: 'Rejeitado', bg: '#FEE2E2', color: '#B91C1C' },
-    blocked: { label: 'Bloqueado', bg: '#FEE2E2', color: '#B91C1C' },
-  };
-  const cfg = MAP[status] || { label: status, bg: '#F3F4F6', color: '#4B5563' };
-  return (
-    <span style={{ padding: '4px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: 600, background: cfg.bg, color: cfg.color }}>
-      {cfg.label}
-    </span>
-  );
-}
-
-/** Card de saldo */
-function BalanceCard({ label, value, color, icon }) {
-  return (
-    <div style={{ background: '#fff', borderRadius: '12px', padding: '20px', border: '1px solid #E5E7EB', flex: 1, minWidth: '200px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-        <span style={{ fontSize: '20px' }}>{icon}</span>
-        <span style={{ color: '#6B7280', fontSize: '14px', fontWeight: 500 }}>{label}</span>
-      </div>
-      <div style={{ fontSize: '28px', fontWeight: 700, color }}>{formatCurrency(value)}</div>
-    </div>
-  );
+function getTransactionIcon(type) {
+  switch (type) {
+    case "CREDIT":
+    case "PAYMENT":
+      return <FaArrowDown className="text-green-400" />;
+    case "DEBIT":
+    case "CHARGEBACK":
+      return <FaArrowUp className="text-red-400" />;
+    case "WITHDRAWAL":
+      return <FaMoneyBillWave className="text-yellow-400" />;
+    default:
+      return <FaFileInvoiceDollar className="text-gray-400" />;
+  }
 }
 
 export default function MinhaCarteira() {
@@ -95,153 +55,411 @@ export default function MinhaCarteira() {
   const [wallet, setWallet] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [error, setError] = useState(null);
+  const [showWithdraw, setShowWithdraw] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [withdrawMethod, setWithdrawMethod] = useState("PIX");
+  const [withdrawDest, setWithdrawDest] = useState("");
   const [withdrawing, setWithdrawing] = useState(false);
+  const [paymentOnline, setPaymentOnline] = useState(null);
+  const [cursor, setCursor] = useState("");
+  const [hasMore, setHasMore] = useState(false);
+
+  const establishmentId = user?.establishmentId || user?._id || user?.id || "";
+
+  const fetchWallet = useCallback(async () => {
+    if (!establishmentId) {
+      setError("ID do estabelecimento não encontrado. Faça login novamente.");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const [walletData, extractData, health] = await Promise.all([
+        getWallet(establishmentId).catch(() => null),
+        getExtract(establishmentId, 20, "").catch(() => ({ data: [] })),
+        getPaymentHealth().catch(() => ({ status: "offline" })),
+      ]);
+
+      if (walletData) {
+        setWallet(walletData);
+      }
+
+      setTransactions(extractData?.data || []);
+      setCursor(extractData?.next_cursor || "");
+      setHasMore(!!extractData?.next_cursor);
+      setPaymentOnline(health?.status === "healthy");
+    } catch (err) {
+      console.error("Erro ao carregar carteira:", err);
+      setError(
+        err?.response?.data?.message ||
+          err?.message ||
+          "Erro ao conectar com o servidor de pagamentos"
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [establishmentId]);
 
   useEffect(() => {
-    loadData();
-  }, [user]);
+    fetchWallet();
+  }, [fetchWallet]);
 
-  async function loadData() {
+  const loadMore = async () => {
+    if (!cursor) return;
     try {
-      const token = localStorage.getItem('token');
-      const [walletData, txData] = await Promise.all([
-        fetchWallet(token),
-        fetchTransactions(token)
-      ]);
-      setWallet(walletData);
-      setTransactions(txData.transactions || txData || []);
+      const more = await getExtract(establishmentId, 20, cursor);
+      setTransactions((prev) => [...prev, ...(more?.data || [])]);
+      setCursor(more?.next_cursor || "");
+      setHasMore(!!more?.next_cursor);
     } catch (err) {
-      console.error(err);
-      toast.error('Erro ao carregar dados da carteira');
+      toast.error("Erro ao carregar mais transações");
     }
-    setLoading(false);
-  }
+  };
 
-  async function handleWithdraw() {
+  const handleWithdraw = async () => {
     const amount = parseFloat(withdrawAmount);
+
     if (!amount || amount <= 0) {
-      toast.error('Informe um valor válido');
-      return;
-    }
-    if (amount > (wallet?.available || 0)) {
-      toast.error('Saldo insuficiente');
+      toast.error("Informe um valor válido");
       return;
     }
 
-    setWithdrawing(true);
-    try {
-      const token = localStorage.getItem('token');
-      await requestWithdraw(token, amount);
-      toast.success(`Saque de ${formatCurrency(amount)} solicitado com sucesso!`);
-      setWithdrawAmount('');
-      loadData();
-    } catch (err) {
-      toast.error(err.message);
+    if (wallet && amount > wallet.available) {
+      toast.error("Saldo insuficiente para este saque");
+      return;
     }
-    setWithdrawing(false);
-  }
+
+    if (amount < 10) {
+      toast.error("Valor mínimo para saque: R$ 10,00");
+      return;
+    }
+
+    if (!withdrawDest || withdrawDest.length < 10) {
+      toast.error("Informe uma chave PIX ou dados bancários válidos");
+      return;
+    }
+
+    try {
+      setWithdrawing(true);
+      await requestWithdraw(establishmentId, {
+        amount,
+        destination: withdrawDest,
+        method: withdrawMethod,
+      });
+      toast.success(
+        `Saque de R$ ${amount.toFixed(2)} solicitado com sucesso!`
+      );
+      setShowWithdraw(false);
+      setWithdrawAmount("");
+      setWithdrawDest("");
+      await fetchWallet();
+    } catch (err) {
+      toast.error(
+        err?.response?.data?.error || "Erro ao solicitar saque"
+      );
+    } finally {
+      setWithdrawing(false);
+    }
+  };
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '300px', color: '#6B7280' }}>
-        Carregando carteira...
+      <div className="flex flex-col items-center justify-center min-h-[400px]">
+        <FaSpinner className="animate-spin text-4xl text-red-500 mb-4" />
+        <p className="text-gray-400">Carregando carteira...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px]">
+        <FaExclamationTriangle className="text-4xl text-yellow-500 mb-4" />
+        <p className="text-gray-300 mb-2">Não foi possível carregar a carteira</p>
+        <p className="text-gray-500 text-sm mb-4">{error}</p>
+        <button
+          onClick={fetchWallet}
+          className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-white transition"
+        >
+          Tentar novamente
+        </button>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#111827', margin: 0 }}>Minha Carteira</h1>
-        <p style={{ color: '#6B7280', marginTop: '4px' }}>Acompanhe seus saldos e extrato financeiro</p>
+    <div className="max-w-4xl mx-auto p-4 space-y-6">
+      {/* Status do servidor de pagamentos */}
+      <div className="flex items-center gap-2 text-sm">
+        <div
+          className={`w-2 h-2 rounded-full ${
+            paymentOnline ? "bg-green-400" : "bg-red-400"
+          }`}
+        />
+        <span className="text-gray-400">
+          Servidor de pagamentos:{" "}
+          {paymentOnline ? "Online" : "Offline"}
+        </span>
       </div>
 
-      {/* Saldo Cards */}
-      <div style={{ display: 'flex', gap: '16px', marginBottom: '32px', flexWrap: 'wrap' }}>
-        <BalanceCard label="Saldo Disponível" value={wallet?.available || 0} color="#047857" icon="💰" />
-        <BalanceCard label="Saldo Pendente" value={wallet?.pending || 0} color="#B45309" icon="⏳" />
-        <BalanceCard label="Saldo Bloqueado" value={wallet?.blocked || 0} color="#B91C1C" icon="🔒" />
-        <BalanceCard label="Total Recebido" value={wallet?.totalReceived || 0} color="#1D4ED8" icon="📊" />
-      </div>
-
-      {/* Solicitar Saque */}
-      <div style={{ background: '#F9FAFB', borderRadius: '12px', padding: '24px', marginBottom: '32px', border: '1px solid #E5E7EB' }}>
-        <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#111827', marginBottom: '12px' }}>Solicitar Saque</h3>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end' }}>
-          <div style={{ flex: 1, maxWidth: '300px' }}>
-            <label style={{ display: 'block', fontSize: '14px', color: '#6B7280', marginBottom: '4px' }}>Valor (R$)</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="0,00"
-              value={withdrawAmount}
-              onChange={(e) => setWithdrawAmount(e.target.value)}
-              style={{ width: '100%', padding: '10px 12px', border: '1px solid #D1D5DB', borderRadius: '8px', fontSize: '14px' }}
-            />
+      {/* Cards de saldo */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <div className="flex items-center gap-2 mb-3">
+            <FaWallet className="text-green-400" />
+            <span className="text-gray-400 text-sm">Saldo Disponível</span>
           </div>
-          <button
-            onClick={handleWithdraw}
-            disabled={withdrawing || !withdrawAmount}
-            style={{
-              padding: '10px 20px', background: '#EA1D2C', color: '#fff', border: 'none', borderRadius: '8px',
-              fontSize: '14px', fontWeight: 600, cursor: 'pointer', opacity: withdrawing || !withdrawAmount ? 0.5 : 1
-            }}
-          >
-            {withdrawing ? 'Processando...' : 'Solicitar Saque'}
-          </button>
+          <p className="text-3xl font-bold text-green-400">
+            {formatCurrency(wallet?.available)}
+          </p>
+          <p className="text-gray-500 text-xs mt-1">Pronto para saque</p>
         </div>
-        <p style={{ fontSize: '12px', color: '#9CA3AF', marginTop: '8px' }}>
-          Disponível para saque: {formatCurrency(wallet?.available || 0)}
-        </p>
+
+        <div className="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <div className="flex items-center gap-2 mb-3">
+            <FaSpinner className="text-yellow-400" />
+            <span className="text-gray-400 text-sm">Saldo Pendente</span>
+          </div>
+          <p className="text-3xl font-bold text-yellow-400">
+            {formatCurrency(wallet?.pending)}
+          </p>
+          <p className="text-gray-500 text-xs mt-1">
+            Aguardando aprovação do sistema
+          </p>
+        </div>
+
+        <div className="bg-gray-800 rounded-xl p-5 border border-gray-700">
+          <div className="flex items-center gap-2 mb-3">
+            <FaLock className="text-red-400" />
+            <span className="text-gray-400 text-sm">Saldo Bloqueado</span>
+          </div>
+          <p className="text-3xl font-bold text-red-400">
+            {formatCurrency(wallet?.blocked)}
+          </p>
+          <p className="text-gray-500 text-xs mt-1">
+            Retido por disputa ou estorno
+          </p>
+        </div>
       </div>
+
+      {/* Totais */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700/50">
+          <span className="text-gray-400 text-sm">Total ganho</span>
+          <p className="text-xl font-semibold text-white">
+            {formatCurrency(wallet?.total_earned)}
+          </p>
+        </div>
+        <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700/50">
+          <span className="text-gray-400 text-sm">Total sacado</span>
+          <p className="text-xl font-semibold text-white">
+            {formatCurrency(wallet?.total_withdrawn)}
+          </p>
+        </div>
+      </div>
+
+      {/* Botão de saque */}
+      {wallet?.available > 0 && (
+        <button
+          onClick={() => setShowWithdraw(true)}
+          className="w-full py-3 bg-green-600 hover:bg-green-700 rounded-xl text-white font-semibold transition flex items-center justify-center gap-2"
+        >
+          <FaMoneyBillWave /> Solicitar Saque
+        </button>
+      )}
+
+      {/* Modal de saque */}
+      {showWithdraw && (
+        <div
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+          onClick={(e) => e.target === e.currentTarget && setShowWithdraw(false)}
+        >
+          <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-md border border-gray-700">
+            <h3 className="text-xl font-bold text-white mb-4">
+              Solicitar Saque
+            </h3>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-gray-400 text-sm block mb-1">
+                  Valor (mínimo R$ 10,00)
+                </label>
+                <input
+                  type="number"
+                  value={withdrawAmount}
+                  onChange={(e) => setWithdrawAmount(e.target.value)}
+                  placeholder="0.00"
+                  min="10"
+                  step="0.01"
+                  className="w-full px-4 py-3 bg-gray-700 rounded-lg text-white border border-gray-600 focus:border-green-500 focus:outline-none"
+                />
+                <p className="text-gray-500 text-xs mt-1">
+                  Disponível: {formatCurrency(wallet?.available)}
+                </p>
+              </div>
+
+              <div>
+                <label className="text-gray-400 text-sm block mb-1">
+                  Método
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setWithdrawMethod("PIX")}
+                    className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-2 transition ${
+                      withdrawMethod === "PIX"
+                        ? "bg-green-600 text-white"
+                        : "bg-gray-700 text-gray-400"
+                    }`}
+                  >
+                    <FaQrcode /> PIX
+                  </button>
+                  <button
+                    onClick={() => setWithdrawMethod("TED")}
+                    className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-2 transition ${
+                      withdrawMethod === "TED"
+                        ? "bg-green-600 text-white"
+                        : "bg-gray-700 text-gray-400"
+                    }`}
+                  >
+                    <FaUniversity /> TED
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-gray-400 text-sm block mb-1">
+                  {withdrawMethod === "PIX"
+                    ? "Chave PIX"
+                    : "Dados bancários (Ag/CC)"}
+                </label>
+                <input
+                  type="text"
+                  value={withdrawDest}
+                  onChange={(e) => setWithdrawDest(e.target.value)}
+                  placeholder={
+                    withdrawMethod === "PIX"
+                      ? "CPF, email, telefone ou chave aleatória"
+                      : "0000/00000-0"
+                  }
+                  className="w-full px-4 py-3 bg-gray-700 rounded-lg text-white border border-gray-600 focus:border-green-500 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowWithdraw(false)}
+                className="flex-1 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-gray-300 transition"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleWithdraw}
+                disabled={withdrawing}
+                className="flex-1 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-white font-semibold transition flex items-center justify-center gap-2"
+              >
+                {withdrawing ? (
+                  <>
+                    <FaSpinner className="animate-spin" /> Processando...
+                  </>
+                ) : (
+                  <>
+                    <FaCheckCircle /> Confirmar Saque
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Extrato */}
-      <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #E5E7EB', overflow: 'hidden' }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #E5E7EB' }}>
-          <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#111827', margin: 0 }}>Extrato</h3>
+      <div className="bg-gray-800 rounded-xl border border-gray-700">
+        <div className="flex items-center justify-between p-4 border-b border-gray-700">
+          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+            <FaHistory /> Extrato
+          </h3>
         </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: '#F9FAFB' }}>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#6B7280', textTransform: 'uppercase' }}>Data</th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#6B7280', textTransform: 'uppercase' }}>Descrição</th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#6B7280', textTransform: 'uppercase' }}>Tipo</th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#6B7280', textTransform: 'uppercase' }}>Status</th>
-                <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '12px', fontWeight: 600, color: '#6B7280', textTransform: 'uppercase' }}>Valor</th>
-              </tr>
-            </thead>
-            <tbody>
-              {transactions.length === 0 ? (
-                <tr>
-                  <td colSpan={5} style={{ padding: '40px', textAlign: 'center', color: '#9CA3AF' }}>
-                    Nenhuma transação encontrada
-                  </td>
-                </tr>
-              ) : (
-                transactions.map((tx, i) => (
-                  <tr key={tx.id || i} style={{ borderTop: '1px solid #F3F4F6' }}>
-                    <td style={{ padding: '12px 16px', fontSize: '14px', color: '#374151' }}>{formatDate(tx.createdAt)}</td>
-                    <td style={{ padding: '12px 16px', fontSize: '14px', color: '#111827' }}>{tx.description || tx.type || '-'}</td>
-                    <td style={{ padding: '12px 16px', fontSize: '14px', color: '#6B7280' }}>
-                      {tx.type === 'credit' ? 'Crédito' : tx.type === 'debit' ? 'Débito' : tx.type || '-'}
-                    </td>
-                    <td style={{ padding: '12px 16px' }}><StatusBadge status={tx.status} /></td>
-                    <td style={{
-                      padding: '12px 16px', textAlign: 'right', fontWeight: 600, fontSize: '14px',
-                      color: tx.type === 'credit' ? '#047857' : '#B91C1C'
-                    }}>
-                      {tx.type === 'credit' ? '+' : '-'} {formatCurrency(tx.amount)}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+
+        {transactions.length === 0 ? (
+          <div className="p-8 text-center text-gray-500">
+            Nenhuma transação encontrada
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-700">
+            {transactions.map((tx, i) => (
+              <div
+                key={tx.id || tx._id || i}
+                className="flex items-center justify-between p-4 hover:bg-gray-700/30 transition"
+              >
+                <div className="flex items-center gap-3">
+                  {getTransactionIcon(tx.type)}
+                  <div>
+                    <p className="text-white text-sm">
+                      {tx.description || tx.type}
+                    </p>
+                    <p className="text-gray-500 text-xs">
+                      {formatDate(tx.created_at)}
+                    </p>
+                    {tx.payment_ref && (
+                      <p className="text-gray-600 text-xs font-mono">
+                        {tx.payment_ref}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p
+                    className={`font-semibold ${
+                      tx.type === "CREDIT" || tx.type === "PAYMENT"
+                        ? "text-green-400"
+                        : tx.type === "WITHDRAWAL"
+                        ? "text-yellow-400"
+                        : "text-red-400"
+                    }`}
+                  >
+                    {tx.type === "CREDIT" || tx.type === "PAYMENT"
+                      ? "+"
+                      : "-"}{" "}
+                    {formatCurrency(Math.abs(tx.amount))}
+                  </p>
+                  {tx.balance != null && (
+                    <p className="text-gray-600 text-xs">
+                      Saldo: {formatCurrency(tx.balance)}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {hasMore && (
+          <div className="p-4 text-center border-t border-gray-700">
+            <button
+              onClick={loadMore}
+              className="px-6 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-gray-300 text-sm transition"
+            >
+              Carregar mais
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Info sobre o fluxo */}
+      <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/30">
+        <p className="text-gray-500 text-xs leading-relaxed">
+          <strong className="text-gray-400">Como funciona:</strong> Após a
+          entrega ser confirmada, o pagamento fica pendente por 48h (janela
+          anti-fraude). Pagamentos de baixo risco são aprovados automaticamente
+          pelo sistema. Pagamentos de alto valor ou alto risco passam por análise
+          de compliance. Após aprovação, o valor é creditado na sua carteira e
+          fica disponível para saque.
+        </p>
       </div>
     </div>
   );

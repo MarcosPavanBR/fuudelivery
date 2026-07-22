@@ -29,6 +29,14 @@ export default function NavStack() {
       />
 
       <Stack.Screen
+        name="onboarding"
+        options={{
+          title: "Cadastrar Restaurante",
+          presentation: "modal",
+        }}
+      />
+
+      <Stack.Screen
         name="modal"
         options={{ presentation: "modal", headerShown: false }}
       />

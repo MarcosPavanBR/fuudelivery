@@ -1,6 +1,9 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BBR">
 <head>
+  <!-- FuuPayment Panel — Painel de gestao de pagamentos standalone -->
+  <!-- Funcionalidades: Login, Dashboard, Tabela de pagamentos, Modal de detalhes -->
+  <!-- Conecta ao Payment Service via REST API (fuudelivery-payment.onrender.com) -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FuuPayment Panel</title>
@@ -91,11 +94,21 @@
   </div>
 
   <script>
-    const API_URL = window.location.hostname === 'localhost' ? 'http://localhost:8084' : 'https://fuudelivery-payment.onrender.com';
-    let token = '';
-    let currentTab = 'payments';
-    let pendingRejectId = null;
+    // =====================================================
+    // FuuPayment Panel — Cliente JavaScript
+    // =====================================================
 
+    // URL base do Payment Service (detecta automaticamente localhost vs producao)
+    const API_URL = window.location.hostname === 'localhost' ? 'http://localhost:8084' : 'https://fuudelivery-payment.onrender.com';
+    let token = '';       // Token JWT para autenticacao
+    let currentTab = 'payments';  // Aba ativa
+    let pendingRejectId = null;   // ID do pagamento pendente de rejeicao
+
+    /**
+     * login() — Autentica o usuario via API.
+     * Envia email/senha para POST /api/auth/login.
+     * Se sucesso, esconde tela de login e carrega aba de pagamentos.
+     */
     async function login() {
       const email = document.getElementById('email').value;
       const password = document.getElementById('password').value;
@@ -118,12 +131,14 @@
       }
     }
 
+    /** logout() — Limpa token e volta para tela de login */
     function logout() {
       token = '';
       document.getElementById('loginScreen').style.display = 'flex';
       document.getElementById('app').style.display = 'none';
     }
 
+    /** showTab() — Troca a aba ativa e recarrega o conteudo */
     function showTab(tab) {
       currentTab = tab;
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -131,6 +146,11 @@
       loadTab(tab);
     }
 
+    /**
+     * loadTab() — Carrega o conteudo da aba selecionada.
+     * Para 'payments': busca stats + lista de pagamentos e renderiza tabela.
+     * Para 'chargebacks' e 'wallets': placeholder (em breve).
+     */
     async function loadTab(tab) {
       const content = document.getElementById('content');
       
@@ -182,6 +202,7 @@
       }
     }
 
+    /** approvePayment() — Aprova um pagamento via POST /api/payments/:id/approve */
     async function approvePayment(id) {
       await fetch(`${API_URL}/api/payments/${id}/approve`, {
         method: 'POST',
@@ -190,16 +211,19 @@
       loadTab(currentTab);
     }
 
+    /** showRejectModal() — Abre modal para informar motivo da rejeicao */
     function showRejectModal(id) {
       pendingRejectId = id;
       document.getElementById('rejectModal').style.display = 'flex';
     }
 
+    /** closeModal() — Fecha modal de rejeicao e limpa estado */
     function closeModal() {
       document.getElementById('rejectModal').style.display = 'none';
       pendingRejectId = null;
     }
 
+    /** confirmReject() — Envia rejeicao com motivo via POST /api/payments/:id/reject */
     async function confirmReject() {
       if (!pendingRejectId) return;
       const reason = document.getElementById('rejectReason').value;

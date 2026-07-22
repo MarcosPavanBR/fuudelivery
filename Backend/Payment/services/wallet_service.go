@@ -5,6 +5,7 @@
 package services
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/carloshomar/vercardapio/payment/models"
@@ -45,28 +46,27 @@ func (ws *WalletService) GetOrCreateWallet(userID, userType string) (*models.Wal
 	return wallet, nil
 }
 
-// CreditWallet credita um valor na carteira do usuario.
+// CreditWallet credita um valor na carteira do usuario de forma atomica
+// ($inc no MongoDB, via repository.IncrementWalletBalance) — nao ha mais
+// leitura-depois-escrita separadas, entao duas chamadas concorrentes para
+// o mesmo usuario nunca perdem uma atualizacao.
 // Registra a transacao com saldo antes/depois para auditoria.
 // Usado quando um pagamento e aprovado.
 func (ws *WalletService) CreditWallet(userID string, amount float64, description string, referenceID string) error {
-	// Busca a carteira do usuario
-	wallet, err := repository.GetWallet(userID)
+	if amount <= 0 {
+		return fmt.Errorf("valor de credito deve ser positivo: %.2f", amount)
+	}
+
+	walletAfter, err := repository.IncrementWalletBalance(userID, amount)
 	if err != nil {
 		return err
 	}
-
-	// Calcula o novo saldo
-	balanceBefore := wallet.Balance
-	balanceAfter := balanceBefore + amount
-
-	// Atualiza o saldo no banco
-	if err := repository.UpdateWalletBalance(userID, balanceAfter); err != nil {
-		return err
-	}
+	balanceAfter := walletAfter.Balance
+	balanceBefore := balanceAfter - amount
 
 	// Registra a transacao para auditoria
 	tx := &models.WalletTransaction{
-		WalletID:      wallet.ID,
+		WalletID:      walletAfter.ID,
 		Type:          models.TransactionCredit,
 		Amount:        amount,
 		BalanceBefore: balanceBefore,
@@ -78,33 +78,33 @@ func (ws *WalletService) CreditWallet(userID string, amount float64, description
 	return repository.CreateWalletTransaction(tx)
 }
 
-// DebitWallet debita um valor da carteira do usuario.
-// Verifica se ha saldo suficiente antes de debitar.
-// Usado para estornos ou correcoes.
+// DebitWallet debita um valor da carteira do usuario de forma atomica.
+// A checagem de saldo suficiente e o desconto acontecem na mesma operacao
+// do banco (repository.TryDebitWalletBalance), entao duas chamadas
+// concorrentes nunca conseguem debitar mais do que a carteira tem.
+//
+// IMPORTANTE: se o saldo for insuficiente, este metodo retorna
+// repository.ErrInsufficientBalance — NAO retorna nil. Chamadores devem
+// tratar erro explicitamente; um retorno nil aqui sempre significa que o
+// debito realmente aconteceu.
 func (ws *WalletService) DebitWallet(userID string, amount float64, description string, referenceID string) error {
-	// Busca a carteira do usuario
-	wallet, err := repository.GetWallet(userID)
+	if amount <= 0 {
+		return fmt.Errorf("valor de debito deve ser positivo: %.2f", amount)
+	}
+
+	walletAfter, err := repository.TryDebitWalletBalance(userID, amount)
 	if err != nil {
+		// Inclui repository.ErrInsufficientBalance quando nao ha saldo —
+		// o chamador decide o que fazer (bloquear pedido, avisar usuario etc.),
+		// mas o erro nunca e engolido silenciosamente.
 		return err
 	}
-
-	// Verifica saldo suficiente
-	if wallet.Balance < amount {
-		return nil // Saldo insuficiente: nao debita
-	}
-
-	// Calcula o novo saldo
-	balanceBefore := wallet.Balance
-	balanceAfter := balanceBefore - amount
-
-	// Atualiza o saldo no banco
-	if err := repository.UpdateWalletBalance(userID, balanceAfter); err != nil {
-		return err
-	}
+	balanceAfter := walletAfter.Balance
+	balanceBefore := balanceAfter + amount
 
 	// Registra a transacao para auditoria
 	tx := &models.WalletTransaction{
-		WalletID:      wallet.ID,
+		WalletID:      walletAfter.ID,
 		Type:          models.TransactionDebit,
 		Amount:        amount,
 		BalanceBefore: balanceBefore,

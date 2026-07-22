@@ -2,6 +2,7 @@
 package middleware
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -18,6 +19,7 @@ type Claims struct {
 }
 
 // AuthRequired verifica se a requisicao possui um token JWT valido.
+// Valida o algoritmo de assinatura para prevenir algorithm confusion attacks.
 func AuthRequired() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		authHeader := c.Get("Authorization")
@@ -34,6 +36,10 @@ func AuthRequired() fiber.Handler {
 		claims := &Claims{}
 
 		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+			// Previne algorithm confusion: rejeita tokens que nao usam HMAC
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			}
 			return []byte(config.AppConfig.JWTSecret), nil
 		})
 

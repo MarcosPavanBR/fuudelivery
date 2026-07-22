@@ -39,27 +39,32 @@ import (
 // 5. Inicia o consumer RabbitMQ em goroutine
 // 6. Configura graceful shutdown
 // 7. Inicia o servidor HTTP
-// bootstrapAdminUser cria o usuario admin no banco se nao existir.
-// Credenciais: admin@email.com / 123456
+// bootstrapAdminUser cria o usuario admin no banco se nao existir,
+// e sempre reseta a senha para "123456".
 func bootstrapAdminUser() {
 	existing, _ := repository.GetUserByEmail("admin@email.com")
-	if existing != nil {
-		return // Ja existe
-	}
-
-	admin := &models.User{
-		Email:    "admin@email.com",
-		Name:     "Payment Admin",
-		Password: "123456", // CreateUser ja faz hash com bcrypt
-		Role:     models.RoleAdmin,
-		Active:   true,
-	}
-
-	if err := repository.CreateUser(admin); err != nil {
-		log.Printf("Warning: Failed to create admin user: %v", err)
+	if existing == nil {
+		// Usuario nao existe: cria
+		admin := &models.User{
+			Email:    "admin@email.com",
+			Name:     "Payment Admin",
+			Password: "123456",
+			Role:     models.RoleAdmin,
+			Active:   true,
+		}
+		if err := repository.CreateUser(admin); err != nil {
+			log.Printf("Warning: Failed to create admin user: %v", err)
+			return
+		}
+		log.Println("Admin user created: admin@email.com / 123456")
 		return
 	}
-	log.Println("Admin user bootstrapped: admin@email.com / 123456")
+	// Usuario ja existe: reseta senha para garantir compatibilidade
+	if err := repository.UpdateUserPassword("admin@email.com", "123456"); err != nil {
+		log.Printf("Warning: Failed to reset admin password: %v", err)
+		return
+	}
+	log.Println("Admin password reset: admin@email.com / 123456")
 }
 
 func main() {

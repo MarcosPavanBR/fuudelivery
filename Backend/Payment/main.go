@@ -39,32 +39,34 @@ import (
 // 5. Inicia o consumer RabbitMQ em goroutine
 // 6. Configura graceful shutdown
 // 7. Inicia o servidor HTTP
-// bootstrapAdminUser cria o usuario admin no banco se nao existir,
-// e sempre reseta a senha para "123456".
+// bootstrapAdminUser cria o usuario admin no banco se nao existir.
+// NUNCA reseta a senha em reinicios — isso so acontece na criacao inicial.
 func bootstrapAdminUser() {
 	existing, _ := repository.GetUserByEmail("admin@email.com")
-	if existing == nil {
-		// Usuario nao existe: cria
-		admin := &models.User{
-			Email:    "admin@email.com",
-			Name:     "Payment Admin",
-			Password: "123456",
-			Role:     models.RoleAdmin,
-			Active:   true,
-		}
-		if err := repository.CreateUser(admin); err != nil {
-			log.Printf("Warning: Failed to create admin user: %v", err)
-			return
-		}
-		log.Println("Admin user created: admin@email.com / 123456")
+	if existing != nil {
+		log.Println("Admin user already exists, skipping bootstrap")
 		return
 	}
-	// Usuario ja existe: reseta senha para garantir compatibilidade
-	if err := repository.UpdateUserPassword("admin@email.com", "123456"); err != nil {
-		log.Printf("Warning: Failed to reset admin password: %v", err)
+
+	// Usuario nao existe: cria com senha do ambiente ou default
+	password := os.Getenv("ADMIN_PASSWORD")
+	if password == "" {
+		password = "changeme"
+		log.Println("Warning: No ADMIN_PASSWORD env var, using default password. Set ADMIN_PASSWORD in Render dashboard.")
+	}
+
+	admin := &models.User{
+		Email:    "admin@email.com",
+		Name:     "Payment Admin",
+		Password: password,
+		Role:     models.RoleAdmin,
+		Active:   true,
+	}
+	if err := repository.CreateUser(admin); err != nil {
+		log.Printf("Warning: Failed to create admin user: %v", err)
 		return
 	}
-	log.Println("Admin password reset: admin@email.com / 123456")
+	log.Println("Admin user created: admin@email.com (set ADMIN_PASSWORD env var to change)")
 }
 
 func main() {
@@ -85,7 +87,7 @@ func main() {
 	// 4. Configura middleware global
 	app.Use(logger.New()) // Log de cada requisicao no console
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "*", // Em producao, restringir para dominios especificos
+		AllowOrigins: "https://fuudelivery-web.onrender.com,https://fuudelivery-admin-lv7f.onrender.com,https://fuudelivery-payment-panel.onrender.com",
 		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
 		AllowHeaders: "Origin,Content-Type,Accept,Authorization",
 	}))

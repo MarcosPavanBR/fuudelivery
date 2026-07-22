@@ -26,11 +26,15 @@ var AppConfig *Config
 
 // Load carrega as variaveis de ambiente do arquivo .env
 // e inicializa a variavel global AppConfig.
-// Se o arquivo .env nao for encontrado, usa as variaveis
-// de ambiente do sistema operacional.
+// Se JWT_SECRET nao estiver configurado, o servico nao sobe (seguranca).
 func Load() {
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found, using environment variables")
+	}
+
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		log.Fatal("FATAL: JWT_SECRET environment variable is required. Generate one with: openssl rand -hex 32")
 	}
 
 	AppConfig = &Config{
@@ -38,7 +42,7 @@ func Load() {
 		MongoDatabase:      getEnv("PAYMENT_MONGO_DATABASE", "payment"),
 		RabbitConnection:   getEnv("RABBIT_CONNECTION", "amqp://guest:guest@localhost:5672/"),
 		RabbitPaymentQueue: getEnv("RABBIT_PAYMENT_QUEUE", "payment_queue"),
-		JWTSecret:          getEnv("JWT_SECRET", "fuu-jwt-secret-2026"),
+		JWTSecret:          jwtSecret,
 		Port:               getEnv("PORT", "8084"),
 	}
 }

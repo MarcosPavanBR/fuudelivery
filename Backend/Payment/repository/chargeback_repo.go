@@ -1,3 +1,5 @@
+// Package repository - chargeback_repo.go
+// Funcoes de acesso a dados para a colecao de estornos (chargebacks).
 package repository
 
 import (
@@ -9,6 +11,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+// CreateChargeback insere um novo estorno no MongoDB.
+// Gera automaticamente o ObjectID e os timestamps.
 func CreateChargeback(chargeback *models.Chargeback) error {
 	ctx := MongoCtx()
 	chargeback.ID = primitive.NewObjectID()
@@ -18,6 +22,7 @@ func CreateChargeback(chargeback *models.Chargeback) error {
 	return err
 }
 
+// GetChargebackByID busca um estorno pelo seu ObjectID.
 func GetChargebackByID(id primitive.ObjectID) (*models.Chargeback, error) {
 	ctx := MongoCtx()
 	var chargeback models.Chargeback
@@ -28,6 +33,8 @@ func GetChargebackByID(id primitive.ObjectID) (*models.Chargeback, error) {
 	return &chargeback, nil
 }
 
+// UpdateChargebackStatus atualiza o status de um estorno e campos adicionais.
+// Usado para aprovar, rejeitar ou escalar estornos.
 func UpdateChargebackStatus(id primitive.ObjectID, status models.ChargebackStatus, updates bson.M) error {
 	ctx := MongoCtx()
 	updates["status"] = status
@@ -36,6 +43,8 @@ func UpdateChargebackStatus(id primitive.ObjectID, status models.ChargebackStatu
 	return err
 }
 
+// ListChargebacks lista estornos com filtro por status e paginacao.
+// Retorna a lista, total e erro (se houver).
 func ListChargebacks(status string, page, limit int) ([]models.Chargeback, int64, error) {
 	ctx := MongoCtx()
 	query := bson.M{}
@@ -43,11 +52,13 @@ func ListChargebacks(status string, page, limit int) ([]models.Chargeback, int64
 		query["status"] = status
 	}
 
+	// Conta total para paginacao
 	total, err := Chargebacks.CountDocuments(ctx, query)
 	if err != nil {
 		return nil, 0, err
 	}
 
+	// Configura paginacao (default: pagina 1, 20 itens)
 	if page < 1 {
 		page = 1
 	}
@@ -57,7 +68,7 @@ func ListChargebacks(status string, page, limit int) ([]models.Chargeback, int64
 
 	skip := int64((page - 1) * limit)
 	opts := options.Find().
-		SetSort(bson.D{{Key: "created_at", Value: -1}}).
+		SetSort(bson.D{{Key: "created_at", Value: -1}}). // Mais recentes primeiro
 		SetSkip(skip).
 		SetLimit(int64(limit))
 

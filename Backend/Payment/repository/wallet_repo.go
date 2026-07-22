@@ -1,3 +1,5 @@
+// Package repository - wallet_repo.go
+// Funcoes de acesso a dados para carteiras (wallets) e transacoes.
 package repository
 
 import (
@@ -8,6 +10,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
+// GetWallet busca uma carteira pelo ID do usuario.
+// Retorna a carteira ou erro se nao encontrar.
 func GetWallet(userID string) (*models.Wallet, error) {
 	ctx := MongoCtx()
 	var wallet models.Wallet
@@ -18,6 +22,8 @@ func GetWallet(userID string) (*models.Wallet, error) {
 	return &wallet, nil
 }
 
+// CreateWallet insere uma nova carteira no MongoDB.
+// Gera automaticamente o ObjectID e os timestamps.
 func CreateWallet(wallet *models.Wallet) error {
 	ctx := MongoCtx()
 	wallet.ID = primitive.NewObjectID()
@@ -27,6 +33,8 @@ func CreateWallet(wallet *models.Wallet) error {
 	return err
 }
 
+// UpdateWalletBalance atualiza o saldo de uma carteira.
+// Usado apos credito ou debito de uma transacao.
 func UpdateWalletBalance(userID string, newBalance float64) error {
 	ctx := MongoCtx()
 	_, err := Wallets.UpdateOne(ctx,
@@ -36,6 +44,8 @@ func UpdateWalletBalance(userID string, newBalance float64) error {
 	return err
 }
 
+// CreateWalletTransaction insere uma nova transacao na carteira.
+// Registra o tipo (credit/debit), valor e saldos antes/depois.
 func CreateWalletTransaction(tx *models.WalletTransaction) error {
 	ctx := MongoCtx()
 	tx.ID = primitive.NewObjectID()
@@ -44,6 +54,8 @@ func CreateWalletTransaction(tx *models.WalletTransaction) error {
 	return err
 }
 
+// GetWalletTransactions retorna o historico de transacoes de uma carteira.
+// Ordenado por data (mais recente primeiro) com limite configuravel.
 func GetWalletTransactions(walletID primitive.ObjectID, limit int) ([]models.WalletTransaction, error) {
 	ctx := MongoCtx()
 	if limit < 1 || limit > 100 {

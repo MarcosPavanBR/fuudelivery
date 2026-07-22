@@ -1,3 +1,5 @@
+// Package handlers - chargeback_handler.go
+// Handlers HTTP para operacoes de estornos (chargebacks).
 package handlers
 
 import (
@@ -9,22 +11,27 @@ import (
 	"github.com/carloshomar/vercardapio/payment/services"
 )
 
+// ChargebackHandler e responsavel pelas rotas de estornos.
 type ChargebackHandler struct {
 	Service *services.ChargebackService
 }
 
+// NewChargebackHandler cria uma nova instancia do handler.
 func NewChargebackHandler() *ChargebackHandler {
 	return &ChargebackHandler{
 		Service: services.NewChargebackService(),
 	}
 }
 
+// CreateChargeback cria um novo estorno.
+// POST /api/chargebacks
 func (ch *ChargebackHandler) CreateChargeback(c *fiber.Ctx) error {
 	var chargeback models.Chargeback
 	if err := c.BodyParser(&chargeback); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
+	// Define status inicial como pendente
 	chargeback.Status = models.ChargebackPending
 	if err := ch.Service.CreateChargeback(&chargeback); err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to create chargeback"})
@@ -33,6 +40,8 @@ func (ch *ChargebackHandler) CreateChargeback(c *fiber.Ctx) error {
 	return c.Status(201).JSON(chargeback)
 }
 
+// GetChargeback busca um estorno pelo ID.
+// GET /api/chargebacks/:id
 func (ch *ChargebackHandler) GetChargeback(c *fiber.Ctx) error {
 	id := c.Params("id")
 	chargeback, err := ch.Service.GetChargeback(id)
@@ -42,6 +51,8 @@ func (ch *ChargebackHandler) GetChargeback(c *fiber.Ctx) error {
 	return c.JSON(chargeback)
 }
 
+// ListChargebacks lista estornos com filtro e paginacao.
+// GET /api/chargebacks?status=pending&page=1&limit=20
 func (ch *ChargebackHandler) ListChargebacks(c *fiber.Ctx) error {
 	status := c.Query("status")
 	page, _ := strconv.Atoi(c.Query("page", "1"))
@@ -60,6 +71,8 @@ func (ch *ChargebackHandler) ListChargebacks(c *fiber.Ctx) error {
 	})
 }
 
+// ApproveChargeback aprova um estorno.
+// POST /api/chargebacks/:id/approve
 func (ch *ChargebackHandler) ApproveChargeback(c *fiber.Ctx) error {
 	id := c.Params("id")
 	userID := c.Locals("user_id").(string)
@@ -71,6 +84,8 @@ func (ch *ChargebackHandler) ApproveChargeback(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "Chargeback approved"})
 }
 
+// RejectChargeback rejeita um estorno.
+// POST /api/chargebacks/:id/reject
 func (ch *ChargebackHandler) RejectChargeback(c *fiber.Ctx) error {
 	id := c.Params("id")
 	userID := c.Locals("user_id").(string)
@@ -89,6 +104,8 @@ func (ch *ChargebackHandler) RejectChargeback(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "Chargeback rejected"})
 }
 
+// AddEvidence adiciona uma evidencia a um estorno.
+// POST /api/chargebacks/:id/evidence
 func (ch *ChargebackHandler) AddEvidence(c *fiber.Ctx) error {
 	chargebackID := c.Params("id")
 	objID, err := repository.HexToObjectID(chargebackID)
@@ -101,6 +118,7 @@ func (ch *ChargebackHandler) AddEvidence(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
+	// Associa a evidencia ao estorno e registra quem enviou
 	evidence.ChargebackID = objID
 	evidence.UploadedBy = c.Locals("user_id").(string)
 
@@ -111,6 +129,8 @@ func (ch *ChargebackHandler) AddEvidence(c *fiber.Ctx) error {
 	return c.Status(201).JSON(evidence)
 }
 
+// GetEvidences retorna todas as evidencias de um estorno.
+// GET /api/chargebacks/:id/evidence
 func (ch *ChargebackHandler) GetEvidences(c *fiber.Ctx) error {
 	chargebackID := c.Params("id")
 	objID, err := repository.HexToObjectID(chargebackID)
@@ -126,11 +146,14 @@ func (ch *ChargebackHandler) GetEvidences(c *fiber.Ctx) error {
 	return c.JSON(evidences)
 }
 
+// GetStats retorna estatisticas dos estornos.
+// GET /api/chargebacks/stats
 func (ch *ChargebackHandler) GetStats(c *fiber.Ctx) error {
 	ctx := repository.MongoCtx()
 
 	stats := map[string]interface{}{}
 
+	// Conta por status
 	total, _ := repository.Chargebacks.CountDocuments(ctx, map[string]interface{}{})
 	stats["total"] = total
 

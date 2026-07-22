@@ -1,3 +1,5 @@
+// Package handlers - wallet_handler.go
+// Handlers HTTP para operacoes de carteiras (wallets).
 package handlers
 
 import (
@@ -7,16 +9,20 @@ import (
 	"github.com/carloshomar/vercardapio/payment/services"
 )
 
+// WalletHandler e responsavel pelas rotas de carteiras.
 type WalletHandler struct {
 	Service *services.WalletService
 }
 
+// NewWalletHandler cria uma nova instancia do handler.
 func NewWalletHandler() *WalletHandler {
 	return &WalletHandler{
 		Service: services.NewWalletService(),
 	}
 }
 
+// GetBalance retorna o saldo da carteira de um usuario.
+// GET /api/wallets/:user_id
 func (wh *WalletHandler) GetBalance(c *fiber.Ctx) error {
 	userID := c.Params("user_id")
 	if userID == "" {
@@ -31,6 +37,8 @@ func (wh *WalletHandler) GetBalance(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"balance": balance})
 }
 
+// GetTransactions retorna o historico de transacoes da carteira.
+// GET /api/wallets/:user_id/transactions?limit=50
 func (wh *WalletHandler) GetTransactions(c *fiber.Ctx) error {
 	userID := c.Params("user_id")
 	if userID == "" {
@@ -47,6 +55,8 @@ func (wh *WalletHandler) GetTransactions(c *fiber.Ctx) error {
 	return c.JSON(transactions)
 }
 
+// Credit credita um valor na carteira.
+// POST /api/wallets/:user_id/credit
 func (wh *WalletHandler) Credit(c *fiber.Ctx) error {
 	userID := c.Params("user_id")
 
@@ -66,6 +76,8 @@ func (wh *WalletHandler) Credit(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "Wallet credited"})
 }
 
+// Debit debita um valor da carteira.
+// POST /api/wallets/:user_id/debit
 func (wh *WalletHandler) Debit(c *fiber.Ctx) error {
 	userID := c.Params("user_id")
 
@@ -85,6 +97,8 @@ func (wh *WalletHandler) Debit(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "Wallet debited"})
 }
 
+// GetOrCreate retorna a carteira existente ou cria uma nova.
+// GET /api/wallets/:user_id/get-or-create?type=establishment
 func (wh *WalletHandler) GetOrCreate(c *fiber.Ctx) error {
 	userID := c.Params("user_id")
 	userType := c.Query("type", "establishment")

@@ -56,3 +56,35 @@ services:
     name: fuudelivery-redis
     plan: free
     maxmemoryPolicy: allkeys-lru
+
+  - type: web
+    name: fuudelivery-payment
+    env: go
+    buildCommand: cd Backend/Payment && go build -o ../../server .
+    startCommand: ./server
+    envVars:
+      - key: PORT
+        value: "8084"
+      - key: MONGO_URI
+        sync: false
+      - key: PAYMENT_MONGO_DATABASE
+        value: "payment"
+      - key: RABBIT_CONNECTION
+        sync: false
+      - key: RABBIT_PAYMENT_QUEUE
+        value: "payment_queue"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ABACATE_PAY_API_KEY
+        sync: false
+    healthCheckPath: /health
+
+  - type: web
+    name: fuudelivery-payment-panel
+    env: static
+    buildCommand: cd Frontend/PaymentPanel && npm install && npm run build
+    staticPublishPath: Frontend/PaymentPanel/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

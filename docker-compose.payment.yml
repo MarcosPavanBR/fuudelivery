@@ -1,0 +1,31 @@
+services:
+  payment-service:
+    build:
+      context: ./Backend/Payment
+      dockerfile: Dockerfile
+    ports:
+      - "8084:8084"
+    environment:
+      - MONGO_URI=${MONGO_URI}
+      - PAYMENT_MONGO_DATABASE=${PAYMENT_MONGO_DATABASE:-payment}
+      - RABBIT_CONNECTION=${RABBIT_CONNECTION}
+      - RABBIT_PAYMENT_QUEUE=${RABBIT_PAYMENT_QUEUE:-payment_queue}
+      - JWT_SECRET=${JWT_SECRET:-fuu-jwt-secret-2026}
+      - ABACATE_PAY_API_KEY=${ABACATE_PAY_API_KEY}
+      - PORT=8084
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8084/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  payment-panel:
+    build:
+      context: ./Frontend/PaymentPanel
+      dockerfile: Dockerfile
+    ports:
+      - "3001:80"
+    depends_on:
+      - payment-service
+    restart: unless-stopped

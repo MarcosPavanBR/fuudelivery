@@ -63,3 +63,16 @@ func ListUsers() ([]models.User, error) {
 	}
 	return users, nil
 }
+
+func UpdateUserPassword(email string, newPassword string) error {
+	ctx := MongoCtx()
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	_, err = Users.UpdateOne(ctx,
+		bson.M{"email": email},
+		bson.M{"$set": bson.M{"password": string(hashedPassword)}},
+	)
+	return err
+}

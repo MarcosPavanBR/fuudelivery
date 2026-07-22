@@ -1,0 +1,13 @@
+go 1.26.0
+
+use (
+	./Backend/auth_api
+	./Backend/chat_api
+	./Backend/delivery_api
+	./Backend/orders_api
+	./Backend/payment_api
+	./Backend/Payment
+	./cmd/fuudelivery
+)
+
+

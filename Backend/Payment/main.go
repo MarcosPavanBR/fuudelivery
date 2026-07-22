@@ -104,6 +104,7 @@ func main() {
 	wh := handlers.NewWalletHandler()      // Carteiras
 	uh := handlers.NewUserHandler()        // Autenticacao
 	ah := handlers.NewApprovalHandler()    // Aprovacoes
+	rh := handlers.NewReportHandler()      // Relatorios
 
 	// 7. Configura grupo de rotas da API com autenticacao JWT
 	api := app.Group("/api")
@@ -143,6 +144,10 @@ func main() {
 	wallets.Post("/:user_id/credit", wh.Credit)
 	wallets.Post("/:user_id/debit", wh.Debit)
 	wallets.Get("/:user_id/get-or-create", wh.GetOrCreate)
+
+	// === Rotas de Relatorios ===
+	reports := api.Group("/reports", middleware.AuthRequired())
+	reports.Get("/establishment/:id", rh.GetEstablishmentReport)
 
 	// 8. Inicia consumer RabbitMQ em goroutine separada
 	// O consumer escuta a fila de pagamentos e credit automaticamente

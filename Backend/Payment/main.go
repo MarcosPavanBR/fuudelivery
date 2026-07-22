@@ -40,6 +40,7 @@ func main() {
 	ch := handlers.NewChargebackHandler()
 	wh := handlers.NewWalletHandler()
 	uh := handlers.NewUserHandler()
+	ah := handlers.NewApprovalHandler()
 
 	api := app.Group("/api")
 	_ = middleware.AuthRequired()
@@ -55,8 +56,15 @@ func main() {
 	payments.Post("/:id/approve", ph.ApprovePayment)
 	payments.Post("/:id/reject", ph.RejectPayment)
 
+	approvals := api.Group("/approvals")
+	approvals.Get("/queue", ah.GetQueue)
+	approvals.Get("/auto-approved", ah.GetAutoApproved)
+	approvals.Get("/rules", ah.GetRules)
+	approvals.Put("/rules", ah.UpdateRules)
+
 	chargebacks := api.Group("/chargebacks")
 	chargebacks.Get("/", ch.ListChargebacks)
+	chargebacks.Get("/stats", ch.GetStats)
 	chargebacks.Get("/:id", ch.GetChargeback)
 	chargebacks.Post("/", ch.CreateChargeback)
 	chargebacks.Post("/:id/approve", ch.ApproveChargeback)

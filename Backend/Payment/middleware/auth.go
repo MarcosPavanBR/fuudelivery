@@ -1,3 +1,4 @@
+// Package middleware fornece middlewares HTTP para autenticacao e autorizacao.
 package middleware
 
 import (
@@ -8,6 +9,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// Claims representa as informacoes contidas no token JWT.
 type Claims struct {
 	UserID string `json:"user_id"`
 	Email  string `json:"email"`
@@ -15,6 +17,7 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
+// AuthRequired verifica se a requisicao possui um token JWT valido.
 func AuthRequired() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		authHeader := c.Get("Authorization")
@@ -46,6 +49,7 @@ func AuthRequired() fiber.Handler {
 	}
 }
 
+// AdminRequired verifica se o usuario autenticado tem papel de administrador.
 func AdminRequired() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		role := c.Locals("role")

@@ -1,3 +1,5 @@
+// Package handlers - user_handler.go
+// Handlers HTTP para autenticacao e gestao de usuarios.
 package handlers
 
 import (
@@ -5,16 +7,20 @@ import (
 	"github.com/carloshomar/vercardapio/payment/services"
 )
 
+// UserHandler e responsavel pelas rotas de usuarios.
 type UserHandler struct {
 	Service *services.UserService
 }
 
+// NewUserHandler cria uma nova instancia do handler.
 func NewUserHandler() *UserHandler {
 	return &UserHandler{
 		Service: services.NewUserService(),
 	}
 }
 
+// Login autentica um usuario e retorna um token JWT.
+// POST /api/auth/login
 func (uh *UserHandler) Login(c *fiber.Ctx) error {
 	var req struct {
 		Email    string `json:"email"`
@@ -32,6 +38,8 @@ func (uh *UserHandler) Login(c *fiber.Ctx) error {
 	return c.JSON(resp)
 }
 
+// GetUser busca um usuario pelo ID.
+// GET /api/users/:id
 func (uh *UserHandler) GetUser(c *fiber.Ctx) error {
 	id := c.Params("id")
 	user, err := uh.Service.GetUser(id)
@@ -41,6 +49,8 @@ func (uh *UserHandler) GetUser(c *fiber.Ctx) error {
 	return c.JSON(user)
 }
 
+// ListUsers retorna todos os usuarios.
+// GET /api/users
 func (uh *UserHandler) ListUsers(c *fiber.Ctx) error {
 	users, err := uh.Service.ListUsers()
 	if err != nil {
@@ -49,6 +59,8 @@ func (uh *UserHandler) ListUsers(c *fiber.Ctx) error {
 	return c.JSON(users)
 }
 
+// CreateUser cria um novo usuario.
+// POST /api/users
 func (uh *UserHandler) CreateUser(c *fiber.Ctx) error {
 	var user struct {
 		Email    string `json:"email"`
@@ -60,5 +72,6 @@ func (uh *UserHandler) CreateUser(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
+	// TODO: Implementar criacao real com hash de senha
 	return c.JSON(fiber.Map{"message": "User created"})
 }

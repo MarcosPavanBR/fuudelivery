@@ -2,7 +2,8 @@
   "name": "fuudelivery-payment-panel",
   "version": "1.0.0",
   "private": true,
+  "dependencies": {},
   "scripts": {
-    "build": "node -e \"const fs=require('fs');const p=require('path');fs.mkdirSync('dist',{recursive:true});fs.copyFileSync('index.html',p.join('dist','index.html'))\""
+    "build": "node -e \"const fs=require('fs');fs.mkdirSync('dist',{recursive:true});fs.copyFileSync('index.html','dist/index.html');console.log('Build OK')\""
   }
 }

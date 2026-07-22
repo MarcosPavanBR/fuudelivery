@@ -16,6 +16,7 @@ type Coupon struct {
 	ExpiryDate      time.Time
 	IsActive        bool      `gorm:"default:true"`
 	EstablishmentID uint
+	OwnerPhone      string    `gorm:"index"`
 	CreatedBy       uint
 	CreatedAt       time.Time
 	UpdatedAt       time.Time

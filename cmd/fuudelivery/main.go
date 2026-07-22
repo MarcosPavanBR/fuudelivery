@@ -503,6 +503,9 @@ func main() {
 	// Initialize message queue
 	queue.Init()
 
+	// Wire loyalty points: when payment is confirmed, customer earns points
+	paymentHandlers.OnPaymentApproved = ordersHandlers.EarnPointsForOrder
+
 	// Create Fiber app
 	app := fiber.New(fiber.Config{
 		Prefork:       false,

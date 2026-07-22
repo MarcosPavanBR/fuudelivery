@@ -56,6 +56,7 @@ func GeneratePIX(c *fiber.Ctx) error {
 		ID:              primitive.NewObjectID(),
 		OrderID:         req.OrderID,
 		CustomerID:      req.CustomerID,
+		CustomerPhone:   req.CustomerPhone,
 		EstablishmentID: req.EstablishmentID,
 		Amount:          req.Amount,
 		DeliveryAmount:  req.DeliveryAmount,

@@ -126,6 +126,13 @@ func ValidateCoupon(c *fiber.Ctx) error {
 		})
 	}
 
+	if coupon.OwnerPhone != "" && request.UserPhone != "" && coupon.OwnerPhone != request.UserPhone {
+		return c.JSON(dto.ValidateCouponResponse{
+			Valid:   false,
+			Message: "Este cupom é pessoal e intransferível",
+		})
+	}
+
 	if coupon.MaxUsesPerUser > 0 && request.UserPhone != "" {
 		var userUsageCount int64
 		models.DB.Model(&models.CouponUsage{}).Where("coupon_id = ? AND user_phone = ?", coupon.ID, request.UserPhone).Count(&userUsageCount)
@@ -234,6 +241,10 @@ func ValidateCouponInternal(req dto.ValidateCouponRequest) dto.ValidateCouponRes
 
 	if req.EstablishmentID != 0 && coupon.EstablishmentID != 0 && coupon.EstablishmentID != req.EstablishmentID {
 		return dto.ValidateCouponResponse{Valid: false, Message: "Cupom não é válido para este estabelecimento"}
+	}
+
+	if coupon.OwnerPhone != "" && req.UserPhone != "" && coupon.OwnerPhone != req.UserPhone {
+		return dto.ValidateCouponResponse{Valid: false, Message: "Este cupom é pessoal e intransferível"}
 	}
 
 	if coupon.MaxUsesPerUser > 0 && req.UserPhone != "" {

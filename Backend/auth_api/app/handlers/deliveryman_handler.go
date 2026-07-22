@@ -74,3 +74,36 @@ func CreateDeliveryMan(c *fiber.Ctx) error {
 	request.Password = ""
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"user": request, "token": tokenString})
 }
+
+func UpdateDeliveryManWallet(c *fiber.Ctx) error {
+	deliveryManID := c.Params("id")
+	if deliveryManID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid delivery man ID"})
+	}
+
+	var req struct {
+		PaymentWalletID string `json:"payment_wallet_id"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
+	}
+
+	if req.PaymentWalletID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "payment_wallet_id is required"})
+	}
+
+	var deliveryMan models.DeliveryMan
+	if err := models.DB.First(&deliveryMan, deliveryManID).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Delivery man not found"})
+	}
+
+	deliveryMan.PaymentWalletID = req.PaymentWalletID
+	if err := models.DB.Save(&deliveryMan).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update wallet"})
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "Wallet ID updated successfully",
+		"payment_wallet_id": deliveryMan.PaymentWalletID,
+	})
+}

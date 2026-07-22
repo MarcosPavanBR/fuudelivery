@@ -6,4 +6,6 @@ type DeliveryMan struct {
 	Email    string `json:"email"`
 	Password string `json:"-"`
 	Phone    string `json:"phone"`
+
+	PaymentWalletID string `json:"payment_wallet_id,omitempty" gorm:"size:100"`
 }

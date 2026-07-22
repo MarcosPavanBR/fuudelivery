@@ -168,6 +168,39 @@ func UpdateEstablishment(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "Establishment updated successfully"})
 }
 
+func UpdateEstablishmentWallet(c *fiber.Ctx) error {
+	establishmentID := c.Params("id")
+	if establishmentID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid establishment ID"})
+	}
+
+	var req struct {
+		PaymentWalletID string `json:"payment_wallet_id"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
+	}
+
+	if req.PaymentWalletID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "payment_wallet_id is required"})
+	}
+
+	var establishment models.Establishment
+	if err := models.DB.First(&establishment, establishmentID).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Establishment not found"})
+	}
+
+	establishment.PaymentWalletID = req.PaymentWalletID
+	if err := models.DB.Save(&establishment).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update wallet"})
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "Wallet ID updated successfully",
+		"payment_wallet_id": establishment.PaymentWalletID,
+	})
+}
+
 func DeleteEstablishment(c *fiber.Ctx) error {
 	id := c.Params("id")
 	if id == "" {

@@ -7,6 +7,7 @@ import {
   FiMenu,
   FiChevronLeft,
   FiX,
+  FiCreditCard,
 } from "react-icons/fi";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -114,6 +115,11 @@ const SideMenu = ({ isOpen, isMobile, onClose }) => {
       title: "Ajustes",
       href: "/perfil",
       icon: <FiSettings className="h-5 w-5" />,
+    },
+    {
+      title: "Carteira",
+      href: "/carteira",
+      icon: <FiCreditCard className="h-5 w-5" />,
     },
   ];
 

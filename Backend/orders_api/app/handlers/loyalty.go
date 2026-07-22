@@ -1,7 +1,10 @@
 package handlers
 
 import (
+	"crypto/rand"
+	"log"
 	"math"
+	"math/big"
 	"strconv"
 	"time"
 
@@ -27,6 +30,19 @@ func getPointsMultiplier(tier string) int {
 	default:
 		return 1
 	}
+}
+
+func generateCashbackCode() (string, error) {
+	const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, 6)
+	for i := range b {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(chars))))
+		if err != nil {
+			return "", err
+		}
+		b[i] = chars[n.Int64()]
+	}
+	return "CASHBACK-" + string(b), nil
 }
 
 func EarnPoints(c *fiber.Ctx) error {
@@ -81,6 +97,48 @@ func EarnPoints(c *fiber.Ctx) error {
 	})
 }
 
+func EarnPointsForOrder(userPhone, orderID string, orderValue float64) error {
+	if userPhone == "" || orderValue <= 0 {
+		return nil
+	}
+
+	var loyalty models.LoyaltyPoints
+	result := models.DB.Where("user_phone = ?", userPhone).First(&loyalty)
+
+	if result.Error != nil {
+		loyalty = models.LoyaltyPoints{
+			UserPhone: userPhone,
+			Points:    0,
+			Tier:      "bronze",
+		}
+		models.DB.Create(&loyalty)
+	}
+
+	multiplier := getPointsMultiplier(loyalty.Tier)
+	pointsEarned := int(math.Floor(orderValue)) * multiplier
+
+	loyalty.Points += pointsEarned
+	loyalty.TotalOrders++
+	loyalty.TotalSpent += orderValue
+	loyalty.Tier = getTier(loyalty.Points)
+	loyalty.UpdatedAt = time.Now()
+
+	models.DB.Save(&loyalty)
+
+	transaction := models.LoyaltyTransaction{
+		UserPhone:   userPhone,
+		Points:      pointsEarned,
+		Type:        "earn",
+		Description: "Pontos ganhos com pedido",
+		OrderID:     orderID,
+		CreatedAt:   time.Now(),
+	}
+	models.DB.Create(&transaction)
+
+	log.Printf("[LOYALTY] %s ganhou %d pontos (pedido %s, valor %.2f)", userPhone, pointsEarned, orderID, orderValue)
+	return nil
+}
+
 func RedeemPoints(c *fiber.Ctx) error {
 	var req struct {
 		UserPhone string `json:"user_phone"`
@@ -123,11 +181,37 @@ func RedeemPoints(c *fiber.Ctx) error {
 	}
 	models.DB.Create(&transaction)
 
+	cashbackCode, err := generateCashbackCode()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Erro ao gerar cupom de cashback"})
+	}
+
+	now := time.Now()
+	cashbackCoupon := models.Coupon{
+		Code:           cashbackCode,
+		Description:    "Cupom de cashback - resgate de pontos",
+		DiscountType:   "FIXED",
+		DiscountValue:  discountValue,
+		MinOrderValue:  0,
+		MaxUses:        1,
+		MaxUsesPerUser: 1,
+		StartDate:      now,
+		ExpiryDate:     now.AddDate(0, 0, 30),
+		IsActive:       true,
+		OwnerPhone:     req.UserPhone,
+	}
+
+	if err := models.DB.Create(&cashbackCoupon).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Erro ao criar cupom de cashback"})
+	}
+
 	return c.JSON(fiber.Map{
-		"message":       "Pontos resgatados com sucesso",
-		"points_redeemed": req.Points,
-		"discount_value": discountValue,
+		"message":          "Pontos resgatados com sucesso! Use o cupom no próximo pedido.",
+		"points_redeemed":  req.Points,
+		"discount_value":   discountValue,
 		"remaining_points": loyalty.Points,
+		"coupon_code":      cashbackCode,
+		"coupon_expires":   cashbackCoupon.ExpiryDate.Format("02/01/2006"),
 	})
 }
 

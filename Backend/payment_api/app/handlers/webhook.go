@@ -88,6 +88,8 @@ func updateLocalPaymentStatus(abacatepayID string, status string) {
 	}
 }
 
+var OnPaymentApproved func(customerPhone, orderID string, orderValue float64) error
+
 func publishPaymentApproved(abacatepayID string) {
 	var payment models.Payment
 	err := models.MongoDabase.Collection("payments").FindOne(
@@ -131,6 +133,12 @@ func publishPaymentApproved(abacatepayID string) {
 	)
 	if err != nil {
 		log.Printf("Failed to save split rules for AbacatePay ID %s: %v", abacatepayID, err)
+	}
+
+	if OnPaymentApproved != nil {
+		if err := OnPaymentApproved(payment.CustomerPhone, payment.OrderID, payment.Amount); err != nil {
+			log.Printf("[LOYALTY] Failed to award points for order %s: %v", payment.OrderID, err)
+		}
 	}
 }
 

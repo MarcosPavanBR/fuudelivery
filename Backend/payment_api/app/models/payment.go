@@ -17,6 +17,7 @@ type Payment struct {
 	ID              primitive.ObjectID `bson:"_id,omitempty" json:"id"`
 	OrderID         string             `bson:"order_id" json:"order_id"`
 	CustomerID      int64              `bson:"customer_id" json:"customer_id"`
+	CustomerPhone   string             `bson:"customer_phone,omitempty" json:"customer_phone,omitempty"`
 	EstablishmentID int64              `bson:"establishment_id" json:"establishment_id"`
 	Amount          float64            `bson:"amount" json:"amount"`
 	DeliveryAmount  float64            `bson:"delivery_amount,omitempty" json:"delivery_amount,omitempty"`

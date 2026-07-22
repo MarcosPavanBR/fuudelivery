@@ -9,6 +9,7 @@ import (
 	"github.com/carloshomar/vercardapio/payment/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -98,7 +99,7 @@ func TryDebitWalletBalance(userID string, amount float64) (*models.Wallet, error
 
 	if err != nil {
 		// Mongo retorna mongo.ErrNoDocuments quando a condicao nao e satisfeita
-		if errors.Is(err, primitive.ErrNoDocuments) {
+		if errors.Is(err, mongo.ErrNoDocuments) {
 			return nil, ErrInsufficientBalance
 		}
 		return nil, err

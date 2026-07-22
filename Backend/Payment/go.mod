@@ -1,6 +1,6 @@
 module github.com/carloshomar/vercardapio/payment
 
-go 1.23.0
+go 1.25.0
 
 require (
 	github.com/gofiber/fiber/v2 v2.52.6
@@ -9,6 +9,7 @@ require (
 	github.com/streadway/amqp v1.1.0
 	go.mongodb.org/mongo-driver v1.17.3
 	golang.org/x/crypto v0.37.0
+	golang.org/x/time v0.15.0
 )
 
 require (

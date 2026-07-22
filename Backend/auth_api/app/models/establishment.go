@@ -16,4 +16,6 @@ type Establishment struct {
 	MaxDistanceDelivery float64 `json:"max_distance_delivery"`
 
 	OpenData *string `json:"open_data,omitempty"`
+
+	PaymentWalletID string `json:"payment_wallet_id,omitempty" gorm:"size:100"`
 }

@@ -322,10 +322,12 @@ func setupAuthRoutes(app *fiber.App) {
 	app.Post("/establishments/hours", protectedRoute, authHandlers.UpsertBusinessHours)
 	app.Post("/establishments/hours/bulk", protectedRoute, authHandlers.BulkUpdateBusinessHours)
 	app.Get("/establishments/:id/is-open", authHandlers.CheckEstablishmentOpen)
+	app.Put("/establishments/:id/wallet", protectedRoute, authHandlers.UpdateEstablishmentWallet)
 
 	app.Post("/delivery-man/login", authHandlers.LoginDeliveryMan)
 	app.Post("/delivery-man/register", authHandlers.CreateDeliveryMan)
 	app.Get("/delivery-man", adminRequired, authHandlers.ListAllDeliveryMen)
+	app.Put("/delivery-man/:id/wallet", protectedRoute, authHandlers.UpdateDeliveryManWallet)
 }
 
 func setupOrdersRoutes(app *fiber.App) {
@@ -421,6 +423,11 @@ func setupPaymentRoutes(app *fiber.App) {
 	app.Get("/wallet/balance/:user_id", protectedRoute, paymentHandlers.GetBalance)
 	app.Post("/wallet/topup", protectedRoute, paymentHandlers.TopUp)
 	app.Post("/wallet/deduct", protectedRoute, paymentHandlers.DeductFromWallet)
+
+	// Asaas split payment
+	app.Post("/asaas/wallet/create", protectedRoute, paymentHandlers.CreateAsaasWallet)
+	app.Get("/asaas/wallet/:walletId/status", protectedRoute, paymentHandlers.GetAsaasWalletStatus)
+	app.Post("/asaas/payment/split", protectedRoute, paymentHandlers.CreateAsaasSplitPayment)
 }
 
 func setupChatRoutes(app *fiber.App) {

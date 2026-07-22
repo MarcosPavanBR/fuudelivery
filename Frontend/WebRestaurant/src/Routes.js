@@ -7,8 +7,7 @@ import Cardapio from "./pages/cardapio/products/Cardapio";
 import Perfil from "./pages/perfil";
 import Taxes from "./pages/perfil/taxes";
 import ChangePassword from "./pages/perfil/password";
-import WalletPage from "./pages/perfil/wallet";
-import PaymentsPage from "./pages/payments/PaymentsPage";
+import MinhaCarteira from "./pages/wallet/MinhaCarteira";
 
 export default function PrivateRoute() {
   const { user } = useAuth();
@@ -20,8 +19,7 @@ export default function PrivateRoute() {
       <Route path="/" element={<Home />} />
       <Route path="/gestor-cardapio" element={<Cardapio />} />
       <Route path="/perfil" element={<Perfil />} />
-      <Route path="/carteira" element={<WalletPage />} />
-      <Route path="/pagamentos" element={<PaymentsPage />} />
+      <Route path="/carteira" element={<MinhaCarteira />} />
       <Route path="/taxas" element={<Taxes />} />
       <Route path="/alterar-senha" element={<ChangePassword />} />
     </ReactRoutes>

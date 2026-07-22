@@ -66,6 +66,16 @@ export default function Perfil() {
       </View>
 
       <View style={{ padding: 15 }}>
+        <TouchableOpacity
+          style={styles.onboardingButton}
+          onPress={() => nav.navigate("onboarding")}
+        >
+          <Text style={styles.onboardingButtonText}>Cadastrar Restaurante</Text>
+          <Ionicons name="restaurant" size={16} color={Colors.light.white} />
+        </TouchableOpacity>
+      </View>
+
+      <View style={{ padding: 15 }}>
         <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
           <Text style={styles.logoutButtonText}>Sair</Text>
           <MaterialIcons name="logout" size={16} color={Colors.light.white} />
@@ -131,6 +141,19 @@ const styles = StyleSheet.create({
     marginTop: "10%",
   },
   logoutButtonText: {
+    color: Colors.light.white,
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+  onboardingButton: {
+    backgroundColor: Colors.light.tint,
+    padding: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    borderRadius: 3,
+    marginBottom: 10,
+  },
+  onboardingButtonText: {
     color: Colors.light.white,
     fontSize: 14,
     fontWeight: "bold",

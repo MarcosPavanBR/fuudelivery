@@ -1,12 +1,25 @@
+/**
+ * PaymentDashboard.js
+ * Dashboard principal de pagamentos com metricas, tabela de pendencias e modal de detalhes.
+ * Permite aprovar/rejeitar pagamentos com feedback visual (toast).
+ *
+ * Componentes internos:
+ * - RiskBadge: Badge colorido baseado no score de risco (0-100)
+ * - ChainDots: Indicador visual da cadeia Restaurante->Entregador->Cliente
+ * - StatusBadge: Badge de status do pagamento (PENDING, AUTO_APPROVED, etc)
+ * - PaymentModal: Modal de detalhes com timeline, verificacoes e acoes
+ */
 import React, { useState } from 'react';
 import '../../styles/payments.css';
 
+/** Status dos gateways de pagamento conectados (AbacatePay, PIX, Asaas) */
 const MOCK_GATEWAYS = [
   { name: 'AbacatePay', status: 'online' },
   { name: 'PIX Gateway', status: 'online' },
   { name: 'Asaas', status: 'online' },
 ];
 
+/** Metricas gerais exibidas no topo do dashboard (pendentes, aprovados, alto risco, etc) */
 const MOCK_METRICS = [
   { label: 'Pendentes', value: 7, sub: 'R$ 12.847,50 total', color: 'yellow' },
   { label: 'Aprovados Hoje', value: 43, sub: 'vs ontem', color: 'green', trend: '\u2191 12%', trendDir: 'up' },
@@ -15,6 +28,7 @@ const MOCK_METRICS = [
   { label: 'Auto-Aprovados', value: 128, sub: '89% do volume hoje', color: 'purple' },
 ];
 
+/** Lista mock de pagamentos pendentes de aprovacao */
 const MOCK_PAYMENTS = [
   { id: '#PAY-04891', type: 'Saque', beneficiary: 'Restaurante Sabor da Terra', amount: 4230, order: '#ORD-8847', risk: 47, chain: { restaurant: 'ok', driver: 'ok', customer: 'warn' }, status: 'PENDING' },
   { id: '#PAY-04892', type: 'Repasse', beneficiary: 'Entregador - Carlos M.', amount: 380.5, order: '#ORD-8851', risk: 12, chain: { restaurant: 'ok', driver: 'ok', customer: 'ok' }, status: 'PENDING' },

@@ -1,6 +1,13 @@
+/**
+ * PaymentApprovals.js
+ * Exibe a fila de aprovacoes de pagamentos e as regras de decisao.
+ * Mostra regras de auto-aprovacao (score < 20, valor < R$1000) e
+ * gatilhos para analise manual (score > 60, valor > R$5000, etc).
+ */
 import React from 'react';
 import '../../styles/payments.css';
 
+/** Regras que resultam em aprovacao automatica */
 const AUTO_RULES = [
   { label: 'Valor ate R$ 1.000', type: 'pass', result: 'Auto', color: 'var(--pp-accent)' },
   { label: 'Score de risco abaixo de 20', type: 'pass', result: 'Auto', color: 'var(--pp-accent)' },

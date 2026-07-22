@@ -1,6 +1,13 @@
+/**
+ * PaymentResponsibility.js
+ * Cadeia de responsabilidade e matriz de atribuicao de culpa.
+ * Define responsabilidades de cada ator (Restaurante, Entregador, Cliente)
+ * e como problemas afetam o pagamento (reter, bloquear, liberar).
+ */
 import React from 'react';
 import '../../styles/payments.css';
 
+/** Cards de responsabilidade para cada ator da cadeia */
 const RESP_CARDS = [
   {
     role: 'restaurant', icon: '\uD83C\uDF73', name: 'Restaurante', subtitle: 'Preparo & Qualidade',

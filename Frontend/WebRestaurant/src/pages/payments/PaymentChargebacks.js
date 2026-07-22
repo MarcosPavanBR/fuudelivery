@@ -1,6 +1,13 @@
+/**
+ * PaymentChargebacks.js
+ * Gerencia estornos e disputas de pagamentos.
+ * Exibe cards com metricas (pendentes, contestados, taxa) e tabela de disputas.
+ * Cada disputa tem: ID, pedido, valor, motivo, responsavel, evidencias e status.
+ */
 import React from 'react';
 import '../../styles/payments.css';
 
+/** Lista mock de estornos/disputas ativas */
 const CHARGEBACKS = [
   { id: '#DSP-00231', order: '#ORD-8801', amount: 1230, reason: 'Pedido nao entregue', responsible: 'Entregador', evidenceCount: 3, status: 'investigating' },
   { id: '#DSP-00232', order: '#ORD-8790', amount: 680, reason: 'Item faltante', responsible: 'Restaurante', evidenceCount: 1, status: 'awaiting' },

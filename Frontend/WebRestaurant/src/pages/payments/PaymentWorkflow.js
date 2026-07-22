@@ -1,6 +1,13 @@
+/**
+ * PaymentWorkflow.js
+ * Visualiza o fluxo completo de aprovacao de pagamentos — do pedido ao saque.
+ * Pipeline de 8 etapas: Criado -> Confirmado -> Entrega -> Espera -> Verificacao -> Aprovacao -> Gateway.
+ * Tambem exibe verificacoes pre-aprovacao e anti-fraude.
+ */
 import React from 'react';
 import '../../styles/payments.css';
 
+/** Pipeline de pagamento — etapas do fluxo */
 const WORKFLOW = [
   { icon: '\uD83D\uDCE6', label: '1. Pedido Criado', description: 'Cliente faz pedido\nGateway processa pagamento', color: 'blue' },
   { icon: '\u2713', label: '2. Pedido Confirmado', description: 'Restaurante aceita\nEntregador designado', color: 'green' },

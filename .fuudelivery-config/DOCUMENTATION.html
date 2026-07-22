@@ -1,0 +1,697 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>FuuDelivery - Documentacao do Sistema</title>
+<style>
+body{font-family:'Segoe UI',sans-serif;max-width:900px;margin:0 auto;padding:40px;line-height:1.6;color:#333}
+h1{color:#00ff88;border-bottom:3px solid #00ff88;padding-bottom:10px}
+h2{color:#1a1a2e;border-bottom:2px solid #ddd;padding-bottom:8px;margin-top:30px}
+h3{color:#333}
+code{background:#f4f4f4;padding:2px 6px;border-radius:3px;font-size:14px}
+pre{background:#1a1a2e;color:#00ff88;padding:16px;border-radius:8px;overflow-x:auto}
+table{border-collapse:collapse;width:100%;margin:16px 0}
+th,td{border:1px solid #ddd;padding:10px;text-align:left}
+th{background:#1a1a2e;color:white}
+@media print{body{padding:20px}h1{page-break-before:always}}
+</style>
+</head>
+<body>
+<h1>FuuDelivery â€” Documentacao Completa do Sistema
+
+> **Versao:** 2.0.0  
+> **Ultima atualizacao:** 2026-07-22  
+> **Autor:** FuuDelivery Team
+
+<hr>
+
+#<h1>Sumario
+
+1. [Visao Geral do Sistema](#1-visao-geral-do-sistema)
+2. [Arquitetura](#2-arquitetura)
+3. [Servicos e Endpoints](#3-servicos-e-endpoints)
+4. [Microservico Payment Service](#4-microservico-payment-service)
+5. [Frontend WebRestaurant â€” Painel de Pagamentos](#5-frontend-webrestaurant--painel-de-pagamentos)
+6. [Frontend PaymentPanel â€” Painel Standalone](#6-frontend-paymentpanel--painel-standalone)
+7. [Banco de Dados](#7-banco-de-dados)
+8. [Autenticacao e Seguranca](#8-autenticacao-e-seguranca)
+9. [Fluxo de Pagamento Completo](#9-fluxo-de-pagamento-completo)
+10. [Deploy e Infraestrutura](#10-deploy-e-infraestrutura)
+11. [Credenciais e Configuracoes](#11-credenciais-e-configuracoes)
+12. [Guia de Manutencao](#12-guia-de-manutencao)
+13. [Endereco dos Arquivos](#13-endereco-dos-arquivos)
+
+<hr>
+
+#<h1>1. Visao Geral do Sistema
+
+O FuuDelivery e uma plataforma completa de delivery que conecta restaurantes, entregadores e clientes. O sistema inclui:
+
+- **API Principal** (Go monolith): Autenticacao, pedidos, produtos, entregas, chat, pagamentos
+- **WebRestaurant**: Painel do restaurante para gerenciar pedidos, cardapio, carteira
+- **WebAdmin**: Painel administrativo para gerenciar o plataforma
+- **AppComida**: App mobile para clientes (React Native/Expo)
+- **AppEntrega**: App mobile para entregadores (React Native/Expo)
+- **Payment Service**: Microservico de pagamentos com motor de aprovacao
+- **Payment Panel**: Painel standalone de aprovacao de pagamentos
+
+##<h1>Stack Tecnologica
+
+<td> Camada <td> Tecnologia <td>
+<td><hr><hr>--<td><hr><hr><hr><hr><td>
+<td> Backend API <td> Go 1.23 + Fiber + MongoDB + RabbitMQ <td>
+<td> Payment Service <td> Go 1.23 + Fiber + MongoDB + RabbitMQ <td>
+<td> Frontend Web <td> React 18 + Tailwind CSS + React Router <td>
+<td> Mobile <td> React Native + Expo <td>
+<td> Banco de Dados <td> MongoDB Atlas (fuudelivery + fuudelivery_payments) <td>
+<td> Cache <td> Redis (Render) <td>
+<td> Gateway Pagamentos <td> AbacatePay (PIX) + Asaas (Split) <td>
+<td> Hospedagem <td> Render.com <td>
+
+<hr>
+
+#<h1>2. Arquitetura
+
+<pre><code>â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                        CLIENTES                             â”‚
+â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”   â”‚
+â”‚  â”‚ AppComidaâ”‚  â”‚AppEntregaâ”‚  â”‚WebRest.  â”‚  â”‚ WebAdmin â”‚   â”‚
+â”‚  â””â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”˜  â””â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”˜   â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+        â”‚              â”‚              â”‚              â”‚
+        â–¼              â–¼              â–¼              â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                    NGINX (Proxy Reverso)                     â”‚
+â”‚                    Porta 80/443                              â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                         â”‚
+        â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+        â–¼                â–¼                â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â” â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â” â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚  API Main    â”‚ â”‚Payment Serviceâ”‚ â”‚ Payment Panelâ”‚
+â”‚  (port 3000) â”‚ â”‚ (port 8084)  â”‚ â”‚  (port 80)   â”‚
+â””â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”˜ â””â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”˜ â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+       â”‚                â”‚
+       â–¼                â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                    MongoDB Atlas                             â”‚
+â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”              â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”             â”‚
+â”‚  â”‚  fuudelivery â”‚              â”‚fuudelivery_  â”‚             â”‚
+â”‚  â”‚  (principal) â”‚              â”‚  payments    â”‚             â”‚
+â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜              â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜             â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                         â”‚
+                         â–¼
+              â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+              â”‚     RabbitMQ     â”‚
+              â”‚  (message queue) â”‚
+              â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+</code></pre>
+
+##<h1>Microservicos
+
+<td> Servico <td> Porta <td> Descricao <td>
+<td><hr><hr><hr><td><hr><hr>-<td><hr><hr><hr>--<td>
+<td> API Main <td> 3000 <td> Monolith principal com todas as APIs <td>
+<td> Payment Service <td> 8084 <td> Motor de aprovacao de pagamentos <td>
+<td> Nginx <td> 80/443 <td> Proxy reverso e rate limiting <td>
+<td> MongoDB <td> 27017 <td> Banco de dados NoSQL <td>
+<td> RabbitMQ <td> 5672 <td> Fila de mensagens assincronas <td>
+<td> Redis <td> 12264 <td> Cache e sessoes <td>
+
+<hr>
+
+#<h1>3. Servicos e Endpoints
+
+##<h1>3.1 API Principal (Monolith)
+
+**Base URL:** `https://fuudelivery-api-8y6l.onrender.com`
+
+###<h1>Autenticacao
+<td> Metodo <td> Rota <td> Descricao <td>
+<td><hr><hr>--<td><hr><hr><td><hr><hr><hr>--<td>
+<td> POST <td> `/auth/login` <td> Login do usuario <td>
+<td> POST <td> `/auth/register` <td> Cadastro de usuario <td>
+
+###<h1>Estabelecimentos
+<td> Metodo <td> Rota <td> Descricao <td>
+<td><hr><hr>--<td><hr><hr><td><hr><hr><hr>--<td>
+<td> GET <td> `/establishments` <td> Listar estabelecimentos <td>
+<td> GET <td> `/establishments/:id` <td> Buscar estabelecimento <td>
+<td> PUT <td> `/establishments/:id` <td> Atualizar estabelecimento <td>
+<td> PUT <td> `/establishments/status/handler/:id` <td> Abrir/fechar estabelecimento <td>
+<td> PUT <td> `/establishments/wallet/:id` <td> Configurar carteira Asaas <td>
+
+###<h1>Pedidos
+<td> Metodo <td> Rota <td> Descricao <td>
+<td><hr><hr>--<td><hr><hr><td><hr><hr><hr>--<td>
+<td> GET <td> `/orders` <td> Listar pedidos <td>
+<td> POST <td> `/orders` <td> Criar pedido <td>
+<td> PUT <td> `/orders/:id/status` <td> Atualizar status do pedido <td>
+<td> GET <td> `/orders/:id` <td> Buscar pedido <td>
+
+###<h1>Produtos
+<td> Metodo <td> Rota <td> Descricao <td>
+<td><hr><hr>--<td><hr><hr><td><hr><hr><hr>--<td>
+<td> GET <td> `/products` <td> Listar produtos <td>
+<td> POST <td> `/products` <td> Criar produto <td>
+<td> PUT <td> `/products/:id` <td> Atualizar produto <td>
+<td> DELETE <td> `/products/:id` <td> Remover produto <td>
+
+###<h1>Entregadores
+<td> Metodo <td> Rota <td> Descricao <td>
+<td><hr><hr>--<td><hr><hr><td><hr><hr><hr>--<td>
+<td> GET <td> `/delivery-men` <td> Listar entregadores <td>
+<td> POST <td> `/delivery-men` <td> Cadastrar entregador <td>
+<td> PUT <td> `/delivery-men/:id/location` <td> Atualizar localizacao GPS <td>
+<td> PUT <td> `/delivery-men/wallet/:id` <td> Configurar carteira Asaas <td>
+
+###<h1>Chat
+<td> Metodo <td> Rota <td> Descricao <td>
+<td><hr><hr>--<td><hr><hr><td><hr><hr><hr>--<td>
+<td> GET <td> `/chat/:orderId` <td> Buscar mensagens do chat <td>
+<td> POST <td> `/chat/:orderId` <td> Enviar mensagem <td>
+<td> WS <td> `/ws/:id` <td> WebSocket para chat em tempo real <td>
+
+###<h1>Pagamentos (AbacatePay)
+<td> Metodo <td> Rota <td> Descricao <td>
+<td><hr><hr>--<td><hr><hr><td><hr><hr><hr>--<td>
+<td> POST <td> `/payments/pix` <td> Criar pagamento PIX <td>
+<td> POST <td> `/payments/card` <td> Criar pagamento cartao <td>
+<td> GET <td> `/payments/:id` <td> Buscar pagamento <td>
+<td> POST <td> `/webhooks/abacatepay` <td> Webhook do gateway <td>
+
+###<h1>Split Payments (Asaas)
+<td> Metodo <td> Rota <td> Descricao <td>
+<td><hr><hr>--<td><hr><hr><td><hr><hr><hr>--<td>
+<td> POST <td> `/asaas/wallet` <td> Criar carteira Asaas <td>
+<td> GET <td> `/asaas/wallet/:id` <td> Status da carteira <td>
+<td> POST <td> `/asaas/split` <td> Criar split payment <td>
+
+###<h1>Fidelidade
+<td> Metodo <td> Rota <td> Descricao <td>
+<td><hr><hr>--<td><hr><hr><td><hr><hr><hr>--<td>
+<td> POST <td> `/loyalty/earn` <td> Ganhar pontos <td>
+<td> POST <td> `/loyalty/redeem` <td> Resgatar pontos por cupom <td>
+<td> GET <td> `/loyalty/:customerId` <td> Saldo de pontos <td>
+
+###<h1>Cupons
+<td> Metodo <td> Rota <td> Descricao <td>
+<td><hr><hr>--<td><hr><hr><td><hr><hr><hr>--<td>
+<td> POST <td> `/coupons` <td> Criar cupom <td>
+<td> POST <td> `/coupons/validate` <td> Validar cupom <td>
+<td> POST <td> `/coupons/validate-internal` <td> Validacao interna <td>
+
+<hr>
+
+##<h1>3.2 Payment Service (Microservico)
+
+**Base URL:** `https://fuudelivery-payment.onrender.com`
+
+###<h1>Health Check
+<td> Metodo <td> Rota <td> Descricao <td>
+<td><hr><hr>--<td><hr><hr><td><hr><hr><hr>--<td>
+<td> GET <td> `/health` <td> Status do servico <td>
+
+###<h1>Autenticacao
+<td> Metodo <td> Rota <td> Descricao <td>
+<td><hr><hr>--<td><hr><hr><td><hr><hr><hr>--<td>
+<td> POST <td> `/api/auth/login` <td> Login no painel de pagamentos <td>
+
+###<h1>Pagamentos
+<td> Metodo <td> Rota <td> Descricao <td>
+<td><hr><hr>--<td><hr><hr><td><hr><hr><hr>--<td>
+<td> GET <td> `/api/payments` <td> Listar pagamentos (filtros: status, risk_level, establishment_id) <td>
+<td> GET <td> `/api/payments/stats` <td> Estatisticas de pagamentos <td>
+<td> GET <td> `/api/payments/:id` <td> Buscar pagamento <td>
+<td> POST <td> `/api/payments` <td> Criar pagamento <td>
+<td> POST <td> `/api/payments/:id/approve` <td> Aprovar pagamento manualmente <td>
+<td> POST <td> `/api/payments/:id/reject` <td> Rejeitar pagamento <td>
+
+###<h1>Aprovacoes
+<td> Metodo <td> Rota <td> Descricao <td>
+<td><hr><hr>--<td><hr><hr><td><hr><hr><hr>--<td>
+<td> GET <td> `/api/approvals/queue` <td> Fila de aprovacao (pagamentos pendentes) <td>
+<td> GET <td> `/api/approvals/auto-approved` <td> Pagamentos auto-aprovados <td>
+<td> GET <td> `/api/approvals/rules` <td> Regras de aprovacao <td>
+<td> PUT <td> `/api/approvals/rules` <td> Atualizar regras <td>
+
+###<h1>Estornos (Chargebacks)
+<td> Metodo <td> Rota <td> Descricao <td>
+<td><hr><hr>--<td><hr><hr><td><hr><hr><hr>--<td>
+<td> GET <td> `/api/chargebacks` <td> Listar estornos <td>
+<td> GET <td> `/api/chargebacks/stats` <td> Estatisticas de estornos <td>
+<td> GET <td> `/api/chargebacks/:id` <td> Buscar estorno <td>
+<td> POST <td> `/api/chargebacks` <td> Criar estorno <td>
+<td> POST <td> `/api/chargebacks/:id/approve` <td> Aprovar estorno <td>
+<td> POST <td> `/api/chargebacks/:id/reject` <td> Rejeitar estorno <td>
+<td> POST <td> `/api/chargebacks/:id/evidence` <td> Adicionar evidencia <td>
+<td> GET <td> `/api/chargebacks/:id/evidence` <td> Listar evidencias <td>
+
+###<h1>Carteiras (Wallets)
+<td> Metodo <td> Rota <td> Descricao <td>
+<td><hr><hr>--<td><hr><hr><td><hr><hr><hr>--<td>
+<td> GET <td> `/api/wallets/:user_id` <td> Saldo da carteira <td>
+<td> GET <td> `/api/wallets/:user_id/transactions` <td> Historico de transacoes <td>
+<td> POST <td> `/api/wallets/:user_id/credit` <td> Creditar carteira <td>
+<td> POST <td> `/api/wallets/:user_id/debit` <td> Debitar carteira <td>
+<td> GET <td> `/api/wallets/:user_id/get-or-create` <td> Obter ou criar carteira <td>
+
+<hr>
+
+#<h1>4. Microservico Payment Service
+
+##<h1>4.1 Arquitetura Interna
+
+<pre><code>Backend/Payment/
+â”œâ”€â”€ main.go                    <h1>Ponto de entrada, configura Fiber e rotas
+â”œâ”€â”€ config/
+â”‚   â””â”€â”€ config.go              <h1>Carrega variaveis de ambiente
+â”œâ”€â”€ models/
+â”‚   â”œâ”€â”€ payment.go             <h1>Modelo de pagamento com RiskLevel e Status
+â”‚   â”œâ”€â”€ chargeback.go          <h1>Modelo de estorno/disputa
+â”‚   â”œâ”€â”€ wallet.go              <h1>Modelo de carteira e transacoes
+â”‚   â”œâ”€â”€ evidence.go            <h1>Modelo de evidencia para disputas
+â”‚   â””â”€â”€ user.go                <h1>Modelo de usuario do painel
+â”œâ”€â”€ repository/
+â”‚   â”œâ”€â”€ mongo.go               <h1>Conexao MongoDB e criacao de indices
+â”‚   â”œâ”€â”€ payment_repo.go        <h1>CRUD de pagamentos
+â”‚   â”œâ”€â”€ chargeback_repo.go     <h1>CRUD de estornos
+â”‚   â”œâ”€â”€ wallet_repo.go         <h1>CRUD de carteiras
+â”‚   â”œâ”€â”€ evidence_repo.go       <h1>CRUD de evidencias
+â”‚   â””â”€â”€ user_repo.go           <h1>CRUD de usuarios
+â”œâ”€â”€ services/
+â”‚   â”œâ”€â”€ risk_scorer.go         <h1>Calculo de score de risco (0-100)
+â”‚   â”œâ”€â”€ approval_engine.go     <h1>Motor de decisao de aprovacao
+â”‚   â”œâ”€â”€ gateway_service.go     <h1>Integracao com AbacatePay API
+â”‚   â”œâ”€â”€ wallet_service.go      <h1>Logica de credito/debito
+â”‚   â”œâ”€â”€ responsibility_chain.go <h1>Cadeia de responsabilidade (R->E->C)
+â”‚   â”œâ”€â”€ chargeback_service.go  <h1>Logica de estornos
+â”‚   â””â”€â”€ user_service.go        <h1>Servico de autenticacao
+â”œâ”€â”€ handlers/
+â”‚   â”œâ”€â”€ payment_handler.go     <h1>Endpoints de pagamentos
+â”‚   â”œâ”€â”€ approval_handler.go    <h1>Endpoints de aprovacoes
+â”‚   â”œâ”€â”€ chargeback_handler.go  <h1>Endpoints de estornos
+â”‚   â”œâ”€â”€ wallet_handler.go      <h1>Endpoints de carteiras
+â”‚   â””â”€â”€ user_handler.go        <h1>Endpoints de autenticacao
+â”œâ”€â”€ consumers/
+â”‚   â””â”€â”€ payment_consumer.go    <h1>Consumer RabbitMQ para pagamentos aprovados
+â”œâ”€â”€ middleware/
+â”‚   â””â”€â”€ auth.go                <h1>Middleware JWT de autenticacao
+â”œâ”€â”€ go.mod                     <h1>Dependencias Go
+â””â”€â”€ Dockerfile                 <h1>Build multi-stage para producao
+</code></pre>
+
+##<h1>4.2 Motor de Aprovacao (ApprovalEngine)
+
+O motor de aprovacao e o componente central do Payment Service. Ele decide automaticamente se um pagamento deve ser:
+
+1. **Auto-Aprovado** (status: `approved`): Score baixo + valor baixo + sem reclamacoes
+2. **Analise Manual** (status: `pending`): Score medio OU alto valor
+3. **Compliance** (status: `pending`): Score alto OU estorno ativo
+4. **Bloqueado** (status: `rejected`): Fraude confirmada
+
+###<h1>Regras de Aprovacao
+
+<td> Condicao <td> Resultado <td>
+<td><hr><hr><hr>-<td><hr><hr><hr>--<td>
+<td> Valor < R$ 1.000 AND Score < 20 AND sem reclamacoes <td> Auto-Aprovado <td>
+<td> Valor > R$ 5.000 <td> Analise Manual <td>
+<td> Score > 60 <td> Analise Manual <td>
+<td> Score > 80 <td> Compliance <td>
+<td> Estorno ativo <td> Bloqueado <td>
+<td> Reclamacao nos ultimos 30 dias <td> Analise Manual <td>
+
+###<h1>Calculo de Score de Risco
+
+O score vai de 0 a 100 e e calculado baseado em:
+
+<td> Fator <td> Peso <td> Descricao <td>
+<td><hr><hr>-<td><hr><hr><td><hr><hr><hr>--<td>
+<td> Valor do pagamento <td> 0-30 <td> Acima de R$ 500 = 30pts, R$ 200-500 = 20pts, R$ 100-200 = 10pts <td>
+<td> Frequencia do cliente <td> 0-25 <td> Mais de 10 pedidos/dia = 25pts, 5-10 = 15pts <td>
+<td> Horario <td> 0-15 <td> Entre 1h-5h = 15pts (horario suspeito) <td>
+<td> Historico do restaurante <td> 0-20 <td> Mais de 5 estornos = 20pts, 2-5 = 10pts <td>
+
+###<h1>Niveis de Risco
+
+<td> Score <td> Nivel <td> Acao <td>
+<td><hr><hr>-<td><hr><hr>-<td><hr><hr><td>
+<td> 0-19 <td> `low` <td> Auto-aprovado <td>
+<td> 20-59 <td> `medium` <td> Analise manual <td>
+<td> 60-79 <td> `high` <td> Compliance <td>
+<td> 80-100 <td> `critical` <td> Bloqueado <td>
+
+##<h1>4.3 Cadeia de Responsabilidade (Responsibility Chain)
+
+O sistema implementa um padrao Chain of Responsibility para verificar a responsabilidade de cada parte no fluxo de pagamento:
+
+<pre><code>Restaurante (R) â†’ Entregador (E) â†’ Cliente (C)
+</code></pre>
+
+Cada componente pode ter status:
+- `ok`: Tudo correto
+- `warn`: Atencao necessaria
+- `err`: Problema identificado
+
+Exemplos:
+- `R:ok â†’ E:ok â†’ C:ok` = Pagamento auto-aprovado
+- `R:ok â†’ E:err â†’ C:warn` = Compliance (entrega com problema + reclamacao)
+- `R:err â†’ E:warn â†’ C:err` = Bloqueado (restaurante com problemas + fraude)
+
+##<h1>4.4 IntegraÃ§Ã£o com RabbitMQ
+
+O Payment Service consome mensagens da fila `payment_queue`:
+
+<pre><code>// Quando um pagamento e aprovado, credit automaticamente na carteira
+func (pc *PaymentConsumer) processMessage(msg amqp.Delivery) {
+    var payment models.Payment
+    json.Unmarshal(msg.Body, &payment)
+    
+    if payment.Status == "approved" {
+        pc.Wallet.ProcessPaymentApproval(&payment)
+    }
+}
+</code></pre>
+
+<hr>
+
+#<h1>5. Frontend WebRestaurant â€” Painel de Pagamentos
+
+##<h1>5.1 Estrutura
+
+<pre><code>Frontend/WebRestaurant/src/
+â”œâ”€â”€ pages/payments/
+â”‚   â”œâ”€â”€ PaymentsPage.js          <h1>Container com 5 abas
+â”‚   â”œâ”€â”€ PaymentDashboard.js      <h1>Dashboard principal
+â”‚   â”œâ”€â”€ PaymentApprovals.js      <h1>Regras de aprovacao
+â”‚   â”œâ”€â”€ PaymentChargebacks.js    <h1>Gestao de estornos
+â”‚   â”œâ”€â”€ PaymentWorkflow.js       <h1>Diagrama de fluxo
+â”‚   â””â”€â”€ PaymentResponsibility.js <h1>Cadeia de responsabilidade
+â”œâ”€â”€ services/
+â”‚   â””â”€â”€ paymentApi.js            <h1>Cliente API para Payment Service
+â”œâ”€â”€ styles/
+â”‚   â””â”€â”€ payments.css             <h1>Estilos dark theme (pp-*)
+â”œâ”€â”€ Routes.js                    <h1>Rota /pagamentos
+â””â”€â”€ components/Menu.js           <h1>Item "Pagamentos" no menu
+</code></pre>
+
+##<h1>5.2 Abas do Painel
+
+1. **Dashboard**: Metricas, tabela de pagamentos, modal de detalhes, acoes aprovar/rejeitar
+2. **Aprovacoes**: Regras de auto-aprovacao vs analise manual
+3. **Estornos**: Cards de estorno, tabela de disputas, evidencias
+4. **Workflow**: Diagrama de 8 etapas do fluxo de pagamento
+5. **Responsabilidade**: Cards de responsabilidade (R/E/C), matriz de atribuicao
+
+##<h1>5.3 API Service
+
+<pre><code>// paymentApi.js - Conecta ao Payment Service
+const PAYMENT_API_URL = process.env.REACT_APP_PAYMENT_API_URL <td><td> 'http://localhost:8084';
+
+export const PaymentService = {
+  getPayments: (params) => paymentApi.get('/api/payments', { params }),
+  approvePayment: (id) => paymentApi.post(`/api/payments/${id}/approve`),
+  rejectPayment: (id, reason) => paymentApi.post(`/api/payments/${id}/reject`, { reason }),
+  // ... outros endpoints
+};
+</code></pre>
+
+<hr>
+
+#<h1>6. Frontend PaymentPanel â€” Painel Standalone
+
+##<h1>6.1 Arquitetura
+
+<pre><code>Frontend/PaymentPanel/
+â”œâ”€â”€ index.html      <h1>App completa em HTML/CSS/JS puro
+â”œâ”€â”€ package.json    <h1>Build script para Render
+â””â”€â”€ Dockerfile      <h1>Container nginx
+</code></pre>
+
+##<h1>6.2 Funcionalidades
+
+- Login com JWT
+- Dashboard com metricas em tempo real
+- Tabela de pagamentos com filtros
+- Modal de detalhes com timeline
+- Acoes de aprovar/rejeitar
+- Toast notifications
+- Dark theme completo
+
+<hr>
+
+#<h1>7. Banco de Dados
+
+##<h1>7.1 Database: fuudelivery (Principal)
+
+<td> Colecao <td> Descricao <td>
+<td><hr><hr><hr><td><hr><hr><hr>--<td>
+<td> `users` <td> Usuarios do sistema <td>
+<td> `establishments` <td> Restaurantes <td>
+<td> `delivery_men` <td> Entregadores <td>
+<td> `orders` <td> Pedidos <td>
+<td> `products` <td> Produtos do cardapio <td>
+<td> `categories` <td> Categorias de produtos <td>
+<td> `coupons` <td> Cupons de desconto/cashback <td>
+<td> `chats` <td> Mensagens de chat <td>
+
+##<h1>7.2 Database: fuudelivery_payments
+
+<td> Colecao <td> Descricao <td>
+<td><hr><hr><hr><td><hr><hr><hr>--<td>
+<td> `payments` <td> Pagamentos processados <td>
+<td> `chargebacks` <td> Estornos e disputas <td>
+<td> `wallets` <td> Carteiras de restaurantes/entregadores <td>
+<td> `wallet_transactions` <td> Historico de transacoes <td>
+<td> `evidences` <td> Evidencias para disputas <td>
+<td> `users` <td> Usuarios do painel de pagamentos <td>
+
+##<h1>7.3 Indices
+
+<pre><code>// payments
+{ order_id: 1 }           // unique
+{ customer_id: 1 }
+{ establishment_id: 1 }
+{ status: 1 }
+{ risk_level: 1 }
+{ created_at: -1 }
+
+// wallets
+{ user_id: 1 }            // unique
+
+// wallet_transactions
+{ wallet_id: 1 }
+{ created_at: -1 }
+</code></pre>
+
+<hr>
+
+#<h1>8. Autenticacao e Seguranca
+
+##<h1>8.1 JWT Authentication
+
+<pre><code>// Middleware de autenticacao
+func AuthRequired() fiber.Handler {
+    return func(c *fiber.Ctx) error {
+        token := extractToken(c.Get("Authorization"))
+        claims := validateJWT(token)
+        c.Locals("user_id", claims.UserID)
+        c.Locals("role", claims.Role)
+        return c.Next()
+    }
+}
+</code></pre>
+
+##<h1>8.2 Roles
+
+<td> Role <td> Permissoes <td>
+<td><hr><hr><td><hr><hr><hr><hr><td>
+<td> `admin` <td> Acesso total <td>
+<td> `operator` <td> Aprovar/rejeitar pagamentos <td>
+<td> `viewer` <td> Apenas visualizar <td>
+
+##<h1>8.3 CORS
+
+<pre><code>cors.New(cors.Config{
+    AllowOrigins: "*",  // Em producao: dominios especificos
+    AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
+    AllowHeaders: "Origin,Content-Type,Accept,Authorization",
+})
+</code></pre>
+
+<hr>
+
+#<h1>9. Fluxo de Pagamento Completo
+
+<pre><code>1. Cliente faz pedido
+   â†“
+2. Pagamento criado (PIX ou Cartao)
+   â†“
+3. Webhook do gateway confirma pagamento
+   â†“
+4. Pagamento salvo no MongoDB (status: pending)
+   â†“
+5. ApprovalEngine verifica:
+   â”œâ”€â”€ Score de risco
+   â”œâ”€â”€ Valor do pagamento
+   â”œâ”€â”€ Historico do cliente/restaurante
+   â””â”€â”€ Cadeia de responsabilidade
+   â†“
+6. Decisao:
+   â”œâ”€â”€ Auto-aprovado â†’ Credita na carteira automaticamente
+   â”œâ”€â”€ Analise manual â†’ Fila de aprovacao no painel
+   â”œâ”€â”€ Compliance â†’ Apenas admin pode resolver
+   â””â”€â”€ Bloqueado â†’ Pagamento rejeitado
+   â†“
+7. Se aprovado â†’ RabbitMQ publica evento
+   â†“
+8. Consumer credita na carteira do restaurante
+   â†“
+9. Restaurante pode solicitar saque
+</code></pre>
+
+<hr>
+
+#<h1>10. Deploy e Infraestrutura
+
+##<h1>10.1 Servicos no Render
+
+<td> Servico <td> Tipo <td> URL <td>
+<td><hr><hr><hr><td><hr><hr><td><hr>--<td>
+<td> fuudelivery-api <td> Web Service <td> https://fuudelivery-api-8y6l.onrender.com <td>
+<td> fuudelivery-web <td> Static Site <td> https://fuudelivery-web.onrender.com <td>
+<td> fuudelivery-admin <td> Static Site <td> https://fuudelivery-admin-lv7f.onrender.com <td>
+<td> fuudelivery-payment <td> Web Service <td> https://fuudelivery-payment.onrender.com <td>
+<td> fuudelivery-payment-panel <td> Static Site <td> https://fuudelivery-payment-panel.onrender.com <td>
+
+##<h1>10.2 Variaveis de Ambiente
+
+Ver `.fuudelivery-config/CREDENTIALS.md` para todas as variaveis.
+
+##<h1>10.3 Deploy Automatico
+
+O auto-deploy esta habilitado para todos os servicos. Quando voce faz push para a branch `master`, o Render automaticamente:
+
+1. Detecta a mudanca no repositorio
+2. Faz build do codigo
+3. Deploya a nova versao
+4. Verifica a saude do servico
+
+##<h1>10.4 Rollback
+
+Para reverter um deploy:
+1. Acesse o dashboard do Render
+2. Va para o servico
+3. Clique em "Manual Deploy" â†’ "Rollback to previous deploy"
+
+<hr>
+
+#<h1>11. Credenciais e Configuracoes
+
+Todas as credenciais estao salvas em:
+- **`.fuudelivery-config/CREDENTIALS.md`**: Credenciais completas
+- **`.env`**: Variaveis de ambiente locais
+- **Render Dashboard**: Variaveis de ambiente de producao
+
+##<h1>Chave de API Render
+
+<pre><code>rnd_uWc5UfLvn8OFUxcagUtwHSMYxFWN
+</code></pre>
+
+##<h1>MongoDB Atlas
+
+<pre><code>mongodb+srv://pavanbrtl050_db_user:q0RGpDo30LXVI0eS@fuudelivery.hj0pytw.mongodb.net/fuudelivery
+</code></pre>
+
+##<h1>AbacatePay
+
+<pre><code>API Key: abc_prod_uCfXQTJqBxJgY5MQLxSKghPL
+Webhook Secret: whsec_fuudelivery_prod_2024
+</code></pre>
+
+<hr>
+
+#<h1>12. Guia de Manutencao
+
+##<h1>12.1 Adicionar Nova Rota no Payment Service
+
+1. Crie o handler em `Backend/Payment/handlers/`
+2. Registre a rota em `Backend/Payment/main.go`
+3. Teste localmente com `go run .`
+4. Faca push para deploy automatico
+
+##<h1>12.2 Alterar Regras de Aprovacao
+
+1. Acesse o Payment Panel
+2. Va na aba "Aprovacoes"
+3. As regras podem ser atualizadas via API:
+<pre><code>curl -X PUT https://fuudelivery-payment.onrender.com/api/approvals/rules \
+  -H "Authorization: Bearer <token>" \
+  -d '{"auto_approve_max_amount": 2000}'
+</code></pre>
+
+##<h1>12.3 Monitorar Pagamentos
+
+1. Acesse o Payment Panel: https://fuudelivery-payment-panel.onrender.com
+2. Ou via API:
+<pre><code>curl https://fuudelivery-payment.onrender.com/api/payments/stats \
+  -H "Authorization: Bearer <token>"
+</code></pre>
+
+##<h1>12.4 Verificar Logs
+
+No Render Dashboard:
+1. Acesse o servico
+2. Va na aba "Logs"
+3. Filtre por nivel (info, warn, error)
+
+##<h1>12.5 Adicionar Novo Endpoint
+
+1. Crie o arquivo em `handlers/`
+2. Adicione a rota em `main.go`
+3. Execute `go vet ./...` para verificar erros
+4. Faca push
+
+<hr>
+
+#<h1>13. Endereco dos Arquivos
+
+##<h1>Backend
+
+<td> Arquivo <td> Caminho <td> Descricao <td>
+<td><hr><hr><hr><td><hr><hr><hr><td><hr><hr><hr>--<td>
+<td> main.go <td> `Backend/Payment/main.go` <td> Ponto de entrada do Payment Service <td>
+<td> config.go <td> `Backend/Payment/config/config.go` <td> Configuracoes <td>
+<td> payment.go <td> `Backend/Payment/models/payment.go` <td> Modelo de pagamento <td>
+<td> risk_scorer.go <td> `Backend/Payment/services/risk_scorer.go` <td> Calculo de risco <td>
+<td> approval_engine.go <td> `Backend/Payment/services/approval_engine.go` <td> Motor de aprovacao <td>
+<td> auth.go <td> `Backend/Payment/middleware/auth.go` <td> Middleware JWT <td>
+<td> mongo.go <td> `Backend/Payment/repository/mongo.go` <td> Conexao MongoDB <td>
+
+##<h1>Frontend
+
+<td> Arquivo <td> Caminho <td> Descricao <td>
+<td><hr><hr><hr><td><hr><hr><hr><td><hr><hr><hr>--<td>
+<td> PaymentsPage.js <td> `Frontend/WebRestaurant/src/pages/payments/PaymentsPage.js` <td> Container principal <td>
+<td> PaymentDashboard.js <td> `Frontend/WebRestaurant/src/pages/payments/PaymentDashboard.js` <td> Dashboard <td>
+<td> paymentApi.js <td> `Frontend/WebRestaurant/src/services/paymentApi.js` <td> Cliente API <td>
+<td> payments.css <td> `Frontend/WebRestaurant/src/styles/payments.css` <td> Estilos dark theme <td>
+<td> index.html <td> `Frontend/PaymentPanel/index.html` <td> Painel standalone <td>
+
+##<h1>Configuracao
+
+<td> Arquivo <td> Caminho <td> Descricao <td>
+<td><hr><hr><hr><td><hr><hr><hr><td><hr><hr><hr>--<td>
+<td> CREDENTIALS.md <td> `.fuudelivery-config/CREDENTIALS.md` <td> Todas as credenciais <td>
+<td> render.yaml <td> `render.yaml` <td> Configuracao Render <td>
+<td> docker-compose.payment.yml <td> `docker-compose.payment.yml` <td> Compose para Payment <td>
+<td> go.work <td> `go.work` <td> Workspace Go <td>
+
+<hr>
+
+*Documento gerado automaticamente em 2026-07-22*
+
+<p style="text-align:center;color:#888;margin-top:40px">Gerado em 22/07/2026 13:14</p>
+</body>
+</html>

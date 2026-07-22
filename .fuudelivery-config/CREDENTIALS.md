@@ -11,7 +11,7 @@
 | fuudelivery-web | srv-d9edpar7uimc73fdotp0 | static_site | https://fuudelivery-web.onrender.com |
 | fuudelivery-admin | srv-d9elp2n41pts73f5kvf0 | static_site | https://fuudelivery-admin-lv7f.onrender.com |
 | fuudelivery-payment | srv-d9gego3rjlhs739jgrfg | web_service | https://fuudelivery-payment.onrender.com |
-| fuudelivery-payment-panel | srv-d9gefarrjlhs739jdl90 | static_site | https://fuudelivery-payment-panel.onrender.com |
+| fuudelivery-payment-panel | srv-d9gemgepbkes73cjqqg0 | static_site | https://fuudelivery-payment-panel.onrender.com |
 
 **Render API Token:** `rnd_uWc5UfLvn8OFUxcagUtwHSMYxFWN`
 **Render Owner ID:** `tea-d9e51in41pts73e8j02g`

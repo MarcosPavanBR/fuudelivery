@@ -19,6 +19,7 @@ function Taxes() {
   const start = async () => {
     const resp = await deliveryModel.getDeilvery(estId);
     setBody({
+      establishmentId: estId,
       fixedTaxa: resp?.FixedTaxa ?? 0,
       perKm: resp?.PerKm ?? 0,
     });

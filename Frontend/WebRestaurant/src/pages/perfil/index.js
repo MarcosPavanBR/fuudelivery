@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import MenuLayout from "../../components/Menu";
 import { useAuth } from "../../context/AuthContext";
 import api from "../../services/api";
-import { FiLoader, FiSave, FiUser, FiMapPin, FiImage, FiPalette, FiLock } from "react-icons/fi";
+import { FiLoader, FiSave, FiUser, FiMapPin, FiPalette, FiLock } from "react-icons/fi";
 import { toast } from "react-toastify";
 import Texts from "../../constants/Texts";
 import restaurantModel from "../../services/restaurant.model";

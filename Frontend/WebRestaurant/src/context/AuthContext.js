@@ -33,7 +33,13 @@ export const AuthProvider = ({ children }) => {
 
   // Só conecta WebSocket após login válido
 
-  const [wsUrl, setWsUrl] = useState(null);useEffect(()=>{if(user?.sub){setWsUrl(api.getUri().replace('http','ws')+'/ws/'+user.sub+'?token='+localStorage.getItem(Strings.token_jwt))}},[user]);const { sendJsonMessage, lastMessage } = useWebSocket(wsUrl, {
+  const [wsUrl, setWsUrl] = useState(null);
+  useEffect(() => {
+    if (user?.sub) {
+      setWsUrl(api.getUri().replace('http', 'ws') + '/ws/' + user.sub + '?token=' + localStorage.getItem(Strings.token_jwt));
+    }
+  }, [user]);
+  const { sendJsonMessage, lastMessage } = useWebSocket(wsUrl, {
     reconnectInterval: 1000,
     retryOnError: true,
     reconnectAttempts: 5,
@@ -70,7 +76,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const decodedToken = getUser();
       setUser(decodedToken);
-      if (decodedToken) {
+      if (decodedToken?.establishment) {
         sendSocketMessage("connect", {
           id: decodedToken.establishment.id,
           name: decodedToken.establishment.name,

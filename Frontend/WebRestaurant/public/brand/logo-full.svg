@@ -1,0 +1,27 @@
+<svg width="320" height="120" viewBox="0 0 320 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="fuuGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#EA1D2C"/>
+      <stop offset="100%" stop-color="#C41420"/>
+    </linearGradient>
+    <linearGradient id="accentGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF6B35"/>
+      <stop offset="100%" stop-color="#F7A11E"/>
+    </linearGradient>
+    <filter id="shadow2" x="-10%" y="-5%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#EA1D2C" flood-opacity="0.2"/>
+    </filter>
+  </defs>
+  <!-- Mark -->
+  <g filter="url(#shadow2)">
+    <rect width="100" height="100" rx="24" fill="url(#fuuGrad2)"/>
+    <path d="M25 25h34c5 0 9 4 9 9s-4 9-9 9H35v7H25V25zm9 14h26c2 0 3-1.5 3-3s-1-3-3-3H34v6z" fill="white"/>
+    <path d="M22 58h7M22 65h12M22 72h5" stroke="white" stroke-width="2.5" stroke-linecap="round" opacity="0.45"/>
+    <circle cx="82" cy="20" r="8" fill="url(#accentGrad2)"/>
+    <path d="M79 17l3 3 3-3" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+  </g>
+  <!-- Logotype: Fuu -->
+  <text x="118" y="58" font-family="Inter, system-ui, sans-serif" font-size="52" font-weight="900" fill="#EA1D2C" letter-spacing="-1">Fuu</text>
+  <!-- Logotype: Delivery -->
+  <text x="118" y="82" font-family="Inter, system-ui, sans-serif" font-size="22" font-weight="700" fill="#1A1A1A" letter-spacing="4" text-transform="uppercase">DELIVERY</text>
+</svg>

@@ -20,7 +20,9 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/bson"
+	"github.com/go-redis/redis/v8"
 	"golang.org/x/time/rate"
+	"gorm.io/gorm"
 
 	// Models (database initialization)
 	"github.com/carloshomar/vercardapio/auth_api/app/models"
@@ -31,6 +33,7 @@ import (
 
 	// Handlers
 	authHandlers "github.com/carloshomar/vercardapio/auth_api/app/handlers"
+	// sponsoredHandler uses the same package as authHandlers (added via authHandlers.CreateSponsoredListing etc.)
 	ordersHandlers "github.com/carloshomar/vercardapio/orders_api/app/handlers"
 	deliveryHandlers "github.com/carloshomar/vercardapio/delivery_api/app/handlers"
 	paymentHandlers "github.com/carloshomar/vercardapio/payment_api/app/handlers"
@@ -39,7 +42,10 @@ import (
 	// Middleware
 	"github.com/carloshomar/vercardapio/auth_api/app/middlewares"
 
-	// Queue
+	// Dispatch engine
+	dispatchServices "github.com/carloshomar/vercardapio/delivery_api/app/services"
+	// Batch expiry
+	orderServices "github.com/carloshomar/vercardapio/orders_api/app/services"
 	"github.com/carloshomar/fuudelivery/pkg/queue"
 	"github.com/carloshomar/fuudelivery/pkg/health"
 )
@@ -63,7 +69,11 @@ func getRateLimiter(ip string, rateLimit rate.Limit, burst int) *rate.Limiter {
 
 func rateLimitMiddleware(maxPerMinute int) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		limiter := getRateLimiter(c.IP(), rate.Limit(maxPerMinute)/60.0, maxPerMinute)
+		ip := c.Get("X-Forwarded-For")
+		if ip == "" {
+			ip = c.IP()
+		}
+		limiter := getRateLimiter(ip, rate.Limit(maxPerMinute)/60.0, maxPerMinute)
 		if !limiter.Allow() {
 			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
 				"error": "Muitas requisicoes. Tente novamente mais tarde.",
@@ -73,7 +83,6 @@ func rateLimitMiddleware(maxPerMinute int) fiber.Handler {
 	}
 }
 
-// Limpeza periodica
 func startRateLimitCleanup() {
 	go func() {
 		for {
@@ -117,6 +126,325 @@ func adminRequired(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Admin access required"})
 	}
 	return c.Next()
+}
+
+// === DISPATCH ENGINE (global instances) ===
+var (
+	courierStore     *dispatchServices.CourierStore
+	matchingEngine   *dispatchServices.MatchingEngine
+	dispatchHandler  *deliveryHandlers.DispatchHandler
+	calibrationJob   *dispatchServices.AutoCalibrationJob
+	splitDecayJob    *dispatchServices.SplitDecayJob
+)
+
+func initDispatchEngine(db *gorm.DB) {
+	courierStore = dispatchServices.NewCourierStore()
+
+	// Zone resolver: consulta PostgreSQL via GORM
+	zoneResolver := &zoneDBResolver{DB: db}
+
+	matchingEngine = dispatchServices.NewMatchingEngine(courierStore, zoneResolver)
+
+	// Callback: quando um pedido e matchado, publica no canal de delivery_updates
+	matchingEngine.OnMatch = func(orderID string, courierID int64) {
+		data, _ := json.Marshal(map[string]interface{}{
+			"type":          "order_matched",
+			"order_id":      orderID,
+			"courier_id":    courierID,
+			"matched_at":    time.Now().UTC(),
+		})
+		queue.Publish("delivery_updates", data)
+	}
+
+	// Callback: fallback comunitario ativado
+	matchingEngine.OnFallback = func(orderID string, zoneName string) {
+		log.Printf("[FALLBACK] Order %s needs community fallback in zone %q", orderID, zoneName)
+		data, _ := json.Marshal(map[string]interface{}{
+			"type":      "community_fallback",
+			"order_id":  orderID,
+			"zone_name": zoneName,
+			"time":      time.Now().UTC(),
+		})
+		queue.Publish("delivery_updates", data)
+	}
+
+	// Inicia retry loop a cada 30s
+	matchingEngine.StartRetryLoop(30 * time.Second)
+
+	// Inicia cleanup de couriers stale a cada 5min
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			courierStore.CleanupStale(300) // 5 minutos
+		}
+	}()
+
+	// Cria handler HTTP
+	dispatchHandler = deliveryHandlers.NewDispatchHandler(courierStore, matchingEngine, deliveryModels.MongoDabase)
+
+	// === Job de calibracao automatica ===
+	calConfig := dispatchServices.DefaultCalibrationConfig()
+	calConfig.Interval = 24 * time.Hour
+	calibrationJob = dispatchServices.NewAutoCalibrationJob(calConfig, matchingEngine, zoneResolver)
+
+	// Callback: quando uma zona e calibrada, persiste o novo raio no banco
+	calibrationJob.SetOnCalibrate(func(result dispatchServices.CalibrationResult) {
+		if result.OldRadiusKm == result.NewRadiusKm {
+			return
+		}
+		if db == nil {
+			return
+		}
+		if err := db.Model(&models.Zone{}).Where("id = ?", result.ZoneID).Update("radius_km", result.NewRadiusKm).Error; err != nil {
+			log.Printf("[CALIBRATION] Failed to update radius for zone %d: %v", result.ZoneID, err)
+		}
+	})
+
+	// Funcao de busca de zonas para o job
+	fetchZones := func() []dispatchServices.ZoneMetadata {
+		if db == nil {
+			return nil
+		}
+		var zones []models.Zone
+		if err := db.Where("is_active = ?", true).Find(&zones).Error; err != nil {
+			log.Printf("[CALIBRATION] Failed to fetch zones: %v", err)
+			return nil
+		}
+		result := make([]dispatchServices.ZoneMetadata, 0, len(zones))
+		for _, z := range zones {
+			result = append(result, dispatchServices.ZoneMetadata{
+				ID:                    z.ID,
+				Name:                  z.Name,
+				MinRadiusKm:           z.MinRadiusKm,
+				RadiusKm:              z.RadiusKm,
+				MaxRadiusKm:           z.MaxRadiusKm,
+				PeakRadiusMultiplier:  z.PeakRadiusMultiplier,
+				PeakHourStart:         z.PeakHourStart,
+				PeakHourEnd:           z.PeakHourEnd,
+				CitySize:              z.CitySize,
+				DensityCouriersPerKm2: z.DensityCouriersPerKm2,
+				MinDeliveryFee:        z.MinDeliveryFee,
+				SurgeMultiplier:       z.SurgeMultiplier,
+				MinCouriersThreshold:  z.MinCouriersThreshold,
+				AllowBatching:         z.AllowBatching,
+			})
+		}
+		return result
+	}
+
+	// Inicia o job de calibracao
+	calibrationJob.Start(fetchZones)
+
+	// Inicia recalculo periodico de densidade (a cada 15min)
+	go func() {
+		ticker := time.NewTicker(15 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			zones := fetchZones()
+			if len(zones) == 0 {
+				continue
+			}
+			// Converte ZoneMetadata para ZoneInfo
+			zoneInfos := make([]dispatchServices.ZoneInfo, len(zones))
+			for i, z := range zones {
+				zoneInfos[i] = dispatchServices.ZoneInfo{
+					ID:        z.ID,
+					CenterLat: 0, // Idealmente viria do centroide da zona
+					CenterLng: 0,
+					RadiusKm:  z.RadiusKm,
+				}
+			}
+			courierStore.RecalculateAllDensities(zoneInfos)
+		}
+	}()
+
+	// === Job de decaimento de split ===
+	splitDecayConfig := dispatchServices.DefaultSplitDecayConfig()
+	splitDecayJob = dispatchServices.NewSplitDecayJob(splitDecayConfig, &splitMetricsProvider{DB: db})
+
+	// Callback: persiste o novo split no banco
+	splitDecayJob.SetOnDecay(func(result dispatchServices.SplitDecayResult) {
+		if !result.Applied {
+			return
+		}
+		if db == nil {
+			return
+		}
+		now := time.Now()
+		updates := map[string]interface{}{
+			"split_current_platform_pct":      result.NewPlatformPct,
+			"split_current_establishment_pct": result.NewEstablishmentPct,
+			"split_last_adjusted_at":           now,
+		}
+		if err := db.Model(&models.Zone{}).Where("id = ?", result.ZoneID).Updates(updates).Error; err != nil {
+			log.Printf("[SPLIT_DECAY] Failed to update split for zone %d: %v", result.ZoneID, err)
+		} else {
+			log.Printf("[SPLIT_DECAY] Zone %d split updated: %.1f%% -> %.1f%%",
+				result.ZoneID, result.OldPlatformPct, result.NewPlatformPct)
+		}
+	})
+
+	// Funcao de busca de dados de split das zonas
+	fetchSplitZones := func() []dispatchServices.ZoneSplitData {
+		if db == nil {
+			return nil
+		}
+		var zones []models.Zone
+		if err := db.Where("is_active = ?", true).Find(&zones).Error; err != nil {
+			log.Printf("[SPLIT_DECAY] Failed to fetch zones: %v", err)
+			return nil
+		}
+		result := make([]dispatchServices.ZoneSplitData, 0, len(zones))
+		for _, z := range zones {
+			result = append(result, dispatchServices.ZoneSplitData{
+				ID:                           z.ID,
+				Name:                         z.Name,
+				SplitCurrentPlatformPct:      z.SplitCurrentPlatformPct,
+				SplitCurrentEstablishmentPct: z.SplitCurrentEstablishmentPct,
+				SplitInitialPlatformPct:      z.SplitInitialPlatformPct,
+				SplitInitialEstablishmentPct: z.SplitInitialEstablishmentPct,
+				SplitTargetPlatformPct:       z.SplitTargetPlatformPct,
+				SplitTargetEstablishmentPct:  z.SplitTargetEstablishmentPct,
+				SplitStepMonths:              z.SplitStepMonths,
+				SplitStepPlatformPct:         z.SplitStepPlatformPct,
+				SplitStepEstablishmentPct:    z.SplitStepEstablishmentPct,
+				SplitMinMonthlyOrders:        z.SplitMinMonthlyOrders,
+				SplitMinActiveCouriers:       z.SplitMinActiveCouriers,
+				SplitLastAdjustedAt:          z.SplitLastAdjustedAt,
+				CreatedAt:                    z.CreatedAt,
+			})
+		}
+		return result
+	}
+
+	// Inicia o job de decaimento
+	splitDecayJob.Start(fetchSplitZones)
+
+	log.Println("[DISPATCH] Engine initialized: courier store + matching engine + calibration job + split decay + retry loop")
+}
+
+// splitMetricsProvider implementa dispatchServices.ZoneMetricsProvider usando GORM.
+type splitMetricsProvider struct {
+	DB *gorm.DB
+}
+
+func (s *splitMetricsProvider) GetMonthlyOrders(zoneID uint) int {
+	// Placeholder: em producao, consultaria a tabela de orders no PostgreSQL
+	// filtrando por estabelecimentos vinculados a esta zona
+	return 100 // valor ficticio para o job rodar
+}
+
+func (s *splitMetricsProvider) GetActiveCouriers(zoneID uint) int {
+	// Placeholder: em producao, consultaria a tabela de couriers no PostgreSQL
+	return 5 // valor ficticio para o job rodar
+}
+
+// zoneDBResolver implementa dispatchServices.ZoneResolver usando GORM.
+type zoneDBResolver struct {
+	DB *gorm.DB
+}
+
+func (z *zoneDBResolver) ResolveByLatLng(lat, lng float64) (uint, string, float64, error) {
+	if z.DB == nil {
+		return 0, "Default", 10.0, nil
+	}
+
+	var zone models.Zone
+	if err := z.DB.Where("is_active = ?", true).First(&zone).Error; err != nil {
+		return 0, "Default", 10.0, nil
+	}
+
+	return zone.ID, zone.Name, zone.RadiusKm, nil
+}
+
+func (z *zoneDBResolver) GetDeliveryFee(zoneID uint, distanceKm float64) float64 {
+	if z.DB == nil {
+		return 5.0
+	}
+	var zone models.Zone
+	if err := z.DB.First(&zone, zoneID).Error; err != nil {
+		return 5.0
+	}
+	fee := zone.MinDeliveryFee
+	if distanceKm > 3.0 {
+		fee += (distanceKm - 3.0) * 1.5
+	}
+	return fee
+}
+
+func (z *zoneDBResolver) GetSurgeMultiplier(zoneID uint) float64 {
+	if z.DB == nil {
+		return 1.0
+	}
+	var zone models.Zone
+	if err := z.DB.First(&zone, zoneID).Error; err != nil {
+		return 1.0
+	}
+	return zone.SurgeMultiplier
+}
+
+func (z *zoneDBResolver) GetMinCouriersThreshold(zoneID uint) int {
+	if z.DB == nil {
+		return 3
+	}
+	var zone models.Zone
+	if err := z.DB.First(&zone, zoneID).Error; err != nil {
+		return 3
+	}
+	return zone.MinCouriersThreshold
+}
+
+func (z *zoneDBResolver) AllowsBatching(zoneID uint) bool {
+	if z.DB == nil {
+		return true
+	}
+	var zone models.Zone
+	if err := z.DB.First(&zone, zoneID).Error; err != nil {
+		return true
+	}
+	return zone.AllowBatching
+}
+
+func (z *zoneDBResolver) GetZoneMetadata(zoneID uint) *dispatchServices.ZoneMetadata {
+	meta := &dispatchServices.ZoneMetadata{
+		MinRadiusKm:          2.0,
+		RadiusKm:             5.0,
+		MaxRadiusKm:          15.0,
+		PeakRadiusMultiplier: 0.7,
+		PeakHourStart:        "11:00",
+		PeakHourEnd:          "14:00",
+		MinDeliveryFee:       5.0,
+		SurgeMultiplier:      1.0,
+		MinCouriersThreshold: 3,
+		AllowBatching:        true,
+	}
+
+	if z.DB == nil || zoneID == 0 {
+		return meta
+	}
+
+	var zone models.Zone
+	if err := z.DB.First(&zone, zoneID).Error; err != nil {
+		return meta
+	}
+
+	meta.ID = zone.ID
+	meta.Name = zone.Name
+	meta.MinRadiusKm = zone.MinRadiusKm
+	meta.RadiusKm = zone.RadiusKm
+	meta.MaxRadiusKm = zone.MaxRadiusKm
+	meta.PeakRadiusMultiplier = zone.PeakRadiusMultiplier
+	meta.PeakHourStart = zone.PeakHourStart
+	meta.PeakHourEnd = zone.PeakHourEnd
+	meta.CitySize = zone.CitySize
+	meta.DensityCouriersPerKm2 = zone.DensityCouriersPerKm2
+	meta.MinDeliveryFee = zone.MinDeliveryFee
+	meta.SurgeMultiplier = zone.SurgeMultiplier
+	meta.MinCouriersThreshold = zone.MinCouriersThreshold
+	meta.AllowBatching = zone.AllowBatching
+
+	return meta
 }
 
 func setupWebSocketRoutes(app *fiber.App) {
@@ -174,8 +502,8 @@ func setupWebSocketRoutes(app *fiber.App) {
 		}()
 
 		var (
-			mt  int
-			msg []byte
+			mt   int
+			msg  []byte
 			err2 error
 		)
 		for {
@@ -220,7 +548,6 @@ func setupWebSocketRoutes(app *fiber.App) {
 	}))
 
 	// --- FUU PULSE: Real-time delivery location ---
-	// Store latest location per order (in-memory, ephemeral)
 	type DeliveryLocation struct {
 		Lat       float64 `json:"lat"`
 		Lng       float64 `json:"lng"`
@@ -271,7 +598,6 @@ func setupWebSocketRoutes(app *fiber.App) {
 			deliveryLocsListenersMu.Unlock()
 		}()
 
-		// Send current location immediately if exists
 		deliveryLocsMu.RLock()
 		if loc, ok := deliveryLocations[orderID]; ok {
 			data, _ := json.Marshal(map[string]interface{}{"type": "location", "payload": loc})
@@ -279,7 +605,6 @@ func setupWebSocketRoutes(app *fiber.App) {
 		}
 		deliveryLocsMu.RUnlock()
 
-		// Keep connection alive; ignore incoming messages
 		for {
 			if _, _, err := c.ReadMessage(); err != nil {
 				break
@@ -307,7 +632,6 @@ func setupWebSocketRoutes(app *fiber.App) {
 			return c.Status(400).JSON(fiber.Map{"error": "order_id, lat, and lng are required"})
 		}
 
-		// Verify deliveryman is assigned to this order
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 		var solicitation struct {
@@ -331,7 +655,6 @@ func setupWebSocketRoutes(app *fiber.App) {
 		deliveryLocations[req.OrderID] = loc
 		deliveryLocsMu.Unlock()
 
-		// Broadcast to all listeners for this order
 		data, _ := json.Marshal(map[string]interface{}{"type": "location", "payload": loc})
 		deliveryLocsListenersMu.Lock()
 		for _, listener := range deliveryLocsListeners[req.OrderID] {
@@ -353,6 +676,7 @@ func setupAuthRoutes(app *fiber.App) {
 	app.Put("/users/:id/password", protectedRoute, authHandlers.ChangePassword)
 
 	app.Get("/establishments", authHandlers.ListEstablishments)
+	app.Get("/establishments/ranked", authHandlers.ListEstablishmentsRanked)
 	app.Get("/establishments/:id", authHandlers.GetEstablishments)
 	app.Post("/establishments", adminRequired, authHandlers.CreateEstablishment)
 	app.Put("/establishments/status/handler/:id", protectedRoute, authHandlers.HandlerEstablishmentStatus)
@@ -376,30 +700,25 @@ func setupOrdersRoutes(app *fiber.App) {
 	app.Get("/ping", ordersHandlers.Ping)
 	app.Get("/products/all/:establishmentId", ordersHandlers.GetByEstablishmentIdWithRelations)
 	app.Get("/products/:establishmentId", ordersHandlers.GetByEstablishmentId)
-
 	app.Post("/products/create", protectedRoute, ordersHandlers.CreateProduct)
 	app.Delete("/products/delete/:id", protectedRoute, ordersHandlers.DeleteProduct)
 	app.Post("/products/multi-create", protectedRoute, ordersHandlers.CreateMultProducts)
 	app.Put("/products/update/:id", protectedRoute, ordersHandlers.UpdateProduct)
-
 	app.Post("/categories/create", protectedRoute, ordersHandlers.CreateCategories)
 	app.Get("/categories/:establishmentId", ordersHandlers.GetCategories)
 	app.Post("/categories/product", protectedRoute, ordersHandlers.CreateProductCategorie)
 	app.Delete("/categories/:id", protectedRoute, ordersHandlers.DeleteCategory)
 	app.Put("/categories/:id", protectedRoute, ordersHandlers.UpdateCategory)
 	app.Get("/categories/product/:establishmentId", ordersHandlers.GetCategoriesWithProducts)
-
 	app.Post("/additional", protectedRoute, ordersHandlers.CreateAdditional)
 	app.Get("/additional/:id", ordersHandlers.ListAdditional)
 	app.Put("/additional/:id", protectedRoute, ordersHandlers.UpdateAdditional)
 	app.Delete("/additional/:id", protectedRoute, ordersHandlers.DeleteAdditional)
 	app.Post("/additional/product", protectedRoute, ordersHandlers.CreateProductToAdditional)
-
 	app.Post("/delivery", protectedRoute, ordersHandlers.InsertDelivery)
 	app.Post("/delivery/calculate-delivery-value", protectedRoute, ordersHandlers.CalculateDeliveryValue)
 	app.Post("/delivery/calculate-route", protectedRoute, ordersHandlers.CalculateRoute)
 	app.Get("/delivery/value/:establishmentId", ordersHandlers.GetDeliveryByEstablishmentID)
-
 	app.Post("/orders", protectedRoute, func(c *fiber.Ctx) error {
 		return ordersHandlers.CreateOrder(c, sendMessageToClient)
 	})
@@ -411,7 +730,6 @@ func setupOrdersRoutes(app *fiber.App) {
 	app.Get("/orders/list-phone/:phone", protectedRoute, ordersHandlers.ListOrdersByPhone)
 	app.Get("/orders/:establishmentId", protectedRoute, ordersHandlers.ListOrdersByEstablishmentID)
 	app.Get("/orders/:establishmentId/:phoneNumber", protectedRoute, ordersHandlers.ListOrdersByEstablishmentIDAndPhone)
-
 	app.Post("/coupons", protectedRoute, ordersHandlers.CreateCoupon)
 	app.Post("/coupons/validate", protectedRoute, ordersHandlers.ValidateCoupon)
 	app.Post("/coupons/apply", protectedRoute, ordersHandlers.ApplyCoupon)
@@ -420,27 +738,33 @@ func setupOrdersRoutes(app *fiber.App) {
 	app.Delete("/coupons/:id", protectedRoute, ordersHandlers.DeleteCoupon)
 	app.Post("/coupons/referral", protectedRoute, ordersHandlers.GenerateReferralCoupon)
 	app.Post("/coupons/calculate", protectedRoute, ordersHandlers.CalculateDiscount)
-
 	app.Get("/qrcode/:establishmentId", ordersHandlers.GenerateTableQRCode)
 	app.Post("/orders/schedule", protectedRoute, ordersHandlers.ScheduleOrder)
 	app.Post("/notifications/register", protectedRoute, ordersHandlers.RegisterPushToken)
-
 	app.Post("/loyalty/earn", protectedRoute, ordersHandlers.EarnPoints)
 	app.Post("/loyalty/redeem", protectedRoute, ordersHandlers.RedeemPoints)
 	app.Get("/loyalty/balance/:phone", protectedRoute, ordersHandlers.GetLoyaltyBalance)
 	app.Get("/loyalty/history/:phone", protectedRoute, ordersHandlers.GetLoyaltyHistory)
 	app.Get("/loyalty/calculate", protectedRoute, ordersHandlers.CalculateLoyaltyDiscount)
-
 	app.Post("/reviews", protectedRoute, ordersHandlers.CreateReview)
 	app.Get("/reviews/establishment/:id", protectedRoute, ordersHandlers.GetEstablishmentReviews)
 	app.Get("/reviews/product/:id", protectedRoute, ordersHandlers.GetProductReviews)
 	app.Put("/reviews/respond/:id", protectedRoute, ordersHandlers.RespondToReview)
 	app.Get("/reviews/user/:phone", protectedRoute, ordersHandlers.GetUserReviews)
 	app.Get("/reviews/rating/:establishmentId", protectedRoute, ordersHandlers.GetEstablishmentRating)
-
 	app.Post("/orders/pickup-code/generate", protectedRoute, ordersHandlers.GeneratePickupCode)
 	app.Post("/orders/pickup-code/validate", protectedRoute, ordersHandlers.ValidatePickupCode)
 	app.Get("/orders/pickup-code/:id", protectedRoute, ordersHandlers.GetPickupCode)
+
+	// === Rotas de Batch (batching de pedidos) ===
+	batches := app.Group("/batches", adminRequired)
+	batches.Post("/", ordersHandlers.CreateBatch)
+	batches.Get("/:id", ordersHandlers.GetBatch)
+	batches.Post("/:id/assign", ordersHandlers.AssignBatch)
+	batches.Post("/:id/complete", ordersHandlers.CompleteBatch)
+	batches.Post("/:id/add-order", ordersHandlers.AddOrderToBatch)
+	batches.Get("/zone/:zoneId", ordersHandlers.ListBatchesByZone)
+	batches.Post("/:id/force-expire", ordersHandlers.ForceExpireBatch)
 }
 
 func setupDeliveryRoutes(app *fiber.App) {
@@ -453,6 +777,32 @@ func setupDeliveryRoutes(app *fiber.App) {
 	app.Get("/deliveryman/extrato/:id", protectedRoute, deliveryHandlers.GetExtrato)
 }
 
+func setupZoneRoutes(app *fiber.App) {
+	app.Get("/zones", adminRequired, authHandlers.ListZones)
+	app.Get("/zones/all", adminRequired, authHandlers.ListAllZones)
+	app.Get("/zones/:id", adminRequired, authHandlers.GetZone)
+	app.Post("/zones", adminRequired, authHandlers.CreateZone)
+	app.Put("/zones/:id", adminRequired, authHandlers.UpdateZone)
+	app.Delete("/zones/:id", adminRequired, authHandlers.DeleteZone)
+	app.Post("/zones/:id/calibrate", adminRequired, authHandlers.CalibrateZone)
+}
+
+func setupDispatchRoutes(app *fiber.App) {
+	dispatch := app.Group("/dispatch", protectedRoute)
+
+	// Localizacao do entregador
+	dispatch.Post("/location", dispatchHandler.UpdateLocation)
+	dispatch.Post("/status", dispatchHandler.SetCourierStatus)
+
+	// Matching
+	dispatch.Post("/trigger", dispatchHandler.TriggerDispatch)
+	dispatch.Get("/nearby", dispatchHandler.NearbyCouriers)
+
+	// Dead-letter queue e metricas
+	dispatch.Get("/dlq", adminRequired, dispatchHandler.GetDLQ)
+	dispatch.Get("/status", adminRequired, dispatchHandler.GetDispatchStatus)
+}
+
 func setupPaymentRoutes(app *fiber.App) {
 	app.Get("/payments/all", adminRequired, paymentHandlers.ListAllPayments)
 	app.Post("/payments/pix/generate", protectedRoute, paymentHandlers.GeneratePIX)
@@ -461,15 +811,45 @@ func setupPaymentRoutes(app *fiber.App) {
 	app.Post("/payments/process", protectedRoute, paymentHandlers.ProcessPayment)
 	app.Post("/payments/split", protectedRoute, paymentHandlers.ProcessSplit)
 	app.Post("/payments/webhook", rateLimitMiddleware(100), paymentHandlers.HandlePaymentWebhook)
-	// Mercado Pago removed — AbacatePay is the official gateway
 	app.Get("/wallet/balance/:user_id", protectedRoute, paymentHandlers.GetBalance)
 	app.Post("/wallet/topup", protectedRoute, paymentHandlers.TopUp)
 	app.Post("/wallet/deduct", protectedRoute, paymentHandlers.DeductFromWallet)
-
-	// Asaas split payment
 	app.Post("/asaas/wallet/create", protectedRoute, paymentHandlers.CreateAsaasWallet)
 	app.Get("/asaas/wallet/:walletId/status", protectedRoute, paymentHandlers.GetAsaasWalletStatus)
 	app.Post("/asaas/payment/split", protectedRoute, paymentHandlers.CreateAsaasSplitPayment)
+}
+
+func setupSponsoredRoutes(app *fiber.App) {
+	// Rotas de patrocínio (admin)
+	sponsored := app.Group("/sponsored", adminRequired)
+	sponsored.Get("/", authHandlers.ListSponsoredListings)
+	sponsored.Get("/:id", authHandlers.GetSponsoredListing)
+	sponsored.Post("/", authHandlers.CreateSponsoredListing)
+	sponsored.Put("/:id", authHandlers.UpdateSponsoredListing)
+	sponsored.Post("/:id/cancel", authHandlers.CancelSponsoredListing)
+	sponsored.Post("/:id/renew", authHandlers.RenewSponsoredListing)
+
+	// Rotas públicas/de consulta
+	sponsored.Get("/by-establishment/:id", protectedRoute, authHandlers.GetEstablishmentSponsorship)
+	sponsored.Get("/by-zone/:id", authHandlers.ListSponsoredByZone)
+
+	// === Endpoint público de destaque (não requer auth) ===
+	// GET /establishments/featured?zone_id=1&limit=8
+	app.Get("/establishments/featured", authHandlers.GetFeaturedEstablishments)
+}
+
+func setupSubscriptionRoutes(app *fiber.App) {
+	subscriptions := app.Group("/subscriptions")
+
+	// Rotas do usuario (protegidas)
+	subscriptions.Get("/me", protectedRoute, authHandlers.GetUserSubscription)
+	subscriptions.Post("/", protectedRoute, authHandlers.CreateSubscription)
+	subscriptions.Post("/cancel", protectedRoute, authHandlers.CancelSubscription)
+	subscriptions.Post("/renew", protectedRoute, authHandlers.RenewSubscription)
+
+	// Rotas de admin
+	subscriptions.Get("/", adminRequired, authHandlers.ListSubscriptions)
+	subscriptions.Put("/:id", adminRequired, authHandlers.AdminUpdateSubscription)
 }
 
 func setupChatRoutes(app *fiber.App) {
@@ -483,13 +863,11 @@ func setupChatRoutes(app *fiber.App) {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "orderId is required"})
 		}
 
-		// 1. Check if user is the customer (order owner)
 		var order ordersModels.Order
 		if qErr := ordersModels.DB.First(&order, orderID).Error; qErr == nil {
 			if uint(tokenUserID) == order.UserID {
 				return chatHandlers.GetMessages(c)
 			}
-			// 2. Check if user is the restaurant owner of the order's establishment
 			var user models.User
 			if uErr := models.DB.First(&user, tokenUserID).Error; uErr == nil {
 				if user.EstablishmentID != 0 && user.EstablishmentID == order.EstablishmentID {
@@ -498,7 +876,6 @@ func setupChatRoutes(app *fiber.App) {
 			}
 		}
 
-		// 3. Check if user is the assigned deliveryman for this order
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 		var solicitation struct {
@@ -511,7 +888,6 @@ func setupChatRoutes(app *fiber.App) {
 			return chatHandlers.GetMessages(c)
 		}
 
-		// 4. Admin role bypass (for support/audit)
 		role, _ := middlewares.GetUserRoleFromToken(c)
 		if role == "admin" {
 			return chatHandlers.GetMessages(c)
@@ -538,8 +914,39 @@ func setupChatRoutes(app *fiber.App) {
 	})
 }
 
+// validateRequiredEnv verifica se as variaveis de ambiente essenciais estao presentes.
+// Em producao, falha rapidamente se algo estiver faltando.
+func validateRequiredEnv() {
+	required := []string{"JWT_SECRET", "DB_CONNECTION_STRING", "MONGO_URI"}
+	missing := false
+	for _, key := range required {
+		if os.Getenv(key) == "" {
+			log.Printf("[ENV] CRITICAL: %s nao configurado", key)
+			missing = true
+		}
+	}
+
+	// Em producao, valida tambem as de pagamento
+	if os.Getenv("GO_ENV") == "production" {
+		prodRequired := []string{"ABACATE_PAY_API_KEY", "RABBIT_CONNECTION"}
+		for _, key := range prodRequired {
+			if os.Getenv(key) == "" {
+				log.Printf("[ENV] WARNING: %s nao configurado — funcionalidade limitada", key)
+			}
+		}
+	}
+
+	if missing {
+		log.Println("[ENV] Configuracao incompleta. Defina as variaveis no painel do Render (Environment > Secret Files).")
+		log.Println("[ENV] Variaveis necessarias para o monolith: DB_CONNECTION_STRING, MONGO_URI, JWT_SECRET")
+	}
+}
+
 func main() {
 	godotenv.Load()
+
+	// Valida ambiente antes de inicializar
+	validateRequiredEnv()
 
 	// Initialize databases
 	models.ConnectDatabase()
@@ -552,8 +959,21 @@ func main() {
 	// Initialize message queue
 	queue.Init()
 
-	// Wire loyalty points: when payment is confirmed, customer earns points
+	// Start batch expiry job
+	batchExpiryConfig := orderServices.DefaultBatchExpiryConfig()
+	batchExpiryManager := orderServices.NewBatchExpiryManager(ordersModels.DB, batchExpiryConfig)
+	batchExpiryManager.Start()
+
+	// Wire loyalty points
 	paymentHandlers.OnPaymentApproved = ordersHandlers.EarnPointsForOrder
+
+	// Wire zone-based split config
+	paymentHandlers.GetSplitConfigForEstablishment = func(establishmentID int64) (platformPct, establishmentPct float64) {
+		return models.GetZoneSplitConfig(uint(establishmentID))
+	}
+
+	// Initialize dispatch engine (courier store + matching engine + handler)
+	initDispatchEngine(models.DB)
 
 	// Create Fiber app
 	app := fiber.New(fiber.Config{
@@ -566,26 +986,40 @@ func main() {
 	app.Use(logger.New())
 	app.Use(recover.New())
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "https://fuudelivery-web.onrender.com,https://fuudelivery-admin-lv7f.onrender.com,http://localhost:3000,http://localhost:3001",
+		AllowOrigins: "https://fuudelivery-web.onrender.com,https://fuudelivery-admin-lv7f.onrender.com,https://fuudelivery-payment-panel.onrender.com,http://localhost:3000,http://localhost:3001",
+		AllowCredentials: true,
 		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
 		AllowHeaders: "Origin,Content-Type,Accept,Authorization",
 	}))
 
 	// Health check
 	app.Get("/health", func(c *fiber.Ctx) error {
+		// Tenta conectar Redis se REDIS_URL estiver configurado
+		var redisClient *redis.Client
+		redisURL := os.Getenv("REDIS_URL")
+		if redisURL != "" {
+			opts, err := redis.ParseURL(redisURL)
+			if err == nil {
+				redisClient = redis.NewClient(opts)
+				defer redisClient.Close()
+			}
+		}
+
 		return c.JSON(fiber.Map{
 			"status":  "ok",
 			"service": "fuudelivery",
 			"version": "1.0.0",
 			"checks": fiber.Map{
-				"postgres": health.DatabaseCheck(models.DB),
-				"mongodb":  health.MongoCheck(ordersModels.MongoClient),
+				"postgres":   health.DatabaseCheck(models.DB),
+				"mongodb":    health.MongoCheck(ordersModels.MongoClient),
+				"redis":      health.RedisCheck(redisClient),
+				"redis_geo":  health.RedisGeoCheck(redisClient),
+				"batches":    health.BatchCheck(ordersModels.DB),
 			},
 			"time": time.Now().UTC(),
 		})
 	})
 
-	// Root health check (for Render when healthCheckPath not configured)
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok", "service": "fuudelivery"})
 	})
@@ -595,10 +1029,14 @@ func main() {
 	setupAuthRoutes(app)
 	setupOrdersRoutes(app)
 	setupDeliveryRoutes(app)
+	setupZoneRoutes(app)
+	setupDispatchRoutes(app)
+	setupSponsoredRoutes(app)
+	setupSubscriptionRoutes(app)
 	setupPaymentRoutes(app)
 	setupChatRoutes(app)
 
-	// Start queue listeners and rate limit cleanup in background
+	// Start background workers
 	go startQueueListeners()
 	startRateLimitCleanup()
 

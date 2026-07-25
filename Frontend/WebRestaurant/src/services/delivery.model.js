@@ -1,6 +1,6 @@
 import api from "./api";
 
-async function saveDeilvery({ establishmentId, fixedTaxa, perKm }) {
+export async function saveDelivery({ establishmentId, fixedTaxa, perKm }) {
   try {
     const { data } = await api.post("/delivery", {
       establishmentId,
@@ -14,7 +14,7 @@ async function saveDeilvery({ establishmentId, fixedTaxa, perKm }) {
   }
 }
 
-async function getDeilvery(establishmentId) {
+export async function getDelivery(establishmentId) {
   try {
     const { data } = await api.get(
       `/delivery/value/${establishmentId}`
@@ -27,6 +27,6 @@ async function getDeilvery(establishmentId) {
 }
 
 export default {
-  getDeilvery,
-  saveDeilvery,
+  getDelivery,
+  saveDelivery,
 };

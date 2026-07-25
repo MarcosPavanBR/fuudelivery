@@ -87,14 +87,23 @@ func (ah *ApprovalHandler) GetRules(c *fiber.Ctx) error {
 
 // UpdateRules atualiza as regras de aprovacao e persiste no MongoDB.
 // Aceita um JSON com os campos das regras e faz upsert no banco.
+// ANTES: carrega as regras existentes para NAO zerar campos nao enviados.
 // PUT /api/approvals/rules
 func (ah *ApprovalHandler) UpdateRules(c *fiber.Ctx) error {
-	var rules models.ApprovalRules
-	if err := c.BodyParser(&rules); err != nil {
+	// Carrega regras existentes primeiro — se nao houver, usa defaults
+	rules, err := repository.GetApprovalRules()
+	if err != nil {
+		defaultRules := models.DefaultApprovalRules()
+		rules = &defaultRules
+	}
+
+	// BodyParser aplica apenas os campos enviados no JSON sobre o struct existente.
+	// Campos NAO enviados mantem seus valores atuais — nao sao zerados.
+	if err := c.BodyParser(rules); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
-	if err := repository.SaveApprovalRules(&rules); err != nil {
+	if err := repository.SaveApprovalRules(rules); err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to save rules"})
 	}
 

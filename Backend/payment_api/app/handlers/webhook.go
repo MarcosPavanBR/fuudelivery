@@ -148,6 +148,17 @@ func updateLocalPaymentStatus(abacatepayID string, status string) {
 	}
 }
 
+// SplitConfigResolver e chamado para obter os percentuais de split
+// de um estabelecimento com base na zona/praca a que ele pertence.
+// Retorna (platformFeePercent, establishmentPercent).
+// Se nao configurado, usa o padrao 5/85.
+type SplitConfigResolver func(establishmentID int64) (platformPct, establishmentPct float64)
+
+// GetSplitConfigForEstablishment e um callback que pode ser definido
+// pelo monólito (cmd/fuudelivery/main.go) para buscar a configuracao
+// de split da zona do estabelecimento no PostgreSQL.
+var GetSplitConfigForEstablishment SplitConfigResolver
+
 var OnPaymentApproved func(customerPhone, orderID string, orderValue float64) error
 
 func publishPaymentApproved(abacatepayID string) {
@@ -193,7 +204,13 @@ func publishPaymentApproved(abacatepayID string) {
 	publishedAt := now
 	payment.Status = "CONFIRMED"
 	payment.ConfirmedAt = &publishedAt
-	splitRules := defaultSplitRules(&payment)
+	// Determina os percentuais de split com base na zona do estabelecimento
+	platformPct, establishmentPct := 5.0, 85.0
+	if GetSplitConfigForEstablishment != nil {
+		platformPct, establishmentPct = GetSplitConfigForEstablishment(payment.EstablishmentID)
+	}
+
+	splitRules := defaultSplitRules(&payment, platformPct, establishmentPct)
 	payment.SplitRules = splitRules
 
 	_, err = models.MongoDabase.Collection("payments").UpdateOne(
@@ -275,10 +292,14 @@ func HandlePaymentWebhook(c *fiber.Ctx) error {
 	})
 }
 
-func defaultSplitRules(payment *models.Payment) []models.SplitRule {
+// defaultSplitRules calcula as regras de split de pagamento com base
+// nos percentuais configurados para a zona do estabelecimento.
+// Se platformPct + establishmentPct nao somarem 100%, o excedente
+// vai para customerCredit (cashback).
+func defaultSplitRules(payment *models.Payment, platformPct, establishmentPct float64) []models.SplitRule {
 	total := payment.Amount
-	platformFee := total * 0.05
-	establishmentAmount := total * 0.85
+	platformFee := total * (platformPct / 100.0)
+	establishmentAmount := total * (establishmentPct / 100.0)
 	deliveryAmount := payment.DeliveryAmount
 	customerCredit := total - platformFee - establishmentAmount - deliveryAmount
 
@@ -302,13 +323,13 @@ func defaultSplitRules(payment *models.Payment) []models.SplitRule {
 			ReceiverID:   0,
 			ReceiverType: "platform",
 			Amount:       platformFee,
-			Percentage:   5.0,
+			Percentage:   platformPct,
 		},
 		{
 			ReceiverID:   payment.EstablishmentID,
 			ReceiverType: "establishment",
 			Amount:       establishmentAmount,
-			Percentage:   85.0,
+			Percentage:   establishmentPct,
 		},
 	}
 

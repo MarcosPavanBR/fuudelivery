@@ -67,6 +67,7 @@ func ConnectPostgresDatabase() {
 		&LoyaltyPoints{},
 		&LoyaltyTransaction{},
 		&Review{},
+		&Batch{},
 	)
 
 	DB = database

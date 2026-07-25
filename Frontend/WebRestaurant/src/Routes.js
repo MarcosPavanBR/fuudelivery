@@ -2,7 +2,7 @@ import React from "react";
 import { useAuth } from "./context/AuthContext";
 import LoginPage from "./pages/login";
 import Home from "./pages/home";
-import { Routes as ReactRoutes, Route } from "react-router-dom";
+import { Routes as ReactRoutes, Route, useLocation } from "react-router-dom";
 import Cardapio from "./pages/cardapio/products/Cardapio";
 import Perfil from "./pages/perfil";
 import Taxes from "./pages/perfil/taxes";
@@ -13,17 +13,18 @@ import Reports from "./pages/reports/Reports";
 
 export default function PrivateRoute() {
   const { user } = useAuth();
+  const location = useLocation();
 
   // Rotas públicas (acessíveis sem login)
   const publicRoutes = ["/cadastrar-restaurante"];
 
   // Se não está autenticado e não é rota pública, mostra login
-  if (!user && !publicRoutes.includes(window.location.hash.replace("#", ""))) {
+  if (!user && !publicRoutes.includes(location.pathname)) {
     return <LoginPage />;
   }
 
   return (
-    <ReactRoutes>
+    <ReactRoutes location={location}>
       {/* Rotas públicas */}
       <Route path="/cadastrar-restaurante" element={<RegisterEstablishment />} />
 

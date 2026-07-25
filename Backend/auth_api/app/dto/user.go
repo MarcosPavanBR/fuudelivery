@@ -22,6 +22,8 @@ type EstablishmentRequest struct {
 	LocationString       string  `json:"location_string"`
 
 	MaxDistanceDelivery float64 `json:"max_distance_delivery"`
+
+	ZoneID *uint `json:"zone_id,omitempty"`
 }
 
 type LoginRequest struct {

@@ -114,10 +114,16 @@ func UpdateOrderStatusByDeliverymanID(c *fiber.Ctx, sendMessageToClient func(cli
 
 	update := bson.M{"$set": bson.M{"deliveryman.status": request.Deliveryman.Status}}
 
-	_, err := collection.UpdateOne(mongoCtx(), filter, update)
+	updateResult, err := collection.UpdateOne(mongoCtx(), filter, update)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Erro ao atualizar o status do pedido",
+		})
+	}
+
+	if updateResult.ModifiedCount == 0 {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Pedido nao encontrado ou entregador nao autorizado",
 		})
 	}
 

@@ -20,6 +20,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/bson"
+	"golang.org/x/time/rate"
 
 	// Models (database initialization)
 	"github.com/carloshomar/vercardapio/auth_api/app/models"
@@ -42,6 +43,47 @@ import (
 	"github.com/carloshomar/fuudelivery/pkg/queue"
 	"github.com/carloshomar/fuudelivery/pkg/health"
 )
+
+// Rate limiter: mapa de IP -> token bucket
+var (
+	rateLimiters   = make(map[string]*rate.Limiter)
+	rateLimitersMu sync.Mutex
+)
+
+func getRateLimiter(ip string, rateLimit rate.Limit, burst int) *rate.Limiter {
+	rateLimitersMu.Lock()
+	defer rateLimitersMu.Unlock()
+	if limiter, ok := rateLimiters[ip]; ok {
+		return limiter
+	}
+	limiter := rate.NewLimiter(rateLimit, burst)
+	rateLimiters[ip] = limiter
+	return limiter
+}
+
+func rateLimitMiddleware(maxPerMinute int) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		limiter := getRateLimiter(c.IP(), rate.Limit(maxPerMinute)/60.0, maxPerMinute)
+		if !limiter.Allow() {
+			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
+				"error": "Muitas requisicoes. Tente novamente mais tarde.",
+			})
+		}
+		return c.Next()
+	}
+}
+
+// Limpeza periodica
+func startRateLimitCleanup() {
+	go func() {
+		for {
+			time.Sleep(10 * time.Minute)
+			rateLimitersMu.Lock()
+			rateLimiters = make(map[string]*rate.Limiter)
+			rateLimitersMu.Unlock()
+		}
+	}()
+}
 
 // WebSocket client management (shared across services)
 var wsClients = make(map[int64]*websocket.Conn)
@@ -302,9 +344,9 @@ func setupWebSocketRoutes(app *fiber.App) {
 }
 
 func setupAuthRoutes(app *fiber.App) {
-	app.Post("/users/register", authHandlers.CreateUser)
-	app.Post("/users/login", authHandlers.Login)
-	app.Post("/admin/bootstrap", authHandlers.BootstrapAdmin)
+	app.Post("/users/register", rateLimitMiddleware(5), authHandlers.CreateUser)
+	app.Post("/users/login", rateLimitMiddleware(10), authHandlers.Login)
+	app.Post("/admin/bootstrap", rateLimitMiddleware(3), authHandlers.BootstrapAdmin)
 	app.Get("/users", adminRequired, authHandlers.ListAllUsers)
 	app.Get("/users/:id", protectedRoute, authHandlers.GetUser)
 	app.Delete("/users/:id", protectedRoute, authHandlers.DeleteUser)
@@ -418,7 +460,7 @@ func setupPaymentRoutes(app *fiber.App) {
 	app.Post("/payments/card/charge", protectedRoute, paymentHandlers.ChargeCard)
 	app.Post("/payments/process", protectedRoute, paymentHandlers.ProcessPayment)
 	app.Post("/payments/split", protectedRoute, paymentHandlers.ProcessSplit)
-	app.Post("/payments/webhook", paymentHandlers.HandlePaymentWebhook)
+	app.Post("/payments/webhook", rateLimitMiddleware(100), paymentHandlers.HandlePaymentWebhook)
 	// Mercado Pago removed — AbacatePay is the official gateway
 	app.Get("/wallet/balance/:user_id", protectedRoute, paymentHandlers.GetBalance)
 	app.Post("/wallet/topup", protectedRoute, paymentHandlers.TopUp)
@@ -556,8 +598,9 @@ func main() {
 	setupPaymentRoutes(app)
 	setupChatRoutes(app)
 
-	// Start queue listeners in background
+	// Start queue listeners and rate limit cleanup in background
 	go startQueueListeners()
+	startRateLimitCleanup()
 
 	// Graceful shutdown
 	port := os.Getenv("PORT")

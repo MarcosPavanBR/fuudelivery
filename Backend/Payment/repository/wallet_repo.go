@@ -117,6 +117,17 @@ func CreateWalletTransaction(tx *models.WalletTransaction) error {
 	return err
 }
 
+// TransactionExistsByReference verifica se ja existe uma transacao com
+// o mesmo reference_id. Usado para idempotencia no credito de pagamento.
+func TransactionExistsByReference(referenceID string) (bool, error) {
+	ctx := MongoCtx()
+	count, err := WalletTransactions.CountDocuments(ctx, bson.M{"reference_id": referenceID})
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 // GetWalletTransactions retorna o historico de transacoes de uma carteira.
 // Ordenado por data (mais recente primeiro) com limite configuravel.
 func GetWalletTransactions(walletID primitive.ObjectID, limit int) ([]models.WalletTransaction, error) {

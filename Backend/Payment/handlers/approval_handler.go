@@ -74,28 +74,29 @@ func (ah *ApprovalHandler) GetAutoApproved(c *fiber.Ctx) error {
 }
 
 // GetRules retorna as regras de aprovacao atuais.
+// Le do MongoDB; se nao existir, retorna as regras padrao.
 // GET /api/approvals/rules
 func (ah *ApprovalHandler) GetRules(c *fiber.Ctx) error {
-	// Regras hardcoded - em producao, viriam do banco de dados
-	rules := map[string]interface{}{
-		"auto_approve_max_amount":     1000,  // Maximo para auto-aprovacao: R$1000
-		"auto_approve_max_risk":       20,    // Score maximo para auto-aprovacao
-		"manual_review_min_amount":    5000,  // Minimo para revisao manual
-		"manual_review_min_risk":      60,    // Score minimo para revisao
-		"compliance_min_risk":         80,    // Score minimo para compliance
-		"block_chargeback_active":     true,  // Bloquear se tiver chargebacks
-		"block_max_daily_withdrawals": 3,     // Maximo de saques por dia
+	rules, err := repository.GetApprovalRules()
+	if err != nil {
+		defaultRules := models.DefaultApprovalRules()
+		return c.JSON(defaultRules)
 	}
 	return c.JSON(rules)
 }
 
-// UpdateRules atualiza as regras de aprovacao.
+// UpdateRules atualiza as regras de aprovacao e persiste no MongoDB.
+// Aceita um JSON com os campos das regras e faz upsert no banco.
 // PUT /api/approvals/rules
 func (ah *ApprovalHandler) UpdateRules(c *fiber.Ctx) error {
-	var rules map[string]interface{}
+	var rules models.ApprovalRules
 	if err := c.BodyParser(&rules); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
 	}
-	// TODO: Salvar regras no banco de dados
+
+	if err := repository.SaveApprovalRules(&rules); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to save rules"})
+	}
+
 	return c.JSON(fiber.Map{"message": "Rules updated", "rules": rules})
 }

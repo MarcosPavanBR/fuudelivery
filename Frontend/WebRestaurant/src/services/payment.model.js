@@ -1,8 +1,9 @@
-import api from "./api";
+import api, { getApiBaseUrl } from "./api";
 
 const PAYMENT_API =
   process.env.REACT_APP_PAYMENT_API_URL ||
-  "https://fuudelivery-api-8y6l.onrender.com/api/v1";
+  process.env.PAYMENT_API_URL ||
+  getApiBaseUrl() + "/api/v1";
 
 // === WALLET (para o restaurante) ===
 

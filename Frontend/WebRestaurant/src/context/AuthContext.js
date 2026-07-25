@@ -32,11 +32,21 @@ export const AuthProvider = ({ children }) => {
   }, [theme]);
 
   // Só conecta WebSocket após login válido
+  const getWsBaseUrl = () => {
+    const apiUrl = api.defaults.baseURL || "https://fuudelivery-api-8y6l.onrender.com";
+    return apiUrl.replace(/^http/, "ws").replace(/\/+$/, "");
+  };
 
   const [wsUrl, setWsUrl] = useState(null);
   useEffect(() => {
     if (user?.sub) {
-      setWsUrl(api.getUri().replace('http', 'ws') + '/ws/' + user.sub + '?token=' + localStorage.getItem(Strings.token_jwt));
+      setWsUrl(
+        getWsBaseUrl() +
+          "/ws/" +
+          user.sub +
+          "?token=" +
+          localStorage.getItem(Strings.token_jwt)
+      );
     }
   }, [user]);
   const { sendJsonMessage, lastMessage } = useWebSocket(wsUrl, {
@@ -102,11 +112,13 @@ export const AuthProvider = ({ children }) => {
         password,
       });
       const token = response.data.token;
-      setUser(token);
+      const decoded = decodeToken(token);
+      setUser(decoded);
 
       localStorage.setItem(Strings.token_jwt, token);
     } catch (error) {
       console.error("Erro ao fazer login:", error);
+      throw error;
     }
   };
 

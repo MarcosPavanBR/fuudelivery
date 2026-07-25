@@ -128,6 +128,22 @@ func TransactionExistsByReference(referenceID string) (bool, error) {
 	return count > 0, nil
 }
 
+// UpdateWalletTransactionBalance atualiza os saldos de auditoria de uma transacao existente.
+// Chamado apos o $inc do saldo para registrar o balance_before e balance_after reais.
+func UpdateWalletTransactionBalance(txID primitive.ObjectID, balanceBefore, balanceAfter float64, walletID primitive.ObjectID) error {
+	ctx := MongoCtx()
+	_, err := WalletTransactions.UpdateOne(ctx,
+		bson.M{"_id": txID},
+		bson.M{"$set": bson.M{
+			"balance_before": balanceBefore,
+			"balance_after":  balanceAfter,
+			"wallet_id":      walletID,
+			"updated_at":     time.Now(),
+		}},
+	)
+	return err
+}
+
 // GetWalletTransactions retorna o historico de transacoes de uma carteira.
 // Ordenado por data (mais recente primeiro) com limite configuravel.
 func GetWalletTransactions(walletID primitive.ObjectID, limit int) ([]models.WalletTransaction, error) {

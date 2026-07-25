@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useAuth } from "../../context/AuthContext";
+import { useNavigate } from "react-router-dom";
 import Logo from "../../components/Logo";
 import {
   FiMail,
@@ -14,6 +15,7 @@ import api from "../../services/api";
 
 const SignupPage = ({ onBack }) => {
   const { login } = useAuth();
+  const navigate = useNavigate();
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -61,8 +63,8 @@ const SignupPage = ({ onBack }) => {
 
       const token = response.data.token;
       if (token) {
-        localStorage.setItem("JWT_TOKEN", token);
-        window.location.href = "/#/";
+        await login(form.email, form.password);
+        navigate("/");
       }
     } catch (err) {
       const msg =

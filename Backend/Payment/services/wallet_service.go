@@ -10,6 +10,7 @@ import (
 
 	"github.com/carloshomar/vercardapio/payment/models"
 	"github.com/carloshomar/vercardapio/payment/repository"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 // WalletService e responsavel pelas operacoes de carteira.
@@ -137,25 +138,31 @@ func (ws *WalletService) GetTransactions(userID string, limit int) ([]models.Wal
 
 // ProcessPaymentApproval processa a aprovacao de um pagamento.
 // Credit o valor liquido (valor - taxa de entrega) na carteira do restaurante.
+// Idempotente: verifica se ja existe transacao com o mesmo OrderID antes de
+// creditar duas vezes.
 // Este metodo e chamado quando um pagamento e aprovado.
 func (ws *WalletService) ProcessPaymentApproval(payment *models.Payment) error {
-	// So processa pagamentos aprovados
 	if payment.Status != models.PaymentApproved {
 		return nil
 	}
 
-	// Calcula o valor liquido (descontando taxa de entrega)
+	exists, err := repository.TransactionExistsByReference(payment.OrderID)
+	if err != nil {
+		return fmt.Errorf("erro ao verificar idempotencia: %w", err)
+	}
+	if exists {
+		return nil
+	}
+
 	establishmentID := payment.EstablishmentID
 	amount := payment.Amount - payment.DeliveryAmount
 
-	// Credit na carteira do restaurante
 	if err := ws.CreditWallet(establishmentID, amount, "Payment received for order "+payment.OrderID, payment.OrderID); err != nil {
 		return err
 	}
 
-	// Registra quando o credito foi feito
 	now := time.Now()
-	return repository.UpdatePaymentStatus(payment.ID, models.PaymentApproved, map[string]interface{}{
+	return repository.UpdatePaymentStatus(payment.ID, models.PaymentApproved, bson.M{
 		"wallet_credited_at": now,
 	})
 }

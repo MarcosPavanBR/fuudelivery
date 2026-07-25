@@ -1,5 +1,5 @@
 import React from "react";
-import { DragDropContext } from "react-beautiful-dnd";
+import { DragDropContext } from "@hello-pangea/dnd";
 import Column from "./Column";
 
 const Board = ({ columns, tasks, onDragEnd }) => {

@@ -30,15 +30,6 @@ import (
 	"github.com/carloshomar/vercardapio/payment/repository"
 )
 
-// main inicializa o servico Payment.
-// Ordem de inicializacao:
-// 1. Carrega configuracoes do .env
-// 2. Conecta ao MongoDB
-// 3. Configura o servidor HTTP com Fiber
-// 4. Registra todas as rotas da API
-// 5. Inicia o consumer RabbitMQ em goroutine
-// 6. Configura graceful shutdown
-// 7. Inicia o servidor HTTP
 // bootstrapAdminUser cria o usuario admin no banco se nao existir.
 // NUNCA reseta a senha em reinicios — isso so acontece na criacao inicial.
 func bootstrapAdminUser() {
@@ -48,7 +39,6 @@ func bootstrapAdminUser() {
 		return
 	}
 
-	// Usuario nao existe: cria com senha do ambiente ou default
 	password := os.Getenv("ADMIN_PASSWORD")
 	if password == "" {
 		password = "changeme"
@@ -85,7 +75,7 @@ func main() {
 	})
 
 	// 4. Configura middleware global
-	app.Use(logger.New()) // Log de cada requisicao no console
+	app.Use(logger.New())
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: "https://fuudelivery-web.onrender.com,https://fuudelivery-admin-lv7f.onrender.com,https://fuudelivery-payment-panel.onrender.com",
 		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
@@ -93,12 +83,11 @@ func main() {
 	}))
 
 	// 5. Rota de health check para monitoramento
-	// Usado pelo Render para verificar se o servico esta saudavel
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok", "service": "payment"})
 	})
 
-	// 6. Inicializa handlers (cada um responsavel por um dominio)
+	// 6. Inicializa handlers
 	ph := handlers.NewPaymentHandler()     // Pagamentos
 	ch := handlers.NewChargebackHandler()  // Estornos
 	wh := handlers.NewWalletHandler()      // Carteiras
@@ -106,7 +95,7 @@ func main() {
 	ah := handlers.NewApprovalHandler()    // Aprovacoes
 	rh := handlers.NewReportHandler()      // Relatorios
 
-	// 7. Configura grupo de rotas da API com autenticacao JWT
+	// 7. Configura grupo de rotas da API
 	api := app.Group("/api")
 
 	// === Rotas de Autenticacao (publicas) ===
@@ -138,20 +127,25 @@ func main() {
 	chargebacks.Post("/:id/evidence", ch.AddEvidence)
 	chargebacks.Get("/:id/evidence", ch.GetEvidences)
 
-	wallets := api.Group("/wallets", middleware.AuthRequired(), middleware.WalletRateLimit())
+	wallets := api.Group("/wallets", middleware.AuthRequired())
 	wallets.Get("/:user_id", wh.GetBalance)
 	wallets.Get("/:user_id/transactions", wh.GetTransactions)
 	wallets.Post("/:user_id/credit", wh.Credit)
 	wallets.Post("/:user_id/debit", wh.Debit)
+	wallets.Post("/:user_id/withdraw", wh.Withdraw)
 	wallets.Get("/:user_id/get-or-create", wh.GetOrCreate)
 
 	// === Rotas de Relatorios ===
 	reports := api.Group("/reports", middleware.AuthRequired())
 	reports.Get("/establishment/:id", rh.GetEstablishmentReport)
 
+	// === Rotas de Usuarios (somente admin) ===
+	users := api.Group("/users", middleware.AuthRequired(), middleware.AdminRequired())
+	users.Get("/", uh.ListUsers)
+	users.Get("/:id", uh.GetUser)
+	users.Post("/", uh.CreateUser)
+
 	// 8. Inicia consumer RabbitMQ em goroutine separada
-	// O consumer escuta a fila de pagamentos e credit automaticamente
-	// na carteira quando um pagamento e aprovado
 	go func() {
 		consumer, err := consumers.NewPaymentConsumer()
 		if err != nil {
@@ -165,18 +159,15 @@ func main() {
 	}()
 
 	// 9. Configura graceful shutdown
-	// Captura sinais SIGINT (Ctrl+C) e SIGTERM (kill do Docker)
-	// para encerrar o servico graciosamente
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-c
 		log.Println("Shutting down...")
-		app.Shutdown() // Aguarda requisicoes em andamento finalizarem
+		app.Shutdown()
 	}()
 
 	// 10. Inicia servidor HTTP na porta configurada
-	// Porta padrao: 8084 (configuravel via variavel PORT)
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8084"

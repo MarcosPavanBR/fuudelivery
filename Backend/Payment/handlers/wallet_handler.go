@@ -110,3 +110,35 @@ func (wh *WalletHandler) GetOrCreate(c *fiber.Ctx) error {
 
 	return c.JSON(wallet)
 }
+
+// Withdraw solicita um saque Pix da carteira.
+// POST /api/wallets/:user_id/withdraw
+func (wh *WalletHandler) Withdraw(c *fiber.Ctx) error {
+	userID := c.Params("user_id")
+
+	var body struct {
+		Amount     float64 `json:"amount"`
+		PixKey     string  `json:"pix_key"`
+		PixKeyType string  `json:"pix_key_type"`
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
+	}
+
+	if body.Amount <= 0 {
+		return c.Status(400).JSON(fiber.Map{"error": "Amount must be positive"})
+	}
+	if body.PixKey == "" {
+		return c.Status(400).JSON(fiber.Map{"error": "Pix key is required"})
+	}
+
+	payout, err := wh.Service.RequestPixWithdrawal(userID, body.Amount, body.PixKey, body.PixKeyType)
+	if err != nil {
+		return c.Status(422).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "Saque solicitado com sucesso. O Pix sera enviado em instantes.",
+		"payout":  payout,
+	})
+}

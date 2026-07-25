@@ -17,7 +17,7 @@ function Taxes() {
   });
 
   const start = async () => {
-    const resp = await deliveryModel.getDeilvery(estId);
+    const resp = await deliveryModel.getDelivery(estId);
     setBody({
       establishmentId: estId,
       fixedTaxa: resp?.FixedTaxa ?? 0,
@@ -31,7 +31,7 @@ function Taxes() {
 
   const save = async (e) => {
     e.preventDefault();
-    const resp = await deliveryModel.saveDeilvery(body);
+    const resp = await deliveryModel.saveDelivery(body);
     if (resp) toast.success(Texts.delivery_update);
     else toast.error(Texts.delivery_error);
   };

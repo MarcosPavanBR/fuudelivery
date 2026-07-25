@@ -142,3 +142,58 @@ func (gs *GatewayService) GetPixStatus(id string) (*GetPixStatusResponse, error)
 
 	return &statusResp, nil
 }
+
+// SendPixTransferRequest representa os dados para enviar um Pix para terceiro.
+type SendPixTransferRequest struct {
+	Amount  float64 `json:"amount"`   // Valor em R$
+	PixKey  string  `json:"pix_key"`  // Chave Pix do recebedor
+	PixType string  `json:"pix_type"` // Tipo: CPF, CNPJ, EMAIL, PHONE, EVP
+	Name    string  `json:"name"`     // Nome do recebedor
+}
+
+// SendPixTransferResponse representa a resposta apos enviar um Pix.
+type SendPixTransferResponse struct {
+	ID        string `json:"id"`         // ID da transferencia no AbacatePay
+	Status    string `json:"status"`     // Status: completed, pending, failed
+	CreatedAt string `json:"created_at"` // Data de criacao
+}
+
+// SendPixTransfer envia um Pix para a chave de um terceiro via API do AbacatePay.
+// Usado para realizar pagamentos a restaurantes e entregadores.
+// Endpoint: POST /pix/create
+func (gs *GatewayService) SendPixTransfer(req *SendPixTransferRequest) (*SendPixTransferResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequest("POST", gs.APIURL+"/pix/create", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+gs.APIKey)
+
+	resp, err := gs.HTTPClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(respBody))
+	}
+
+	var transferResp SendPixTransferResponse
+	if err := json.Unmarshal(respBody, &transferResp); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return &transferResp, nil
+}

@@ -1,4 +1,8 @@
 services:
+  # ============================================================
+  # MONOLITH — API Gateway (Go + Fiber)
+  # Unifica auth_api, orders_api, delivery_api, chat_api, payment_api
+  # ============================================================
   - type: web
     name: fuudelivery-api
     env: go
@@ -16,16 +20,33 @@ services:
           type: redis
           name: fuudelivery-redis
           property: connectionString
+      - key: DB_CONNECTION_STRING
+        sync: false
       - key: SUPABASE_DATABASE_URL
         sync: false
       - key: SUPABASE_DATABASE_URL_DIRECT
         sync: false
       - key: MONGODB_ATLAS_URI
         sync: false
+      - key: MONGO_URI
+        sync: false
+      - key: MONGO_DATABASE
+        value: "fuudelivery"
+      - key: RABBIT_CONNECTION
+        sync: false
+      - key: RABBIT_ORDER_QUEUE
+        value: "RABBIT_ORDER_QUEUE"
+      - key: RABBIT_DELIVERY_QUEUE
+        value: "MS_DELIVERY_QUEUE"
+      - key: RABBIT_PAYMENT_QUEUE
+        value: "MS_PAYMENT_QUEUE"
       - key: ABACATE_PAY_API_KEY
         sync: false
     healthCheckPath: /health
 
+  # ============================================================
+  # WEB — Frontend do Restaurante (React)
+  # ============================================================
   - type: web
     name: fuudelivery-web
     env: static
@@ -39,6 +60,9 @@ services:
       - key: REACT_APP_API_URL
         value: https://fuudelivery-api-8y6l.onrender.com
 
+  # ============================================================
+  # ADMIN — Painel Administrativo (React)
+  # ============================================================
   - type: web
     name: fuudelivery-admin
     env: static
@@ -52,16 +76,22 @@ services:
       - key: REACT_APP_API_URL
         value: https://fuudelivery-api-8y6l.onrender.com
 
+  # ============================================================
+  # REDIS — Cache + GEO para motor de despacho
+  # ============================================================
   - type: redis
     name: fuudelivery-redis
     plan: free
     maxmemoryPolicy: allkeys-lru
 
+  # ============================================================
+  # PAYMENT SERVICE — Microserviço isolado de pagamentos
+  # ============================================================
   - type: web
     name: fuudelivery-payment
     env: go
-    buildCommand: cd Backend/Payment && go build -o ../../server .
-    startCommand: ./server
+    buildCommand: cd Backend/Payment && go build -o ../../payment-server .
+    startCommand: ./payment-server
     envVars:
       - key: PORT
         value: "8084"
@@ -79,6 +109,9 @@ services:
         sync: false
     healthCheckPath: /health
 
+  # ============================================================
+  # PAYMENT PANEL — Frontend do Payment Service (React)
+  # ============================================================
   - type: web
     name: fuudelivery-payment-panel
     env: static

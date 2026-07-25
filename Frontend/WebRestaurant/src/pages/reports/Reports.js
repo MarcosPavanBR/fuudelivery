@@ -41,26 +41,13 @@ const Reports = () => {
       setStats(data);
     } catch (err) {
       console.error("Failed to load reports:", err);
-      // Dados mockados para demonstração
       setStats({
-        totalRevenue: 12450.80,
-        totalOrders: 187,
-        avgTicket: 66.58,
-        deliveryRevenue: 2340.00,
-        ordersByStatus: {
-          delivered: 165,
-          cancelled: 15,
-          pending: 7,
-        },
-        revenueByDay: [
-          { date: "01/07", revenue: 420.5 },
-          { date: "02/07", revenue: 380.2 },
-          { date: "03/07", revenue: 510.8 },
-          { date: "04/07", revenue: 290.0 },
-          { date: "05/07", revenue: 620.3 },
-          { date: "06/07", revenue: 580.1 },
-          { date: "07/07", revenue: 450.9 },
-        ],
+        totalRevenue: 0,
+        totalOrders: 0,
+        avgTicket: 0,
+        deliveryRevenue: 0,
+        ordersByStatus: {},
+        revenueByDay: [],
       });
     } finally {
       setLoading(false);

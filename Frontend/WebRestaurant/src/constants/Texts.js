@@ -22,7 +22,7 @@ export default {
   adicionar_no_produto: "Adicionar no Produto",
   adicionado_no_produto: "Alteração realizada com sucesso",
   restaurant_error:
-    "Ouve um problema ao atualizar o estabelecimento, tente novamente.",
+    "Houve um problema ao atualizar o estabelecimento, tente novamente.",
   itens_carrinho: "Itens no Carrinho",
   delivery_conf: "Configurações de Delivery",
   ocultar_itens: "Ocultar Itens",
@@ -37,7 +37,7 @@ export default {
   restaurant_update:
     "Os dados do estabelecimento foram atualizados com sucesso.",
   removido_produto: "Produto removido com sucesso!",
-  falha_remover_produto: "Ouve um erro ao remover o produto, tente novamente.",
+  falha_remover_produto: "Houve um erro ao remover o produto, tente novamente.",
   imagem: "Imagem",
   establishment_open: "Seu estabelecimento foi aberto!",
   gestor_cardapio: "Gestor de Cardápio",
@@ -46,13 +46,13 @@ export default {
   text_login: "Faça login na sua conta",
   delivery_update: "O valor do seu delivery foi atualizado com sucesso!",
   delivery_error:
-    "Ouve um erro ao atualizar o valor do seu delivery, verifique os campos e tente novamente.",
+    "Houve um erro ao atualizar o valor do seu delivery, verifique os campos e tente novamente.",
   categorias: "Categorias",
   password: "Senha",
   esqueceu_senha: "Esqueceu sua senha?",
   entrar: "Entrar",
   additional: "Adicionais",
-  alteracao_aplicada: "Atualização aplicada.",
+  alteracao_aplicada: "Alteracao realizada com sucesso.",
   cardapio_desc:
     " Faça as configurações do seu cardápio, suportando também adicionais e categorias.",
   taxes_desc:

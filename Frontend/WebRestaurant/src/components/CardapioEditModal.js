@@ -1,15 +1,23 @@
 import React, { useEffect, useState } from "react";
 import Modal from "react-modal";
-import MenuLayout from "./Menu";
 import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
-import Strings from "../constants/Strings";
 import { toast } from "react-toastify";
 import Texts from "../constants/Texts";
 import helper from "../helpers/helper";
 import ModalAddItens from "./ModalAddItens";
 import productsModel from "../services/products.model";
 import { FiX, FiSave, FiTrash2 } from "react-icons/fi";
+
+const getInitialFormData = (item) => ({
+  ID: item?.ID || "",
+  Name: item?.Name || "",
+  Description: item?.Description || "",
+  Price: item?.Price || 0,
+  Image: item?.Image || "",
+  Categories: item?.Categories ?? [],
+  Additional: item?.Additional ?? [],
+});
 
 const CardapioEditModal = ({
   isOpen,
@@ -18,27 +26,27 @@ const CardapioEditModal = ({
   onSave,
   onRefreshItens,
 }) => {
-  const [formData, setFormData] = useState(Strings.initial_order(item));
   const { getUser } = useAuth();
+  const [formData, setFormData] = useState(getInitialFormData(item));
   const [isOpenModal, setIsOpenModal] = useState(false);
   const [isCategory, setIsCategory] = useState(false);
 
   useEffect(() => {
     if (item) {
-      setFormData(Strings.initial_order(item));
+      setFormData(getInitialFormData(item));
     }
   }, [item]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleChangeMoney = (e) => {
     const { name, value } = e.target;
     const moneyPattern = /^\d+(\.\d{0,2})?$/;
     if (moneyPattern.test(value) || value === "") {
-      setFormData({ ...formData, [name]: value });
+      setFormData((prev) => ({ ...prev, [name]: value }));
     }
   };
 
@@ -91,11 +99,9 @@ const CardapioEditModal = ({
       overlayClassName="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
       style={{ content: { outline: "none" } }}
     >
-      <div
-        className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-modal animate-slide-up"
-      >
+      <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-modal animate-slide-up flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
           <h2 className="text-lg font-bold text-gray-900">
             {item?.ID ? Texts.editar_itens : Texts.novo_produto}
           </h2>
@@ -108,7 +114,11 @@ const CardapioEditModal = ({
         </div>
 
         {/* Body */}
-        <form onSubmit={handleSubmit} className="overflow-y-auto max-h-[70vh] p-6">
+        <form
+          id="product-form"
+          onSubmit={handleSubmit}
+          className="overflow-y-auto flex-1 p-6"
+        >
           <div className="flex gap-6 mb-6">
             {formData.Image && (
               <div className="flex-shrink-0">
@@ -197,7 +207,7 @@ const CardapioEditModal = ({
               onChange={handleChange}
               rows={3}
               className="block w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white resize-none"
-              placeholder="Descrição do produto..."
+              placeholder="Descricao do produto..."
             />
           </div>
 
@@ -267,7 +277,7 @@ const CardapioEditModal = ({
         </form>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50/50">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex-shrink-0">
           <button
             type="button"
             onClick={() => deleteProduct()}
@@ -287,7 +297,7 @@ const CardapioEditModal = ({
             </button>
             <button
               type="submit"
-              onClick={handleSubmit}
+              form="product-form"
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-white transition-all duration-200 hover:shadow-lg"
               style={{
                 background: "linear-gradient(135deg, #EA1D2C, #C41420)",

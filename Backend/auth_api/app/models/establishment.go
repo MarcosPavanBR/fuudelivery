@@ -18,4 +18,9 @@ type Establishment struct {
 	OpenData *string `json:"open_data,omitempty"`
 
 	PaymentWalletID string `json:"payment_wallet_id,omitempty" gorm:"size:100"`
+
+	// ZoneID vincula o estabelecimento a uma praça/regiao
+	// que define as regras de split de pagamento (percentuais
+	// plataforma x estabelecimento). Se nil, usa 5/85 padrao.
+	ZoneID *uint `gorm:"default:null" json:"zone_id,omitempty"`
 }

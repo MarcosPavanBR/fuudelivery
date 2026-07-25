@@ -2,6 +2,7 @@ package models
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"time"
@@ -49,6 +50,54 @@ func ConnectDatabase() {
 	database.AutoMigrate(&Establishment{})
 	database.AutoMigrate(&DeliveryMan{})
 	database.AutoMigrate(&BusinessHours{})
+	database.AutoMigrate(&Zone{})
+	database.AutoMigrate(&Subscription{})
+	database.AutoMigrate(&SponsoredListing{})
+
+	// Atualiza DeliveryMan com campos do motor de despacho se nao existirem
+	// (GORM AutoMigrate adiciona colunas novas, mas nao remove)
+	if database.Migrator().HasColumn(&DeliveryMan{}, "zone_id") {
+		log.Println("[COURIER] DeliveryMan ja possui campos de zona — migration OK")
+	}
+
+	// Cria zona padrao se nao existir (5/85)
+	var count int64
+	database.Model(&Zone{}).Count(&count)
+	if count == 0 {
+		defaultZone := Zone{
+			Name:                    "Padrão",
+			PlatformFeePercentage:   5.0,
+			EstablishmentPercentage: 85.0,
+			IsActive:                true,
+			CitySize:                "medium",
+			MinRadiusKm:             2.0,
+			RadiusKm:                5.0,
+			MaxRadiusKm:             15.0,
+			PeakHourStart:           "11:00",
+			PeakHourEnd:             "14:00",
+			PeakRadiusMultiplier:    0.7,
+			MinDeliveryFee:          5.0,
+			SurgeMultiplier:         1.0,
+			MinCouriersThreshold:    3,
+			MatchAlgorithm:          "proximity",
+			AllowBatching:           true,
+
+			// Decaimento de split
+			SplitInitialPlatformPct:       3.0,
+			SplitInitialEstablishmentPct:  87.0,
+			SplitTargetPlatformPct:        12.0,
+			SplitTargetEstablishmentPct:   78.0,
+			SplitStepMonths:               3,
+			SplitStepPlatformPct:          1.5,
+			SplitStepEstablishmentPct:     -1.5,
+			SplitMinMonthlyOrders:         50,
+			SplitMinActiveCouriers:        3,
+			SplitCurrentPlatformPct:       3.0,
+			SplitCurrentEstablishmentPct:  87.0,
+		}
+		database.Create(&defaultZone)
+		log.Println("[ZONE] Zona padrao criada: 5%% plataforma / 85%% estabelecimento, raio 5km")
+	}
 
 	DB = database
 }

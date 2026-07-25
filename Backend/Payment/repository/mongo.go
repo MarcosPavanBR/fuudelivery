@@ -25,6 +25,8 @@ var (
 	WalletTransactions  *mongo.Collection     // Colecao de transacoes das carteiras
 	Evidences           *mongo.Collection     // Colecao de evidencias
 	Users               *mongo.Collection     // Colecao de usuarios
+	ProcessedOrders     *mongo.Collection     // Trava de idempotencia: 1 doc por order_id ja processado
+	Payouts             *mongo.Collection     // Solicitacoes de saque Pix
 )
 
 // Connect estabelece a conexao com o MongoDB, inicializa as colecoes
@@ -59,6 +61,8 @@ func Connect() {
 	WalletTransactions = Database.Collection("wallet_transactions")
 	Evidences = Database.Collection("evidences")
 	Users = Database.Collection("users")
+	ProcessedOrders = Database.Collection("processed_orders")
+	Payouts = Database.Collection("payouts")
 
 	// Cria indices para otimizar consultas
 	createIndexes()
@@ -97,8 +101,13 @@ func createIndexes() {
 	})
 
 	// Indices da colecao wallet_transactions
+	// reference_id e UNICO para garantir idempotencia no credito:
+	// duas chamadas concorrentes com o mesmo reference_id nunca passam juntas.
+	// Sem esse indice, o padrao check-then-act em ProcessPaymentApproval teria
+	// race condition que permite creditar duas vezes o mesmo pagamento.
 	WalletTransactions.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{Keys: []string{"wallet_id"}},
+		{Keys: []string{"reference_id"}, Options: options.Index().SetUnique(true).SetSparse(true)},
 		{Keys: []string{"created_at"}},
 	})
 

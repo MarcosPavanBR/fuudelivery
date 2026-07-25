@@ -80,11 +80,22 @@ func (uh *UserHandler) CreateUser(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Senha deve ter pelo menos 6 caracteres"})
 	}
 
+	// Valida role contra valores permitidos
+	validRoles := map[models.UserRole]bool{
+		models.RoleAdmin:    true,
+		models.RoleOperator: true,
+		models.RoleViewer:   true,
+	}
+	role := models.UserRole(user.Role)
+	if !validRoles[role] {
+		return c.Status(400).JSON(fiber.Map{"error": "Role invalida. Use: admin, operator ou viewer"})
+	}
+
 	u := &models.User{
 		Email:    user.Email,
 		Name:     user.Name,
 		Password: user.Password, // Hash via bcrypt no repository.CreateUser
-		Role:     models.UserRole(user.Role),
+		Role:     role,
 	}
 
 	if err := uh.Service.CreateUser(u); err != nil {

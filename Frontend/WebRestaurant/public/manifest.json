@@ -1,6 +1,6 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "FuuDelivery",
+  "name": "FuuDelivery - Painel do Restaurante",
   "icons": [
     {
       "src": "favicon.ico",
@@ -20,6 +20,8 @@
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
+  "theme_color": "#EA1D2C",
+  "background_color": "#FFFFFF",
+  "orientation": "portrait-primary",
+  "description": "Painel do restaurante para gerenciar pedidos, cardápio e finanças"
 }

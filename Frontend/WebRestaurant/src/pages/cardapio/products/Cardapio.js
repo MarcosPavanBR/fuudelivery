@@ -3,11 +3,11 @@ import MenuLayout from "../../../components/Menu";
 import CardapioList from "../../../components/CardapioList";
 import SearchInput from "../../../components/SearchInput";
 import AddButton from "../../../components/AddButton";
-import { useAuth } from "../../../context/AuthContext";
 import Strings from "../../../constants/Strings";
 import Texts from "../../../constants/Texts";
 import productsModel from "../../../services/products.model";
-import { FiLoader } from "react-icons/fi";
+import { useAuth } from "../../../context/AuthContext";
+import { FiLoader, FiPlus } from "react-icons/fi";
 
 const Cardapio = () => {
   const { getUser } = useAuth();

@@ -40,7 +40,12 @@ func LoginDeliveryMan(c *fiber.Ctx) error {
 }
 
 func CreateDeliveryMan(c *fiber.Ctx) error {
-	var request dto.CreateDeliveryManRequest
+	var request struct {
+		dto.CreateDeliveryManRequest
+		ZoneID    *uint   `json:"zone_id,omitempty"`
+		Status    string  `json:"status"`
+		MaxOrders int     `json:"max_orders"`
+	}
 	if err := c.BodyParser(&request); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to parse request body"})
 	}
@@ -56,10 +61,20 @@ func CreateDeliveryMan(c *fiber.Ctx) error {
 	}
 
 	user := models.DeliveryMan{
-		Name:     request.Name,
-		Email:    request.Email,
-		Phone:    request.Phone,
-		Password: string(hashedPassword),
+		Name:      request.Name,
+		Email:     request.Email,
+		Phone:     request.Phone,
+		Password:  string(hashedPassword),
+		ZoneID:    request.ZoneID,
+		Status:    "offline",
+		MaxOrders: 3,
+	}
+
+	if request.Status != "" {
+		user.Status = request.Status
+	}
+	if request.MaxOrders > 0 {
+		user.MaxOrders = request.MaxOrders
 	}
 
 	if err := models.DB.Create(&user).Error; err != nil {

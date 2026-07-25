@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import MenuLayout from "../../components/Menu";
 import { useAuth } from "../../context/AuthContext";
 import api from "../../services/api";
-import { FiLoader, FiSave, FiUser, FiMapPin, FiPalette, FiLock } from "react-icons/fi";
+import { FiLoader, FiSave, FiUser, FiMapPin, FiGrid, FiLock } from "react-icons/fi";
 import { toast } from "react-toastify";
 import Texts from "../../constants/Texts";
 import restaurantModel from "../../services/restaurant.model";
@@ -89,7 +89,7 @@ function Perfil() {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-card p-6">
           <div className="flex items-center gap-3 mb-5">
             <div className="p-2.5 rounded-xl bg-red-50">
-              <FiPalette className="h-5 w-5" style={{ color: "#EA1D2C" }} />
+              <FiGrid className="h-5 w-5" style={{ color: "#EA1D2C" }} />
             </div>
             <h3 className="text-lg font-bold text-gray-900">Estabelecimento</h3>
           </div>

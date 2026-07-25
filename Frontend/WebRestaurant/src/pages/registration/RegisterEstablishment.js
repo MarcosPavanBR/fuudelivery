@@ -11,7 +11,7 @@ import {
   FiClock,
   FiSave,
   FiLoader,
-  FiStore,
+  FiHome,
 } from "react-icons/fi";
 import api from "../../services/api";
 
@@ -116,7 +116,7 @@ const RegisterEstablishment = () => {
           <div className="bg-white rounded-2xl border border-gray-100 shadow-card p-6">
             <div className="flex items-center gap-2 mb-4">
               <div className="p-2.5 rounded-xl bg-red-50">
-                <FiStore className="h-5 w-5" style={{ color: "#EA1D2C" }} />
+                <FiHome className="h-5 w-5" style={{ color: "#EA1D2C" }} />
               </div>
               <h2 className="text-sm font-semibold text-gray-900">Dados do Restaurante</h2>
             </div>

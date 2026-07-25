@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/carloshomar/vercardapio/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
@@ -11,6 +12,8 @@ func CalculateDeliveryValue(c *fiber.Ctx) error {
 	var request struct {
 		Distance        float32 `json:"distance"`
 		EstablishmentID int64   `json:"establishmentId"`
+		UserID          *uint   `json:"user_id,omitempty"` // opcional: para verificar frete gratis da assinatura
+		OrderTotal      float64 `json:"order_total,omitempty"` // valor total do pedido para frete gratis
 	}
 
 	if err := c.BodyParser(&request); err != nil {
@@ -31,11 +34,65 @@ func CalculateDeliveryValue(c *fiber.Ctx) error {
 		})
 	}
 
-	// Calcular o valor da entrega
-	deliveryValue := (request.Distance * delivery.PerKm) + delivery.FixedTaxa
+	// Calcular o valor base da entrega
+	baseDeliveryValue := (request.Distance * delivery.PerKm) + delivery.FixedTaxa
+	deliveryValue := float64(baseDeliveryValue)
+	subscriptionDiscount := false
+
+	// Verifica se o usuario tem assinatura ativa que concede frete gratis
+	if request.UserID != nil && *request.UserID > 0 {
+		// Busca assinatura ativa do usuario na tabela subscriptions (auth_api)
+		// Usamos o mesmo DB (compartilhado via GORM) porque subscriptions
+		// esta no mesmo banco PostgreSQL que orders_api
+		type SubscriptionCheck struct {
+			Plan               string
+			Status             string
+			FreeDeliveryAbove  float64
+			CurrentPeriodStart string
+			CurrentPeriodEnd   string
+		}
+		var sub SubscriptionCheck
+		// Tenta buscar a subscription no banco compartilhado
+		if err := models.DB.Table("subscriptions").
+			Where("user_id = ? AND status = 'active'", *request.UserID).
+			Select("plan, status, free_delivery_above, current_period_start::text as current_period_start, current_period_end::text as current_period_end").
+			Scan(&sub).Error; err == nil && sub.Status == "active" {
+
+			now := time.Now()
+			// Verifica periodo vigente
+			startTime, _ := time.Parse("2006-01-02T15:04:05Z", sub.CurrentPeriodStart)
+			endTime, _ := time.Parse("2006-01-02T15:04:05Z", sub.CurrentPeriodEnd)
+			// Tenta parse sem timezone
+			if startTime.IsZero() {
+				startTime, _ = time.Parse("2006-01-02 15:04:05", sub.CurrentPeriodStart)
+			}
+			if endTime.IsZero() {
+				endTime, _ = time.Parse("2006-01-02 15:04:05", sub.CurrentPeriodEnd)
+			}
+			// Se falhou parse, assume que esta valido
+			periodValid := startTime.IsZero() || (now.After(startTime) && now.Before(endTime))
+
+			if periodValid {
+				switch sub.Plan {
+				case "premium":
+					// Premium: frete gratis sempre
+					deliveryValue = 0
+					subscriptionDiscount = true
+				case "basic":
+					// Basic: frete gratis acima do valor minimo
+					if sub.FreeDeliveryAbove > 0 && request.OrderTotal >= sub.FreeDeliveryAbove {
+						deliveryValue = 0
+						subscriptionDiscount = true
+					}
+				}
+			}
+		}
+	}
 
 	return c.JSON(fiber.Map{
-		"deliveryValue": deliveryValue,
+		"deliveryValue":        deliveryValue,
+		"baseDeliveryValue":    float64(baseDeliveryValue),
+		"subscriptionDiscount": subscriptionDiscount,
 	})
 }
 

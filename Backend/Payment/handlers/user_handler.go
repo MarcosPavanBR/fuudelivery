@@ -4,6 +4,7 @@ package handlers
 
 import (
 	"github.com/gofiber/fiber/v2"
+	"github.com/carloshomar/vercardapio/payment/models"
 	"github.com/carloshomar/vercardapio/payment/services"
 )
 
@@ -72,6 +73,23 @@ func (uh *UserHandler) CreateUser(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
-	// TODO: Implementar criacao real com hash de senha
-	return c.JSON(fiber.Map{"message": "User created"})
+	if user.Email == "" || user.Password == "" {
+		return c.Status(400).JSON(fiber.Map{"error": "Email e senha obrigatorios"})
+	}
+	if len(user.Password) < 6 {
+		return c.Status(400).JSON(fiber.Map{"error": "Senha deve ter pelo menos 6 caracteres"})
+	}
+
+	u := &models.User{
+		Email:    user.Email,
+		Name:     user.Name,
+		Password: user.Password, // Hash via bcrypt no repository.CreateUser
+		Role:     models.UserRole(user.Role),
+	}
+
+	if err := uh.Service.CreateUser(u); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to create user"})
+	}
+
+	return c.Status(201).JSON(fiber.Map{"message": "User created", "user": u})
 }

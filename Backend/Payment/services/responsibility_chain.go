@@ -7,6 +7,8 @@
 package services
 
 import (
+	"log"
+
 	"github.com/carloshomar/vercardapio/payment/models"
 )
 
@@ -111,9 +113,13 @@ type NotificationHandler struct {
 	BaseHandler
 }
 
-// Handle passa para o proximo handler (placeholder para notificacoes).
+// Handle registra a decisao final do pagamento para auditoria.
+// Notificacoes assincronas (email, push) devem ser delegadas a
+// um worker dedicado — este handler apenas confirma o resultado
+// da cadeia e registra no log.
 func (nh *NotificationHandler) Handle(payment *models.Payment) error {
-	// TODO: Implementar notificacoes (email, push, etc)
+	log.Printf("[NOTIFICATION] Payment %s finalized: status=%s risk=%s score=%.0f",
+		payment.OrderID, payment.Status, payment.RiskLevel, payment.RiskScore)
 	return nh.passToNext(payment)
 }
 

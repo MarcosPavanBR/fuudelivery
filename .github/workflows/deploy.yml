@@ -6,14 +6,22 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
+  deploy-all:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - name: api
+            hook_secret: RENDER_DEPLOY_HOOK_API
+          - name: web
+            hook_secret: RENDER_DEPLOY_HOOK_WEB
+          - name: admin
+            hook_secret: RENDER_DEPLOY_HOOK_ADMIN
+          - name: payment
+            hook_secret: RENDER_DEPLOY_HOOK_PAYMENT
+          - name: payment-panel
+            hook_secret: RENDER_DEPLOY_HOOK_PAYMENT_PANEL
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Deploy to Render via API
+      - name: Deploy ${{ matrix.service.name }} to Render
         run: |
-          curl -X POST \
-            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
-            -H "Content-Type: application/json" \
-            "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys"
+          curl -X POST "${{ secrets[matrix.service.hook_secret] }}"

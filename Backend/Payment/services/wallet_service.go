@@ -272,7 +272,7 @@ func (ws *WalletService) RequestPixWithdrawal(userID string, amount float64, pix
 		// Falhou ao salvar o registro, mas o dinheiro ja foi debitado.
 		// Loga warning e tenta estornar.
 		log.Printf("CRITICAL: saque realizado mas registro falhou - user=%s amount=%.2f err=%v", userID, amount, err)
-		if refErr := repository.IncrementWalletBalance(userID, amount); refErr != nil {
+		if _, refErr := repository.IncrementWalletBalance(userID, amount); refErr != nil {
 			log.Printf("CRITICAL: estorno tambem falhou - user=%s amount=%.2f err=%v", userID, amount, refErr)
 		}
 		return nil, fmt.Errorf("erro ao registrar solicitacao de saque: %w", err)

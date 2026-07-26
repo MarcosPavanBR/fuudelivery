@@ -227,6 +227,15 @@ func DeleteEstablishment(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "Establishment deleted successfully"})
 }
 
+// EstablishmentWithSponsor carrega metadados de patrocinio para um estabelecimento.
+type EstablishmentWithSponsor struct {
+	models.Establishment
+	IsSponsored    bool   `json:"is_sponsored"`
+	SponsorPlan    string `json:"sponsor_plan,omitempty"`
+	SponsorPriority int   `json:"sponsor_priority,omitempty"`
+	HasBanner      bool   `json:"has_banner,omitempty"`
+}
+
 // ListEstablishmentsRanked retorna estabelecimentos abertos ordenados com patrocinados no topo.
 // GET /establishments/ranked?zone_id=1
 //
@@ -259,15 +268,6 @@ func ListEstablishmentsRanked(c *fiber.Ctx) error {
 
 	// Aplica ranking: patrocinados no topo
 	ranked := models.RankListings(uint(zoneID), establishments)
-
-	// Monta resposta incluindo metadados de patrocínio pra cada estabelecimento
-	type EstablishmentWithSponsor struct {
-		models.Establishment
-		IsSponsored    bool   `json:"is_sponsored"`
-		SponsorPlan    string `json:"sponsor_plan,omitempty"`
-		SponsorPriority int   `json:"sponsor_priority,omitempty"`
-		HasBanner      bool   `json:"has_banner,omitempty"`
-	}
 
 	result := make([]EstablishmentWithSponsor, 0, len(ranked))
 	for _, est := range ranked {

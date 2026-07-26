@@ -5,7 +5,7 @@
 # ============================================================
 
 # ---- Stage 1: Build ----
-FROM golang:1.23-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 RUN apk --no-cache add ca-certificates tzdata git
 
@@ -42,7 +42,7 @@ RUN cd cmd/fuudelivery && CGO_ENABLED=0 GOOS=linux go build \
     -o /app/server .
 
 # ---- Stage 2: Runtime ----
-FROM alpine:3.19
+FROM alpine:3.21
 
 RUN apk --no-cache add ca-certificates tzdata curl && \
     adduser -D -u 1001 appuser

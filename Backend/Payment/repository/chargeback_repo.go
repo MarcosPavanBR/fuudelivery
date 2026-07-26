@@ -14,7 +14,8 @@ import (
 // CreateChargeback insere um novo estorno no MongoDB.
 // Gera automaticamente o ObjectID e os timestamps.
 func CreateChargeback(chargeback *models.Chargeback) error {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	chargeback.ID = primitive.NewObjectID()
 	chargeback.CreatedAt = time.Now()
 	chargeback.UpdatedAt = time.Now()
@@ -24,7 +25,8 @@ func CreateChargeback(chargeback *models.Chargeback) error {
 
 // GetChargebackByID busca um estorno pelo seu ObjectID.
 func GetChargebackByID(id primitive.ObjectID) (*models.Chargeback, error) {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	var chargeback models.Chargeback
 	err := Chargebacks.FindOne(ctx, bson.M{"_id": id}).Decode(&chargeback)
 	if err != nil {
@@ -36,7 +38,8 @@ func GetChargebackByID(id primitive.ObjectID) (*models.Chargeback, error) {
 // UpdateChargebackStatus atualiza o status de um estorno e campos adicionais.
 // Usado para aprovar, rejeitar ou escalar estornos.
 func UpdateChargebackStatus(id primitive.ObjectID, status models.ChargebackStatus, updates bson.M) error {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	updates["status"] = status
 	updates["updated_at"] = time.Now()
 	_, err := Chargebacks.UpdateOne(ctx, bson.M{"_id": id}, bson.M{"$set": updates})
@@ -46,7 +49,8 @@ func UpdateChargebackStatus(id primitive.ObjectID, status models.ChargebackStatu
 // ListChargebacks lista estornos com filtro por status e paginacao.
 // Retorna a lista, total e erro (se houver).
 func ListChargebacks(status string, page, limit int) ([]models.Chargeback, int64, error) {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	query := bson.M{}
 	if status != "" {
 		query["status"] = status

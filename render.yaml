@@ -15,18 +15,14 @@ services:
         value: production
       - key: JWT_SECRET
         sync: false
+      - key: ABACATE_PAY_WEBHOOK_SECRET
+        sync: false
       - key: REDIS_URL
         fromService:
           type: redis
           name: fuudelivery-redis
           property: connectionString
       - key: DB_CONNECTION_STRING
-        sync: false
-      - key: SUPABASE_DATABASE_URL
-        sync: false
-      - key: SUPABASE_DATABASE_URL_DIRECT
-        sync: false
-      - key: MONGODB_ATLAS_URI
         sync: false
       - key: MONGO_URI
         sync: false
@@ -98,7 +94,7 @@ services:
       - key: MONGO_URI
         sync: false
       - key: PAYMENT_MONGO_DATABASE
-        value: "payment"
+        value: "fuudelivery_payments"
       - key: RABBIT_CONNECTION
         sync: false
       - key: RABBIT_PAYMENT_QUEUE
@@ -106,6 +102,8 @@ services:
       - key: JWT_SECRET
         sync: false
       - key: ABACATE_PAY_API_KEY
+        sync: false
+      - key: ABACATE_PAY_WEBHOOK_SECRET
         sync: false
     healthCheckPath: /health
 

@@ -149,7 +149,8 @@ func (ch *ChargebackHandler) GetEvidences(c *fiber.Ctx) error {
 // GetStats retorna estatisticas dos estornos.
 // GET /api/chargebacks/stats
 func (ch *ChargebackHandler) GetStats(c *fiber.Ctx) error {
-	ctx := repository.MongoCtx()
+	ctx, cancel := repository.MongoCtx()
+	defer cancel()
 
 	stats := map[string]interface{}{}
 

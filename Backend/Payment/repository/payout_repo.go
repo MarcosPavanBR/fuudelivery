@@ -12,7 +12,8 @@ import (
 
 // CreatePayout insere uma nova solicitacao de saque no MongoDB.
 func CreatePayout(payout *models.PayoutRequest) error {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	payout.ID = primitive.NewObjectID()
 	payout.CreatedAt = time.Now()
 	payout.UpdatedAt = time.Now()
@@ -22,7 +23,8 @@ func CreatePayout(payout *models.PayoutRequest) error {
 
 // UpdatePayoutStatus atualiza o status de uma solicitacao de saque.
 func UpdatePayoutStatus(id primitive.ObjectID, status models.PayoutStatus, gatewayID, failureReason string) error {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	update := bson.M{
 		"$set": bson.M{
 			"status":     status,
@@ -41,7 +43,8 @@ func UpdatePayoutStatus(id primitive.ObjectID, status models.PayoutStatus, gatew
 
 // GetPayoutsByUser retorna o historico de saques de um usuario.
 func GetPayoutsByUser(userID string, limit int) ([]models.PayoutRequest, error) {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	if limit < 1 || limit > 100 {
 		limit = 20
 	}

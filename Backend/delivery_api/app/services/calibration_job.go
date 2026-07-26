@@ -131,13 +131,10 @@ func (j *AutoCalibrationJob) RunOnce(zoneMetadatas []ZoneMetadata) []Calibration
 // calibrateZone executa a calibracao para uma zona especifica.
 func (j *AutoCalibrationJob) calibrateZone(zone ZoneMetadata) CalibrationResult {
 	result := CalibrationResult{
-		ZoneID:          zone.ID,
-		ZoneName:        zone.Name,
-		OldRadiusKm:     zone.RadiusKm,
-		CurrentRadiusKm: zone.RadiusKm,
-		MinRadiusKm:     zone.MinRadiusKm,
-		MaxRadiusKm:     zone.MaxRadiusKm,
-		Reason:          "no_change",
+		ZoneID:      zone.ID,
+		ZoneName:    zone.Name,
+		OldRadiusKm: zone.RadiusKm,
+		Reason:      "no_change",
 	}
 
 	// Coleta metricas

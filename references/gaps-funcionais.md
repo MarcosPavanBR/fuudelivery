@@ -36,6 +36,47 @@
   - `handlers/report_handler.go`: Handler HTTP com validação
   - 17 testes de integração
 
+### 4. CI/CD — Testar todos os módulos Go ✅
+
+**Resolvido em**: 2026-07-26
+
+**Solução implementada**: `.github/workflows/ci.yml`
+- Matrix strategy para testar 7 módulos Go em paralelo
+- Fail-fast: false para não parar se um módulo falhar
+- Módulos: cmd/fuudelivery, Backend/Payment, auth_api, payment_api, orders_api, delivery_api, chat_api
+
+### 5. Vulnerability scanning no CI ✅
+
+**Resolvido em**: 2026-07-26
+
+**Solução implementada**:
+- **govulncheck**: Matrix strategy paralela para todos os 7 módulos Go
+- **npm audit**: Roda para WebRestaurant, WebAdmin, PaymentPanel
+
+### 6. Frontend CI ✅
+
+**Resolvido em**: 2026-07-26
+
+**Solução implementada**:
+- Job separado `frontend-webrestaurant` com: npm install → npm test → npm run build
+- npm audit em paralelo para 3 frontends
+
+### 7. Integration tests do Payment Service ✅
+
+**Resolvido em**: 2026-07-26
+
+**Solução implementada**: `Backend/Payment/services/integration_test.go`
+- Testes com MongoDB real via testcontainers
+- Cobre: happy path, idempotência, saldo insuficiente, créditos concorrentes, múltiplos pagamentos
+
+### 8. Bug fix: GetWalletTransactions não aplicava limit ✅
+
+**Resolvido em**: 2026-07-26
+
+**Bug**: `repository/wallet_repo.go` validava o parâmetro `limit` mas nunca passava para o `Find()` do MongoDB. Resultado: todas as transações eram carregadas na memória.
+
+**Fix**: Adicionado `options.Find().SetSort().SetLimit()` na query.
+
 ---
 
 ## Duplicação: payment_api vs Backend/Payment
@@ -74,13 +115,37 @@ A separação é intencional e benéfica:
 
 ---
 
-## README desatualizado
+## README atualizado ✅
 
-O README.md atual reflete o projeto original (vercardapio), não o fork (FuuDelivery). Informações que precisam ser atualizadas:
-
-- [ ] Nome do projeto (vercardapio → FuuDelivery)
+O README.md foi atualizado em 2026-07-26 para refletir o FuuDelivery:
+- [x] Nome do projeto (vercardapio → FuuDelivery)
 - [x] Features novas (pagamento, carteira, chat, rastreio, relatórios, cadastro)
-- [x] Arquitetura (5 serviços no Render)
-- [ ] Variáveis de ambiente necessárias
-- [ ] Guia de setup local atualizado
-- [ ] Licença (verificar se mantém MIT)
+- [x] Arquitetura (7 módulos Go + 5 frontends)
+- [x] Variáveis de ambiente necessárias
+- [x] Guia de setup local atualizado
+- [x] Licença (MIT)
+
+---
+
+## Ainda pendente
+
+### Rate limiting (P1)
+
+- [ ] Implementar rate limiting para login, registro, pagamento e carteira
+- [ ] Ver `references/seguranca.md` para especificações
+
+### Shared MongoDB container nos testes (tech-debt)
+
+- [ ] Cada teste de integração sobe um container MongoDB separado
+- [ ] Ideal: usar TestMain ou Repository struct para compartilhar container
+- [ ] Reduziría tempo de CI de ~5min para ~1min
+
+### Repository struct/interface (tech-debt)
+
+- [ ] Introduzir `Repository` struct para desacoplar globals do `repository/mongo.go`
+- [ ] Permitir injeção de dependência nos service constructors
+- [ ] Melhorar testabilidade e reduzir acoplamento
+
+---
+
+*Última atualização: 2026-07-26*

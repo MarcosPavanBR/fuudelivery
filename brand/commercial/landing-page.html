@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FuuDelivery - Delivery Cooperativo do Brasil</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --red: #DC2626;
+            --red-light: #EF4444;
+            --red-dark: #B91C1C;
+            --yellow: #FBBF24;
+            --yellow-light: #FCD34D;
+            --yellow-dark: #F59E0B;
+            --dark: #0A0A0F;
+            --dark-card: #12121A;
+            --dark-lighter: #1A1A25;
+            --white: #FFFFFF;
+            --gray-100: #F3F4F6;
+            --gray-200: #E5E7EB;
+            --gray-300: #D1D5DB;
+            --gray-400: #9CA3AF;
+            --gray-500: #6B7280;
+            --gray-600: #4B5563;
+            --gray-700: #374151;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--dark);
+            color: var(--white);
+            line-height: 1.6;
+        }
+
+        /* ===== NAVIGATION ===== */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 72px;
+            background: rgba(10, 10, 15, 0.9);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 48px;
+            z-index: 1000;
+        }
+
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            color: var(--white);
+        }
+
+        .nav-logo-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, var(--red), var(--red-dark));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 900;
+            color: var(--white);
+        }
+
+        .nav-logo-text {
+            font-size: 18px;
+            font-weight: 800;
+        }
+
+        .nav-logo-text .accent {
+            color: var(--red);
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 32px;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: var(--gray-400);
+            font-size: 14px;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: var(--white);
+        }
+
+        .nav-cta {
+            background: var(--red);
+            color: var(--white) !important;
+            padding: 10px 24px;
+            border-radius: 10px;
+            font-weight: 600 !important;
+            transition: background 0.2s, transform 0.2s !important;
+        }
+
+        .nav-cta:hover {
+            background: var(--red-dark) !important;
+            transform: translateY(-1px);
+        }
+
+        .nav-mobile-toggle {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--white);
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        /* ===== HERO SECTION ===== */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 120px 48px 80px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -200px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 800px;
+            height: 800px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(220, 38, 38, 0.08), transparent 60%);
+            pointer-events: none;
+        }
+
+        .hero::after {
+            content: '';
+            position: absolute;
+            bottom: -200px;
+            right: -200px;
+            width: 600px;
+            height: 600px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(251, 191, 36, 0.05), transparent 60%);
+            pointer-events: none;
+        }
+
+        .hero-content {
+            max-width: 800px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(251, 191, 36, 0.08);
+            border: 1px solid rgba(251, 191, 36, 0.2);
+            border-radius: 100px;
+            padding: 8px 20px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--yellow);
+            margin-bottom: 32px;
+        }
+
+        .hero h1 {
+            font-size: 64px;
+            font-weight: 900;
+            letter-spacing: -2px;
+            line-height: 1.05;
+            margin-bottom: 24px;
+        }
+
+        .hero h1 .accent {
+            color: var(--red);
+        }
+
+        .hero h1 .yellow {
+            color: var(--yellow);
+        }
+
+        .hero p {
+            font-size: 20px;
+            color: var(--gray-400);
+            max-width: 600px;
+            margin: 0 auto 40px;
+            line-height: 1.6;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--red);
+            color: var(--white);
+            padding: 16px 32px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 700;
+            text-decoration: none;
+            transition: all 0.3s;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-primary:hover {
+            background: var(--red-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(220, 38, 38, 0.3);
+        }
+
+        .btn-secondary {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: transparent;
+            color: var(--white);
+            padding: 16px 32px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 700;
+            text-decoration: none;
+            border: 1px solid rgba(255,255,255,0.15);
+            transition: all 0.3s;
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--yellow);
+            color: var(--yellow);
+            transform: translateY(-2px);
+        }
+
+        .hero-stats {
+            display: flex;
+            justify-content: center;
+            gap: 48px;
+            margin-top: 64px;
+        }
+
+        .hero-stat {
+            text-align: center;
+        }
+
+        .hero-stat .value {
+            font-size: 32px;
+            font-weight: 900;
+            color: var(--yellow);
+        }
+
+        .hero-stat .label {
+            font-size: 13px;
+            color: var(--gray-500);
+            margin-top: 4px;
+        }
+
+        /* ===== PROBLEM SECTION ===== */
+        .section {
+            padding: 120px 48px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .section-label {
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            color: var(--red);
+            margin-bottom: 16px;
+            text-align: center;
+        }
+
+        .section-title {
+            font-size: 44px;
+            font-weight: 900;
+            text-align: center;
+            margin-bottom: 16px;
+            letter-spacing: -1px;
+        }
+
+        .section-title .accent { color: var(--red); }
+        .section-title .yellow { color: var(--yellow); }
+
+        .section-desc {
+            font-size: 18px;
+            color: var(--gray-400);
+            text-align: center;
+            max-width: 600px;
+            margin: 0 auto 64px;
+            line-height: 1.6;
+        }
+
+        /* Comparison Cards */
+        .comparison-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 32px;
+            margin-bottom: 48px;
+        }
+
+        .compare-card {
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .compare-card.bad {
+            background: rgba(220, 38, 38, 0.04);
+            border: 1px solid rgba(220, 38, 38, 0.15);
+        }
+
+        .compare-card.good {
+            background: rgba(251, 191, 36, 0.04);
+            border: 1px solid rgba(251, 191, 36, 0.15);
+        }
+
+        .compare-card .card-label {
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            margin-bottom: 16px;
+            color: var(--gray-500);
+        }
+
+        .compare-card.bad .rate {
+            font-size: 64px;
+            font-weight: 900;
+            color: var(--red);
+            margin-bottom: 8px;
+        }
+
+        .compare-card.good .rate {
+            font-size: 64px;
+            font-weight: 900;
+            color: var(--yellow);
+            margin-bottom: 8px;
+        }
+
+        .compare-card .card-desc {
+            font-size: 16px;
+            color: var(--gray-400);
+            margin-bottom: 24px;
+        }
+
+        .compare-list {
+            list-style: none;
+            text-align: left;
+            max-width: 320px;
+            margin: 0 auto;
+        }
+
+        .compare-list li {
+            padding: 8px 0;
+            font-size: 14px;
+            color: var(--gray-400);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .compare-card.bad .compare-list li::before {
+            content: 'X';
+            color: var(--red);
+            font-weight: 700;
+            font-size: 12px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: rgba(220, 38, 38, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .compare-card.good .compare-list li::before {
+            content: '\2713';
+            color: #10B981;
+            font-weight: 700;
+            font-size: 12px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: rgba(16, 185, 129, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .comparison-cta {
+            text-align: center;
+            padding: 40px;
+            background: var(--dark-card);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 16px;
+        }
+
+        .comparison-cta h3 {
+            font-size: 28px;
+            font-weight: 800;
+            margin-bottom: 8px;
+        }
+
+        .comparison-cta p {
+            font-size: 16px;
+            color: var(--gray-400);
+            margin-bottom: 24px;
+        }
+
+        /* ===== FEATURES SECTION ===== */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+        }
+
+        .feature-card {
+            background: var(--dark-card);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 20px;
+            padding: 36px;
+            transition: all 0.3s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(255,255,255,0.12);
+        }
+
+        .feature-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: 900;
+            margin-bottom: 20px;
+        }
+
+        .feature-card:nth-child(1) .feature-icon {
+            background: linear-gradient(135deg, var(--red), var(--red-dark));
+        }
+
+        .feature-card:nth-child(2) .feature-icon {
+            background: linear-gradient(135deg, var(--yellow), var(--yellow-dark));
+            color: var(--dark);
+        }
+
+        .feature-card:nth-child(3) .feature-icon {
+            background: linear-gradient(135deg, #10B981, #059669);
+        }
+
+        .feature-card:nth-child(4) .feature-icon {
+            background: linear-gradient(135deg, #6366F1, #4F46E5);
+        }
+
+        .feature-card:nth-child(5) .feature-icon {
+            background: linear-gradient(135deg, #8B5CF6, #7C3AED);
+        }
+
+        .feature-card:nth-child(6) .feature-icon {
+            background: linear-gradient(135deg, #EC4899, #DB2777);
+        }
+
+        .feature-card h3 {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .feature-card p {
+            font-size: 14px;
+            color: var(--gray-400);
+            line-height: 1.6;
+        }
+
+        /* ===== HOW IT WORKS ===== */
+        .steps-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 40px;
+            position: relative;
+        }
+
+        .steps-container::before {
+            content: '';
+            position: absolute;
+            top: 48px;
+            left: 16%;
+            right: 16%;
+            height: 2px;
+            background: linear-gradient(90deg, var(--red), var(--yellow), var(--red));
+            opacity: 0.3;
+        }
+
+        .step-card {
+            text-align: center;
+            position: relative;
+        }
+
+        .step-number {
+            width: 96px;
+            height: 96px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            font-weight: 900;
+            margin: 0 auto 24px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .step-card:nth-child(1) .step-number {
+            background: linear-gradient(135deg, var(--red), var(--red-dark));
+            box-shadow: 0 12px 40px rgba(220, 38, 38, 0.25);
+        }
+
+        .step-card:nth-child(2) .step-number {
+            background: linear-gradient(135deg, var(--yellow), var(--yellow-dark));
+            color: var(--dark);
+            box-shadow: 0 12px 40px rgba(251, 191, 36, 0.25);
+        }
+
+        .step-card:nth-child(3) .step-number {
+            background: linear-gradient(135deg, #10B981, #059669);
+            box-shadow: 0 12px 40px rgba(16, 185, 129, 0.25);
+        }
+
+        .step-card h3 {
+            font-size: 22px;
+            font-weight: 800;
+            margin-bottom: 12px;
+        }
+
+        .step-card p {
+            font-size: 15px;
+            color: var(--gray-400);
+            max-width: 280px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+
+        /* ===== CTA SECTION ===== */
+        .cta-section {
+            padding: 120px 48px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .cta-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 32px;
+        }
+
+        .cta-card {
+            border-radius: 24px;
+            padding: 48px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .cta-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+        }
+
+        .cta-card.restaurante {
+            background: linear-gradient(180deg, rgba(220, 38, 38, 0.06), var(--dark-card));
+            border: 1px solid rgba(220, 38, 38, 0.15);
+        }
+
+        .cta-card.restaurante::before {
+            background: var(--red);
+        }
+
+        .cta-card.app {
+            background: linear-gradient(180deg, rgba(251, 191, 36, 0.06), var(--dark-card));
+            border: 1px solid rgba(251, 191, 36, 0.15);
+        }
+
+        .cta-card.app::before {
+            background: var(--yellow);
+        }
+
+        .cta-card .cta-icon {
+            width: 72px;
+            height: 72px;
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            font-weight: 900;
+            margin: 0 auto 24px;
+        }
+
+        .cta-card.restaurante .cta-icon {
+            background: linear-gradient(135deg, var(--red), var(--red-dark));
+        }
+
+        .cta-card.app .cta-icon {
+            background: linear-gradient(135deg, var(--yellow), var(--yellow-dark));
+            color: var(--dark);
+        }
+
+        .cta-card h3 {
+            font-size: 28px;
+            font-weight: 800;
+            margin-bottom: 12px;
+        }
+
+        .cta-card p {
+            font-size: 16px;
+            color: var(--gray-400);
+            margin-bottom: 32px;
+            max-width: 400px;
+            margin-left: auto;
+            margin-right: auto;
+            line-height: 1.6;
+        }
+
+        .cta-card .btn-primary {
+            width: 100%;
+            max-width: 320px;
+            justify-content: center;
+        }
+
+        .cta-card .btn-secondary {
+            width: 100%;
+            max-width: 320px;
+            justify-content: center;
+        }
+
+        .store-badges {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-top: 16px;
+        }
+
+        .store-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 10px 20px;
+            text-decoration: none;
+            color: var(--white);
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .store-badge:hover {
+            background: rgba(255,255,255,0.1);
+            border-color: rgba(255,255,255,0.2);
+        }
+
+        .store-badge .store-icon {
+            font-size: 18px;
+        }
+
+        /* ===== FOOTER ===== */
+        footer {
+            border-top: 1px solid rgba(255,255,255,0.06);
+            padding: 64px 48px 32px;
+        }
+
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .footer-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            gap: 48px;
+            margin-bottom: 48px;
+        }
+
+        .footer-brand .footer-logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .footer-brand .footer-logo-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, var(--red), var(--red-dark));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 900;
+            color: var(--white);
+        }
+
+        .footer-brand .footer-logo-text {
+            font-size: 16px;
+            font-weight: 800;
+        }
+
+        .footer-brand .footer-logo-text .accent {
+            color: var(--red);
+        }
+
+        .footer-brand p {
+            font-size: 14px;
+            color: var(--gray-500);
+            line-height: 1.6;
+            max-width: 320px;
+        }
+
+        .footer-column h4 {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            color: var(--gray-300);
+        }
+
+        .footer-column ul {
+            list-style: none;
+        }
+
+        .footer-column ul li {
+            margin-bottom: 10px;
+        }
+
+        .footer-column ul li a {
+            text-decoration: none;
+            color: var(--gray-500);
+            font-size: 14px;
+            transition: color 0.2s;
+        }
+
+        .footer-column ul li a:hover {
+            color: var(--white);
+        }
+
+        .footer-bottom {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 24px;
+            border-top: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .footer-bottom p {
+            font-size: 13px;
+            color: var(--gray-600);
+        }
+
+        .footer-bottom .license {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(251, 191, 36, 0.06);
+            border: 1px solid rgba(251, 191, 36, 0.15);
+            border-radius: 6px;
+            padding: 6px 14px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--yellow);
+        }
+
+        .footer-social {
+            display: flex;
+            gap: 12px;
+        }
+
+        .footer-social a {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .footer-social a:hover {
+            background: var(--red);
+            border-color: var(--red);
+        }
+
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 1024px) {
+            .hero h1 { font-size: 48px; }
+            .section-title { font-size: 36px; }
+            .features-grid { grid-template-columns: repeat(2, 1fr); }
+            .footer-grid { grid-template-columns: 1fr 1fr; }
+        }
+
+        @media (max-width: 768px) {
+            nav { padding: 0 24px; }
+            .nav-links { display: none; }
+            .nav-mobile-toggle { display: block; }
+            .hero { padding: 120px 24px 80px; }
+            .hero h1 { font-size: 36px; letter-spacing: -1px; }
+            .hero p { font-size: 16px; }
+            .hero-stats { gap: 24px; flex-wrap: wrap; }
+            .hero-stat .value { font-size: 24px; }
+            .section { padding: 80px 24px; }
+            .section-title { font-size: 32px; }
+            .comparison-row { grid-template-columns: 1fr; }
+            .features-grid { grid-template-columns: 1fr; }
+            .steps-container { grid-template-columns: 1fr; gap: 40px; }
+            .steps-container::before { display: none; }
+            .cta-grid { grid-template-columns: 1fr; }
+            .cta-section { padding: 80px 24px; }
+            footer { padding: 48px 24px 24px; }
+            .footer-grid { grid-template-columns: 1fr; gap: 32px; }
+            .footer-bottom { flex-direction: column; gap: 16px; text-align: center; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Navigation -->
+    <nav>
+        <a href="#" class="nav-logo">
+            <div class="nav-logo-icon">FD</div>
+            <div class="nav-logo-text">Fuu<span class="accent">Delivery</span></div>
+        </a>
+        <div class="nav-links">
+            <a href="#problema">Problema</a>
+            <a href="#features">Recursos</a>
+            <a href="#como-funciona">Como Funciona</a>
+            <a href="#parceiros">Parceiros</a>
+            <a href="#download" class="nav-cta">Baixe o App</a>
+        </div>
+        <button class="nav-mobile-toggle" onclick="document.querySelector('.nav-links').classList.toggle('show')">&#9776;</button>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content">
+            <div class="hero-badge">Cooperativismo Digital</div>
+            <h1>Delivery<br><span class="accent">Cooperativo</span> do <span class="yellow">Brasil</span></h1>
+            <p>Uma plataforma de delivery onde restaurantes, entregadores e clientes sao donos. Taxas justas, codigo aberto, tecnologia brasileira.</p>
+            <div class="hero-buttons">
+                <a href="#parceiros" class="btn-primary">Seja um Parceiro &#8594;</a>
+                <a href="#download" class="btn-secondary">Baixe o App</a>
+            </div>
+            <div class="hero-stats">
+                <div class="hero-stat">
+                    <div class="value">5-12%</div>
+                    <div class="label">Taxa por transacao</div>
+                </div>
+                <div class="hero-stat">
+                    <div class="value">PIX</div>
+                    <div class="label">Pagamento instantaneo</div>
+                </div>
+                <div class="hero-stat">
+                    <div class="value">MIT</div>
+                    <div class="label">Codigo aberto</div>
+                </div>
+                <div class="hero-stat">
+                    <div class="value">7</div>
+                    <div class="label">Microservicos Go</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Problem Section -->
+    <section class="section" id="problema">
+        <div class="section-label">O Problema</div>
+        <h2 class="section-title">O mercado de delivery<br>esta <span class="accent">quebrado</span></h2>
+        <p class="section-desc">Grandes plataformas exploram restaurantes e entregadores com taxas abusivas e controle total dos dados.</p>
+
+        <div class="comparison-row">
+            <div class="compare-card bad">
+                <div class="card-label">Modelo Tradicional</div>
+                <div class="rate">27-33%</div>
+                <div class="card-desc">comissao por cada pedido</div>
+                <ul class="compare-list">
+                    <li>Restaurantes perdem margem de lucro</li>
+                    <li>Entregadores ganham menos a cada entrega</li>
+                    <li>Clientes pagam mais por cada pedido</li>
+                    <li>Dados ficam presos na plataforma</li>
+                    <li>Sem transparencia nos custos</li>
+                </ul>
+            </div>
+            <div class="compare-card good">
+                <div class="card-label">FuuDelivery</div>
+                <div class="rate">5-12%</div>
+                <div class="card-desc">comissao por cada pedido</div>
+                <ul class="compare-list">
+                    <li>Restaurantes mantem mais lucro</li>
+                    <li>Entregadores ganham mais por entrega</li>
+                    <li>Clientes pagam menos e recebem mais</li>
+                    <li>Dados ficam com quem produz</li>
+                    <li>Transparencia total, codigo aberto</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="comparison-cta">
+            <h3>A diferenca e clara</h3>
+            <p>Enquanto o iFood cobra 27%, o FuuDelivery cobra apenas 5% no plano basico.</p>
+            <a href="#parceiros" class="btn-primary">Quero ser parceiro &#8594;</a>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="section" id="features">
+        <div class="section-label">Recursos</div>
+        <h2 class="section-title">Tecnologia que <span class="yellow">entrega</span></h2>
+        <p class="section-desc">Funcionalidades pensadas para o mercado brasileiro, com foco em velocidade, simplicidade e economia.</p>
+
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">PIX</div>
+                <h3>Pagamento via PIX</h3>
+                <p>Pague instantaneamente com PIX. Sem intermediarios bancarios, sem taxas ocultas. Liquidacao em tempo real.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">WLT</div>
+                <h3>Carteira Digital</h3>
+                <p>Acumule cashback em cada pedido. Use seu saldo para proximas compras ou faca saque direto na sua conta bancaria.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">TRK</div>
+                <h3>Tracking ao Vivo</h3>
+                <p>Acompanhe cada passo da sua entrega em tempo real. Do restaurante ate a sua porta, com notificacoes a cada etapa.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">CHAT</div>
+                <h3>Chat Integrado</h3>
+                <p>Converse diretamente com o restaurante. Sem precisar trocar de aplicativo ou ligar por telefone.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">FAITH</div>
+                <h3>Programa de Fidelidade</h3>
+                <p>Ganhe pontos a cada compra. Suba de nivel e desbloqueie beneficios exclusivos como descontos e frete gratis.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">SPLIT</div>
+                <h3>Split Automatico</h3>
+                <p>Pedido pago, dinheiro distribuido automaticamente entre restaurante e entregador. Sem burocracia.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="section" id="como-funciona">
+        <div class="section-label">Como Funciona</div>
+        <h2 class="section-title">Simples, <span class="accent">rapido</span>, <span class="yellow">justo</span></h2>
+        <p class="section-desc">Em 3 passos simples, voce ja esta fazendo parte da revolucao do delivery cooperativo.</p>
+
+        <div class="steps-container">
+            <div class="step-card">
+                <div class="step-number">1</div>
+                <h3>Peca</h3>
+                <p>Escolha entre dezenas de restaurantes parceiros. Monte seu pedido com facilidade e pague via PIX ou cartao.</p>
+            </div>
+            <div class="step-card">
+                <div class="step-number">2</div>
+                <h3>Acompanhe</h3>
+                <p>Veja em tempo real onde esta seu pedido. Acompanhe o entregador no mapa e receba notificacoes a cada etapa.</p>
+            </div>
+            <div class="step-card">
+                <div class="step-number">3</div>
+                <h3>Receba</h3>
+                <p>Receba sua comida no conforto da sua casa. Acumule cashback na carteira e use nos proximos pedidos.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section" id="parceiros">
+        <div class="cta-grid">
+            <div class="cta-card restaurante">
+                <div class="cta-icon">R</div>
+                <h3>Seja um Restaurante Parceiro</h3>
+                <p>Reduza suas taxas de 27% para apenas 5%. Mantenha seus dados, ganhe mais clientes e faca parte de uma cooperativa.</p>
+                <a href="mailto:parceiros@fuudelivery.com.br" class="btn-primary">Cadastrar Restaurante &#8594;</a>
+            </div>
+            <div class="cta-card app" id="download">
+                <div class="cta-icon">FD</div>
+                <h3>Baixe o App</h3>
+                <p>Peca sua comida com taxas justas. PIX, cashback, tracking ao vivo e chat integrado. Tudo em um so app.</p>
+                <div class="store-badges">
+                    <a href="#" class="store-badge">
+                        <span class="store-icon">&#63743;</span>
+                        <span>App Store</span>
+                    </a>
+                    <a href="#" class="store-badge">
+                        <span class="store-icon">&#9654;</span>
+                        <span>Google Play</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-content">
+            <div class="footer-grid">
+                <div class="footer-brand">
+                    <div class="footer-logo">
+                        <div class="footer-logo-icon">FD</div>
+                        <div class="footer-logo-text">Fuu<span class="accent">Delivery</span></div>
+                    </div>
+                    <p>A plataforma de delivery cooperativa do Brasil. Codigo aberto, taxas justas, governanca democratica.</p></div>
+                <div class="footer-column">
+                    <h4>Produto</h4>
+                    <ul>
+                        <li><a href="#features">Recursos</a></li>
+                        <li><a href="#como-funciona">Como Funciona</a></li>
+                        <li><a href="#download">Download</a></li>
+                        <li><a href="#">API Publica</a></li>
+                    </ul>
+                </div>
+                <div class="footer-column">
+                    <h4>Parceiros</h4>
+                    <ul>
+                        <li><a href="#parceiros">Restaurantes</a></li>
+                        <li><a href="#">Entregadores</a></li>
+                        <li><a href="#">Cooperativas</a></li>
+                        <li><a href="#">Cidades</a></li>
+                    </ul>
+                </div>
+                <div class="footer-column">
+                    <h4>Contato</h4>
+                    <ul>
+                        <li><a href="mailto:contato@fuudelivery.com.br">contato@fuudelivery.com.br</a></li>
+                        <li><a href="mailto:parceiros@fuudelivery.com.br">parceiros@fuudelivery.com.br</a></li>
+                        <li><a href="https://github.com/fuudelivery" target="_blank">GitHub</a></li>
+                        <li><a href="#">Documentacao</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 FuuDelivery. Todos os direitos reservados.</p>
+                <div class="footer-social">
+                    <a href="#" title="GitHub">GH</a>
+                    <a href="#" title="Instagram">IG</a>
+                    <a href="#" title="LinkedIn">LI</a>
+                    <a href="#" title="Twitter/X">X</a>
+                </div>
+                <span class="license">Licenca MIT - Codigo Aberto</span>
+            </div>
+        </div>
+    </footer>
+
+</body>
+</html>

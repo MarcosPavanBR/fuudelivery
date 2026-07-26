@@ -161,8 +161,13 @@ func GetWalletTransactions(walletID primitive.ObjectID, limit int) ([]models.Wal
 		limit = 50
 	}
 
+	opts := options.Find().
+		SetSort(bson.D{{Key: "created_at", Value: -1}}).
+		SetLimit(int64(limit))
+
 	cursor, err := WalletTransactions.Find(ctx,
 		bson.M{"wallet_id": walletID},
+		opts,
 	)
 	if err != nil {
 		return nil, err

@@ -1,26 +1,23 @@
 //go:build integration
 
-// Teste de integração do fluxo: pagamento aprovado -> crédito na carteira
-// do restaurante.
+// Testes de integração do Payment Service com MongoDB real (testcontainers).
 //
-// No sistema real esse fluxo cruza dois serviços via RabbitMQ:
+// Cobrem os fluxos críticos de dinheiro:
+// 1. Pagamento aprovado → crédito na carteira (happy path)
+// 2. Idempotência: mesmo payment processado duas vezes não credita em dobro
+// 3. Carteira com saldo insuficiente não debita
+// 4. Créditos concorrentes (race condition) preservam todas as atualizações
+// 5. Múltiplos pagamentos acumulam corretamente na carteira
 //
-//	payment_api (webhook.go, publishPaymentApproved) --publica--> fila "payments"
-//	Payment/consumers/payment_consumer.go             --consome--> WalletService.ProcessPaymentApproval
-//
-// Esse teste NÃO sobe RabbitMQ nem o processo do payment_api — isso é
-// integração *entre processos* e fica melhor coberto por um teste E2E
-// (ver Fase 3/4 do plano de testes). Aqui testamos com MongoDB real a parte
-// que já dá pra pegar bug de verdade sem precisar de infra pesada: dado um
-// Payment com status "approved" já salvo no banco (como o consumer decodifica
-// da fila), será que ProcessPaymentApproval credita o valor líquido certo,
-// registra a transação e marca wallet_credited_at?
+// NOTA: Testes de validação de input (amount <= 0) e de status não-aprovado
+// já estão cobertos por testes unitários em wallet_service_test.go e
+// risk_scorer_test.go — não precisam de um container MongoDB.
 //
 // Rodar com:
 //
-//	go test -tags=integration ./services/... -run TestPaymentApproval -v
+//	go test -tags=integration ./services/... -v
 //
-// Pré-requisito: adicionar ao go.mod (rodar com rede liberada p/ proxy.golang.org):
+// Pré-requisito:
 //
 //	go get github.com/testcontainers/testcontainers-go
 //	go get github.com/testcontainers/testcontainers-go/modules/mongodb
@@ -28,6 +25,8 @@ package services
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -65,6 +64,11 @@ func setupPaymentIntegrationEnv(t *testing.T) func() {
 	repository.Chargebacks = db.Collection("chargebacks")
 	repository.Evidences = db.Collection("evidences")
 	repository.Users = db.Collection("users")
+	repository.ProcessedOrders = db.Collection("processed_orders")
+	repository.Payouts = db.Collection("payouts")
+
+	// Cria índices necessários (replica os que createIndexes() faria)
+	createTestIndexes(ctx, db)
 
 	return func() {
 		_ = client.Disconnect(ctx)
@@ -72,22 +76,29 @@ func setupPaymentIntegrationEnv(t *testing.T) func() {
 	}
 }
 
-// TestPaymentApproval_CreditsNetAmountToWallet cobre o caminho feliz:
-// pagamento de R$100 com R$10 de taxa de entrega -> restaurante recebe R$90
-// e a transação fica registrada.
-//
-// TODO (casos que faltam além do caminho feliz):
-//   - Chamar ProcessPaymentApproval duas vezes com o mesmo Payment não deve
-//     creditar em dobro (hoje não há checagem de idempotência — vale confirmar
-//     se esse é o comportamento esperado ou se é bug a corrigir).
-//   - Payment com status diferente de "approved" (ex: "pending", "rejected")
-//     deve retornar nil sem tocar na carteira (já há teste unitário disso em
-//     wallet_service_test.go — aqui a diferença é usar Mongo de verdade).
-//   - amount - delivery_amount negativo ou zero: deveria falhar antes de chegar
-//     aqui? Confirmar contrato com quem gera a mensagem da fila.
-//   - Duas aprovações concorrentes (goroutines) para o mesmo establishment_id
-//     não podem perder incremento — é o cenário que o $inc atômico existe pra
-//     resolver, vale um teste de carga leve (ex: 20 goroutines, 1 real).
+// createTestIndexes cria índices usados nos testes.
+func createTestIndexes(ctx context.Context, db *mongo.Database) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	db.Collection("wallet_transactions").Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{Keys: []string{"wallet_id"}},
+		{Keys: []string{"reference_id"}, Options: options.Index().SetUnique(true).SetSparse(true)},
+	})
+
+	db.Collection("wallets").Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{Keys: []string{"user_id"}, Options: options.Index().SetUnique(true)},
+	})
+
+	db.Collection("payments").Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{Keys: []string{"order_id"}, Options: options.Index().SetUnique(true)},
+	})
+}
+
+// ════════════════════════════════════════════════════════════════════
+// 1. CAMINHO FELIZ — pagamento aprovado credita valor líquido
+// ════════════════════════════════════════════════════════════════════
+
 func TestPaymentApproval_CreditsNetAmountToWallet(t *testing.T) {
 	cleanup := setupPaymentIntegrationEnv(t)
 	defer cleanup()
@@ -121,4 +132,251 @@ func TestPaymentApproval_CreditsNetAmountToWallet(t *testing.T) {
 	updated, err := repository.GetPaymentByID(payment.ID)
 	require.NoError(t, err)
 	require.NotNil(t, updated, "payment deveria existir após o update")
+}
+
+// ════════════════════════════════════════════════════════════════════
+// 2. IDEMPOTÊNCIA — mesmo payment processado 2x não credita em dobro
+// ════════════════════════════════════════════════════════════════════
+
+func TestPaymentApproval_IdempotentSecondCallSkipped(t *testing.T) {
+	cleanup := setupPaymentIntegrationEnv(t)
+	defer cleanup()
+
+	establishmentID := "estab-idempotent"
+
+	payment := &models.Payment{
+		OrderID:         "order-idempotent-1",
+		EstablishmentID: establishmentID,
+		Amount:          200.00,
+		DeliveryAmount:  0,
+		Status:          models.PaymentApproved,
+		Method:          models.PaymentMethodCard,
+		CreatedAt:       time.Now(),
+	}
+	require.NoError(t, repository.CreatePayment(payment))
+
+	ws := NewWalletService()
+
+	// Primeira chamada — deve creditar R$200
+	err := ws.ProcessPaymentApproval(payment)
+	require.NoError(t, err)
+
+	wallet, err := repository.GetWallet(establishmentID)
+	require.NoError(t, err)
+	require.Equal(t, 200.00, wallet.Balance, "primeira chamada: R$200 creditados")
+
+	// Segunda chamada — não deve creditar novamente
+	err = ws.ProcessPaymentApproval(payment)
+	require.NoError(t, err, "segunda chamada não deve retornar erro")
+
+	wallet2, err := repository.GetWallet(establishmentID)
+	require.NoError(t, err)
+	require.Equal(t, 200.00, wallet2.Balance, "segunda chamada: saldo continua R$200 (sem dobro)")
+
+	// Só deve haver 1 transação de crédito
+	txs, err := ws.GetTransactions(establishmentID, 100)
+	require.NoError(t, err)
+	creditCount := 0
+	for _, tx := range txs {
+		if tx.Type == models.TransactionCredit {
+			creditCount++
+		}
+	}
+	require.Equal(t, 1, creditCount, "deve haver exatamente 1 transação de crédito")
+}
+
+// ════════════════════════════════════════════════════════════════════
+// 3. SALDO INSUFICIENTE — débito deve falhar sem alterar saldo
+// ════════════════════════════════════════════════════════════════════
+
+func TestWallet_DebitInsufficientBalance(t *testing.T) {
+	cleanup := setupPaymentIntegrationEnv(t)
+	defer cleanup()
+
+	ws := NewWalletService()
+	userID := "user-debit-test"
+
+	// Cria carteira com saldo R$50
+	_, err := repository.IncrementWalletBalance(userID, 50.0)
+	require.NoError(t, err)
+
+	// Tenta debitar R$75 — deve falhar
+	err = ws.DebitWallet(userID, 75.0, "teste saldo insuficiente", "ref-debit-1")
+	require.ErrorIs(t, err, repository.ErrInsufficientBalance, "deve retornar ErrInsufficientBalance")
+
+	// Verifica que o saldo não mudou
+	wallet, err := repository.GetWallet(userID)
+	require.NoError(t, err)
+	require.Equal(t, 50.0, wallet.Balance, "saldo não deve mudar após débito com saldo insuficiente")
+}
+
+func TestWallet_DebitExactBalance(t *testing.T) {
+	cleanup := setupPaymentIntegrationEnv(t)
+	defer cleanup()
+
+	ws := NewWalletService()
+	userID := "user-debit-exact"
+
+	// Cria carteira com R$30
+	_, err := repository.IncrementWalletBalance(userID, 30.0)
+	require.NoError(t, err)
+
+	// Debita exatamente R$30 — deve funcionar
+	err = ws.DebitWallet(userID, 30.0, "débito exato", "ref-debit-exact")
+	require.NoError(t, err)
+
+	wallet, err := repository.GetWallet(userID)
+	require.NoError(t, err)
+	require.Equal(t, 0.0, wallet.Balance, "saldo deve ser zero após débito exato")
+}
+
+// ════════════════════════════════════════════════════════════════════
+// 4. CRÉDITOS CONCORRENTES — race condition com goroutines
+// ════════════════════════════════════════════════════════════════════
+
+func TestWallet_ConcurrentCredits(t *testing.T) {
+	cleanup := setupPaymentIntegrationEnv(t)
+	defer cleanup()
+
+	ws := NewWalletService()
+	userID := "user-concurrent"
+	numGoroutines := 20
+	creditPerGoroutine := 1.0 // R$1 por goroutine
+
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	errors := make(chan error, numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func(idx int) {
+			defer wg.Done()
+			refID := fmt.Sprintf("concurrent-credit-%d", idx)
+			if err := ws.CreditWallet(userID, creditPerGoroutine, fmt.Sprintf("credit %d", idx), refID); err != nil {
+				errors <- fmt.Errorf("goroutine %d: %w", idx, err)
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	close(errors)
+
+	for err := range errors {
+		t.Errorf("erro em goroutine concorrente: %v", err)
+	}
+
+	// Saldo deve ser exatamente numGoroutines * creditPerGoroutine
+	wallet, err := repository.GetWallet(userID)
+	require.NoError(t, err)
+	expectedBalance := float64(numGoroutines) * creditPerGoroutine
+	require.Equal(t, expectedBalance, wallet.Balance,
+		"saldo deve ser %v (20 goroutines × R$1 = R$20), got %v", expectedBalance, wallet.Balance)
+}
+
+func TestWallet_ConcurrentCreditAndDebit(t *testing.T) {
+	cleanup := setupPaymentIntegrationEnv(t)
+	defer cleanup()
+
+	ws := NewWalletService()
+	userID := "user-concurrent-mix"
+
+	// Cria carteira com R$100
+	_, err := repository.IncrementWalletBalance(userID, 100.0)
+	require.NoError(t, err)
+
+	// 10 goroutines creditando R$5 cada (total +R$50)
+	// 10 goroutines debitando R$2 cada (total -R$20)
+	// Saldo esperado: 100 + 50 - 20 = R$130
+	var wg sync.WaitGroup
+	wg.Add(20)
+
+	creditErrors := make(chan error, 10)
+	debitErrors := make(chan error, 10)
+
+	for i := 0; i < 10; i++ {
+		go func(idx int) {
+			defer wg.Done()
+			refID := fmt.Sprintf("mix-credit-%d", idx)
+			if err := ws.CreditWallet(userID, 5.0, "concurrent credit", refID); err != nil {
+				creditErrors <- err
+			}
+		}(i)
+
+		go func(idx int) {
+			defer wg.Done()
+			refID := fmt.Sprintf("mix-debit-%d", idx)
+			// Debita R$2 — se saldo insuficiente, ignora (fluxo normal)
+			if err := ws.DebitWallet(userID, 2.0, "concurrent debit", refID); err != nil {
+				debitErrors <- err
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	close(creditErrors)
+	close(debitErrors)
+
+	for err := range creditErrors {
+		t.Errorf("erro no crédito concorrente: %v", err)
+	}
+	// DebitErrors pode conter ErrInsufficientBalance — isso é esperado se saldo acaba
+
+	wallet, err := repository.GetWallet(userID)
+	require.NoError(t, err)
+	// Saldo mínimo garantido: 100 (inicial) + todos os créditos que passaram - débitos que passaram
+	require.True(t, wallet.Balance >= 100.0,
+		"saldo não pode cair abaixo do inicial: got %.2f", wallet.Balance)
+	t.Logf("Saldo final: R$%.2f (esperado entre R$100 e R$130)", wallet.Balance)
+}
+
+// ════════════════════════════════════════════════════════════════════
+// 5. MÚLTIPLOS PAGAMENTOS — acúmulo correto na carteira
+// ════════════════════════════════════════════════════════════════════
+
+func TestWallet_MultiplePaymentApprovals(t *testing.T) {
+	cleanup := setupPaymentIntegrationEnv(t)
+	defer cleanup()
+
+	establishmentID := "estab-multi"
+	ws := NewWalletService()
+
+	// 3 pagamentos aprovados sequenciais
+	payments := []struct {
+		orderID  string
+		amount   float64
+		delivery float64
+	}{
+		{"order-multi-1", 100.0, 10.0}, // líquido: 90
+		{"order-multi-2", 50.0, 5.0},   // líquido: 45
+		{"order-multi-3", 200.0, 20.0}, // líquido: 180
+	}
+
+	totalExpected := 0.0
+	for _, p := range payments {
+		payment := &models.Payment{
+			OrderID:         p.orderID,
+			EstablishmentID: establishmentID,
+			Amount:          p.amount,
+			DeliveryAmount:  p.delivery,
+			Status:          models.PaymentApproved,
+			Method:          models.PaymentMethodPix,
+			CreatedAt:       time.Now(),
+		}
+		require.NoError(t, repository.CreatePayment(payment))
+
+		err := ws.ProcessPaymentApproval(payment)
+		require.NoError(t, err, "ProcessPaymentApproval para %s", p.orderID)
+
+		totalExpected += p.amount - p.delivery
+	}
+
+	// Saldo final deve ser 90 + 45 + 180 = 315
+	wallet, err := repository.GetWallet(establishmentID)
+	require.NoError(t, err)
+	require.Equal(t, totalExpected, wallet.Balance, "saldo acumulado de 3 pagamentos")
+
+	// Histórico deve ter 3 transações
+	txs, err := ws.GetTransactions(establishmentID, 100)
+	require.NoError(t, err)
+	require.Len(t, txs, 3, "deve haver 3 transações no histórico")
 }

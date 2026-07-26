@@ -33,7 +33,8 @@ type DayRevenue struct {
 // Usa MongoDB aggregation pipeline para calcular metricas em uma unica query.
 // Periodo: week (7 dias), month (30 dias), quarter (90 dias), year (365 dias).
 func GetEstablishmentReport(establishmentID string, period string) (*EstablishmentReport, error) {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 
 	// Calcula data de inicio baseada no periodo
 	daysBack := 30

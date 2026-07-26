@@ -24,7 +24,8 @@ var ErrInsufficientBalance = errors.New("saldo insuficiente")
 // GetWallet busca uma carteira pelo ID do usuario.
 // Retorna a carteira ou erro se nao encontrar.
 func GetWallet(userID string) (*models.Wallet, error) {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	var wallet models.Wallet
 	err := Wallets.FindOne(ctx, bson.M{"user_id": userID}).Decode(&wallet)
 	if err != nil {
@@ -36,7 +37,8 @@ func GetWallet(userID string) (*models.Wallet, error) {
 // CreateWallet insere uma nova carteira no MongoDB.
 // Gera automaticamente o ObjectID e os timestamps.
 func CreateWallet(wallet *models.Wallet) error {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	wallet.ID = primitive.NewObjectID()
 	wallet.CreatedAt = time.Now()
 	wallet.UpdatedAt = time.Now()
@@ -47,7 +49,8 @@ func CreateWallet(wallet *models.Wallet) error {
 // UpdateWalletBalance atualiza o saldo de uma carteira (nao atomico).
 // Mantido para retrocompatibilidade — preferir IncrementWalletBalance.
 func UpdateWalletBalance(userID string, newBalance float64) error {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	_, err := Wallets.UpdateOne(ctx,
 		bson.M{"user_id": userID},
 		bson.M{"$set": bson.M{"balance": newBalance, "updated_at": time.Now()}},
@@ -59,7 +62,8 @@ func UpdateWalletBalance(userID string, newBalance float64) error {
 // Retorna a carteira atualizada apos a incrementacao.
 // Seguro contra race conditions — duas chamadas concorrentes nunca perdem atualizacao.
 func IncrementWalletBalance(userID string, amount float64) (*models.Wallet, error) {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	var wallet models.Wallet
 
 	err := Wallets.FindOneAndUpdate(
@@ -82,7 +86,8 @@ func IncrementWalletBalance(userID string, amount float64) (*models.Wallet, erro
 // Retorna erro se saldo insuficiente — a verificacao e o debito
 // acontecem na mesma operacao no banco, eliminando race conditions.
 func TryDebitWalletBalance(userID string, amount float64) (*models.Wallet, error) {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	var wallet models.Wallet
 
 	// Usa FindOneAndUpdate com condicao: balance >= amount
@@ -110,7 +115,8 @@ func TryDebitWalletBalance(userID string, amount float64) (*models.Wallet, error
 // CreateWalletTransaction insere uma nova transacao na carteira.
 // Registra o tipo (credit/debit), valor e saldos antes/depois.
 func CreateWalletTransaction(tx *models.WalletTransaction) error {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	tx.ID = primitive.NewObjectID()
 	tx.CreatedAt = time.Now()
 	_, err := WalletTransactions.InsertOne(ctx, tx)
@@ -120,7 +126,8 @@ func CreateWalletTransaction(tx *models.WalletTransaction) error {
 // TransactionExistsByReference verifica se ja existe uma transacao com
 // o mesmo reference_id. Usado para idempotencia no credito de pagamento.
 func TransactionExistsByReference(referenceID string) (bool, error) {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	count, err := WalletTransactions.CountDocuments(ctx, bson.M{"reference_id": referenceID})
 	if err != nil {
 		return false, err
@@ -131,7 +138,8 @@ func TransactionExistsByReference(referenceID string) (bool, error) {
 // UpdateWalletTransactionBalance atualiza os saldos de auditoria de uma transacao existente.
 // Chamado apos o $inc do saldo para registrar o balance_before e balance_after reais.
 func UpdateWalletTransactionBalance(txID primitive.ObjectID, balanceBefore, balanceAfter float64, walletID primitive.ObjectID) error {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	_, err := WalletTransactions.UpdateOne(ctx,
 		bson.M{"_id": txID},
 		bson.M{"$set": bson.M{
@@ -147,7 +155,8 @@ func UpdateWalletTransactionBalance(txID primitive.ObjectID, balanceBefore, bala
 // GetWalletTransactions retorna o historico de transacoes de uma carteira.
 // Ordenado por data (mais recente primeiro) com limite configuravel.
 func GetWalletTransactions(walletID primitive.ObjectID, limit int) ([]models.WalletTransaction, error) {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	if limit < 1 || limit > 100 {
 		limit = 50
 	}

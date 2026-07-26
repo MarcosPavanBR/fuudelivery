@@ -9,7 +9,8 @@ import (
 )
 
 func CreateEvidence(evidence *models.Evidence) error {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	evidence.ID = primitive.NewObjectID()
 	evidence.CreatedAt = time.Now()
 	_, err := Evidences.InsertOne(ctx, evidence)
@@ -17,7 +18,8 @@ func CreateEvidence(evidence *models.Evidence) error {
 }
 
 func GetEvidencesByChargeback(chargebackID primitive.ObjectID) ([]models.Evidence, error) {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	cursor, err := Evidences.Find(ctx, bson.M{"chargeback_id": chargebackID})
 	if err != nil {
 		return nil, err

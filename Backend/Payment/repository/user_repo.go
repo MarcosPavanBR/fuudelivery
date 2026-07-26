@@ -10,7 +10,8 @@ import (
 )
 
 func GetUserByEmail(email string) (*models.User, error) {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	var user models.User
 	err := Users.FindOne(ctx, bson.M{"email": email}).Decode(&user)
 	if err != nil {
@@ -20,7 +21,8 @@ func GetUserByEmail(email string) (*models.User, error) {
 }
 
 func GetUserByID(id string) (*models.User, error) {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	var user models.User
 	objID, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
@@ -34,7 +36,8 @@ func GetUserByID(id string) (*models.User, error) {
 }
 
 func CreateUser(user *models.User) error {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	user.ID = primitive.NewObjectID().Hex()
 	user.CreatedAt = time.Now()
 	user.UpdatedAt = time.Now()
@@ -50,7 +53,8 @@ func CreateUser(user *models.User) error {
 }
 
 func ListUsers() ([]models.User, error) {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	cursor, err := Users.Find(ctx, bson.M{})
 	if err != nil {
 		return nil, err
@@ -65,7 +69,8 @@ func ListUsers() ([]models.User, error) {
 }
 
 func UpdateUserPassword(email string, newPassword string) error {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return err

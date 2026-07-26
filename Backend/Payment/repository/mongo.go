@@ -122,12 +122,11 @@ func createIndexes() {
 	})
 }
 
-// MongoCtx retorna um contexto com timeout de 5 segundos para operacoes MongoDB.
+// MongoCtx retorna um contexto com deadline de 5 segundos para operacoes MongoDB.
 // Evita que requisicoes fiquem travadas em caso de lentidao do banco.
-func MongoCtx() context.Context {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	_ = cancel
-	return ctx
+// O caller DEVE chamar cancel quando terminar para liberar recursos.
+func MongoCtx() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), 5*time.Second)
 }
 
 // HexToObjectID converte uma string hexadecimal (24 caracteres) em ObjectID do MongoDB.

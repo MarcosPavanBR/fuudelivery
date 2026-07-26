@@ -21,7 +21,6 @@ import (
 	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/bson"
 	"github.com/go-redis/redis/v8"
-	"golang.org/x/time/rate"
 	"gorm.io/gorm"
 
 	// Models (database initialization)
@@ -50,22 +49,17 @@ import (
 	"github.com/carloshomar/fuudelivery/pkg/health"
 )
 
-// Rate limiter: mapa de IP -> token bucket
-var (
-	rateLimiters   = make(map[string]*rate.Limiter)
-	rateLimitersMu sync.Mutex
-)
-
-func getRateLimiter(ip string, rateLimit rate.Limit, burst int) *rate.Limiter {
-	rateLimitersMu.Lock()
-	defer rateLimitersMu.Unlock()
-	if limiter, ok := rateLimiters[ip]; ok {
-		return limiter
-	}
-	limiter := rate.NewLimiter(rateLimit, burst)
-	rateLimiters[ip] = limiter
-	return limiter
+// Rate limiter simples: contador de requisicoes por IP por minuto.
+// Usa apenas stdlib para evitar dependencia externa (golang.org/x/time).
+type ipCounter struct {
+	count    int
+	resetAt  time.Time
 }
+
+var (
+	rateCounters   = make(map[string]*ipCounter)
+	rateCountersMu sync.Mutex
+)
 
 func rateLimitMiddleware(maxPerMinute int) fiber.Handler {
 	return func(c *fiber.Ctx) error {
@@ -73,12 +67,22 @@ func rateLimitMiddleware(maxPerMinute int) fiber.Handler {
 		if ip == "" {
 			ip = c.IP()
 		}
-		limiter := getRateLimiter(ip, rate.Limit(maxPerMinute)/60.0, maxPerMinute)
-		if !limiter.Allow() {
+
+		rateCountersMu.Lock()
+		counter, exists := rateCounters[ip]
+		now := time.Now()
+		if !exists || now.After(counter.resetAt) {
+			counter = &ipCounter{resetAt: now.Add(1 * time.Minute)}
+			rateCounters[ip] = counter
+		}
+		counter.count++
+		if counter.count > maxPerMinute {
+			rateCountersMu.Unlock()
 			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
 				"error": "Muitas requisicoes. Tente novamente mais tarde.",
 			})
 		}
+		rateCountersMu.Unlock()
 		return c.Next()
 	}
 }
@@ -87,9 +91,9 @@ func startRateLimitCleanup() {
 	go func() {
 		for {
 			time.Sleep(10 * time.Minute)
-			rateLimitersMu.Lock()
-			rateLimiters = make(map[string]*rate.Limiter)
-			rateLimitersMu.Unlock()
+			rateCountersMu.Lock()
+			rateCounters = make(map[string]*ipCounter)
+			rateCountersMu.Unlock()
 		}
 	}()
 }

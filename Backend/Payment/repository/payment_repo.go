@@ -15,7 +15,8 @@ import (
 // CreatePayment insere um novo pagamento no MongoDB.
 // Gera automaticamente o ObjectID e os timestamps CreatedAt/UpdatedAt.
 func CreatePayment(payment *models.Payment) error {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	payment.ID = primitive.NewObjectID()
 	payment.CreatedAt = time.Now()
 	payment.UpdatedAt = time.Now()
@@ -26,7 +27,8 @@ func CreatePayment(payment *models.Payment) error {
 // GetPaymentByID busca um pagamento pelo seu ObjectID.
 // Retorna erro se nao encontrar o documento.
 func GetPaymentByID(id primitive.ObjectID) (*models.Payment, error) {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	var payment models.Payment
 	err := Payments.FindOne(ctx, bson.M{"_id": id}).Decode(&payment)
 	if err != nil {
@@ -38,7 +40,8 @@ func GetPaymentByID(id primitive.ObjectID) (*models.Payment, error) {
 // GetPaymentByOrderID busca um pagamento pelo ID do pedido.
 // Usado para evitar pagamentos duplicados para o mesmo pedido.
 func GetPaymentByOrderID(orderID string) (*models.Payment, error) {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	var payment models.Payment
 	err := Payments.FindOne(ctx, bson.M{"order_id": orderID}).Decode(&payment)
 	if err != nil {
@@ -50,7 +53,8 @@ func GetPaymentByOrderID(orderID string) (*models.Payment, error) {
 // UpdatePaymentStatus atualiza o status de um pagamento e campos adicionais.
 // O parameter updates permite enviar campos dinamicos (approved_by, rejection_reason, etc).
 func UpdatePaymentStatus(id primitive.ObjectID, status models.PaymentStatus, updates bson.M) error {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	updates["status"] = status
 	updates["updated_at"] = time.Now()
 	_, err := Payments.UpdateOne(ctx, bson.M{"_id": id}, bson.M{"$set": updates})
@@ -61,7 +65,8 @@ func UpdatePaymentStatus(id primitive.ObjectID, status models.PaymentStatus, upd
 // Retorna a lista de pagamentos, total de resultados e erro (se houver).
 // A paginacao e controlada pelos campos Page e Limit do PaymentFilter.
 func ListPayments(filter models.PaymentFilter) ([]models.Payment, int64, error) {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	query := bson.M{}
 
 	// Adiciona filtros apenas se os valores forem fornecidos
@@ -122,7 +127,8 @@ func ListPayments(filter models.PaymentFilter) ([]models.Payment, int64, error) 
 // GetPaymentStats retorna estatisticas gerais dos pagamentos.
 // Conta pagamentos por status e nivel de risco para exibicao no dashboard.
 func GetPaymentStats() (map[string]interface{}, error) {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	stats := map[string]interface{}{}
 
 	// Conta por status

@@ -32,7 +32,8 @@ var ErrOrderAlreadyProcessed = errors.New("order already processed")
 // mesmo que as duas tenham chegado no mesmo milissegundo, o Mongo garante
 // que so uma das duas insercoes vence.
 func ClaimOrderProcessing(orderID string) error {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	_, err := ProcessedOrders.InsertOne(ctx, bson.M{
 		"_id":          orderID,
 		"processed_at": time.Now(),

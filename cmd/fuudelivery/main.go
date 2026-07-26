@@ -25,18 +25,17 @@ import (
 
 	// Models (database initialization)
 	"github.com/carloshomar/vercardapio/auth_api/app/models"
-	ordersModels "github.com/carloshomar/vercardapio/orders_api/app/models"
-	deliveryModels "github.com/carloshomar/vercardapio/delivery_api/app/models"
-	paymentModels "github.com/carloshomar/vercardapio/payment_api/app/models"
 	chatModels "github.com/carloshomar/vercardapio/chat_api/app/models"
+	deliveryModels "github.com/carloshomar/vercardapio/delivery_api/app/models"
+	ordersModels "github.com/carloshomar/vercardapio/orders_api/app/models"
+	paymentModels "github.com/carloshomar/vercardapio/payment_api/app/models"
 
 	// Handlers
 	authHandlers "github.com/carloshomar/vercardapio/auth_api/app/handlers"
-	// sponsoredHandler uses the same package as authHandlers (added via authHandlers.CreateSponsoredListing etc.)
-	ordersHandlers "github.com/carloshomar/vercardapio/orders_api/app/handlers"
-	deliveryHandlers "github.com/carloshomar/vercardapio/delivery_api/app/handlers"
-	paymentHandlers "github.com/carloshomar/vercardapio/payment_api/app/handlers"
 	chatHandlers "github.com/carloshomar/vercardapio/chat_api/app/handlers"
+	deliveryHandlers "github.com/carloshomar/vercardapio/delivery_api/app/handlers"
+	ordersHandlers "github.com/carloshomar/vercardapio/orders_api/app/handlers"
+	paymentHandlers "github.com/carloshomar/vercardapio/payment_api/app/handlers"
 
 	// Middleware
 	"github.com/carloshomar/vercardapio/auth_api/app/middlewares"
@@ -45,8 +44,10 @@ import (
 	dispatchServices "github.com/carloshomar/vercardapio/delivery_api/app/services"
 	// Batch expiry
 	orderServices "github.com/carloshomar/vercardapio/orders_api/app/services"
-	"github.com/carloshomar/fuudelivery/pkg/queue"
+
+	// Queue + Health
 	"github.com/carloshomar/fuudelivery/pkg/health"
+	"github.com/carloshomar/fuudelivery/pkg/queue"
 )
 
 // Rate limiter simples: contador de requisicoes por IP por minuto.
@@ -990,7 +991,7 @@ func main() {
 	app.Use(logger.New())
 	app.Use(recover.New())
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "https://fuudelivery-web.onrender.com,https://fuudelivery-admin-lv7f.onrender.com,https://fuudelivery-payment-panel.onrender.com,http://localhost:3000,http://localhost:3001",
+		AllowOrigins: "https://fuudelivery-web.onrender.com,https://fuudelivery-admin-lv7f.onrender.com,https://fuudelivery-payment-panel.onrender.com",
 		AllowCredentials: true,
 		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
 		AllowHeaders: "Origin,Content-Type,Accept,Authorization",

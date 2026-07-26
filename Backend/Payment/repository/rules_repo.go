@@ -9,7 +9,8 @@ import (
 const rulesDocID = "approval_rules"
 
 func GetApprovalRules() (*models.ApprovalRules, error) {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	collection := Database.Collection("approval_rules")
 	var rules models.ApprovalRules
 	err := collection.FindOne(ctx, bson.M{"_id": rulesDocID}).Decode(&rules)
@@ -20,7 +21,8 @@ func GetApprovalRules() (*models.ApprovalRules, error) {
 }
 
 func SaveApprovalRules(rules *models.ApprovalRules) error {
-	ctx := MongoCtx()
+	ctx, cancel := MongoCtx()
+	defer cancel()
 	collection := Database.Collection("approval_rules")
 	opts := options.Update().SetUpsert(true)
 	_, err := collection.UpdateOne(ctx,

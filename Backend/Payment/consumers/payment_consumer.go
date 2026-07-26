@@ -9,6 +9,7 @@ package consumers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"sync"
@@ -129,7 +130,7 @@ func (r *RedisPaymentConsumer) processMessage(msg PaymentMessage) {
 	// Converte a mensagem para o modelo de pagamento esperado pelo WalletService
 	payment := &models.Payment{
 		OrderID:         msg.OrderID,
-		EstablishmentID: msg.EstablishmentID,
+		EstablishmentID: fmt.Sprintf("%d", msg.EstablishmentID),
 		Amount:          msg.Amount,
 		DeliveryAmount:  msg.DeliveryAmount,
 		Status:          models.PaymentApproved,

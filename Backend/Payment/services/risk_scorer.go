@@ -88,7 +88,8 @@ func (r *RiskScorer) checkAmount(amount float64) float64 {
 // checkFrequency avalia o risco baseado na frequencia de transacoes do cliente.
 // Muitas transacoes em 24h podem indicar fraude ou uso indevido.
 func (r *RiskScorer) checkFrequency(customerID string) float64 {
-	ctx := repository.MongoCtx()
+	ctx, cancel := repository.MongoCtx()
+	defer cancel()
 	count, _ := repository.Payments.CountDocuments(ctx, map[string]interface{}{
 		"customer_id": customerID,
 		"created_at": map[string]interface{}{
@@ -118,7 +119,8 @@ func (r *RiskScorer) checkTimeOfDay() float64 {
 // checkEstablishmentHistory avalia o risco baseado no historico de chargebacks.
 // Estabelecimentos com muitos estornos aprovados sao mais arriscados.
 func (r *RiskScorer) checkEstablishmentHistory(establishmentID string) float64 {
-	ctx := repository.MongoCtx()
+	ctx, cancel := repository.MongoCtx()
+	defer cancel()
 	chargebacks, _ := repository.Chargebacks.CountDocuments(ctx, map[string]interface{}{
 		"establishment_id": establishmentID,
 		"status":           "approved", // Apenas chargebacks aprovados

@@ -90,7 +90,7 @@ func HandShakeDeliveryman(c *fiber.Ctx) error {
 		})
 	}
 
-	if existingOrder.DeliveryMan != (dto.DeliveryMan{}) {
+	if existingOrder.DeliveryMan != (dto.DeliveryManDTO{}) {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "O deliveryman já foi atribuído a este pedido",
 		})

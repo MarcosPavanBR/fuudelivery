@@ -34,7 +34,7 @@ func ProcessSplit(c *fiber.Ctx) error {
 
 	rules := req.Rules
 	if len(rules) == 0 {
-		rules = defaultSplitRules(&payment)
+		rules = defaultSplitRules(&payment, 5.0, 85.0)
 	}
 
 	var totalSplit float64

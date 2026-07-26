@@ -53,7 +53,7 @@ type DeliveryMan struct {
 	Status string `json:"status"`
 }
 
-type OrderDTO struct {
+type SolicitationOrderDTO struct {
 	Distance        float64       `json:"distance"`
 	Location        Location      `json:"location"`
 	Status          string        `json:"status"`

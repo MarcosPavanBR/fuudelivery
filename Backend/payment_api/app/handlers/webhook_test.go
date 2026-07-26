@@ -20,7 +20,7 @@ func TestDefaultSplitRules_StandardPayment(t *testing.T) {
 		CustomerID:     67890,
 	}
 
-	rules := defaultSplitRules(payment)
+	rules := defaultSplitRules(payment, 5.0, 85.0)
 
 	// Platform fee: 5% = 5.0
 	// Establishment: 85% = 85.0
@@ -55,7 +55,7 @@ func TestDefaultSplitRules_WithDelivery(t *testing.T) {
 		CustomerID:     200,
 	}
 
-	rules := defaultSplitRules(payment)
+	rules := defaultSplitRules(payment, 5.0, 85.0)
 
 	// Should have 3 rules: platform, establishment, deliveryman
 	hasDelivery := false

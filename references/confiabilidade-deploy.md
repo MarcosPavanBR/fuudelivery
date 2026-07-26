@@ -7,6 +7,13 @@ github.com/MarcosPavanBR/fuudelivery
     │
     ├── Push to master
     │
+    ├── GitHub Actions (.github/workflows/ci.yml)
+    │   ├── go-modules (matrix: 7 módulos Go)
+    │   ├── lint (gofmt)
+    │   ├── govulncheck (matrix: 7 módulos Go)
+    │   ├── frontend-webrestaurant (test + build)
+    │   └── npm-audit (matrix: 3 frontends)
+    │
     ├── GitHub Actions (.github/workflows/deploy.yml)
     │   └── JorgeLNJunior/render-deploy@v1
     │       └── RENDER_API_KEY + RENDER_SERVICE_ID
@@ -31,6 +38,7 @@ github.com/MarcosPavanBR/fuudelivery
 - [ ] `go test ./...` passa (todos os módulos)
 - [ ] Nenhum `.env` com credenciais de produção commitado
 - [ ] CREDENTIALS.md removido do git tracking
+- [ ] CI passa no GitHub Actions
 
 ### Verificação pós-deploy
 
@@ -62,7 +70,8 @@ curl -s -o /dev/null -w "%{http_code}" https://fuudelivery-payment-panel.onrende
 | `REDIS_URL` | Render Redis |
 | `JWT_SECRET` | Gerado localmente |
 | `MONGODB_URI` | Atlas |
-| `RABBITMQ_URL` | RabbitMQ Cloud (ou vazio) |
+| `RABBIT_DELIVERY_QUEUE` | Nome da fila |
+| `RABBIT_ORDER_QUEUE` | Nome da fila |
 
 #### fuudelivery-payment
 | Variável | Fonte |
@@ -70,10 +79,19 @@ curl -s -o /dev/null -w "%{http_code}" https://fuudelivery-payment-panel.onrende
 | `MONGODB_URI` | Atlas (fuudelivery_payments) |
 | `JWT_SECRET` | MESMO da API |
 | `ADMIN_PASSWORD` | Gerado localmente |
-| `ABACATEPAY_API_KEY` | AbacatePay dashboard |
-| `ABACATEPAY_WEBHOOK_SECRET` | AbacatePay dashboard |
+| `ABACATE_PAY_API_KEY` | AbacatePay dashboard |
+| `ABACATE_PAY_WEBHOOK_SECRET` | AbacatePay dashboard |
 | `BOOTSTRAP_SECRET` | Gerado localmente |
 | `PORT` | 8084 |
+| `REDIS_URL` | Render Redis |
+
+### Variáveis de ambiente dos Frontends
+
+| Variável | Serviço | Valor |
+|---|---|---|
+| `REACT_APP_API_URL` | WebRestaurant | https://fuudelivery-api-8y6l.onrender.com |
+| `REACT_APP_PAYMENT_API_URL` | WebRestaurant | https://fuudelivery-payment.onrender.com |
+| `REACT_APP_API_URL` | WebAdmin | https://fuudelivery-api-8y6l.onrender.com |
 
 ## Confiabilidade da fila
 
@@ -121,3 +139,27 @@ Quando o Redis cai:
 - **Erros**: Sentry no frontend, logs no Render
 - **Métricas**: Render Metrics (CPU, memória, request time)
 - **Alertas**: Slack/Discord webhook para erros 5xx
+
+## Domínio personalizado (futuro)
+
+Quando o domínio `fuudelivery.com.br` estiver configurado:
+
+1. Configurar DNS no provedor do domínio:
+   - `fuudelivery.com.br` → fuudelivery-web.onrender.com
+   - `api.fuudelivery.com.br` → fuudelivery-api-8y6l.onrender.com
+   - `admin.fuudelivery.com.br` → fuudelivery-admin-lv7f.onrender.com
+   - `payment.fuudelivery.com.br` → fuudelivery-payment.onrender.com
+   - `painel.fuudelivery.com.br` → fuudelivery-payment-panel.onrender.com
+
+2. Atualizar CORS no Backend:
+   ```go
+   AllowOrigins: "https://fuudelivery.com.br,https://api.fuudelivery.com.br,..."
+   ```
+
+3. Atualizar env vars dos frontends com novos domínios
+
+4. Configurar SSL automático no Render (gratuito)
+
+---
+
+*Última atualização: 2026-07-26*

@@ -15,63 +15,105 @@ O arquivo `.fuudelivery-config/CREDENTIALS.md` foi commitado no repositório pú
 | Render API Token | Deploy | Deploy/destroy de serviços |
 | Admin password (`123456`) | Login admin | Conta admin comprometida |
 
-### Ação imediata (passo a passo)
+### Guia Completo de Rotação de Credenciais
 
-**NÃO fazer push de credenciais novas antes de rotacionar as antigas.**
+> **IMPORTANTE:** Execute TODOS os passos na ordem abaixo. Não pule nenhum.
+> Após rotacionar, atualize as env vars no Render ANTES de fazer push das novas credenciais.
 
-#### 1. MongoDB Atlas (banco de pagamento)
-1. Acesse [cloud.mongodb.com](https://cloud.mongodb.com)
-2. Database Access → utilisateur `fuudelivery` → Edit
-3. Regenerate password → copiar nova senha
-4. Atualizar variável `MONGODB_URI` no Render (Payment Service)
+#### Passo 1 — MongoDB Atlas
 
-#### 2. Supabase (PostgreSQL)
-1. Acesse [supabase.com/dashboard](https://supabase.com/dashboard)
-2. Project Settings → Database → Reset password (ou Settings → API → regenerate)
-3. Atualizar variável `SUPABASE_URL` e `SUPABASE_KEY` no Render (API Service)
+```bash
+# 1. Acesse https://cloud.mongodb.com
+# 2. Database Access → Usuário pavanbrtl050_db_user → Edit
+# 3. Regenerate Password → copie a nova senha
+# 4. Atualize MONGODB_URI no Render (Payment Service e API)
+```
 
-#### 3. Redis (Render Managed Redis)
-1. Dashboard Render → `fuudelivery-redis` → Info
-2. Cópia da Connection String (muda a cada reconnect, mas a password é fixa)
-3. Se o Redis foi provisionado via Render, a password não pode ser rotacionada diretamente — recrie o serviço se necessário
+Nova connection string:
+```
+mongodb+srv://pavanbrtl050_db_user:NOVA_SENHA@fuudelivery.hj0pytw.mongodb.net/fuudelivery?retryWrites=true&w=majority&appName=fuudelivery
+```
 
-#### 4. AbacatePay
-1. Acesse painel do AbacatePay
-2. API Keys → Revogar chave antiga → Gerar nova
-3. Atualizar `ABACATEPAY_API_KEY` no Render (Payment Service)
-4. Atualizar webhook secret e variável `ABACATEPAY_WEBHOOK_SECRET`
+#### Passo 2 — Supabase (PostgreSQL)
 
-#### 5. JWT Secret
-1. Gerar novo secret: `openssl rand -hex 32`
-2. Atualizar variável `JWT_SECRET` no Render (API + Payment)
-3. **ATENÇÃO**: todos os tokens JWT existentes serão invalidados — usuários precisarão fazer login novamente
+```bash
+# 1. Acesse https://supabase.com/dashboard
+# 2. Project Settings → Database → Reset password
+# 3. Copie a nova senha
+# 4. Atualize DB_CONNECTION_STRING no Render (API Service)
+```
 
-#### 6. Admin Bootstrap Secret
-1. Gerar novo: `openssl rand -hex 16`
-2. Atualizar variável `BOOTSTRAP_SECRET` no Render (Payment Service)
-3. O código em `main.go` já não reseta mais a senha em cada restart
+Nova connection string:
+```
+postgresql://postgres.prpfuoqhazfynpsfsrpb:NOVA_SENHA@aws-1-us-east-2.pooler.supabase.com:6543/postgres
+```
 
-#### 7. Render API Token
-1. Dashboard Render → Account Settings → API Keys
-2. Revogar token antigo → Criar novo
-3. Atualizar secret `RENDER_API_KEY` no GitHub (`.github/workflows/deploy.yml`)
+#### Passo 3 — Redis (Render)
 
-#### 8. Senha do Admin
-1. Acesse o PaymentPanel ou WebAdmin
-2. Faça login com credenciais atuais
-3. Altere a senha para uma forte (16+ caracteres, mistura de tipos)
-4. Atualizar variável `ADMIN_PASSWORD` no Render
+```bash
+# 1. Dashboard Render → fuudelivery-redis → Info
+# 2. Copie a nova Connection String
+# 3. Atualize REDIS_URL no Render (API + Payment)
+```
 
-### Limpar histórico do git
+#### Passo 4 — AbacatePay
 
-Mesmo após remover `CREDENTIALS.md` do tracking, o conteúdo permanece no histórico. Usar BFG Repo-Cleaner:
+```bash
+# 1. Acesse painel do AbacatePay
+# 2. API Keys → Revogar chave antiga → Gerar nova
+# 3. Copie a nova API Key
+# 4. Atualize ABACATE_PAY_API_KEY no Render (API + Payment)
+# 5. Atualize ABACATE_PAY_WEBHOOK_SECRET no Render (API)
+```
+
+#### Passo 5 — JWT Secret
+
+```bash
+# 1. Gere um novo secret (64 caracteres):
+openssl rand -hex 32
+
+# 2. Atualize JWT_SECRET no Render (API + Payment)
+# ATENÇÃO: todos os tokens JWT existentes serão invalidados
+# Usuários precisarão fazer login novamente
+```
+
+#### Passo 6 — Admin Bootstrap Secret
+
+```bash
+# 1. Gere um novo secret:
+openssl rand -hex 16
+
+# 2. Atualize BOOTSTRAP_SECRET no Render (Payment Service)
+```
+
+#### Passo 7 — Render API Token
+
+```bash
+# 1. Dashboard Render → Account Settings → API Keys
+# 2. Revogar token antigo → Criar novo
+# 3. Atualize RENDER_API_KEY no GitHub (.github/workflows/deploy.yml)
+```
+
+#### Passo 8 — Senha do Admin
+
+```bash
+# 1. Acesse o PaymentPanel ou WebAdmin
+# 2. Faça login com credenciais atuais
+# 3. Altere a senha para uma forte (16+ caracteres)
+# 4. Atualize ADMIN_PASSWORD no Render (Payment Service)
+```
+
+### Limpar Histórico do Git (BFG Repo-Cleaner)
+
+Mesmo após remover `CREDENTIALS.md` do tracking, o conteúdo permanece no histórico.
 
 ```bash
 # 1. Clonar o repo (BFG precisa de clone limpo)
 git clone --mirror https://github.com/MarcosPavanBR/fuudelivery.git
 
-# 2. Rodar BFG para remover o arquivo
+# 2. Rodar BFG para remover os arquivos
 bfg --delete-files CREDENTIALS.md
+bfg --delete-files .env
 
 # 3. Limpar reflog e fazer push forçado
 cd fuudelivery.git
@@ -80,18 +122,34 @@ git gc --prune=now --aggressive
 git push --force
 ```
 
-**IMPORTANTE**: Após o push forçado, todos os clones locais precisam ser re-clonados ou fazer `git fetch --all && git reset --hard origin/master`.
+**IMPORTANTE:** Após o push forçado, todos os clones locais precisam ser re-clonados:
+```bash
+git fetch --all && git reset --hard origin/master
+```
 
-### Verificar se o repo é público
+### Verificar se o Repo é Público
 
-O repositório `github.com/MarcosPavanBR/fuudelivery` é público. Se containha credenciais de produção, qualquer pessoa pode ter clonado e acessado os dados. Considere:
+O repositório `github.com/MarcosPavanBR/fuudelivery` é público. Considere:
 
-1. Criar um novo repo privado com o mesmo código (limpo)
-2. OU manter o repo público mas com ZERO credenciais em texto plano
+1. **Criar um novo repo privado** com o mesmo código (limpo)
+2. **OU** manter público mas com ZERO credenciais em texto plano
 
 ---
 
-## P1 — Rate Limiting
+## Checklist de Segurança para Produção
+
+- [ ] CREDENTIALS.md removido do histórico do git (BFG)
+- [ ] .env removido do histórico do git (BFG)
+- [ ] Todas as credenciais rotacionadas (Atlas, Supabase, Redis, AbacatePay, JWT, Render)
+- [ ] Senha do admin alterada para forte (16+ caracteres)
+- [ ] Rate limiting em login, registro e pagamento (PENDENTE — ver task #4)
+- [ ] govulncheck e npm audit no CI (✅ Implementado)
+- [ ] Repo verified como público (ou tornar privado)
+- [ ] Nenhum `.env` com credenciais de produção commitado
+
+---
+
+## P1 — Rate Limiting (PENDENTE)
 
 ### Rotas que precisam de rate limiting
 
@@ -158,41 +216,28 @@ go get github.com/gofiber/fiber/v2/middleware/limiter
 
 ---
 
-## P1 — Scanning de Vulnerabilidades no CI
+## P1 — Scanning de Vulnerabilidades no CI (✅ Implementado)
 
-### Go: govulncheck
+### Go: govulncheck (✅ Matrix strategy)
 
-Adicionar ao `.github/workflows/ci.yml`:
+O CI agora usa matrix strategy para rodar govulncheck em paralelo para todos os 7 módulos:
+- cmd/fuudelivery
+- Backend/Payment
+- Backend/auth_api
+- Backend/payment_api
+- Backend/orders_api
+- Backend/delivery_api
+- Backend/chat_api
 
-```yaml
-- name: Install govulncheck
-  run: go install golang.org/x/vuln/cmd/govulncheck@latest
-
-- name: Run govulncheck
-  run: govulncheck ./...
-  working-directory: cmd/fuudelivery
-```
-
-### JavaScript: npm audit
+### JavaScript: npm audit (✅ Implementado)
 
 ```yaml
-- name: Run npm audit (WebRestaurant)
+- name: Run npm audit
   run: npm audit --audit-level=moderate
-  working-directory: Frontend/WebRestaurant
-
-- name: Run npm audit (WebAdmin)
-  run: npm audit --audit-level=moderate
-  working-directory: Frontend/WebAdmin
 ```
+
+Roda para: WebRestaurant, WebAdmin, PaymentPanel
 
 ---
 
-## Checklist de segurança para produção
-
-- [ ] CREDENTIALS.md removido do histórico do git (BFG)
-- [ ] Todas as credenciais rotacionadas (Atlas, Supabase, AbacatePay, JWT, Render)
-- [ ] Senha do admin alterada para forte
-- [ ] Rate limiting em login, registro e pagamento
-- [ ] govulncheck e npm audit no CI
-- [ ] Repo verified como público (ou tornar privado)
-- [ ] Nenhum `.env` com credenciais de produção commitado
+*Última atualização: 2026-07-26*

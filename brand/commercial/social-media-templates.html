@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FuuDelivery - Social Media Templates</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --red: #DC2626;
+            --red-light: #EF4444;
+            --red-dark: #B91C1C;
+            --yellow: #FBBF24;
+            --yellow-light: #FCD34D;
+            --yellow-dark: #F59E0B;
+            --dark: #0A0A0F;
+            --dark-card: #12121A;
+            --white: #FFFFFF;
+            --gray-100: #F3F4F6;
+            --gray-300: #D1D5DB;
+            --gray-400: #9CA3AF;
+            --gray-500: #6B7280;
+            --gray-700: #374151;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: #08080C;
+            color: var(--white);
+            padding: 60px 40px;
+        }
+
+        .page-header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .page-header h1 {
+            font-size: 42px;
+            font-weight: 900;
+            margin-bottom: 12px;
+        }
+
+        .page-header h1 .red { color: var(--red); }
+        .page-header h1 .yellow { color: var(--yellow); }
+
+        .page-header p {
+            font-size: 16px;
+            color: var(--gray-400);
+        }
+
+        .section-label {
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            color: var(--red);
+            margin-bottom: 20px;
+            margin-top: 60px;
+        }
+
+        .template-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 40px;
+            margin-bottom: 40px;
+        }
+
+        .template-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .template-meta {
+            text-align: center;
+            margin-top: 16px;
+        }
+
+        .template-meta h3 {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .template-meta p {
+            font-size: 13px;
+            color: var(--gray-500);
+        }
+
+        /* Instagram Post Templates (1080x1080 aspect ratio) */
+        .ig-post {
+            width: 420px;
+            height: 420px;
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+            flex-shrink: 0;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+
+        .ig-post-inner {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 48px 40px;
+            position: relative;
+        }
+
+        /* Instagram Story Template (1080x1920 aspect ratio) */
+        .ig-story {
+            width: 240px;
+            height: 427px;
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+            flex-shrink: 0;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+
+        .ig-story-inner {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 32px 24px;
+            position: relative;
+        }
+
+        /* LinkedIn Template (1200x627 aspect ratio) */
+        .linkedin-post {
+            width: 560px;
+            height: 293px;
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+            flex-shrink: 0;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+
+        .linkedin-inner {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 36px 44px;
+            position: relative;
+        }
+
+        /* ---- Post 1: Problema ---- */
+        .post1 .ig-post-inner {
+            background: linear-gradient(160deg, #1a0a0a 0%, #0A0A0F 50%, #1a0a0a 100%);
+        }
+
+        .post1 .ig-post-inner::before {
+            content: '';
+            position: absolute;
+            top: -80px;
+            right: -80px;
+            width: 240px;
+            height: 240px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(220, 38, 38, 0.15), transparent 70%);
+        }
+
+        .post1 .question-mark {
+            font-size: 64px;
+            font-weight: 900;
+            color: var(--red);
+            margin-bottom: 20px;
+            line-height: 1;
+        }
+
+        .post1 h2 {
+            font-size: 26px;
+            font-weight: 800;
+            text-align: center;
+            line-height: 1.3;
+            margin-bottom: 20px;
+        }
+
+        .post1 .highlight {
+            color: var(--red);
+        }
+
+        .post1 .stat-bar {
+            display: flex;
+            gap: 6px;
+            width: 100%;
+        }
+
+        .post1 .stat-bar-fill {
+            height: 4px;
+            background: var(--red);
+            border-radius: 2px;
+            flex: 1;
+        }
+
+        .post1 .stat-bar-bg {
+            height: 4px;
+            background: var(--gray-700);
+            border-radius: 2px;
+            flex: 1;
+        }
+
+        .post1 .brand-tag {
+            position: absolute;
+            bottom: 20px;
+            right: 24px;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--gray-500);
+        }
+
+        .post1 .brand-tag span { color: var(--red); }
+
+        /* ---- Post 2: Solucao ---- */
+        .post2 .ig-post-inner {
+            background: linear-gradient(160deg, #0a0f0a 0%, #0A0A0F 50%, #0a0a05 100%);
+        }
+
+        .post2 .ig-post-inner::before {
+            content: '';
+            position: absolute;
+            bottom: -60px;
+            left: -60px;
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(251, 191, 36, 0.12), transparent 70%);
+        }
+
+        .post2 .pre-title {
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            color: var(--yellow);
+            margin-bottom: 20px;
+        }
+
+        .post2 h2 {
+            font-size: 28px;
+            font-weight: 800;
+            text-align: center;
+            line-height: 1.25;
+            margin-bottom: 28px;
+        }
+
+        .post2 .highlight {
+            color: var(--yellow);
+        }
+
+        .post2 .icon-row {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .post2 .icon-box {
+            width: 52px;
+            height: 52px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 800;
+        }
+
+        .post2 .icon-box:nth-child(1) { background: var(--red); }
+        .post2 .icon-box:nth-child(2) { background: var(--yellow); color: var(--dark); }
+        .post2 .icon-box:nth-child(3) { background: #10B981; }
+        .post2 .icon-box:nth-child(4) { background: #6366F1; }
+
+        .post2 .brand-tag {
+            position: absolute;
+            bottom: 20px;
+            right: 24px;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--gray-500);
+        }
+
+        .post2 .brand-tag span { color: var(--yellow); }
+
+        /* ---- Post 3: Features ---- */
+        .post3 .ig-post-inner {
+            background: linear-gradient(160deg, #0a0a12 0%, #0A0A0F 50%, #120a0a 100%);
+        }
+
+        .post3 .ig-post-inner::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 300px;
+            height: 300px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(220, 38, 38, 0.08), transparent 60%);
+        }
+
+        .post3 h2 {
+            font-size: 24px;
+            font-weight: 800;
+            text-align: center;
+            line-height: 1.3;
+            margin-bottom: 28px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .post3 .highlight { color: var(--yellow); }
+
+        .post3 .features-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            width: 100%;
+            position: relative;
+            z-index: 1;
+        }
+
+        .post3 .feature-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 10px;
+            padding: 12px 16px;
+        }
+
+        .post3 .feature-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 800;
+            flex-shrink: 0;
+        }
+
+        .post3 .feature-item:nth-child(1) .feature-icon { background: var(--red); }
+        .post3 .feature-item:nth-child(2) .feature-icon { background: var(--yellow); color: var(--dark); }
+        .post3 .feature-item:nth-child(3) .feature-icon { background: #10B981; }
+
+        .post3 .feature-text {
+            font-size: 14px;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+
+        .post3 .brand-tag {
+            position: absolute;
+            bottom: 20px;
+            right: 24px;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--gray-500);
+        }
+
+        .post3 .brand-tag span { color: var(--yellow); }
+
+        /* ---- Post 4: Diferencial ---- */
+        .post4 .ig-post-inner {
+            background: linear-gradient(160deg, #12080a 0%, #0A0A0F 50%, #0a0a12 100%);
+        }
+
+        .post4 .ig-post-inner::before {
+            content: '';
+            position: absolute;
+            top: -40px;
+            left: -40px;
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(251, 191, 36, 0.1), transparent 70%);
+        }
+
+        .post4 .ig-post-inner::after {
+            content: '';
+            position: absolute;
+            bottom: -40px;
+            right: -40px;
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(220, 38, 38, 0.1), transparent 70%);
+        }
+
+        .post4 .comparison {
+            display: flex;
+            width: 100%;
+            gap: 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .post4 .comp-side {
+            flex: 1;
+            padding: 24px;
+            border-radius: 14px;
+            text-align: center;
+        }
+
+        .post4 .comp-side.bad {
+            background: rgba(220, 38, 38, 0.08);
+            border: 1px solid rgba(220, 38, 38, 0.2);
+        }
+
+        .post4 .comp-side.good {
+            background: rgba(251, 191, 36, 0.08);
+            border: 1px solid rgba(251, 191, 36, 0.2);
+        }
+
+        .post4 .comp-label {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 12px;
+            color: var(--gray-500);
+        }
+
+        .post4 .comp-side.bad .comp-percent {
+            font-size: 40px;
+            font-weight: 900;
+            color: var(--red);
+            margin-bottom: 4px;
+        }
+
+        .post4 .comp-side.good .comp-percent {
+            font-size: 40px;
+            font-weight: 900;
+            color: var(--yellow);
+            margin-bottom: 4px;
+        }
+
+        .post4 .comp-detail {
+            font-size: 12px;
+            color: var(--gray-400);
+        }
+
+        .post4 .vs {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--dark);
+            border: 2px solid var(--gray-700);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 800;
+            color: var(--gray-400);
+            z-index: 2;
+        }
+
+        .post4 .bottom-text {
+            font-size: 18px;
+            font-weight: 800;
+            text-align: center;
+            margin-top: 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .post4 .brand-tag {
+            position: absolute;
+            bottom: 20px;
+            right: 24px;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--gray-500);
+        }
+
+        .post4 .brand-tag span { color: var(--yellow); }
+
+        /* ---- Story: App Demo ---- */
+        .story1 .ig-story-inner {
+            background: linear-gradient(180deg, var(--red-dark) 0%, var(--dark) 40%);
+        }
+
+        .story1 .story-logo {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            background: var(--red);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: 900;
+            margin-bottom: 20px;
+        }
+
+        .story1 .story-title {
+            font-size: 16px;
+            font-weight: 800;
+            text-align: center;
+            margin-bottom: 16px;
+            line-height: 1.3;
+        }
+
+        .story1 .phone-mockup {
+            width: 140px;
+            height: 240px;
+            background: var(--dark-card);
+            border-radius: 16px;
+            border: 2px solid rgba(255,255,255,0.1);
+            overflow: hidden;
+            position: relative;
+            margin-bottom: 16px;
+        }
+
+        .story1 .phone-header {
+            height: 24px;
+            background: rgba(220, 38, 38, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .story1 .phone-header span {
+            font-size: 7px;
+            font-weight: 700;
+            color: var(--red);
+        }
+
+        .story1 .phone-content {
+            padding: 8px;
+        }
+
+        .story1 .phone-item {
+            display: flex;
+            gap: 6px;
+            padding: 6px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+
+        .story1 .phone-img {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            background: var(--gray-700);
+            flex-shrink: 0;
+        }
+
+        .story1 .phone-text .name {
+            font-size: 6px;
+            font-weight: 700;
+            color: var(--white);
+            margin-bottom: 2px;
+        }
+
+        .story1 .phone-text .detail {
+            font-size: 5px;
+            color: var(--gray-500);
+        }
+
+        .story1 .story-cta {
+            background: var(--red);
+            border-radius: 8px;
+            padding: 8px 20px;
+            font-size: 11px;
+            font-weight: 700;
+            position: absolute;
+            bottom: 24px;
+        }
+
+        .story1 .swipe-hint {
+            position: absolute;
+            bottom: 12px;
+            font-size: 9px;
+            color: var(--gray-500);
+        }
+
+        /* ---- LinkedIn: Comparativo ---- */
+        .linkedin1 .linkedin-inner {
+            background: linear-gradient(135deg, #0A0A0F 0%, #12121A 100%);
+        }
+
+        .linkedin1 .linkedin-inner::before {
+            content: '';
+            position: absolute;
+            top: -60px;
+            right: -60px;
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(220, 38, 38, 0.1), transparent 70%);
+        }
+
+        .linkedin1 .linkedin-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .linkedin1 .ld-title {
+            font-size: 14px;
+            font-weight: 300;
+            color: var(--gray-400);
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+
+        .linkedin1 .ld-brand {
+            font-size: 14px;
+            font-weight: 800;
+        }
+
+        .linkedin1 .ld-brand .r { color: var(--red); }
+
+        .linkedin1 .rate-compare {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 16px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .linkedin1 .rate-item {
+            flex: 1;
+            padding: 14px 16px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .linkedin1 .rate-item.ifood {
+            background: rgba(220, 38, 38, 0.08);
+            border: 1px solid rgba(220, 38, 38, 0.2);
+        }
+
+        .linkedin1 .rate-item.fd {
+            background: rgba(251, 191, 36, 0.08);
+            border: 1px solid rgba(251, 191, 36, 0.2);
+        }
+
+        .linkedin1 .rate-name {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--gray-500);
+            margin-bottom: 6px;
+        }
+
+        .linkedin1 .rate-value {
+            font-size: 28px;
+            font-weight: 900;
+        }
+
+        .linkedin1 .rate-item.ifood .rate-value { color: var(--red); }
+        .linkedin1 .rate-item.fd .rate-value { color: var(--yellow); }
+
+        .linkedin1 .rate-sub {
+            font-size: 9px;
+            color: var(--gray-500);
+        }
+
+        .linkedin1 .linkedin-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: relative;
+            z-index: 1;
+        }
+
+        .linkedin1 .ld-cta {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--yellow);
+        }
+
+        .linkedin1 .ld-url {
+            font-size: 10px;
+            color: var(--gray-500);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            body { padding: 20px 16px; }
+            .template-grid {
+                grid-template-columns: 1fr;
+                gap: 32px;
+            }
+            .ig-post { width: 100%; height: auto; aspect-ratio: 1; }
+            .linkedin-post { width: 100%; height: auto; aspect-ratio: 1200/627; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="page-header">
+        <h1>Fuu<span class="red">Delivery</span> <span class="yellow">Social</span></h1>
+        <p>Templates de redes sociais para campanhas de marketing</p>
+    </div>
+
+    <!-- Instagram Posts -->
+    <div class="section-label">Instagram Posts (1080x1080)</div>
+    <div class="template-grid">
+
+        <!-- Post 1: Problema -->
+        <div class="template-wrapper">
+            <div class="ig-post post1">
+                <div class="ig-post-inner">
+                    <div class="question-mark">?</div>
+                    <h2>Por que o iFood cobra<br><span class="highlight">27%</span> e voce paga?</h2>
+                    <div class="stat-bar">
+                        <div class="stat-bar-fill"></div>
+                        <div class="stat-bar-fill"></div>
+                        <div class="stat-bar-fill"></div>
+                        <div class="stat-bar-fill"></div>
+                        <div class="stat-bar-fill"></div>
+                        <div class="stat-bar-fill"></div>
+                        <div class="stat-bar-fill"></div>
+                        <div class="stat-bar-bg"></div>
+                        <div class="stat-bar-bg"></div>
+                        <div class="stat-bar-bg"></div>
+                        <div class="stat-bar-bg"></div>
+                    </div>
+                    <div class="brand-tag">Fuu<span>Delivery</span></div>
+                </div>
+            </div>
+            <div class="template-meta">
+                <h3>Instagram Post #1 - Problema</h3>
+                <p>Aborda a dor dos restaurantes com taxas abusivas</p>
+            </div>
+        </div>
+
+        <!-- Post 2: Solucao -->
+        <div class="template-wrapper">
+            <div class="ig-post post2">
+                <div class="ig-post-inner">
+                    <div class="pre-title">Cooperativismo Digital</div>
+                    <h2>E se os restaurantes<br>fossem <span class="highlight">donos</span><br>do sistema?</h2>
+                    <div class="icon-row">
+                        <div class="icon-box">5%</div>
+                        <div class="icon-box">GO</div>
+                        <div class="icon-box">CO</div>
+                        <div class="icon-box">MIT</div>
+                    </div>
+                    <div class="brand-tag">Fuu<span>Delivery</span></div>
+                </div>
+            </div>
+            <div class="template-meta">
+                <h3>Instagram Post #2 - Solucao</h3>
+                <p>Apresenta a plataforma cooperativa como alternativa</p>
+            </div>
+        </div>
+
+        <!-- Post 3: Features -->
+        <div class="template-wrapper">
+            <div class="ig-post post3">
+                <div class="ig-post-inner">
+                    <h2><span class="highlight">PIX</span> instantaneo.<br>Cashback na carteira.<br>Sem intermediarios.</h2>
+                    <div class="features-list">
+                        <div class="feature-item">
+                            <div class="feature-icon">PIX</div>
+                            <div class="feature-text">Pagamento direto, sem banco</div>
+                        </div>
+                        <div class="feature-item">
+                            <div class="feature-icon">WLT</div>
+                            <div class="feature-text">Cashback em cada pedido</div>
+                        </div>
+                        <div class="feature-item">
+                            <div class="feature-icon">SPL</div>
+                            <div class="feature-text">Split automatico entre parceiros</div>
+                        </div>
+                    </div>
+                    <div class="brand-tag">Fuu<span>Delivery</span></div>
+                </div>
+            </div>
+            <div class="template-meta">
+                <h3>Instagram Post #3 - Features</h3>
+                <p>Destaques funcionais com foco em PIX e carteira</p>
+            </div>
+        </div>
+
+        <!-- Post 4: Diferencial -->
+        <div class="template-wrapper">
+            <div class="ig-post post4">
+                <div class="ig-post-inner">
+                    <div class="comparison">
+                        <div class="comp-side bad">
+                            <div class="comp-label">iFood</div>
+                            <div class="comp-percent">27%</div>
+                            <div class="comp-detail">por transacao</div>
+                        </div>
+                        <div class="comp-side good">
+                            <div class="comp-label">FuuDelivery</div>
+                            <div class="comp-percent">5%</div>
+                            <div class="comp-detail">por transacao</div>
+                        </div>
+                        <div class="vs">VS</div>
+                    </div>
+                    <div class="bottom-text">5% para a plataforma.<br>85% para voce.</div>
+                    <div class="brand-tag">Fuu<span>Delivery</span></div>
+                </div>
+            </div>
+            <div class="template-meta">
+                <h3>Instagram Post #4 - Diferencial</h3>
+                <p>Comparativo visual de taxas iFood vs FuuDelivery</p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Instagram Story -->
+    <div class="section-label">Instagram Story (1080x1920)</div>
+    <div class="template-grid">
+        <div class="template-wrapper">
+            <div class="ig-story story1">
+                <div class="ig-story-inner">
+                    <div class="story-logo">FD</div>
+                    <div class="story-title">Seu delivery,<br>seu controle.</div>
+                    <div class="phone-mockup">
+                        <div class="phone-header"><span>FuuDelivery</span></div>
+                        <div class="phone-content">
+                            <div class="phone-item">
+                                <div class="phone-img"></div>
+                                <div class="phone-text">
+                                    <div class="name">Restaurante A</div>
+                                    <div class="detail">X-Bacon Combo - R$32,90</div>
+                                </div>
+                            </div>
+                            <div class="phone-item">
+                                <div class="phone-img"></div>
+                                <div class="phone-text">
+                                    <div class="name">Restaurante B</div>
+                                    <div class="detail">Pizza Margherita - R$45,00</div>
+                                </div>
+                            </div>
+                            <div class="phone-item">
+                                <div class="phone-img"></div>
+                                <div class="phone-text">
+                                    <div class="name">Restaurante C</div>
+                                    <div class="detail">Sushi Combo - R$68,00</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="story-cta">Baixe Agora</div>
+                    <div class="swipe-hint">Deslize para cima</div>
+                </div>
+            </div>
+            <div class="template-meta">
+                <h3>Instagram Story - App Demo</h3>
+                <p>Demonstracao do app com mockup de celular</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- LinkedIn -->
+    <div class="section-label">LinkedIn Post (1200x627)</div>
+    <div class="template-grid">
+        <div class="template-wrapper">
+            <div class="linkedin-post linkedin1">
+                <div class="linkedin-inner">
+                    <div class="linkedin-header">
+                        <div class="ld-title">Comparativo de Taxas</div>
+                        <div class="ld-brand">Fuu<span class="r">Delivery</span></div>
+                    </div>
+                    <div class="rate-compare">
+                        <div class="rate-item ifood">
+                            <div class="rate-name">iFood</div>
+                            <div class="rate-value">27-33%</div>
+                            <div class="rate-sub">por transacao</div>
+                        </div>
+                        <div class="rate-item fd">
+                            <div class="rate-name">FuuDelivery</div>
+                            <div class="rate-value">5-12%</div>
+                            <div class="rate-sub">por transacao</div>
+                        </div>
+                    </div>
+                    <div class="linkedin-footer">
+                        <div class="ld-cta">Codigo aberto. Cooperativa. Justo.</div>
+                        <div class="ld-url">fuudelivery.com.br</div>
+                    </div>
+                </div>
+            </div>
+            <div class="template-meta">
+                <h3>LinkedIn - Comparativo de Taxas</h3>
+                <p>Post profissional comparando modelo cooperativo vs monopolio</p>
+            </div>
+        </div>
+    </div>
+
+    <div style="text-align: center; margin-top: 80px; padding: 40px; border-top: 1px solid rgba(255,255,255,0.06);">
+        <p style="font-size: 14px; color: var(--gray-500);">FuuDelivery Brand Kit - Social Media Templates - Licenca MIT</p>
+    </div>
+
+</body>
+</html>

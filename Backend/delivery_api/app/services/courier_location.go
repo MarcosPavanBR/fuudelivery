@@ -232,7 +232,7 @@ func (s *CourierStore) CleanupStale(maxAgeSeconds int64) {
 
 	cutoff := time.Now().UnixMilli() - maxAgeSeconds*1000
 	for id, c := range s.couriers {
-		if c.LastUpdate < cutoff {
+		if c.LastUpdate <= cutoff {
 			delete(s.couriers, id)
 		}
 	}

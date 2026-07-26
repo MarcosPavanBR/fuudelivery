@@ -36,6 +36,10 @@ services:
         value: "MS_DELIVERY_QUEUE"
       - key: RABBIT_PAYMENT_QUEUE
         value: "payment_queue"
+      - key: APP_URL
+        value: "https://fuudelivery-web.onrender.com"
+      - key: API_BASE_URL
+        value: "https://fuudelivery-api.onrender.com"
       - key: ABACATE_PAY_API_KEY
         sync: false
     healthCheckPath: /health

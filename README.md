@@ -2,7 +2,7 @@
 
 Plataforma de delivery completa com pagamento integrado, split, carteira digital, cashback, cupons, chat, rastreio e painel de pagamentos.
 
-Fork do [vercardapio/appdelivery](https://github.com/carloshomar/appdelivery) extendido com sistema de pagamentos e infra de producao no Render.
+Fork do [vercardapio/appdelivery](https://github.com/carloshomar/appdelivery) estendido com sistema de pagamentos e infra de producao no Render.
 
 ## Arquitetura
 
@@ -13,8 +13,8 @@ Fork do [vercardapio/appdelivery](https://github.com/carloshomar/appdelivery) ex
           +----------------------------+------------------------------+
           |
   API Gateway (Go + Fiber)  ---->  Payment Service (Go + Fiber)
-  PostgreSQL (Supabase)             MongoDB (Atlas)
-  Redis (Render)                    RabbitMQ
+  MongoDB (Atlas)                  MongoDB (Atlas)
+  Redis (Render)                   RabbitMQ
 ```
 
 ## Servicos (Render)
@@ -37,6 +37,7 @@ Fork do [vercardapio/appdelivery](https://github.com/carloshomar/appdelivery) ex
 - Aprovacao automatica (baixo risco) ou manual (alto risco)
 - Carteira digital com operacoes atomicas ($inc no MongoDB)
 - Cashback e cupons de desconto
+- Saque via PIX
 
 ### Comunicacao
 - RabbitMQ: fila entre monolito e Payment Service
@@ -44,17 +45,30 @@ Fork do [vercardapio/appdelivery](https://github.com/carloshomar/appdelivery) ex
 - Redis: fila/pubsub com fallback para canais Go em memoria
 
 ### Frontend
-- AppComida (React Native/Expo): app do cliente
-- AppEntrega (React Native/Expo): app do entregador
-- WebRestaurant (React + Tailwind): kanban, cardapio, carteira, relatorios, cadastro
-- WebAdmin (React): painel administrativo
-- PaymentPanel (React): aprovacao de pagamentos
+- **AppComida** (React Native/Expo): app do cliente
+- **AppEntrega** (React Native/Expo): app do entregador
+- **WebRestaurant** (React + Tailwind): kanban, cardapio, carteira, relatorios, cadastro
+- **WebAdmin** (React): painel administrativo
+- **PaymentPanel** (HTML/JS): painel standalone de aprovacao de pagamentos
+
+### Backend (microservicos Go)
+
+| Modulo | Descricao |
+|---|---|
+| `cmd/fuudelivery` | Monolith principal com auth, pedidos, produtos, entregas, chat |
+| `Backend/Payment` | Motor de aprovacao de pagamentos, carteiras, chargebacks, relatorios |
+| `Backend/auth_api` | Autenticacao JWT, CRUD de usuarios e estabelecimentos |
+| `Backend/payment_api` | Gateway de pagamento (AbacatePay/PIX/Cartao), webhook, split |
+| `Backend/orders_api` | Pedidos, produtos, categorias, cupons, fidelidade |
+| `Backend/delivery_api` | Rastreio de entregadores, calculo de rota |
+| `Backend/chat_api` | Chat em tempo real entre cliente/restaurante |
 
 ### Seguranca
 - JWT com validacao de SigningMethod
 - Rate limiting: login 5req/min, pagamento 10req/min, carteira 20req/min
 - CORS restrito a dominios conhecidos
 - Senhas hasheadas com bcrypt
+- Wallet com operacoes atomicas (eliminacao de race conditions)
 - CI com govulncheck e npm audit
 
 ## Como Rodar
@@ -66,7 +80,7 @@ cd Backend
 docker compose up --build
 ```
 
-### Backend (servico individual)
+### Backend (servico individual — Payment)
 
 ```bash
 cd Backend/Payment
@@ -74,12 +88,27 @@ go mod tidy
 go run main.go
 ```
 
-### Frontend
+### Backend (servico individual — Monolith)
+
+```bash
+cd cmd/fuudelivery
+go mod tidy
+go run main.go
+```
+
+### Frontend (WebRestaurant)
 
 ```bash
 cd Frontend/WebRestaurant
 npm install
 npm start
+```
+
+### Frontend (PaymentPanel)
+
+```bash
+cd Frontend/PaymentPanel
+# Abra index.html no navegador
 ```
 
 ### Apps Mobile
@@ -100,7 +129,11 @@ npx expo start
 | REDIS_URL | Redis (Render) |
 | JWT_SECRET | Secret para tokens JWT |
 | MONGODB_URI | MongoDB Atlas |
-| RABBITMQ_URL | RabbitMQ (opcional) |
+| MONGO_DATABASE | fuudelivery |
+| ABACATE_PAY_API_KEY | API key do AbacatePay |
+| ABACATE_PAY_WEBHOOK_SECRET | Webhook secret do AbacatePay |
+| RABBIT_DELIVERY_QUEUE | Nome da fila de entregas |
+| RABBIT_ORDER_QUEUE | Nome da fila de pedidos |
 
 ### Payment Service (fuudelivery-payment)
 
@@ -109,22 +142,37 @@ npx expo start
 | MONGODB_URI | MongoDB Atlas (fuudelivery_payments) |
 | JWT_SECRET | Mesmo secret da API |
 | ADMIN_PASSWORD | Senha do admin |
-| ABACATEPAY_API_KEY | API key do AbacatePay |
-| ABACATEPAY_WEBHOOK_SECRET | Webhook secret do AbacatePay |
+| ABACATE_PAY_API_KEY | API key do AbacatePay |
+| ABACATE_PAY_WEBHOOK_SECRET | Webhook secret do AbacatePay |
 | BOOTSTRAP_SECRET | Secret para bootstrap do admin |
 | PORT | 8084 (default) |
+| REDIS_URL | Redis para fila de pagamentos |
+
+### Frontends
+
+| Variavel | Descricao |
+|---|---|
+| REACT_APP_API_URL | URL base da API Go |
+| REACT_APP_PAYMENT_API_URL | URL base do Payment Service |
 
 ## Testes
 
 ```bash
-# Todos os testes do Payment Service (44 testes)
-cd Backend/Payment
-go test ./... -v
+# Todos os modulos Go (via go.work)
+go test ./...
 
 # Modulos individuais
+cd Backend/Payment && go test ./...
 cd Backend/payment_api && go test ./...
 cd Backend/orders_api && go test ./...
 cd Backend/auth_api && go test ./...
+
+# Testes de integracao (requer Docker — sobe MongoDB em container)
+cd Backend/Payment
+go test -tags=integration ./services/... -v
+
+# Frontend
+cd Frontend/WebRestaurant && npm test
 ```
 
 ## Deploy
@@ -137,6 +185,7 @@ git push origin master
 
 ## Documentacao
 
+- `.fuudelivery-config/DOCUMENTATION.md` — Documentacao completa do sistema
 - `references/seguranca.md` — Procedimento de rotacao de credenciais
 - `references/testes-ci.md` — Plano de cobertura de testes
 - `references/confiabilidade-deploy.md` — Checklist de deploy e fila

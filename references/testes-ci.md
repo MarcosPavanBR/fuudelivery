@@ -1,72 +1,152 @@
 # Testes e CI — FuuDelivery
 
-## Estado atual
-
-### Arquivos de teste existentes (4)
-
-| Arquivo | Módulo | Tipo |
-|---|---|---|
-| `Backend/auth_api/app/middlewares/jwt_test.go` | auth_api | Unit |
-| `Backend/payment_api/app/handlers/wallet_test.go` | payment_api | Unit |
-| `Backend/orders_api/app/handlers/pickup_code_test.go` | orders_api | Unit |
-| `Frontend/WebRestaurant/src/App.test.js` | WebRestaurant | Smoke (React) |
+## Estado atual (2026-07-26)
 
 ### CI atual (`.github/workflows/ci.yml`)
 
-- Build/Vet/Test rodam em `cmd/fuudelivery` (monólito)
-- Lint com `gofmt`
-- **NÃO testa**: `auth_api`, `payment_api`, `orders_api`, `delivery_api`, `chat_api`, `Backend/Payment`
-- **NÃO há**: frontend CI, integration tests, coverage reports
+#### Jobs implementados
 
-## O que precisa ser corrigido
+| Job | Tipo | Módulos | Status |
+|---|---|---|---|
+| `go-modules` | Matrix (7 paralelos) | cmd/fuudelivery, Payment, auth_api, payment_api, orders_api, delivery_api, chat_api | ✅ |
+| `lint` | Único | gofmt em Backend/ e cmd/ | ✅ |
+| `govulncheck` | Matrix (7 paralelos) | Mesmos 7 módulos Go | ✅ |
+| `frontend-webrestaurant` | Único | Frontend/WebRestaurant (test + build) | ✅ |
+| `npm-audit` | Matrix (3 paralelos) | WebRestaurant, WebAdmin, PaymentPanel | ✅ |
 
-### 1. CI — Testar todos os módulos
+#### O que cada job faz
 
-O CI atual só executa `go test ./...` dentro de `cmd/fuudelivery`, que é o monólito. Os testes dos módulos separados (`auth_api`, `payment_api`, `orders_api`) ficam de fora.
-
-**Solução**: Adicionar etapas separadas para cada módulo ou usar um matrix strategy.
-
+**go-modules** (matrix):
 ```yaml
-strategy:
-  matrix:
-    module:
-      - cmd/fuudelivery
-      - Backend/auth_api
-      - Backend/payment_api
-      - Backend/orders_api
+steps:
+  - go mod tidy
+  - go build ./...
+  - go vet ./...
+  - go test ./... -count=1 -timeout 60s
 ```
 
-### 2. Cobertura mínima por área de dinheiro
+**govulncheck** (matrix):
+```yaml
+steps:
+  - go install golang.org/x/vuln/cmd/govulncheck@latest
+  - govulncheck ./...
+```
 
-| Área | Fluxo crítico | Testes necessários |
+**frontend-webrestaurant**:
+```yaml
+steps:
+  - npm install
+  - npm test -- --watchAll=false
+  - npm run build
+```
+
+### Arquivos de teste existentes
+
+#### Go (Payment Service — `Backend/Payment/`)
+
+| Arquivo | Tipo | Testes | O que testa |
+|---|---|---|---|
+| `services/risk_scorer_test.go` | Unit | 11 | calculateLevel, NormalizeScore, checkAmount, checkTimeOfDay |
+| `services/wallet_service_test.go` | Unit | 14 | Validação de input, ProcessPaymentApproval lógica, WalletBalance |
+| `services/chargeback_service_test.go` | Unit | 8 | Status, Reasons, valid transitions, amount boundaries |
+| `services/responsibility_chain_test.go` | Unit | 12 | ValidationHandler, ApprovalHandler, NotificationHandler, encadeamento |
+| `services/integration_test.go` | Integration | 7 | Happy path, idempotência, saldo insuficiente, concorrência, múltiplos pagamentos |
+
+#### Go (outros módulos)
+
+| Arquivo | Módulo | Tipo |
 |---|---|---|
-| **Pagamento** | Criar → Aprovar → Creditar carteira | Happy path + duplicidade |
-| **Carteira** | Credit/Debit atômico | Race condition, saldo insuficiente |
-| **Split** | Valor líquido = total - taxa | Cálculo correto, edge cases |
-| **Cupons** | Aplicar → Descontar → Validar expiração | Uso múltiplo, valor máximo |
-| **Chargeback** | Estornar → Debitar carteira | Saldo insuficiente, duplicidade |
+| `auth_api/app/middlewares/jwt_test.go` | auth_api | Unit |
+| `payment_api/app/handlers/wallet_test.go` | payment_api | Unit |
+| `payment_api/app/handlers/card_test.go` | payment_api | Unit |
+| `payment_api/app/handlers/pix_test.go` | payment_api | Unit |
+| `payment_api/app/handlers/split_test.go` | payment_api | Unit |
+| `payment_api/app/handlers/webhook_test.go` | payment_api | Unit |
+| `orders_api/app/handlers/pickup_code_test.go` | orders_api | Unit |
+| `orders_api/app/handlers/coupon_test.go` | orders_api | Unit |
+| `orders_api/app/handlers/loyalty_test.go` | orders_api | Unit |
+| `orders_api/app/handlers/orders_test.go` | orders_api | Unit |
+| `orders_api/app/handlers/integration_test.go` | orders_api | Integration |
 
-### 3. Testes de integração
+#### Frontend
 
-- Health check de cada serviço
-- Fluxo completo: pedido → pagamento → carteira
-- Webhook do AbacatePay → aprovação → split
+| Arquivo | Módulo | Tipo |
+|---|---|---|
+| `Frontend/WebRestaurant/src/App.test.js` | WebRestaurant | Smoke (React) |
 
-### 4. Frontend CI
+### Cobertura por área de dinheiro
 
-```yaml
-- name: Test WebRestaurant
-  run: npm test -- --watchAll=false
-  working-directory: Frontend/WebRestaurant
+| Área | Fluxo crítico | Testes | Status |
+|---|---|---|---|
+| **Pagamento** | Criar → Aprovar → Creditar carteira | integration_test.go (happy path + idempotência) | ✅ |
+| **Carteira** | Credit/Debit atômico | integration_test.go (saldo insuficiente, concorrência) | ✅ |
+| **Split** | Valor líquido = total - taxa | split_test.go (payment_api) | ✅ |
+| **Cupons** | Aplicar → Descontar → Validar expiração | coupon_test.go (orders_api) | ✅ |
+| **Chargeback** | Estornar → Debitar carteira | chargeback_service_test.go (unit) | ⚠️ Só unit |
+| **Fidelidade** | Ganhar/Resgatar pontos | loyalty_test.go (orders_api) | ✅ |
 
-- name: Lint WebRestaurant
-  run: npm run lint
-  working-directory: Frontend/WebRestaurant
+### O que falta (backlog)
+
+#### 1. Testes de integração para chargeback com MongoDB
+- Hoje: só testes unitários do chargeback_service
+- Necessário: teste de integração que cria chargeback → debita carteira → verifica saldo
+
+#### 2. Testes E2E completos
+- Fluxo: pedido → pagamento → aprovação → split → carteira
+- Requer: mock do AbacatePay + MongoDB + Redis
+
+#### 3. Frontend CI mais completo
+- Hoje: só WebRestaurant tem test + build
+- Pendente: WebAdmin e PaymentPanel
+
+#### 4. Shared MongoDB container
+- Cada teste de integração sobe um container separado (~5-10s cada)
+- Ideal: TestMain ou Repository struct para compartilhar
+- Reduziria tempo de CI significativamente
+
+---
+
+## Como rodar os testes
+
+### Todos os módulos Go (local)
+
+```bash
+cd C:\Users\acastro\Downloads\fuudelivery
+go test ./...
 ```
 
-## Prioridade de implementação
+### Módulo individual
 
-1. **Agora**: Corrigir CI para testar módulos Go existentes
-2. **Antes de dinheiro real**: Testes de pagamento (wallet_test.go existente + novos)
-3. **Antes de escalar**: Testes de integração com mock do AbacatePay
-4. **Backlog**: Frontend CI, E2E tests
+```bash
+cd Backend/Payment
+go test ./...
+```
+
+### Testes de integração (requer Docker)
+
+```bash
+cd Backend/Payment
+go test -tags=integration ./services/... -v
+```
+
+### Frontend
+
+```bash
+cd Frontend/WebRestaurant
+npm test
+```
+
+### CI local (simular GitHub Actions)
+
+```bash
+# Verificar formatação
+gofmt -l -s Backend/ cmd/
+
+# Verificar vulnerabilidades
+go install golang.org/x/vuln/cmd/govulncheck@latest
+govulncheck ./...
+```
+
+---
+
+*Última atualização: 2026-07-26*

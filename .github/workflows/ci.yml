@@ -7,12 +7,26 @@ on:
     branches: [master]
 
 jobs:
-  monolith:
-    name: Monolith (cmd/fuudelivery)
+  # ──────────────────────────────────────────────
+  # Go modules — matrix strategy
+  # ──────────────────────────────────────────────
+  go-modules:
+    name: Go — ${{ matrix.module }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - cmd/fuudelivery
+          - Backend/Payment
+          - Backend/auth_api
+          - Backend/payment_api
+          - Backend/orders_api
+          - Backend/delivery_api
+          - Backend/chat_api
     defaults:
       run:
-        working-directory: cmd/fuudelivery
+        working-directory: ${{ matrix.module }}
     steps:
       - uses: actions/checkout@v4
 
@@ -32,112 +46,12 @@ jobs:
       - name: Test
         run: go test ./... -count=1 -timeout 60s
 
-  payment-service:
-    name: Payment Service
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: Backend/Payment
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.23"
-
-      - name: Go mod tidy
-        run: go mod tidy
-
-      - name: Build
-        run: go build ./...
-
-      - name: Vet
-        run: go vet ./...
-
-      - name: Test
-        run: go test ./... -count=1 -timeout 60s
-
-  auth-api:
-    name: Auth API
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: Backend/auth_api
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.23"
-
-      - name: Go mod tidy
-        run: go mod tidy
-
-      - name: Build
-        run: go build ./...
-
-      - name: Vet
-        run: go vet ./...
-
-      - name: Test
-        run: go test ./... -count=1 -timeout 60s
-
-  payment-api:
-    name: Payment API
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: Backend/payment_api
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.23"
-
-      - name: Go mod tidy
-        run: go mod tidy
-
-      - name: Build
-        run: go build ./...
-
-      - name: Vet
-        run: go vet ./...
-
-      - name: Test
-        run: go test ./... -count=1 -timeout 60s
-
-  orders-api:
-    name: Orders API
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: Backend/orders_api
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.23"
-
-      - name: Go mod tidy
-        run: go mod tidy
-
-      - name: Build
-        run: go build ./...
-
-      - name: Vet
-        run: go vet ./...
-
-      - name: Test
-        run: go test ./... -count=1 -timeout 60s
-
+  # ──────────────────────────────────────────────
+  # Formatting — all Go modules
+  # ──────────────────────────────────────────────
   lint:
-    name: Lint (monolith)
+    name: Lint — gofmt (all modules)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: cmd/fuudelivery
     steps:
       - uses: actions/checkout@v4
 
@@ -147,15 +61,33 @@ jobs:
 
       - name: Check formatting
         run: |
-          gofmt -l -s . | tee /dev/stderr
-          if [ -n "$(gofmt -l -s .)" ]; then exit 1; fi
+          UNFORMATTED=$(gofmt -l -s Backend/ cmd/)
+          if [ -n "$UNFORMATTED" ]; then
+            echo "Files not formatted:"
+            echo "$UNFORMATTED"
+            exit 1
+          fi
 
+  # ──────────────────────────────────────────────
+  # Vulnerability scanning — all Go modules
+  # ──────────────────────────────────────────────
   govulncheck:
-    name: Vulnerability Check
+    name: govulncheck — ${{ matrix.module }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - cmd/fuudelivery
+          - Backend/Payment
+          - Backend/auth_api
+          - Backend/payment_api
+          - Backend/orders_api
+          - Backend/delivery_api
+          - Backend/chat_api
     defaults:
       run:
-        working-directory: cmd/fuudelivery
+        working-directory: ${{ matrix.module }}
     steps:
       - uses: actions/checkout@v4
 
@@ -169,10 +101,41 @@ jobs:
       - name: Run govulncheck
         run: govulncheck ./...
 
+  # ──────────────────────────────────────────────
+  # Frontend — install, test, lint, build
+  # ──────────────────────────────────────────────
+  frontend-webrestaurant:
+    name: Frontend — WebRestaurant
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Frontend/WebRestaurant
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: Frontend/WebRestaurant/package-lock.json
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run tests
+        run: npm test -- --watchAll=false
+
+      - name: Build
+        run: npm run build
+
+  # ──────────────────────────────────────────────
+  # NPM Audit — all frontends
+  # ──────────────────────────────────────────────
   npm-audit:
-    name: NPM Audit
+    name: NPM Audit — ${{ matrix.dir }}
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         dir:
           - Frontend/WebRestaurant

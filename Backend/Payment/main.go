@@ -145,22 +145,23 @@ func main() {
 	users.Get("/:id", uh.GetUser)
 	users.Post("/", uh.CreateUser)
 
-	// 8. Inicia consumer RabbitMQ em goroutine separada
-	// NOTA: Se o RabbitMQ nao estiver disponivel, o servico ainda sobe,
-	// mas os pagamentos aprovados nao serao creditados nas carteiras
-	// ate que o consumer esteja rodando.
+	// 8. Inicia consumer da fila de pagamentos (Redis BRPop)
+	// A fila usa o Redis ja provisionado pelo Render (fuudelivery-redis).
+	// O publisher (payment_api/webhook.go) faz LPush na mesma chave.
 	go func() {
-		consumer, err := consumers.NewPaymentConsumer()
+		consumer, err := consumers.NewRedisPaymentConsumer()
 		if err != nil {
-			log.Printf("ERROR: [PAYMENT_QUEUE] Failed to start payment consumer: %v. "+
+			log.Printf("ERROR: [PAYMENT_QUEUE] Falha ao iniciar consumer Redis: %v. "+
 				"Pagamentos aprovados NAO serao creditados nas carteiras. "+
-				"Verifique RABBIT_CONNECTION e RABBIT_PAYMENT_QUEUE.", err)
+				"Verifique REDIS_URL.", err)
 			return
 		}
-		defer consumer.Stop()
-		if err := consumer.Start(); err != nil {
-			log.Printf("ERROR: [PAYMENT_QUEUE] Failed to start consumer: %v. "+
-				"Consumer de pagamentos parou inesperadamente.", err)
+		if consumer != nil {
+			defer consumer.Stop()
+			if err := consumer.Start(); err != nil {
+				log.Printf("ERROR: [PAYMENT_QUEUE] Falha ao iniciar consumer: %v. "+
+					"Consumer de pagamentos parou inesperadamente.", err)
+			}
 		}
 	}()
 

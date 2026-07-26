@@ -1,11 +1,13 @@
 ﻿package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"os"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/carloshomar/vercardapio/payment_api/app/models"
 	"github.com/carloshomar/vercardapio/payment_api/app/services"
 	"github.com/gofiber/fiber/v2"
@@ -13,7 +15,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 )
 
-
+const paymentRedisQueueKey = "queue:payments"
 
 func publishToOrderQueue(body []byte) error {
 	dsn := os.Getenv("RABBIT_CONNECTION")
@@ -69,66 +71,39 @@ func publishToOrderQueue(body []byte) error {
 	return nil
 }
 
-// publishToPaymentQueue publica uma mensagem na fila de pagamentos do
-// microsserviço Payment Service. Quando um pagamento e confirmado via
-// webhook do AbacatePay, esta funcao e chamada para notificar o
-// Payment Service, que credita o valor na carteira do restaurante.
-// Se RABBIT_CONNECTION ou RABBIT_PAYMENT_QUEUE nao estiverem
-// configurados, a mensagem e ignorada silenciosamente.
+// publishToPaymentQueue publica uma mensagem na fila de pagamentos usando Redis.
+// Substitui a implementacao antiga com RabbitMQ (streadway/amqp).
+// Agora o Payment Service consome a mesma fila via BRPop no Redis.
+//
+// Usa o Redis ja provisionado pelo Render (fuudelivery-redis) via REDIS_URL,
+// eliminando a dependencia de um broker RabbitMQ externo.
 func publishToPaymentQueue(body []byte) error {
-	dsn := os.Getenv("RABBIT_CONNECTION")
-	if dsn == "" {
-		log.Printf("ALERTA: [PAYMENT_QUEUE] RABBIT_CONNECTION não configurado. "+
+	redisURL := os.Getenv("REDIS_URL")
+	if redisURL == "" {
+		log.Printf("ALERTA: [PAYMENT_QUEUE] REDIS_URL nao configurado. "+
 			"Pagamento nao sera encaminhado para credito na carteira. "+
-			"Configure RABBIT_CONNECTION e RABBIT_PAYMENT_QUEUE nos dois servicos com o mesmo valor.")
+			"Verifique se o servico Redis (fuudelivery-redis) esta ativo.")
 		return nil
 	}
 
-	queueName := os.Getenv("RABBIT_PAYMENT_QUEUE")
-	if queueName == "" {
-		log.Printf("ALERTA: [PAYMENT_QUEUE] RABBIT_PAYMENT_QUEUE não configurado. "+
-			"Pagamento nao sera encaminhado para credito na carteira.")
-		return nil
-	}
-
-	conn, err := amqp.Dial(dsn)
+	opts, err := redis.ParseURL(redisURL)
 	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	ch, err := conn.Channel()
-	if err != nil {
-		return err
-	}
-	defer ch.Close()
-
-	_, err = ch.QueueDeclare(
-		queueName,
-		true,
-		false,
-		false,
-		false,
-		nil,
-	)
-	if err != nil {
+		log.Printf("ALERTA: [PAYMENT_QUEUE] Erro ao parsear REDIS_URL: %v", err)
 		return err
 	}
 
-	err = ch.Publish(
-		"",
-		queueName,
-		false,
-		false,
-		amqp.Publishing{
-			ContentType: "application/json",
-			Body:        body,
-		})
-	if err != nil {
+	client := redis.NewClient(opts)
+	defer client.Close()
+
+	ctx := context.Background()
+
+	// Publica na fila LPush (o consumer usa BRPop)
+	if err := client.LPush(ctx, paymentRedisQueueKey, body).Err(); err != nil {
+		log.Printf("ALERTA: [PAYMENT_QUEUE] Erro ao publicar no Redis: %v", err)
 		return err
 	}
 
-	log.Printf("Message published to payment queue %s", queueName)
+	log.Printf("[PAYMENT_QUEUE] Pagamento publicado no Redis: %s", string(body))
 	return nil
 }
 

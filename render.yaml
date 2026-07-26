@@ -14,7 +14,7 @@ services:
       - key: GO_ENV
         value: production
       - key: JWT_SECRET
-        generateValue: true
+        sync: false
       - key: REDIS_URL
         fromService:
           type: redis
@@ -39,7 +39,7 @@ services:
       - key: RABBIT_DELIVERY_QUEUE
         value: "MS_DELIVERY_QUEUE"
       - key: RABBIT_PAYMENT_QUEUE
-        value: "MS_PAYMENT_QUEUE"
+        value: "payment_queue"
       - key: ABACATE_PAY_API_KEY
         sync: false
     healthCheckPath: /health
@@ -104,7 +104,7 @@ services:
       - key: RABBIT_PAYMENT_QUEUE
         value: "payment_queue"
       - key: JWT_SECRET
-        generateValue: true
+        sync: false
       - key: ABACATE_PAY_API_KEY
         sync: false
     healthCheckPath: /health

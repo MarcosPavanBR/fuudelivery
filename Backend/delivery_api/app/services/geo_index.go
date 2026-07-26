@@ -166,14 +166,14 @@ func (r *RedisGeoIndex) FindNearby(lat, lng, radiusKm float64, limit int) []*Cou
 	}
 
 	couriers := make([]*CourierLocation, 0, len(results))
-	for _, r := range results {
-		courierID := parseCourierKey(r.Name)
+	for _, loc := range results {
+		courierID := parseCourierKey(loc.Name)
 		if courierID == 0 {
 			continue
 		}
 
 		// Busca dados completos
-		data, err := r.client.HGetAll(r.ctx, "courier:data:"+r.Name).Result()
+		data, err := r.client.HGetAll(r.ctx, "courier:data:"+loc.Name).Result()
 		if err != nil || len(data) == 0 {
 			continue
 		}

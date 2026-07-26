@@ -78,13 +78,16 @@ func publishToOrderQueue(body []byte) error {
 func publishToPaymentQueue(body []byte) error {
 	dsn := os.Getenv("RABBIT_CONNECTION")
 	if dsn == "" {
-		log.Println("[QUEUE] RabbitMQ não configurado, mensagem ignorada (payment queue)")
+		log.Printf("ALERTA: [PAYMENT_QUEUE] RABBIT_CONNECTION não configurado. "+
+			"Pagamento nao sera encaminhado para credito na carteira. "+
+			"Configure RABBIT_CONNECTION e RABBIT_PAYMENT_QUEUE nos dois servicos com o mesmo valor.")
 		return nil
 	}
 
 	queueName := os.Getenv("RABBIT_PAYMENT_QUEUE")
 	if queueName == "" {
-		log.Println("[QUEUE] RABBIT_PAYMENT_QUEUE não configurado, mensagem ignorada")
+		log.Printf("ALERTA: [PAYMENT_QUEUE] RABBIT_PAYMENT_QUEUE não configurado. "+
+			"Pagamento nao sera encaminhado para credito na carteira.")
 		return nil
 	}
 

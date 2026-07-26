@@ -146,15 +146,21 @@ func main() {
 	users.Post("/", uh.CreateUser)
 
 	// 8. Inicia consumer RabbitMQ em goroutine separada
+	// NOTA: Se o RabbitMQ nao estiver disponivel, o servico ainda sobe,
+	// mas os pagamentos aprovados nao serao creditados nas carteiras
+	// ate que o consumer esteja rodando.
 	go func() {
 		consumer, err := consumers.NewPaymentConsumer()
 		if err != nil {
-			log.Printf("Warning: Failed to start payment consumer: %v", err)
-		} else {
-			defer consumer.Stop()
-			if err := consumer.Start(); err != nil {
-				log.Printf("Warning: Failed to start consumer: %v", err)
-			}
+			log.Printf("ERROR: [PAYMENT_QUEUE] Failed to start payment consumer: %v. "+
+				"Pagamentos aprovados NAO serao creditados nas carteiras. "+
+				"Verifique RABBIT_CONNECTION e RABBIT_PAYMENT_QUEUE.", err)
+			return
+		}
+		defer consumer.Stop()
+		if err := consumer.Start(); err != nil {
+			log.Printf("ERROR: [PAYMENT_QUEUE] Failed to start consumer: %v. "+
+				"Consumer de pagamentos parou inesperadamente.", err)
 		}
 	}()
 

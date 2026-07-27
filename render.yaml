@@ -90,8 +90,8 @@ services:
   - type: web
     name: fuudelivery-payment
     env: go
-    buildCommand: cd Backend/Payment && go build -o ../../payment-server .
-    startCommand: ./payment-server
+    buildCommand: cd Backend/Payment && go build -o ../../server .
+    startCommand: ./server
     envVars:
       - key: PORT
         value: "8084"

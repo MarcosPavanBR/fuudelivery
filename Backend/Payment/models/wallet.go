@@ -21,15 +21,15 @@ const (
 // WalletTransaction representa uma movimentacao na carteira.
 // Cada transacao registra o saldo antes e depois para auditoria.
 type WalletTransaction struct {
-	ID            primitive.ObjectID `bson:"_id,omitempty" json:"id"`             // ID unico MongoDB
-	WalletID      primitive.ObjectID `bson:"wallet_id" json:"wallet_id"`          // ID da carteira pai
-	Type          TransactionType    `bson:"type" json:"type"`                    // Tipo: credit ou debit
-	Amount        float64            `bson:"amount" json:"amount"`               // Valor da transacao
-	BalanceBefore float64            `bson:"balance_before" json:"balance_before"` // Saldo antes da transacao
-	BalanceAfter  float64            `bson:"balance_after" json:"balance_after"`  // Saldo depois da transacao
-	Description   string             `bson:"description" json:"description"`      // Descricao da movimentacao
+	ID            primitive.ObjectID `bson:"_id,omitempty" json:"id"`                              // ID unico MongoDB
+	WalletID      primitive.ObjectID `bson:"wallet_id" json:"wallet_id"`                           // ID da carteira pai
+	Type          TransactionType    `bson:"type" json:"type"`                                     // Tipo: credit ou debit
+	Amount        float64            `bson:"amount" json:"amount"`                                 // Valor da transacao
+	BalanceBefore float64            `bson:"balance_before" json:"balance_before"`                 // Saldo antes da transacao
+	BalanceAfter  float64            `bson:"balance_after" json:"balance_after"`                   // Saldo depois da transacao
+	Description   string             `bson:"description" json:"description"`                       // Descricao da movimentacao
 	ReferenceID   string             `bson:"reference_id,omitempty" json:"reference_id,omitempty"` // ID de referencia (payment_id, etc)
-	CreatedAt     time.Time          `bson:"created_at" json:"created_at"`       // Data/hora da transacao
+	CreatedAt     time.Time          `bson:"created_at" json:"created_at"`                         // Data/hora da transacao
 }
 
 // Wallet representa a carteira digital de um usuario.

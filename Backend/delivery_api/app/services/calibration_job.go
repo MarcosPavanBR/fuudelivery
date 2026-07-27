@@ -57,14 +57,14 @@ type CalibrationMetrics struct {
 
 // CalibrationResult armazena o resultado da calibracao de uma zona.
 type CalibrationResult struct {
-	ZoneID          uint
-	ZoneName        string
-	OldRadiusKm     float64
-	NewRadiusKm     float64
-	Reason          string // "density", "high_unmatched", "high_match_time", "no_change"
-	UnmatchedRate   float64
-	MatchTimeP90Ms  float64
-	DensityPerKm2   float64
+	ZoneID         uint
+	ZoneName       string
+	OldRadiusKm    float64
+	NewRadiusKm    float64
+	Reason         string // "density", "high_unmatched", "high_match_time", "no_change"
+	UnmatchedRate  float64
+	MatchTimeP90Ms float64
+	DensityPerKm2  float64
 }
 
 // AutoCalibrationJob recalibra automaticamente os raios das zonas
@@ -78,9 +78,9 @@ type CalibrationResult struct {
 //  5. Limita ajuste a AdjustmentFactor (ex: 10%) por ciclo
 //  6. Respeita min/max radius da zona e GlobalMin/MaxRadius
 type AutoCalibrationJob struct {
-	config     CalibrationConfig
-	engine     *MatchingEngine
-	resolver   ZoneResolver
+	config      CalibrationConfig
+	engine      *MatchingEngine
+	resolver    ZoneResolver
 	onCalibrate func(result CalibrationResult)
 }
 

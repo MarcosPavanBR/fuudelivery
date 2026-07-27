@@ -129,8 +129,8 @@ func TestRedeemPoints_MustBeMultipleOf10(t *testing.T) {
 
 func TestRedeemPoints_DiscountCalculation(t *testing.T) {
 	tests := []struct {
-		name           string
-		points         int
+		name             string
+		points           int
 		expectedDiscount float64
 	}{
 		{"10 points", 10, 1.0},
@@ -218,9 +218,9 @@ func TestCashbackCode_Length(t *testing.T) {
 
 func TestCalculateLoyaltyDiscount(t *testing.T) {
 	tests := []struct {
-		name            string
-		points          int
-		expectedUsed    int
+		name             string
+		points           int
+		expectedUsed     int
 		expectedDiscount float64
 	}{
 		{"0 points", 0, 0, 0.0},

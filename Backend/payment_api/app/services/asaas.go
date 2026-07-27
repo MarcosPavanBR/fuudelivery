@@ -23,11 +23,11 @@ type AsaasClient struct {
 }
 
 type AsaasWalletRequest struct {
-	Name        string `json:"name"`
-	CpfCnpj     string `json:"cpfCnpj"`
-	Email       string `json:"email"`
-	Phone       string `json:"phone"`
-	PersonType  string `json:"personType"` // "JURIDICA" or "FISICA"
+	Name        string  `json:"name"`
+	CpfCnpj     string  `json:"cpfCnpj"`
+	Email       string  `json:"email"`
+	Phone       string  `json:"phone"`
+	PersonType  string  `json:"personType"` // "JURIDICA" or "FISICA"
 	IncomeValue float64 `json:"incomeValue,omitempty"`
 }
 
@@ -48,27 +48,27 @@ type AsaasSplitRequest struct {
 }
 
 type AsaasPaymentRequest struct {
-	Customer          string             `json:"customer"`
-	BillingType       string             `json:"billingType"` // "PIX", "BOLETO", "CREDIT_CARD"
-	DueDate           string             `json:"dueDate"`
-	ExternalReference string             `json:"externalReference"`
-	Installments      int                `json:"installments,omitempty"`
-	InstallmentValue  float64            `json:"installmentValue,omitempty"`
-	Value             float64            `json:"value"`
-	Description       string             `json:"description"`
+	Customer          string              `json:"customer"`
+	BillingType       string              `json:"billingType"` // "PIX", "BOLETO", "CREDIT_CARD"
+	DueDate           string              `json:"dueDate"`
+	ExternalReference string              `json:"externalReference"`
+	Installments      int                 `json:"installments,omitempty"`
+	InstallmentValue  float64             `json:"installmentValue,omitempty"`
+	Value             float64             `json:"value"`
+	Description       string              `json:"description"`
 	Split             []AsaasSplitRequest `json:"split,omitempty"`
 }
 
 type AsaasPaymentResponse struct {
-	ID               string  `json:"id"`
-	Status           string  `json:"status"`
-	ExternalReference string `json:"externalReference"`
-	DateCreated      string  `json:"dateCreated"`
-	InvoiceNumber     string `json:"invoiceNumber"`
+	ID                string  `json:"id"`
+	Status            string  `json:"status"`
+	ExternalReference string  `json:"externalReference"`
+	DateCreated       string  `json:"dateCreated"`
+	InvoiceNumber     string  `json:"invoiceNumber"`
 	TotalValue        float64 `json:"totalValue"`
 	NetValue          float64 `json:"netValue"`
-	OrderService       string `json:"orderService"`
-	PixTransaction     struct {
+	OrderService      string  `json:"orderService"`
+	PixTransaction    struct {
 		Payload string `json:"payload"`
 		QRCode  string `json:"qrCode"`
 	} `json:"pixTransaction,omitempty"`

@@ -27,14 +27,14 @@ func ConnectDatabase() {
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		pgDSN := dsn
-	if !strings.Contains(pgDSN, "default_query_exec_mode") {
-		if strings.Contains(pgDSN, "?") {
-			pgDSN += "&default_query_exec_mode=simple_protocol"
-		} else {
-			pgDSN += "?default_query_exec_mode=simple_protocol"
+		if !strings.Contains(pgDSN, "default_query_exec_mode") {
+			if strings.Contains(pgDSN, "?") {
+				pgDSN += "&default_query_exec_mode=simple_protocol"
+			} else {
+				pgDSN += "?default_query_exec_mode=simple_protocol"
+			}
 		}
-	}
-	database, err = gorm.Open(postgres.Open(pgDSN), &gorm.Config{PrepareStmt: false})
+		database, err = gorm.Open(postgres.Open(pgDSN), &gorm.Config{PrepareStmt: false})
 		if err == nil {
 			break
 		}
@@ -84,17 +84,17 @@ func ConnectDatabase() {
 			AllowBatching:           true,
 
 			// Decaimento de split
-			SplitInitialPlatformPct:       3.0,
-			SplitInitialEstablishmentPct:  87.0,
-			SplitTargetPlatformPct:        12.0,
-			SplitTargetEstablishmentPct:   78.0,
-			SplitStepMonths:               3,
-			SplitStepPlatformPct:          1.5,
-			SplitStepEstablishmentPct:     -1.5,
-			SplitMinMonthlyOrders:         50,
-			SplitMinActiveCouriers:        3,
-			SplitCurrentPlatformPct:       3.0,
-			SplitCurrentEstablishmentPct:  87.0,
+			SplitInitialPlatformPct:      3.0,
+			SplitInitialEstablishmentPct: 87.0,
+			SplitTargetPlatformPct:       12.0,
+			SplitTargetEstablishmentPct:  78.0,
+			SplitStepMonths:              3,
+			SplitStepPlatformPct:         1.5,
+			SplitStepEstablishmentPct:    -1.5,
+			SplitMinMonthlyOrders:        50,
+			SplitMinActiveCouriers:       3,
+			SplitCurrentPlatformPct:      3.0,
+			SplitCurrentEstablishmentPct: 87.0,
 		}
 		database.Create(&defaultZone)
 		log.Println("[ZONE] Zona padrao criada: 5%% plataforma / 85%% estabelecimento, raio 5km")

@@ -19,11 +19,11 @@ type PaymentStatus string
 
 const (
 	PaymentPending   PaymentStatus = "pending"   // Aguardando analise de risco
-	PaymentApproved  PaymentStatus = "approved"   // Aprovado (auto ou manual)
-	PaymentRejected  PaymentStatus = "rejected"   // Rejeitado por risco ou operador
-	PaymentCancelled PaymentStatus = "cancelled"  // Cancelado pelo usuario
-	PaymentRefunded  PaymentStatus = "refunded"   // Estornado (devolvido ao cliente)
-	PaymentDisputed  PaymentStatus = "disputed"   // Em disputa (chargeback)
+	PaymentApproved  PaymentStatus = "approved"  // Aprovado (auto ou manual)
+	PaymentRejected  PaymentStatus = "rejected"  // Rejeitado por risco ou operador
+	PaymentCancelled PaymentStatus = "cancelled" // Cancelado pelo usuario
+	PaymentRefunded  PaymentStatus = "refunded"  // Estornado (devolvido ao cliente)
+	PaymentDisputed  PaymentStatus = "disputed"  // Em disputa (chargeback)
 )
 
 // PaymentMethod representa o metodo de pagamento utilizado.
@@ -49,32 +49,32 @@ const (
 // Contem todas as informacoes necessarias para processamento, auditoria
 // e decisao de aprovacao.
 type Payment struct {
-	ID               primitive.ObjectID `bson:"_id,omitempty" json:"id"`              // ID unico MongoDB
-	OrderID          string             `bson:"order_id" json:"order_id"`              // ID do pedido no sistema principal
-	CustomerID       string             `bson:"customer_id" json:"customer_id"`        // ID do cliente
-	CustomerName     string             `bson:"customer_name" json:"customer_name"`    // Nome do cliente
-	CustomerEmail    string             `bson:"customer_email" json:"customer_email"`  // Email do cliente
-	CustomerPhone    string             `bson:"customer_phone,omitempty" json:"customer_phone,omitempty"` // Telefone (opcional)
-	EstablishmentID  string             `bson:"establishment_id" json:"establishment_id"` // ID do restaurante/estabelecimento
-	EstablishmentName string           `bson:"establishment_name" json:"establishment_name"` // Nome do estabelecimento
-	Amount           float64            `bson:"amount" json:"amount"`                  // Valor do pagamento (R$)
-	DeliveryAmount   float64            `bson:"delivery_amount,omitempty" json:"delivery_amount,omitempty"` // Valor da taxa de entrega
-	Method           PaymentMethod      `bson:"method" json:"method"`                  // Metodo de pagamento
-	Status           PaymentStatus      `bson:"status" json:"status"`                  // Status atual
-	RiskLevel        RiskLevel          `bson:"risk_level" json:"risk_level"`          // Nivel de risco calculado
-	RiskScore        float64            `bson:"risk_score" json:"risk_score"`          // Score numerico 0-100
-	RequiresApproval bool              `bson:"requires_approval" json:"requires_approval"` // Se precisa aprovacao manual
-	ApprovedBy       string             `bson:"approved_by,omitempty" json:"approved_by,omitempty"` // Quem aprovou
-	ApprovedAt       *time.Time         `bson:"approved_at,omitempty" json:"approved_at,omitempty"` // Quando aprovou
-	RejectionReason  string             `bson:"rejection_reason,omitempty" json:"rejection_reason,omitempty"` // Motivo da rejeicao
-	RejectedBy       string             `bson:"rejected_by,omitempty" json:"rejected_by,omitempty"` // Quem rejeitou
-	RejectedAt       *time.Time         `bson:"rejected_at,omitempty" json:"rejected_at,omitempty"` // Quando rejeitou
-	Reference        string             `bson:"reference,omitempty" json:"reference,omitempty"` // Referencia externa
-	GatewayID        string             `bson:"gateway_id,omitempty" json:"gateway_id,omitempty"` // ID no gateway (AbacatePay)
-	GatewayStatus    string             `bson:"gateway_status,omitempty" json:"gateway_status,omitempty"` // Status no gateway
-	Metadata         map[string]string  `bson:"metadata,omitempty" json:"metadata,omitempty"` // Dados adicionais flexiveis
-	CreatedAt        time.Time          `bson:"created_at" json:"created_at"`          // Data de criacao
-	UpdatedAt        time.Time          `bson:"updated_at" json:"updated_at"`          // Data da ultima atualizacao
+	ID                primitive.ObjectID `bson:"_id,omitempty" json:"id"`                                      // ID unico MongoDB
+	OrderID           string             `bson:"order_id" json:"order_id"`                                     // ID do pedido no sistema principal
+	CustomerID        string             `bson:"customer_id" json:"customer_id"`                               // ID do cliente
+	CustomerName      string             `bson:"customer_name" json:"customer_name"`                           // Nome do cliente
+	CustomerEmail     string             `bson:"customer_email" json:"customer_email"`                         // Email do cliente
+	CustomerPhone     string             `bson:"customer_phone,omitempty" json:"customer_phone,omitempty"`     // Telefone (opcional)
+	EstablishmentID   string             `bson:"establishment_id" json:"establishment_id"`                     // ID do restaurante/estabelecimento
+	EstablishmentName string             `bson:"establishment_name" json:"establishment_name"`                 // Nome do estabelecimento
+	Amount            float64            `bson:"amount" json:"amount"`                                         // Valor do pagamento (R$)
+	DeliveryAmount    float64            `bson:"delivery_amount,omitempty" json:"delivery_amount,omitempty"`   // Valor da taxa de entrega
+	Method            PaymentMethod      `bson:"method" json:"method"`                                         // Metodo de pagamento
+	Status            PaymentStatus      `bson:"status" json:"status"`                                         // Status atual
+	RiskLevel         RiskLevel          `bson:"risk_level" json:"risk_level"`                                 // Nivel de risco calculado
+	RiskScore         float64            `bson:"risk_score" json:"risk_score"`                                 // Score numerico 0-100
+	RequiresApproval  bool               `bson:"requires_approval" json:"requires_approval"`                   // Se precisa aprovacao manual
+	ApprovedBy        string             `bson:"approved_by,omitempty" json:"approved_by,omitempty"`           // Quem aprovou
+	ApprovedAt        *time.Time         `bson:"approved_at,omitempty" json:"approved_at,omitempty"`           // Quando aprovou
+	RejectionReason   string             `bson:"rejection_reason,omitempty" json:"rejection_reason,omitempty"` // Motivo da rejeicao
+	RejectedBy        string             `bson:"rejected_by,omitempty" json:"rejected_by,omitempty"`           // Quem rejeitou
+	RejectedAt        *time.Time         `bson:"rejected_at,omitempty" json:"rejected_at,omitempty"`           // Quando rejeitou
+	Reference         string             `bson:"reference,omitempty" json:"reference,omitempty"`               // Referencia externa
+	GatewayID         string             `bson:"gateway_id,omitempty" json:"gateway_id,omitempty"`             // ID no gateway (AbacatePay)
+	GatewayStatus     string             `bson:"gateway_status,omitempty" json:"gateway_status,omitempty"`     // Status no gateway
+	Metadata          map[string]string  `bson:"metadata,omitempty" json:"metadata,omitempty"`                 // Dados adicionais flexiveis
+	CreatedAt         time.Time          `bson:"created_at" json:"created_at"`                                 // Data de criacao
+	UpdatedAt         time.Time          `bson:"updated_at" json:"updated_at"`                                 // Data da ultima atualizacao
 }
 
 // PaymentFilter e usada para filtrar pagamentos nas consultas.

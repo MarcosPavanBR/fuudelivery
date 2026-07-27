@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 	"context"
@@ -10,13 +10,11 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-
 func mongoCtx() context.Context {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	_ = cancel
 	return ctx
 }
-
 
 func ListAllPayments(c *fiber.Ctx) error {
 	collection := models.MongoDabase.Collection("payments")

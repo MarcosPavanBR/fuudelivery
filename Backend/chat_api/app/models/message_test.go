@@ -470,11 +470,11 @@ func TestChatMessage_BSONMarshal(t *testing.T) {
 
 func TestChatMessage_BSONUnmarshal(t *testing.T) {
 	doc := bson.M{
-		"order_id":    "order_789",
-		"sender_id":   int64(3003),
-		"sender_type": "delivery",
-		"sender_name": "Pedro",
-		"message":     "On my way",
+		"order_id":     "order_789",
+		"sender_id":    int64(3003),
+		"sender_type":  "delivery",
+		"sender_name":  "Pedro",
+		"message":      "On my way",
 		"message_type": "text",
 	}
 

@@ -2,14 +2,15 @@
 
 // Package main - Testes de cenarios de erro.
 //
-//   Estabelecimento fechado → 400
-//   Pagamento expirado      → status EXPIRED, sem credito
-//   Split com taxa alta      → ajuste automatico, estab. reduzido
-//   Order ID invalido        → 400
-//   Payment not found        → 404
+//	Estabelecimento fechado → 400
+//	Pagamento expirado      → status EXPIRED, sem credito
+//	Split com taxa alta      → ajuste automatico, estab. reduzido
+//	Order ID invalido        → 400
+//	Payment not found        → 404
 //
 // Rodar com:
-//   go test -tags=integration -v -run TestErrorScenarios ./cmd/fuudelivery/
+//
+//	go test -tags=integration -v -run TestErrorScenarios ./cmd/fuudelivery/
 package main
 
 import (
@@ -97,8 +98,8 @@ func setupErrorTestEnv(t *testing.T) (*fiber.App, func(), uint, uint, string) {
 	user.Password = ""
 
 	est := models.Establishment{
-		Name:   "Error Test Est",
-		ZoneID: &defaultZone.ID,
+		Name:    "Error Test Est",
+		ZoneID:  &defaultZone.ID,
 		OwnerID: user.ID,
 	}
 	require.NoError(t, pgDB.Create(&est).Error)
@@ -126,9 +127,9 @@ func setupErrorTestEnv(t *testing.T) (*fiber.App, func(), uint, uint, string) {
 	// Rota de pagamento com status forcado
 	app.Post("/payments/create-with-status", func(c *fiber.Ctx) error {
 		var req struct {
-			OrderID       string  `json:"order_id"`			
-			Amount        float64 `json:"amount"`
-			Status        string  `json:"status"`
+			OrderID string  `json:"order_id"`
+			Amount  float64 `json:"amount"`
+			Status  string  `json:"status"`
 		}
 		if err := c.BodyParser(&req); err != nil {
 			return c.Status(400).JSON(fiber.Map{"error": "Invalid body"})
@@ -136,12 +137,12 @@ func setupErrorTestEnv(t *testing.T) (*fiber.App, func(), uint, uint, string) {
 
 		collection := mongoClient.Database("fuudelivery_err_test").Collection("payments")
 		payment := map[string]interface{}{
-			"order_id":       req.OrderID,
-			"amount":         req.Amount,
+			"order_id":        req.OrderID,
+			"amount":          req.Amount,
 			"delivery_amount": 0,
-			"status":         "PENDING",
-			"split_rules":    []interface{}{},
-			"created_at":     time.Now(),
+			"status":          "PENDING",
+			"split_rules":     []interface{}{},
+			"created_at":      time.Now(),
 		}
 		result, err := collection.InsertOne(ctx, payment)
 		require.NoError(t, err)
@@ -156,7 +157,7 @@ func setupErrorTestEnv(t *testing.T) (*fiber.App, func(), uint, uint, string) {
 	// Rota de split com delivery alta
 	app.Post("/payments/split-high-delivery", func(c *fiber.Ctx) error {
 		var req struct {
-			OrderID  string  `json:"order_id"`
+			OrderID string `json:"order_id"`
 		}
 		if err := c.BodyParser(&req); err != nil {
 			return c.Status(400).JSON(fiber.Map{"error": "Invalid body"})

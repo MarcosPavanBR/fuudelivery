@@ -5,8 +5,8 @@
 package handlers
 
 import (
-	"github.com/gofiber/fiber/v2"
 	"github.com/carloshomar/vercardapio/payment/repository"
+	"github.com/gofiber/fiber/v2"
 )
 
 // ReportHandler e responsavel pelas rotas de relatorios.

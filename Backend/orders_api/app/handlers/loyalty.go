@@ -47,8 +47,8 @@ func generateCashbackCode() (string, error) {
 
 func EarnPoints(c *fiber.Ctx) error {
 	var req struct {
-		UserPhone string  `json:"user_phone"`
-		OrderID   string  `json:"order_id"`
+		UserPhone  string  `json:"user_phone"`
+		OrderID    string  `json:"order_id"`
 		OrderValue float64 `json:"order_value"`
 	}
 
@@ -90,10 +90,10 @@ func EarnPoints(c *fiber.Ctx) error {
 	models.DB.Create(&transaction)
 
 	return c.JSON(fiber.Map{
-		"message":  "Pontos ganhos com sucesso",
-		"points":   pointsEarned,
-		"total":    loyalty.Points,
-		"tier":     loyalty.Tier,
+		"message": "Pontos ganhos com sucesso",
+		"points":  pointsEarned,
+		"total":   loyalty.Points,
+		"tier":    loyalty.Tier,
 	})
 }
 
@@ -225,20 +225,20 @@ func GetLoyaltyBalance(c *fiber.Ctx) error {
 	result := models.DB.Where("user_phone = ?", phone).First(&loyalty)
 	if result.Error != nil {
 		return c.JSON(fiber.Map{
-			"phone":  phone,
-			"points": 0,
-			"tier":   "bronze",
+			"phone":        phone,
+			"points":       0,
+			"tier":         "bronze",
 			"total_orders": 0,
-			"total_spent": 0,
+			"total_spent":  0,
 		})
 	}
 
 	return c.JSON(fiber.Map{
-		"phone":         loyalty.UserPhone,
-		"points":        loyalty.Points,
-		"tier":          loyalty.Tier,
-		"total_orders":  loyalty.TotalOrders,
-		"total_spent":   loyalty.TotalSpent,
+		"phone":        loyalty.UserPhone,
+		"points":       loyalty.Points,
+		"tier":         loyalty.Tier,
+		"total_orders": loyalty.TotalOrders,
+		"total_spent":  loyalty.TotalSpent,
 	})
 }
 

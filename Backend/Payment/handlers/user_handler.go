@@ -3,9 +3,9 @@
 package handlers
 
 import (
-	"github.com/gofiber/fiber/v2"
 	"github.com/carloshomar/vercardapio/payment/models"
 	"github.com/carloshomar/vercardapio/payment/services"
+	"github.com/gofiber/fiber/v2"
 )
 
 // UserHandler e responsavel pelas rotas de usuarios.

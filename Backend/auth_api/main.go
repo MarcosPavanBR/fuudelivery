@@ -3,11 +3,11 @@ package main
 import (
 	"log"
 
+	"github.com/carloshomar/vercardapio/auth_api/app/models"
+	"github.com/carloshomar/vercardapio/auth_api/app/routes"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/joho/godotenv"
-	"github.com/carloshomar/vercardapio/auth_api/app/models"
-	"github.com/carloshomar/vercardapio/auth_api/app/routes"
 )
 
 func main() {

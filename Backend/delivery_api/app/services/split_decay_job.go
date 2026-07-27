@@ -19,34 +19,34 @@ func DefaultSplitDecayConfig() SplitDecayConfig {
 
 // SplitDecayResult armazena o resultado do decaimento para uma zona.
 type SplitDecayResult struct {
-	ZoneID               uint
-	ZoneName             string
-	OldPlatformPct       float64
-	NewPlatformPct       float64
-	OldEstablishmentPct  float64
-	NewEstablishmentPct  float64
-	MonthlyOrders        int
-	ActiveCouriers       int
-	Applied              bool // true se o split foi ajustado
+	ZoneID              uint
+	ZoneName            string
+	OldPlatformPct      float64
+	NewPlatformPct      float64
+	OldEstablishmentPct float64
+	NewEstablishmentPct float64
+	MonthlyOrders       int
+	ActiveCouriers      int
+	Applied             bool // true se o split foi ajustado
 }
 
 // ZoneSplitData representa os dados de zona necessarios para o decaimento.
 type ZoneSplitData struct {
-	ID                   uint
-	Name                 string
-	SplitCurrentPlatformPct       float64
-	SplitCurrentEstablishmentPct  float64
-	SplitInitialPlatformPct       float64
-	SplitInitialEstablishmentPct  float64
-	SplitTargetPlatformPct        float64
-	SplitTargetEstablishmentPct   float64
-	SplitStepMonths               int
-	SplitStepPlatformPct          float64
-	SplitStepEstablishmentPct     float64
-	SplitMinMonthlyOrders         int
-	SplitMinActiveCouriers        int
-	SplitLastAdjustedAt           *time.Time
-	CreatedAt                     time.Time
+	ID                           uint
+	Name                         string
+	SplitCurrentPlatformPct      float64
+	SplitCurrentEstablishmentPct float64
+	SplitInitialPlatformPct      float64
+	SplitInitialEstablishmentPct float64
+	SplitTargetPlatformPct       float64
+	SplitTargetEstablishmentPct  float64
+	SplitStepMonths              int
+	SplitStepPlatformPct         float64
+	SplitStepEstablishmentPct    float64
+	SplitMinMonthlyOrders        int
+	SplitMinActiveCouriers       int
+	SplitLastAdjustedAt          *time.Time
+	CreatedAt                    time.Time
 }
 
 // ZoneMetricsProvider fornece as metricas de uma zona para o job de decaimento.

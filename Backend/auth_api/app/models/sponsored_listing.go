@@ -21,19 +21,19 @@ const (
 // Slots máximos de patrocínio por zona, por plano
 // Evita que a busca vire só anúncio
 const (
-	MaxSponsoredSlotsBasicPerZone   = 5  // até 5 estabelecimentos basic por zona
-	MaxSponsoredSlotsPremiumPerZone = 3  // até 3 estabelecimentos premium por zona
-	MaxSponsoredSlotsTotalPerZone   = 8  // total combinado: no máximo 8
+	MaxSponsoredSlotsBasicPerZone   = 5 // até 5 estabelecimentos basic por zona
+	MaxSponsoredSlotsPremiumPerZone = 3 // até 3 estabelecimentos premium por zona
+	MaxSponsoredSlotsTotalPerZone   = 8 // total combinado: no máximo 8
 )
 
 // SponsoredListing representa um patrocínio de cardápio de um estabelecimento.
 // O restaurante paga para aparecer com destaque no topo da listagem de busca.
 // É a receita de maior margem do modelo, pois não depende de custo logístico.
 type SponsoredListing struct {
-	ID              uint      `gorm:"primaryKey;autoIncrement" json:"id"`
-	EstablishmentID uint      `gorm:"not null;uniqueIndex:idx_sponsored_est_zone" json:"establishment_id"`
-	ZoneID          uint      `gorm:"not null;uniqueIndex:idx_sponsored_est_zone" json:"zone_id"`
-	Plan            string    `gorm:"size:20;not null;default:'basic'" json:"plan"`
+	ID              uint   `gorm:"primaryKey;autoIncrement" json:"id"`
+	EstablishmentID uint   `gorm:"not null;uniqueIndex:idx_sponsored_est_zone" json:"establishment_id"`
+	ZoneID          uint   `gorm:"not null;uniqueIndex:idx_sponsored_est_zone" json:"zone_id"`
+	Plan            string `gorm:"size:20;not null;default:'basic'" json:"plan"`
 
 	// Status: active, expired, cancelled
 	Status string `gorm:"size:20;not null;default:'active'" json:"status"`
@@ -42,8 +42,8 @@ type SponsoredListing struct {
 	Amount float64 `gorm:"not null" json:"amount"`
 
 	// Período vigente
-	StartDate time.Time  `json:"start_date"`
-	EndDate   time.Time  `json:"end_date"`
+	StartDate   time.Time  `json:"start_date"`
+	EndDate     time.Time  `json:"end_date"`
 	CancelledAt *time.Time `json:"cancelled_at,omitempty"`
 
 	// Benefícios
@@ -265,18 +265,18 @@ func GetFeaturedEstablishments(zoneID uint, limit int) ([]map[string]interface{}
 		}
 
 		item := map[string]interface{}{
-			"sponsor_id":           s.ID,
-			"establishment_id":     est.ID,
-			"establishment_name":   est.Name,
-			"establishment_image":  est.Image,
-			"description":          est.Description,
-			"primary_color":        est.PrimaryColor,
-			"secondary_color":      est.SecondaryColor,
-			"plan":                 s.Plan,
-			"priority":             s.Priority,
-			"has_banner":           s.HasBanner,
+			"sponsor_id":            s.ID,
+			"establishment_id":      est.ID,
+			"establishment_name":    est.Name,
+			"establishment_image":   est.Image,
+			"description":           est.Description,
+			"primary_color":         est.PrimaryColor,
+			"secondary_color":       est.SecondaryColor,
+			"plan":                  s.Plan,
+			"priority":              s.Priority,
+			"has_banner":            s.HasBanner,
 			"has_push_notification": s.HasPushNotification,
-			"amount":               s.Amount,
+			"amount":                s.Amount,
 		}
 
 		// Inclui avaliação média se existir (join opcional com reviews)

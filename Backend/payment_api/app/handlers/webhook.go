@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 	"context"
@@ -7,9 +7,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/go-redis/redis/v8"
 	"github.com/carloshomar/vercardapio/payment_api/app/models"
 	"github.com/carloshomar/vercardapio/payment_api/app/services"
+	"github.com/go-redis/redis/v8"
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson"
 )
@@ -62,8 +62,8 @@ func publishToOrderQueue(body []byte) error {
 func publishToPaymentQueue(body []byte) error {
 	redisURL := os.Getenv("REDIS_URL")
 	if redisURL == "" {
-		log.Printf("ALERTA: [PAYMENT_QUEUE] REDIS_URL nao configurado. "+
-			"Pagamento nao sera encaminhado para credito na carteira. "+
+		log.Printf("ALERTA: [PAYMENT_QUEUE] REDIS_URL nao configurado. " +
+			"Pagamento nao sera encaminhado para credito na carteira. " +
 			"Verifique se o servico Redis (fuudelivery-redis) esta ativo.")
 		return nil
 	}
@@ -195,9 +195,9 @@ func publishPaymentApproved(abacatepayID string) {
 
 func HandlePaymentWebhook(c *fiber.Ctx) error {
 	var webhookData struct {
-		Event   string `json:"event"`
-		ID      string `json:"id"`
-		Charge  struct {
+		Event  string `json:"event"`
+		ID     string `json:"id"`
+		Charge struct {
 			ID     string  `json:"id"`
 			Status string  `json:"status"`
 			Amount float64 `json:"amount"`

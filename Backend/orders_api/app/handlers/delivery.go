@@ -12,7 +12,7 @@ func CalculateDeliveryValue(c *fiber.Ctx) error {
 	var request struct {
 		Distance        float32 `json:"distance"`
 		EstablishmentID int64   `json:"establishmentId"`
-		UserID          *uint   `json:"user_id,omitempty"` // opcional: para verificar frete gratis da assinatura
+		UserID          *uint   `json:"user_id,omitempty"`     // opcional: para verificar frete gratis da assinatura
 		OrderTotal      float64 `json:"order_total,omitempty"` // valor total do pedido para frete gratis
 	}
 
@@ -126,14 +126,13 @@ func InsertDelivery(c *fiber.Ctx) error {
 	})
 }
 
-
 func CalculateRoute(c *fiber.Ctx) error {
 	var request struct {
-		OriginLat      float64 `json:"origin_lat"`
-		OriginLng      float64 `json:"origin_lng"`
-		DestLat        float64 `json:"dest_lat"`
-		DestLng        float64 `json:"dest_lng"`
-		EstablishmentID int64  `json:"establishmentId"`
+		OriginLat       float64 `json:"origin_lat"`
+		OriginLng       float64 `json:"origin_lng"`
+		DestLat         float64 `json:"dest_lat"`
+		DestLng         float64 `json:"dest_lng"`
+		EstablishmentID int64   `json:"establishmentId"`
 	}
 
 	if err := c.BodyParser(&request); err != nil {
@@ -169,10 +168,10 @@ func CalculateRoute(c *fiber.Ctx) error {
 	deliveryValue := (float32(distanceKm) * delivery.PerKm) + delivery.FixedTaxa
 
 	return c.JSON(fiber.Map{
-		"distance_km":   fmt.Sprintf("%.2f", distanceKm),
-		"duration_min":  fmt.Sprintf("%.1f", durationMin),
+		"distance_km":    fmt.Sprintf("%.2f", distanceKm),
+		"duration_min":   fmt.Sprintf("%.1f", durationMin),
 		"delivery_value": deliveryValue,
-		"source":        source,
+		"source":         source,
 	})
 }
 

@@ -203,12 +203,12 @@ func ApplyCoupon(c *fiber.Ctx) error {
 	models.DB.Model(&coupon).UpdateColumn("used_count", coupon.UsedCount+1)
 
 	return c.JSON(fiber.Map{
-		"success":        true,
-		"message":        "Cupom aplicado com sucesso",
-		"discount_type":  validateResp.DiscountType,
-		"discount_value": validateResp.DiscountValue,
+		"success":         true,
+		"message":         "Cupom aplicado com sucesso",
+		"discount_type":   validateResp.DiscountType,
+		"discount_value":  validateResp.DiscountValue,
 		"discount_amount": validateResp.DiscountAmount,
-		"final_value":    validateResp.FinalValue,
+		"final_value":     validateResp.FinalValue,
 	})
 }
 
@@ -333,16 +333,16 @@ func GenerateReferralCoupon(c *fiber.Ctx) error {
 	newUserCode := "GANHOU-" + strings.ToUpper(request.NewUserPhone)
 
 	referrerCoupon := models.Coupon{
-		Code:          referrerCode,
-		Description:   "Cupom de indicação - Você indicou um amigo!",
-		DiscountType:  "PERCENTAGE",
-		DiscountValue: 10,
-		MinOrderValue: 0,
-		MaxUses:       1,
+		Code:           referrerCode,
+		Description:    "Cupom de indicação - Você indicou um amigo!",
+		DiscountType:   "PERCENTAGE",
+		DiscountValue:  10,
+		MinOrderValue:  0,
+		MaxUses:        1,
 		MaxUsesPerUser: 1,
-		StartDate:     now,
-		ExpiryDate:    referrerExpiry,
-		IsActive:      true,
+		StartDate:      now,
+		ExpiryDate:     referrerExpiry,
+		IsActive:       true,
 	}
 
 	if err := models.DB.Create(&referrerCoupon).Error; err != nil {
@@ -350,16 +350,16 @@ func GenerateReferralCoupon(c *fiber.Ctx) error {
 	}
 
 	newUserCoupon := models.Coupon{
-		Code:          newUserCode,
-		Description:   "Cupom de indicação - Seja bem-vindo!",
-		DiscountType:  "FIXED",
-		DiscountValue: 10,
-		MinOrderValue: 0,
-		MaxUses:       1,
+		Code:           newUserCode,
+		Description:    "Cupom de indicação - Seja bem-vindo!",
+		DiscountType:   "FIXED",
+		DiscountValue:  10,
+		MinOrderValue:  0,
+		MaxUses:        1,
 		MaxUsesPerUser: 1,
-		StartDate:     now,
-		ExpiryDate:    newUserExpiry,
-		IsActive:      true,
+		StartDate:      now,
+		ExpiryDate:     newUserExpiry,
+		IsActive:       true,
 	}
 
 	if err := models.DB.Create(&newUserCoupon).Error; err != nil {
@@ -367,11 +367,11 @@ func GenerateReferralCoupon(c *fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"message":               "Cupons de indicação criados com sucesso",
-		"referrer_coupon_code":  referrerCoupon.Code,
-		"new_user_coupon_code":  newUserCoupon.Code,
-		"referrer_coupon":       referrerCoupon,
-		"new_user_coupon":       newUserCoupon,
+		"message":              "Cupons de indicação criados com sucesso",
+		"referrer_coupon_code": referrerCoupon.Code,
+		"new_user_coupon_code": newUserCoupon.Code,
+		"referrer_coupon":      referrerCoupon,
+		"new_user_coupon":      newUserCoupon,
 	})
 }
 

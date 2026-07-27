@@ -122,9 +122,9 @@ func TestCheckTimeOfDay(t *testing.T) {
 
 func TestRiskAssessment_RequiresApproval(t *testing.T) {
 	tests := []struct {
-		name              string
-		level             models.RiskLevel
-		requiresApproval  bool
+		name             string
+		level            models.RiskLevel
+		requiresApproval bool
 	}{
 		{"low does not require approval", models.RiskLow, false},
 		{"medium does not require approval", models.RiskMedium, false},

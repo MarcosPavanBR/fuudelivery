@@ -85,7 +85,7 @@ func TokenizeCard(c *fiber.Ctx) error {
 
 func ValidateCard(c *fiber.Ctx) error {
 	var req struct {
-		CardToken string `json:"card_token"`
+		CardToken string  `json:"card_token"`
 		Amount    float64 `json:"amount"`
 	}
 

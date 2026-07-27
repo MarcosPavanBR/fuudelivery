@@ -22,7 +22,7 @@ func DefaultBatchExpiryConfig() BatchExpiryConfig {
 	return BatchExpiryConfig{
 		Interval:     30 * time.Minute, // verifica a cada 30min
 		MaxBatchAge:  24 * time.Hour,   // expira apos 24h
-		ExpireAction: "cancelled",       // marca como cancelado
+		ExpireAction: "cancelled",      // marca como cancelado
 	}
 }
 

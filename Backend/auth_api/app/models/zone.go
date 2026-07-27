@@ -12,8 +12,8 @@ import (
 // entregadores. Cada estabelecimento pertence a uma zona.
 // Se um estabelecimento nao tiver zona atribuida, usa os defaults.
 type Zone struct {
-	ID        uint      `gorm:"primaryKey;autoIncrement" json:"id"`
-	Name      string    `gorm:"size:100;not null;uniqueIndex" json:"name"`
+	ID   uint   `gorm:"primaryKey;autoIncrement" json:"id"`
+	Name string `gorm:"size:100;not null;uniqueIndex" json:"name"`
 
 	// Percentual da plataforma sobre o total do pedido (ex: 5.0 = 5%)
 	PlatformFeePercentage float64 `gorm:"not null;default:5.0" json:"platform_fee_percentage"`
@@ -21,8 +21,8 @@ type Zone struct {
 	EstablishmentPercentage float64 `gorm:"not null;default:85.0" json:"establishment_percentage"`
 
 	// === Campos geograficos (motor de despacho) ===
-	City        string  `gorm:"size:100;index" json:"city"`
-	State       string  `gorm:"size:50;index" json:"state"`
+	City          string `gorm:"size:100;index" json:"city"`
+	State         string `gorm:"size:50;index" json:"state"`
 	GeohashPrefix string `gorm:"size:20;index" json:"geohash_prefix"` // prefixo para resolucao rapida
 
 	// === Configuracao de raio de entrega ===
@@ -62,26 +62,26 @@ type Zone struct {
 	// Se permite batching (entregador pegar mais de 1 pedido na mesma rota)
 	AllowBatching bool `gorm:"not null;default:true" json:"allow_batching"`
 
-// === Decaimento automatico do split (maturidade da praca) ===
+	// === Decaimento automatico do split (maturidade da praca) ===
 	// Split inicial (praca nova, mercado nao maduro)
-	SplitInitialPlatformPct float64 `gorm:"default:3.0" json:"split_initial_platform_pct"`
+	SplitInitialPlatformPct      float64 `gorm:"default:3.0" json:"split_initial_platform_pct"`
 	SplitInitialEstablishmentPct float64 `gorm:"default:87.0" json:"split_initial_establishment_pct"`
 
 	// Split alvo (praca madura, padrao de mercado)
-	SplitTargetPlatformPct float64 `gorm:"default:12.0" json:"split_target_platform_pct"`
+	SplitTargetPlatformPct      float64 `gorm:"default:12.0" json:"split_target_platform_pct"`
 	SplitTargetEstablishmentPct float64 `gorm:"default:78.0" json:"split_target_establishment_pct"`
 
 	// Decaimento: a cada N meses sobe X%
-	SplitStepMonths int `gorm:"default:3" json:"split_step_months"`         // a cada 3 meses
-	SplitStepPlatformPct float64 `gorm:"default:1.5" json:"split_step_platform_pct"` // sobe 1.5%
+	SplitStepMonths           int     `gorm:"default:3" json:"split_step_months"`               // a cada 3 meses
+	SplitStepPlatformPct      float64 `gorm:"default:1.5" json:"split_step_platform_pct"`       // sobe 1.5%
 	SplitStepEstablishmentPct float64 `gorm:"default:-1.5" json:"split_step_establishment_pct"` // desce 1.5%
 
 	// Gatilhos: nao sobe se nao atingiu metricas
-	SplitMinMonthlyOrders int `gorm:"default:50" json:"split_min_monthly_orders"`  // minimo 50 pedidos/mes
+	SplitMinMonthlyOrders  int `gorm:"default:50" json:"split_min_monthly_orders"` // minimo 50 pedidos/mes
 	SplitMinActiveCouriers int `gorm:"default:3" json:"split_min_active_couriers"` // minimo 3 entregadores
 
 	// Split atual efetivo (cache, atualizado pelo job de decaimento)
-	SplitCurrentPlatformPct float64 `gorm:"default:3.0" json:"split_current_platform_pct"`
+	SplitCurrentPlatformPct      float64 `gorm:"default:3.0" json:"split_current_platform_pct"`
 	SplitCurrentEstablishmentPct float64 `gorm:"default:87.0" json:"split_current_establishment_pct"`
 
 	// Ultima vez que o split foi ajustado

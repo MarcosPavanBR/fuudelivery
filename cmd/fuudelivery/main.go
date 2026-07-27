@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -20,7 +21,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/bson"
-	"github.com/go-redis/redis/v8"
 	"gorm.io/gorm"
 
 	// Models (database initialization)
@@ -54,8 +54,8 @@ import (
 // Rate limiter simples: contador de requisicoes por IP por minuto.
 // Usa apenas stdlib para evitar dependencia externa (golang.org/x/time).
 type ipCounter struct {
-	count    int
-	resetAt  time.Time
+	count   int
+	resetAt time.Time
 }
 
 var (
@@ -136,11 +136,11 @@ func adminRequired(c *fiber.Ctx) error {
 
 // === DISPATCH ENGINE (global instances) ===
 var (
-	courierStore     *dispatchServices.CourierStore
-	matchingEngine   *dispatchServices.MatchingEngine
-	dispatchHandler  *deliveryHandlers.DispatchHandler
-	calibrationJob   *dispatchServices.AutoCalibrationJob
-	splitDecayJob    *dispatchServices.SplitDecayJob
+	courierStore    *dispatchServices.CourierStore
+	matchingEngine  *dispatchServices.MatchingEngine
+	dispatchHandler *deliveryHandlers.DispatchHandler
+	calibrationJob  *dispatchServices.AutoCalibrationJob
+	splitDecayJob   *dispatchServices.SplitDecayJob
 )
 
 func initDispatchEngine(db *gorm.DB) {
@@ -154,10 +154,10 @@ func initDispatchEngine(db *gorm.DB) {
 	// Callback: quando um pedido e matchado, publica no canal de delivery_updates
 	matchingEngine.OnMatch = func(orderID string, courierID int64) {
 		data, _ := json.Marshal(map[string]interface{}{
-			"type":          "order_matched",
-			"order_id":      orderID,
-			"courier_id":    courierID,
-			"matched_at":    time.Now().UTC(),
+			"type":       "order_matched",
+			"order_id":   orderID,
+			"courier_id": courierID,
+			"matched_at": time.Now().UTC(),
 		})
 		queue.Publish("delivery_updates", data)
 	}
@@ -281,7 +281,7 @@ func initDispatchEngine(db *gorm.DB) {
 		updates := map[string]interface{}{
 			"split_current_platform_pct":      result.NewPlatformPct,
 			"split_current_establishment_pct": result.NewEstablishmentPct,
-			"split_last_adjusted_at":           now,
+			"split_last_adjusted_at":          now,
 		}
 		if err := db.Model(&models.Zone{}).Where("id = ?", result.ZoneID).Updates(updates).Error; err != nil {
 			log.Printf("[SPLIT_DECAY] Failed to update split for zone %d: %v", result.ZoneID, err)
@@ -999,10 +999,10 @@ func main() {
 	app.Use(logger.New())
 	app.Use(recover.New())
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "https://fuudelivery-web.onrender.com,https://fuudelivery-admin-lv7f.onrender.com,https://fuudelivery-payment-panel.onrender.com",
+		AllowOrigins:     "https://fuudelivery-web.onrender.com,https://fuudelivery-admin-lv7f.onrender.com,https://fuudelivery-payment-panel.onrender.com",
 		AllowCredentials: true,
-		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
-		AllowHeaders: "Origin,Content-Type,Accept,Authorization",
+		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
+		AllowHeaders:     "Origin,Content-Type,Accept,Authorization",
 	}))
 
 	// Health check
@@ -1023,11 +1023,11 @@ func main() {
 			"service": "fuudelivery",
 			"version": "1.0.0",
 			"checks": fiber.Map{
-				"postgres":   health.DatabaseCheck(models.DB),
-				"mongodb":    health.MongoCheck(ordersModels.MongoClient),
-				"redis":      health.RedisCheck(redisClient),
-				"redis_geo":  health.RedisGeoCheck(redisClient),
-				"batches":    health.BatchCheck(ordersModels.DB),
+				"postgres":  health.DatabaseCheck(models.DB),
+				"mongodb":   health.MongoCheck(ordersModels.MongoClient),
+				"redis":     health.RedisCheck(redisClient),
+				"redis_geo": health.RedisGeoCheck(redisClient),
+				"batches":   health.BatchCheck(ordersModels.DB),
 			},
 			"time": time.Now().UTC(),
 		})

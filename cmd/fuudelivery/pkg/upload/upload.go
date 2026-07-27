@@ -87,7 +87,7 @@ func HandleImageUpload(c *fiber.Ctx) error {
 	path := storage.GenerateFilePath(folder, 0, file.Filename)
 	if entityID != "" {
 		var id uint
-		if _, err := parseUint(entityID, &id); err == nil && id > 0 {
+		if err := parseUint(entityID, &id); err == nil && id > 0 {
 			path = storage.GenerateFilePath(folder, id, file.Filename)
 		}
 	}

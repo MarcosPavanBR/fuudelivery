@@ -45,9 +45,10 @@ import (
 	// Batch expiry
 	orderServices "github.com/carloshomar/vercardapio/orders_api/app/services"
 
-	// Queue + Health
+	// Queue + Health + Upload
 	"github.com/carloshomar/fuudelivery/pkg/health"
 	"github.com/carloshomar/fuudelivery/pkg/queue"
+	"github.com/carloshomar/fuudelivery/pkg/upload"
 )
 
 // Rate limiter simples: contador de requisicoes por IP por minuto.
@@ -968,6 +969,9 @@ func main() {
 	// Initialize message queue
 	queue.Init()
 
+	// Initialize storage (Supabase Storage para upload de imagens)
+	upload.Init()
+
 	// Start batch expiry job
 	batchExpiryConfig := orderServices.DefaultBatchExpiryConfig()
 	batchExpiryManager := orderServices.NewBatchExpiryManager(ordersModels.DB, batchExpiryConfig)
@@ -1044,6 +1048,10 @@ func main() {
 	setupSubscriptionRoutes(app)
 	setupPaymentRoutes(app)
 	setupChatRoutes(app)
+
+	// Upload de imagens (Supabase Storage)
+	app.Post("/upload/:entity", upload.HandleImageUpload)
+	app.Post("/upload/:entity/:entityId", upload.HandleImageUpload)
 
 	// Start background workers
 	go startQueueListeners()

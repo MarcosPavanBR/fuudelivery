@@ -13,7 +13,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://fuudelivery-api.onrender.com"
+        "EXPO_PUBLIC_API_URL": "https://fuudelivery-api-8y6l.onrender.com"
       }
     },
     "production": {
@@ -21,7 +21,7 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://fuudelivery-api.onrender.com"
+        "EXPO_PUBLIC_API_URL": "https://fuudelivery-api-8y6l.onrender.com"
       }
     }
   },

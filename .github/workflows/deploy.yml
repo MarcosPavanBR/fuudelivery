@@ -1,12 +1,25 @@
 name: Deploy to Render
 
 on:
-  push:
+  workflow_run:
+    workflows: ["CI Gate"]
+    types: [completed]
     branches: [master, main]
   workflow_dispatch:
 
 jobs:
+  check-ci-status:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion != 'success' && github.event_name != 'workflow_dispatch' }}
+    steps:
+      - name: CI did not pass
+        run: |
+          echo "CI workflow did not pass (conclusion: ${{ github.event.workflow_run.conclusion }})."
+          echo "Fix CI failures before deploying."
+          exit 1
+
   deploy-all:
+    needs: [check-ci-status]
     runs-on: ubuntu-latest
     strategy:
       matrix:

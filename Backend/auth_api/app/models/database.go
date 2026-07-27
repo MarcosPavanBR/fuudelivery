@@ -53,6 +53,7 @@ func ConnectDatabase() {
 	database.AutoMigrate(&Zone{})
 	database.AutoMigrate(&Subscription{})
 	database.AutoMigrate(&SponsoredListing{})
+	database.AutoMigrate(&Client{})
 
 	// Atualiza DeliveryMan com campos do motor de despacho se nao existirem
 	// (GORM AutoMigrate adiciona colunas novas, mas nao remove)

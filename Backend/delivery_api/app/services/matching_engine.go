@@ -186,6 +186,10 @@ type MatchingEngine struct {
 	matchTimeMs     []float64 // historico de tempos de match
 	unmatchedOrders int64     // total de pedidos nao matchados
 	totalOrders     int64     // total de pedidos processados
+
+	// Metricas por zona (para calibracao independente)
+	zoneMetrics    map[uint]*ZoneCalibrationMetrics
+	zoneMetricsMu sync.RWMutex
 }
 
 // NewMatchingEngine cria uma nova instancia do motor de matching.
@@ -195,6 +199,7 @@ func NewMatchingEngine(courierStore *CourierStore, zoneResolver ZoneResolver) *M
 		ZoneResolver: zoneResolver,
 		DLQ:          NewDLQStore(1000),
 		matchTimeMs:  make([]float64, 0, 1000),
+		zoneMetrics:  make(map[uint]*ZoneCalibrationMetrics),
 	}
 }
 
@@ -390,6 +395,13 @@ func (m *MatchingEngine) CheckBatching(existingOrderLat, existingOrderLng, newOr
 
 // --- Metricas para calibracao ---
 
+// ZoneCalibrationMetrics armazena metricas de calibracao para UMA zona.
+type ZoneCalibrationMetrics struct {
+	MatchTimeMs     []float64
+	UnmatchedOrders int64
+	TotalOrders     int64
+}
+
 func (m *MatchingEngine) recordMatchTime(ms float64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -399,12 +411,44 @@ func (m *MatchingEngine) recordMatchTime(ms float64) {
 	}
 }
 
+func (m *MatchingEngine) recordMatchTimeForZone(zoneID uint, ms float64) {
+	m.zoneMetricsMu.Lock()
+	defer m.zoneMetricsMu.Unlock()
+
+	metrics, ok := m.zoneMetrics[zoneID]
+	if !ok {
+		metrics = &ZoneCalibrationMetrics{
+			MatchTimeMs: make([]float64, 0, 1000),
+		}
+		m.zoneMetrics[zoneID] = metrics
+	}
+	metrics.MatchTimeMs = append(metrics.MatchTimeMs, ms)
+	if len(metrics.MatchTimeMs) > 10000 {
+		metrics.MatchTimeMs = metrics.MatchTimeMs[len(metrics.MatchTimeMs)-10000:]
+	}
+}
+
 func (m *MatchingEngine) recordOrder(unmatched bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.totalOrders++
 	if unmatched {
 		m.unmatchedOrders++
+	}
+}
+
+func (m *MatchingEngine) recordOrderForZone(zoneID uint, unmatched bool) {
+	m.zoneMetricsMu.Lock()
+	defer m.zoneMetricsMu.Unlock()
+
+	metrics, ok := m.zoneMetrics[zoneID]
+	if !ok {
+		metrics = &ZoneCalibrationMetrics{}
+		m.zoneMetrics[zoneID] = metrics
+	}
+	metrics.TotalOrders++
+	if unmatched {
+		metrics.UnmatchedOrders++
 	}
 }
 
@@ -418,6 +462,18 @@ func (m *MatchingEngine) GetUnmatchedRate() float64 {
 	return float64(m.unmatchedOrders) / float64(m.totalOrders)
 }
 
+// GetUnmatchedRateForZone retorna a taxa de pedidos nao matchados para UMA zona.
+func (m *MatchingEngine) GetUnmatchedRateForZone(zoneID uint) float64 {
+	m.zoneMetricsMu.RLock()
+	defer m.zoneMetricsMu.RUnlock()
+
+	metrics, ok := m.zoneMetrics[zoneID]
+	if !ok || metrics.TotalOrders == 0 {
+		return 0
+	}
+	return float64(metrics.UnmatchedOrders) / float64(metrics.TotalOrders)
+}
+
 // GetMatchTimeP90 retorna o percentil 90 do tempo de matching em ms.
 func (m *MatchingEngine) GetMatchTimeP90() float64 {
 	m.mu.RLock()
@@ -428,6 +484,31 @@ func (m *MatchingEngine) GetMatchTimeP90() float64 {
 	sorted := make([]float64, len(m.matchTimeMs))
 	copy(sorted, m.matchTimeMs)
 	// Simple sort for small slices; for production use a proper sort
+	for i := 0; i < len(sorted); i++ {
+		for j := i + 1; j < len(sorted); j++ {
+			if sorted[j] < sorted[i] {
+				sorted[i], sorted[j] = sorted[j], sorted[i]
+			}
+		}
+	}
+	idx := int(float64(len(sorted)) * 0.9)
+	if idx >= len(sorted) {
+		idx = len(sorted) - 1
+	}
+	return sorted[idx]
+}
+
+// GetMatchTimeP90ForZone retorna o percentil 90 do tempo de matching para UMA zona.
+func (m *MatchingEngine) GetMatchTimeP90ForZone(zoneID uint) float64 {
+	m.zoneMetricsMu.RLock()
+	defer m.zoneMetricsMu.RUnlock()
+
+	metrics, ok := m.zoneMetrics[zoneID]
+	if !ok || len(metrics.MatchTimeMs) == 0 {
+		return 0
+	}
+	sorted := make([]float64, len(metrics.MatchTimeMs))
+	copy(sorted, metrics.MatchTimeMs)
 	for i := 0; i < len(sorted); i++ {
 		for j := i + 1; j < len(sorted); j++ {
 			if sorted[j] < sorted[i] {

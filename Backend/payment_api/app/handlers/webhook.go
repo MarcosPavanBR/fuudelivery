@@ -11,63 +11,45 @@ import (
 	"github.com/carloshomar/vercardapio/payment_api/app/models"
 	"github.com/carloshomar/vercardapio/payment_api/app/services"
 	"github.com/gofiber/fiber/v2"
-	"github.com/streadway/amqp"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
-const paymentRedisQueueKey = "queue:payments"
+const (
+	paymentRedisQueueKey = "queue:payments"
+	orderRedisQueueKey   = "queue:orders"
+)
 
+// publishToOrderQueue publica uma mensagem na fila de pedidos usando Redis.
+// Migrado de RabbitMQ (streadway/amqp) para Redis, mesma abordagem da
+// publishToPaymentQueue. Usa LPush + BRPop, mesma instancia Redis
+// provisionada pelo Render (fuudelivery-redis).
 func publishToOrderQueue(body []byte) error {
-	dsn := os.Getenv("RABBIT_CONNECTION")
-	if dsn == "" {
-		log.Println("[QUEUE] RabbitMQ não configurado, mensagem ignorada")
+	redisURL := os.Getenv("REDIS_URL")
+	if redisURL == "" {
+		log.Printf("ALERTA: [ORDER_QUEUE] REDIS_URL nao configurado. "+
+			"Confirmacao de pedido nao sera encaminhada. "+
+			"Verifique se o servico Redis (fuudelivery-redis) esta ativo.")
 		return nil
 	}
 
-	queueName := os.Getenv("RABBIT_ORDER_QUEUE")
-	if queueName == "" {
-		log.Println("[QUEUE] RABBIT_ORDER_QUEUE não configurado, mensagem ignorada")
-		return nil
-	}
-
-	conn, err := amqp.Dial(dsn)
+	opts, err := redis.ParseURL(redisURL)
 	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	ch, err := conn.Channel()
-	if err != nil {
-		return err
-	}
-	defer ch.Close()
-
-	_, err = ch.QueueDeclare(
-		queueName,
-		true,
-		false,
-		false,
-		false,
-		nil,
-	)
-	if err != nil {
+		log.Printf("ALERTA: [ORDER_QUEUE] Erro ao parsear REDIS_URL: %v", err)
 		return err
 	}
 
-	err = ch.Publish(
-		"",
-		queueName,
-		false,
-		false,
-		amqp.Publishing{
-			ContentType: "application/json",
-			Body:        body,
-		})
-	if err != nil {
+	client := redis.NewClient(opts)
+	defer client.Close()
+
+	ctx := context.Background()
+
+	// Publica na fila LPush (o consumer usa BRPop)
+	if err := client.LPush(ctx, orderRedisQueueKey, body).Err(); err != nil {
+		log.Printf("ALERTA: [ORDER_QUEUE] Erro ao publicar no Redis: %v", err)
 		return err
 	}
 
-	log.Printf("Message published to queue %s: %s", queueName, string(body))
+	log.Printf("[ORDER_QUEUE] Confirmacao de pedido publicada no Redis: %s", string(body))
 	return nil
 }
 

@@ -137,9 +137,15 @@ func (j *AutoCalibrationJob) calibrateZone(zone ZoneMetadata) CalibrationResult 
 		Reason:      "no_change",
 	}
 
-	// Coleta metricas
-	result.UnmatchedRate = j.engine.GetUnmatchedRate()
-	result.MatchTimeP90Ms = j.engine.GetMatchTimeP90()
+	// Coleta metricas POR ZONA (nao globais)
+	result.UnmatchedRate = j.engine.GetUnmatchedRateForZone(zone.ID)
+	result.MatchTimeP90Ms = j.engine.GetMatchTimeP90ForZone(zone.ID)
+
+	// Fallback para metricas globais se nao houver dados por zona
+	if result.UnmatchedRate == 0 && result.MatchTimeP90Ms == 0 {
+		result.UnmatchedRate = j.engine.GetUnmatchedRate()
+		result.MatchTimeP90Ms = j.engine.GetMatchTimeP90()
+	}
 	result.DensityPerKm2 = j.engine.CourierStore.GetZoneDensity(zone.ID)
 
 	newRadius := zone.RadiusKm

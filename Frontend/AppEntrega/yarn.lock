@@ -3772,6 +3772,11 @@ expo-router@~3.5.11:
     react-native-helmet-async "2.0.4"
     schema-utils "^4.0.1"
 
+expo-secure-store@^57.0.1:
+  version "57.0.1"
+  resolved "https://registry.npmjs.org/expo-secure-store/-/expo-secure-store-57.0.1.tgz"
+  integrity sha512-tLa1VmSadOq19mA/dwkl99RbHyjLE0T1qqBYMY3/OsguZTI+rlrDy/DDJjupqlVtmr95hD7o1pYqx5aL+B4YMA==
+
 expo-splash-screen@~0.27.4, expo-splash-screen@0.27.4:
   version "0.27.4"
   resolved "https://registry.npmjs.org/expo-splash-screen/-/expo-splash-screen-0.27.4.tgz"

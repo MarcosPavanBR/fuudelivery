@@ -96,8 +96,8 @@ func TestPasswordVerification(t *testing.T) {
 
 func TestCreateUserRequest_Fields(t *testing.T) {
 	req := dto.CreateUserRequest{
-		Name:  "Restaurante Teste",
-		Email: "teste@restaurante.com",
+		Name:     "Restaurante Teste",
+		Email:    "teste@restaurante.com",
 		Password: "senha123",
 		Establishment: dto.EstablishmentRequest{
 			Name:        "Restaurante ABC",
@@ -120,10 +120,10 @@ func TestCreateUserRequest_Fields(t *testing.T) {
 
 func TestChangePasswordRequest_Validation(t *testing.T) {
 	tests := []struct {
-		name         string
-		newPassword  string
-		minLength    int
-		valid        bool
+		name        string
+		newPassword string
+		minLength   int
+		valid       bool
 	}{
 		{"valid password", "newpassword123", 6, true},
 		{"too short", "abc", 6, false},

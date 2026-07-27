@@ -45,17 +45,18 @@ func GetZone(c *fiber.Ctx) error {
 
 // CreateZone cria uma nova zona com todos os parametros configuracao.
 // POST /api/zones
-// Exemplo: {
-//   "name": "Centro-SP",
-//   "city": "Sao Paulo", "state": "SP",
-//   "platform_fee_percentage": 12.0, "establishment_percentage": 78.0,
-//   "radius_km": 2.5, "min_radius_km": 1.0, "max_radius_km": 5.0,
-//   "peak_hour_start": "11:00", "peak_hour_end": "14:00",
-//   "peak_radius_multiplier": 0.7,
-//   "city_size": "metro",
-//   "min_delivery_fee": 7.0,
-//   "min_couriers_threshold": 5
-// }
+//
+//	Exemplo: {
+//	  "name": "Centro-SP",
+//	  "city": "Sao Paulo", "state": "SP",
+//	  "platform_fee_percentage": 12.0, "establishment_percentage": 78.0,
+//	  "radius_km": 2.5, "min_radius_km": 1.0, "max_radius_km": 5.0,
+//	  "peak_hour_start": "11:00", "peak_hour_end": "14:00",
+//	  "peak_radius_multiplier": 0.7,
+//	  "city_size": "metro",
+//	  "min_delivery_fee": 7.0,
+//	  "min_couriers_threshold": 5
+//	}
 func CreateZone(c *fiber.Ctx) error {
 	var req struct {
 		Name                    string   `json:"name"`
@@ -81,15 +82,15 @@ func CreateZone(c *fiber.Ctx) error {
 		AllowBatching        *bool    `json:"allow_batching"`
 
 		// Decaimento de split
-		SplitInitialPlatformPct       *float64 `json:"split_initial_platform_pct"`
-		SplitInitialEstablishmentPct  *float64 `json:"split_initial_establishment_pct"`
-		SplitTargetPlatformPct        *float64 `json:"split_target_platform_pct"`
-		SplitTargetEstablishmentPct   *float64 `json:"split_target_establishment_pct"`
-		SplitStepMonths               *int     `json:"split_step_months"`
-		SplitStepPlatformPct          *float64 `json:"split_step_platform_pct"`
-		SplitStepEstablishmentPct     *float64 `json:"split_step_establishment_pct"`
-		SplitMinMonthlyOrders         *int     `json:"split_min_monthly_orders"`
-		SplitMinActiveCouriers        *int     `json:"split_min_active_couriers"`
+		SplitInitialPlatformPct      *float64 `json:"split_initial_platform_pct"`
+		SplitInitialEstablishmentPct *float64 `json:"split_initial_establishment_pct"`
+		SplitTargetPlatformPct       *float64 `json:"split_target_platform_pct"`
+		SplitTargetEstablishmentPct  *float64 `json:"split_target_establishment_pct"`
+		SplitStepMonths              *int     `json:"split_step_months"`
+		SplitStepPlatformPct         *float64 `json:"split_step_platform_pct"`
+		SplitStepEstablishmentPct    *float64 `json:"split_step_establishment_pct"`
+		SplitMinMonthlyOrders        *int     `json:"split_min_monthly_orders"`
+		SplitMinActiveCouriers       *int     `json:"split_min_active_couriers"`
 	}
 
 	if err := c.BodyParser(&req); err != nil {
@@ -101,11 +102,11 @@ func CreateZone(c *fiber.Ctx) error {
 	}
 
 	zone := models.Zone{
-		Name:                    req.Name,
-		City:                    req.City,
-		State:                   req.State,
-		GeohashPrefix:           req.GeohashPrefix,
-		IsActive:                true,
+		Name:          req.Name,
+		City:          req.City,
+		State:         req.State,
+		GeohashPrefix: req.GeohashPrefix,
+		IsActive:      true,
 	}
 
 	// Aplica defaults para split se nao informado
@@ -248,17 +249,17 @@ func UpdateZone(c *fiber.Ctx) error {
 		IsActive             *bool    `json:"is_active"`
 
 		// Decaimento de split
-		SplitInitialPlatformPct       *float64 `json:"split_initial_platform_pct"`
-		SplitInitialEstablishmentPct  *float64 `json:"split_initial_establishment_pct"`
-		SplitTargetPlatformPct        *float64 `json:"split_target_platform_pct"`
-		SplitTargetEstablishmentPct   *float64 `json:"split_target_establishment_pct"`
-		SplitStepMonths               *int     `json:"split_step_months"`
-		SplitStepPlatformPct          *float64 `json:"split_step_platform_pct"`
-		SplitStepEstablishmentPct     *float64 `json:"split_step_establishment_pct"`
-		SplitMinMonthlyOrders         *int     `json:"split_min_monthly_orders"`
-		SplitMinActiveCouriers        *int     `json:"split_min_active_couriers"`
-		SplitCurrentPlatformPct       *float64 `json:"split_current_platform_pct"`
-		SplitCurrentEstablishmentPct  *float64 `json:"split_current_establishment_pct"`
+		SplitInitialPlatformPct      *float64 `json:"split_initial_platform_pct"`
+		SplitInitialEstablishmentPct *float64 `json:"split_initial_establishment_pct"`
+		SplitTargetPlatformPct       *float64 `json:"split_target_platform_pct"`
+		SplitTargetEstablishmentPct  *float64 `json:"split_target_establishment_pct"`
+		SplitStepMonths              *int     `json:"split_step_months"`
+		SplitStepPlatformPct         *float64 `json:"split_step_platform_pct"`
+		SplitStepEstablishmentPct    *float64 `json:"split_step_establishment_pct"`
+		SplitMinMonthlyOrders        *int     `json:"split_min_monthly_orders"`
+		SplitMinActiveCouriers       *int     `json:"split_min_active_couriers"`
+		SplitCurrentPlatformPct      *float64 `json:"split_current_platform_pct"`
+		SplitCurrentEstablishmentPct *float64 `json:"split_current_establishment_pct"`
 	}
 
 	if err := c.BodyParser(&req); err != nil {

@@ -89,12 +89,12 @@ func main() {
 	})
 
 	// 6. Inicializa handlers
-	ph := handlers.NewPaymentHandler()     // Pagamentos
-	ch := handlers.NewChargebackHandler()  // Estornos
-	wh := handlers.NewWalletHandler()      // Carteiras
-	uh := handlers.NewUserHandler()        // Autenticacao
-	ah := handlers.NewApprovalHandler()    // Aprovacoes
-	rh := handlers.NewReportHandler()      // Relatorios
+	ph := handlers.NewPaymentHandler()    // Pagamentos
+	ch := handlers.NewChargebackHandler() // Estornos
+	wh := handlers.NewWalletHandler()     // Carteiras
+	uh := handlers.NewUserHandler()       // Autenticacao
+	ah := handlers.NewApprovalHandler()   // Aprovacoes
+	rh := handlers.NewReportHandler()     // Relatorios
 
 	// 7. Configura grupo de rotas da API
 	api := app.Group("/api")

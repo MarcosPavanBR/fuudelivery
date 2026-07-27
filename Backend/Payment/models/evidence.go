@@ -24,12 +24,12 @@ const (
 // Uma evidencia e composta por um tipo, conteudo e opcionalmente
 // um arquivo (nome + URL) para download.
 type Evidence struct {
-	ID           primitive.ObjectID `bson:"_id,omitempty" json:"id"`          // ID unico MongoDB
-	ChargebackID primitive.ObjectID `bson:"chargeback_id" json:"chargeback_id"` // ID do estorno pai
-	Type         EvidenceType       `bson:"type" json:"type"`                 // Tipo da evidencia
-	Content      string             `bson:"content" json:"content"`           // Conteudo textual/descricao
+	ID           primitive.ObjectID `bson:"_id,omitempty" json:"id"`                        // ID unico MongoDB
+	ChargebackID primitive.ObjectID `bson:"chargeback_id" json:"chargeback_id"`             // ID do estorno pai
+	Type         EvidenceType       `bson:"type" json:"type"`                               // Tipo da evidencia
+	Content      string             `bson:"content" json:"content"`                         // Conteudo textual/descricao
 	FileName     string             `bson:"file_name,omitempty" json:"file_name,omitempty"` // Nome do arquivo (se houver)
 	FileURL      string             `bson:"file_url,omitempty" json:"file_url,omitempty"`   // URL de download do arquivo
-	UploadedBy   string             `bson:"uploaded_by" json:"uploaded_by"`   // ID do usuario que enviou
-	CreatedAt    time.Time          `bson:"created_at" json:"created_at"`     // Data de criacao
+	UploadedBy   string             `bson:"uploaded_by" json:"uploaded_by"`                 // ID do usuario que enviou
+	CreatedAt    time.Time          `bson:"created_at" json:"created_at"`                   // Data de criacao
 }

@@ -35,7 +35,6 @@ func SetupRoutes(app *fiber.App, sendMessageToClient func(clientID int64, messag
 	app.Post("/delivery/calculate-delivery-value", handlers.CalculateDeliveryValue)
 	app.Get("/delivery/value/:establishmentId", handlers.GetDeliveryByEstablishmentID)
 
-
 	app.Post("/orders", func(c *fiber.Ctx) error {
 		return handlers.CreateOrder(c, sendMessageToClient)
 	})

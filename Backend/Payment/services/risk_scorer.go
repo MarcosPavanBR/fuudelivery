@@ -28,10 +28,10 @@ func NewRiskScorer() *RiskScorer {
 // RiskAssessment representa o resultado da avaliacao de risco.
 // Contem o score numerico, nivel qualitativo e se requer aprovacao.
 type RiskAssessment struct {
-	Score           float64          `json:"score"`            // Score numerico 0-100
-	Level           models.RiskLevel `json:"level"`            // Nivel: low, medium, high, critical
-	RequiresApproval bool            `json:"requires_approval"` // Se precisa de aprovacao manual
-	Reasons         []string         `json:"reasons"`          // Motivos do score (para auditoria)
+	Score            float64          `json:"score"`             // Score numerico 0-100
+	Level            models.RiskLevel `json:"level"`             // Nivel: low, medium, high, critical
+	RequiresApproval bool             `json:"requires_approval"` // Se precisa de aprovacao manual
+	Reasons          []string         `json:"reasons"`           // Motivos do score (para auditoria)
 }
 
 // AssessPayment analisa um pagamento e retorna sua avaliacao de risco.
@@ -63,10 +63,10 @@ func (r *RiskScorer) AssessPayment(payment *models.Payment) *RiskAssessment {
 	requiresApproval := level == models.RiskHigh || level == models.RiskCritical
 
 	return &RiskAssessment{
-		Score:           score,
-		Level:           level,
+		Score:            score,
+		Level:            level,
 		RequiresApproval: requiresApproval,
-		Reasons:         reasons,
+		Reasons:          reasons,
 	}
 }
 

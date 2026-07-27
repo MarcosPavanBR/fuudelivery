@@ -148,12 +148,12 @@ func (r *RedisGeoIndex) FindNearby(lat, lng, radiusKm float64, limit int) []*Cou
 
 	// Busca membros dentro do raio
 	results, err := r.client.GeoRadius(r.ctx, "courier:location", lng, lat, &redis.GeoRadiusQuery{
-		Radius:      radiusM,
-		Unit:        "m",
-		WithCoord:   true,
-		WithDist:    true,
-		Count:       limit,
-		Sort:        "ASC",
+		Radius:    radiusM,
+		Unit:      "m",
+		WithCoord: true,
+		WithDist:  true,
+		Count:     limit,
+		Sort:      "ASC",
 	}).Result()
 
 	if err != nil {

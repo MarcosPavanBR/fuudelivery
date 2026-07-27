@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 	"context"
@@ -14,13 +14,11 @@ import (
 	"github.com/carloshomar/vercardapio/delivery_api/app/models"
 )
 
-
 func mongoCtx() context.Context {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	_ = cancel
 	return ctx
 }
-
 
 func GetOrdersByDeliverymanID(c *fiber.Ctx) error {
 

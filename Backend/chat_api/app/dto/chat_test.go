@@ -238,7 +238,7 @@ func TestChatMessageRequest_SenderIDOverride(t *testing.T) {
 	// Handler overrides SenderID and SenderType from WebSocket params
 	req := ChatMessageRequest{
 		OrderID:    "order_ws",
-		SenderID:   999, // will be overridden by handler
+		SenderID:   999,       // will be overridden by handler
 		SenderType: "unknown", // will be overridden by handler
 		Message:    "Hello",
 	}
@@ -517,7 +517,7 @@ func TestChatWebSocketMessage_MessageType(t *testing.T) {
 
 func TestChatWebSocketMessage_TypingType(t *testing.T) {
 	msg := ChatWebSocketMessage{
-		Type:    "typing",
+		Type: "typing",
 		Payload: map[string]interface{}{
 			"sender_id":   float64(100),
 			"sender_type": "customer",

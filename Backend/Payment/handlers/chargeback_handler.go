@@ -5,10 +5,10 @@ package handlers
 import (
 	"strconv"
 
-	"github.com/gofiber/fiber/v2"
 	"github.com/carloshomar/vercardapio/payment/models"
 	"github.com/carloshomar/vercardapio/payment/repository"
 	"github.com/carloshomar/vercardapio/payment/services"
+	"github.com/gofiber/fiber/v2"
 )
 
 // ChargebackHandler e responsavel pelas rotas de estornos.

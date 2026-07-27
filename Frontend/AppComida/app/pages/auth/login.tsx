@@ -1,6 +1,5 @@
 import Colors from "@/constants/Colors";
 import { useApi } from "@/contexts/ApiContext";
-import helpers from "@/helpers/helpers";
 import api from "@/services/api";
 import React, { useState } from "react";
 import {
@@ -13,136 +12,119 @@ import {
   SafeAreaView,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 
 const LoginScreen = () => {
-  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
-  const [isRegistering, setIsRegistering] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isRegister, setIsRegister] = useState(false);
+  const [name, setName] = useState("");
   const { login } = useApi();
 
   const handleLogin = async () => {
-    const cleanPhone = phone.replace(/\D/g, "");
-    if (cleanPhone.length < 10) {
-      Alert.alert("Erro", "Telefone inválido. Digite um número com DDD.");
-      return;
-    }
-    if (password.length < 6) {
-      Alert.alert("Erro", "A senha deve ter pelo menos 6 caracteres.");
-      return;
-    }
-    if (isRegistering && name.trim().length < 2) {
-      Alert.alert("Erro", "Digite seu nome.");
+    if (!email.trim() || !password.trim()) {
+      Alert.alert("", "Preencha e-mail e senha.");
       return;
     }
 
     setIsLoading(true);
-
     try {
-      let response;
+      const endpoint = isRegister ? "/users/register" : "/users/login";
+      const body = isRegister
+        ? { email: email.trim(), password, name: name.trim() }
+        : { email: email.trim(), password };
 
-      if (isRegistering) {
-        // Cadastro: cria conta e já retorna token
-        response = await api.post("/clients/register", {
-          name: name.trim(),
-          phone: cleanPhone,
-          password,
-        });
+      const response = await api.post(endpoint, body);
+      const { token } = response.data;
+
+      if (token) {
+        await login(token);
       } else {
-        // Login: autentica com telefone + senha
-        response = await api.post("/clients/login", {
-          phone: cleanPhone,
-          password,
-        });
+        Alert.alert("", "Resposta inválida do servidor.");
       }
-
-      const { token, user } = response.data;
-
-      // Armazena o JWT real e dados do usuário
-      await login(token, {
-        id: user.id,
-        name: user.name,
-        phone: user.phone,
-      });
     } catch (error: any) {
-      const message =
-        error.response?.data?.error ||
-        "Erro de conexão. Verifique sua internet.";
-      Alert.alert("Erro", message);
+      const msg =
+        error?.response?.data?.error ||
+        "Erro ao conectar com o servidor. Tente novamente.";
+      Alert.alert("", msg);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const toggleMode = () => {
-    setIsRegistering(!isRegistering);
-    setName("");
-    setPassword("");
-  };
-
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.headerContainer}>
-        <Text style={styles.title}>FuuDelivery</Text>
-        <Text style={styles.subtitle}>
-          {isRegistering ? "Criar sua conta" : "Entrar na sua conta"}
-        </Text>
-      </View>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.keyboardView}
+      >
+        <Image source={{ uri: "" }} style={styles.logo} />
+        <View style={styles.formContainer}>
+          <Text style={styles.title}>
+            {isRegister ? "Criar Conta" : "Entrar"}
+          </Text>
 
-      <View style={styles.formContainer}>
-        {isRegistering && (
+          {isRegister && (
+            <TextInput
+              style={styles.input}
+              placeholder="Nome"
+              placeholderTextColor={Colors.light.tabIconDefault}
+              onChangeText={setName}
+              value={name}
+              autoCapitalize="words"
+            />
+          )}
+
           <TextInput
             style={styles.input}
-            onChangeText={setName}
-            value={name}
-            placeholder="Seu nome"
+            placeholder="E-mail"
             placeholderTextColor={Colors.light.tabIconDefault}
-            autoCapitalize="words"
+            onChangeText={setEmail}
+            value={email}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoComplete="email"
           />
-        )}
 
-        <TextInput
-          style={styles.input}
-          onChangeText={(text) => setPhone(text.replace(/\D/g, "").slice(0, 11))}
-          keyboardType="phone-pad"
-          value={helpers.formatPhoneNumber(phone)}
-          placeholder="Telefone com DDD"
-          placeholderTextColor={Colors.light.tabIconDefault}
-        />
+          <TextInput
+            style={styles.input}
+            placeholder="Senha"
+            placeholderTextColor={Colors.light.tabIconDefault}
+            onChangeText={setPassword}
+            value={password}
+            secureTextEntry
+            autoCapitalize="none"
+          />
 
-        <TextInput
-          style={styles.input}
-          onChangeText={setPassword}
-          value={password}
-          placeholder="Senha"
-          placeholderTextColor={Colors.light.tabIconDefault}
-          secureTextEntry
-        />
+          <TouchableOpacity
+            style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
+            onPress={handleLogin}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator color={Colors.light.white} />
+            ) : (
+              <Text style={styles.loginButtonText}>
+                {isRegister ? "Cadastrar" : "Entrar"}
+              </Text>
+            )}
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.loginButton, isLoading && styles.buttonDisabled]}
-          onPress={handleLogin}
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <ActivityIndicator color={Colors.light.white} />
-          ) : (
-            <Text style={styles.loginButtonText}>
-              {isRegistering ? "Criar Conta" : "Entrar"}
+          <TouchableOpacity
+            style={styles.switchButton}
+            onPress={() => setIsRegister(!isRegister)}
+          >
+            <Text style={styles.switchText}>
+              {isRegister
+                ? "Já tem conta? Entrar"
+                : "Não tem conta? Cadastre-se"}
             </Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.toggleButton} onPress={toggleMode}>
-          <Text style={styles.toggleButtonText}>
-            {isRegistering
-              ? "Já tem conta? Faça login"
-              : "Não tem conta? Cadastre-se"}
-          </Text>
-        </TouchableOpacity>
-      </View>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
@@ -154,41 +136,50 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: Colors.light.white,
   },
-  headerContainer: {
+  keyboardView: {
+    flex: 1,
+    justifyContent: "center",
     alignItems: "center",
-    marginBottom: 32,
+    width: "100%",
   },
-  title: {
-    fontSize: 36,
-    fontWeight: "900",
-    color: Colors.light.tint,
-    letterSpacing: 1,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: Colors.light.secondaryText,
-    marginTop: 8,
+  logo: {
+    width: 250,
+    height: 250,
+    marginBottom: 10,
+    marginTop: -200,
+    resizeMode: "contain",
+    alignSelf: "center",
   },
   formContainer: {
-    width: "85%",
+    width: "90%",
     padding: 16,
-    gap: 12,
+    borderRadius: 2,
+    backgroundColor: Colors.light.white,
+    gap: 10,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: Colors.light.text,
+    marginBottom: 8,
+    textAlign: "center",
   },
   input: {
     borderBottomWidth: 2,
     borderColor: Colors.light.tabIconDefault,
     fontSize: 16,
-    padding: 12,
+    marginBottom: 12,
+    padding: 10,
     color: Colors.light.text,
   },
   loginButton: {
     backgroundColor: Colors.light.tint,
-    padding: 14,
-    borderRadius: 8,
+    padding: 12,
+    borderRadius: 2,
     alignItems: "center",
     marginTop: 8,
   },
-  buttonDisabled: {
+  loginButtonDisabled: {
     opacity: 0.7,
   },
   loginButtonText: {
@@ -196,12 +187,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
   },
-  toggleButton: {
+  switchButton: {
     alignItems: "center",
-    padding: 12,
+    marginTop: 16,
   },
-  toggleButtonText: {
-    color: Colors.light.info,
+  switchText: {
+    color: Colors.light.tint,
     fontSize: 14,
   },
 });

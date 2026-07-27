@@ -5,9 +5,8 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "CoopBike",
+    "scheme": "coopbike",
     "userInterfaceStyle": "automatic",
-    "type": "module",
     "splash": {
       "image": "./assets/images/splash.png",
       "resizeMode": "contain",

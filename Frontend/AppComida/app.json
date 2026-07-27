@@ -12,7 +12,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true
     },
@@ -28,7 +30,9 @@
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
-    "plugins": ["expo-router"],
+    "plugins": [
+      "expo-router"
+    ],
     "experiments": {
       "typedRoutes": true
     },
@@ -37,14 +41,12 @@
         "origin": false
       },
       "eas": {
-        "projectId": "46a774a8-73a5-4ec0-ba85-83bf6d5f0a66"
+        "projectId": "2d8f97b1-66f1-4e81-81e5-19b29cc2490b"
       }
     },
     "runtimeVersion": {
       "policy": "appVersion"
     },
-    "updates": {
-      "url": "https://u.expo.dev/46a774a8-73a5-4ec0-ba85-83bf6d5f0a66"
-    }
+    "owner": "pavanbr"
   }
 }

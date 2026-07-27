@@ -27,14 +27,15 @@ export default function WalletScreen() {
 
   const fetchData = useCallback(async () => {
     try {
-      const u = await getUserData();
-      if (!u?.phone) return;
+      const u = getUserData();
+      if (!u?.id) return;
       setUser(u);
 
+      const identifier = String(u.id);
       const [walletRes, loyaltyRes, historyRes] = await Promise.all([
-        api.get(`/wallet/balance/${u.id || u.phone}`).catch(() => null),
-        api.get(`/loyalty/balance/${u.phone}`).catch(() => null),
-        api.get(`/loyalty/history/${u.phone}`).catch(() => null),
+        api.get(`/wallet/balance/${identifier}`).catch(() => null),
+        api.get(`/loyalty/balance/${identifier}`).catch(() => null),
+        api.get(`/loyalty/history/${identifier}`).catch(() => null),
       ]);
 
       if (walletRes?.data?.balance !== undefined) {
@@ -72,7 +73,7 @@ export default function WalletScreen() {
     setRedeeming(true);
     try {
       const res = await api.post("/loyalty/redeem", {
-        user_phone: user.phone,
+        user_phone: String(user.id),
         points,
         order_id: "",
       });
@@ -99,7 +100,7 @@ export default function WalletScreen() {
     try {
       const res = await api.post("/coupons/validate", {
         code: couponCode.trim().toUpperCase(),
-        user_phone: user?.phone || "",
+        user_phone: String(user?.id || ""),
         order_value: 0,
       });
       if (res.data?.valid) {

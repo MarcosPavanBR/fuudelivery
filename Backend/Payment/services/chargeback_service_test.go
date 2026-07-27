@@ -14,9 +14,9 @@ import (
 
 func TestChargebackStatuses(t *testing.T) {
 	statuses := map[models.ChargebackStatus]string{
-		models.ChargebackPending:  "pending",
-		models.ChargebackApproved: "approved",
-		models.ChargebackRejected: "rejected",
+		models.ChargebackPending:   "pending",
+		models.ChargebackApproved:  "approved",
+		models.ChargebackRejected:  "rejected",
 		models.ChargebackEscalated: "escalated",
 	}
 
@@ -105,10 +105,10 @@ func TestChargeback_EvidenceCountIncrement(t *testing.T) {
 
 func TestChargeback_StatusTransitions(t *testing.T) {
 	tests := []struct {
-		name       string
-		from       models.ChargebackStatus
-		to         models.ChargebackStatus
-		valid      bool
+		name  string
+		from  models.ChargebackStatus
+		to    models.ChargebackStatus
+		valid bool
 	}{
 		{"pending to approved", models.ChargebackPending, models.ChargebackApproved, true},
 		{"pending to rejected", models.ChargebackPending, models.ChargebackRejected, true},

@@ -47,7 +47,7 @@ func CreateAsaasWallet(c *fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"message": "Asaas wallet created successfully",
+		"message":   "Asaas wallet created successfully",
 		"wallet_id": walletResp.ID,
 		"name":      walletResp.Name,
 		"status":    walletResp.Status,
@@ -76,15 +76,15 @@ func GetAsaasWalletStatus(c *fiber.Ctx) error {
 
 func CreateAsaasSplitPayment(c *fiber.Ctx) error {
 	var req struct {
-		CustomerName   string                   `json:"customer_name"`
-		CustomerEmail  string                   `json:"customer_email"`
-		CustomerPhone  string                   `json:"customer_phone"`
-		Amount         float64                  `json:"amount"`
-		EstablishmentWalletID string           `json:"establishment_wallet_id"`
-		DeliveryManWalletID   string           `json:"deliveryman_wallet_id"`
-		EstablishmentSplitPct float64          `json:"establishment_split_pct"`
-		DeliveryAmount        float64          `json:"delivery_amount"`
-		OrderID               string           `json:"order_id"`
+		CustomerName          string  `json:"customer_name"`
+		CustomerEmail         string  `json:"customer_email"`
+		CustomerPhone         string  `json:"customer_phone"`
+		Amount                float64 `json:"amount"`
+		EstablishmentWalletID string  `json:"establishment_wallet_id"`
+		DeliveryManWalletID   string  `json:"deliveryman_wallet_id"`
+		EstablishmentSplitPct float64 `json:"establishment_split_pct"`
+		DeliveryAmount        float64 `json:"delivery_amount"`
+		OrderID               string  `json:"order_id"`
 	}
 
 	if err := c.BodyParser(&req); err != nil {
@@ -140,8 +140,8 @@ func CreateAsaasSplitPayment(c *fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"payment_id": paymentResp.ID,
-		"status":     paymentResp.Status,
+		"payment_id":  paymentResp.ID,
+		"status":      paymentResp.Status,
 		"pix_payload": paymentResp.PixTransaction.Payload,
 		"pix_qr_code": paymentResp.PixTransaction.QRCode,
 	})

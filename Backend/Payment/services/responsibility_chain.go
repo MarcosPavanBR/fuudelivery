@@ -16,7 +16,7 @@ import (
 // Cada handler pode processar o pagamento e chamar o proximo.
 type Handler interface {
 	Handle(payment *models.Payment) error // Processa o pagamento
-	SetNext(handler Handler) Handler     // Define o proximo handler
+	SetNext(handler Handler) Handler      // Define o proximo handler
 }
 
 // BaseHandler e o handler base que implementa a logica comum.

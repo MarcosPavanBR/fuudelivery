@@ -93,42 +93,42 @@ func TestHaversineKm_SamePoint(t *testing.T) {
 
 func TestHaversineKm_KnownDistance(t *testing.T) {
 	tests := []struct {
-		name     string
-		lat1     float64
-		lng1     float64
-		lat2     float64
-		lng2     float64
-		minKm    float64
-		maxKm    float64
+		name  string
+		lat1  float64
+		lng1  float64
+		lat2  float64
+		lng2  float64
+		minKm float64
+		maxKm float64
 	}{
 		{
-			name:  "Sao Paulo to Rio de Janeiro",
-			lat1:  -23.5505, lng1: -46.6333,
-			lat2:  -22.9068, lng2: -43.1729,
+			name: "Sao Paulo to Rio de Janeiro",
+			lat1: -23.5505, lng1: -46.6333,
+			lat2: -22.9068, lng2: -43.1729,
 			minKm: 340, maxKm: 400,
 		},
 		{
-			name:  "1 degree latitude apart",
-			lat1:  -23.0, lng1: -46.0,
-			lat2:  -24.0, lng2: -46.0,
+			name: "1 degree latitude apart",
+			lat1: -23.0, lng1: -46.0,
+			lat2: -24.0, lng2: -46.0,
 			minKm: 100, maxKm: 125,
 		},
 		{
-			name:  "1 degree longitude at equator",
-			lat1:  0.0, lng1: 0.0,
-			lat2:  0.0, lng2: 1.0,
+			name: "1 degree longitude at equator",
+			lat1: 0.0, lng1: 0.0,
+			lat2: 0.0, lng2: 1.0,
 			minKm: 100, maxKm: 125,
 		},
 		{
-			name:  "short distance ~1km",
-			lat1:  -23.5505, lng1: -46.6333,
-			lat2:  -23.5505 + 0.01, lng2: -46.6333,
+			name: "short distance ~1km",
+			lat1: -23.5505, lng1: -46.6333,
+			lat2: -23.5505 + 0.01, lng2: -46.6333,
 			minKm: 0.5, maxKm: 2.0,
 		},
 		{
-			name:  "antipodal points",
-			lat1:  0.0, lng1: 0.0,
-			lat2:  0.0, lng2: 180.0,
+			name: "antipodal points",
+			lat1: 0.0, lng1: 0.0,
+			lat2: 0.0, lng2: 180.0,
 			minKm: 20000, maxKm: 20100,
 		},
 	}
@@ -167,11 +167,11 @@ func TestHaversineKm_NegativeCoordinates(t *testing.T) {
 
 func TestZoneMetadata_GetRadiusStages(t *testing.T) {
 	tests := []struct {
-		name            string
-		minRadius       float64
-		radius          float64
-		maxRadius       float64
-		expectedStages  [3]float64
+		name           string
+		minRadius      float64
+		radius         float64
+		maxRadius      float64
+		expectedStages [3]float64
 	}{
 		{
 			name:      "standard zone",
@@ -281,13 +281,13 @@ func TestZoneMetadata_GetEffectiveRadius_PeakClampedToMin(t *testing.T) {
 
 func TestZoneMetadata_GetSuggestedRadiusByDensity(t *testing.T) {
 	tests := []struct {
-		name            string
-		density         float64
-		minRadius       float64
-		maxRadius       float64
-		targetCouriers  int
-		expectedMin     float64
-		expectedMax     float64
+		name           string
+		density        float64
+		minRadius      float64
+		maxRadius      float64
+		targetCouriers int
+		expectedMin    float64
+		expectedMax    float64
 	}{
 		{
 			name:           "zero density returns effective radius",
@@ -333,9 +333,9 @@ func TestZoneMetadata_GetSuggestedRadiusByDensity(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			z := &ZoneMetadata{
-				MinRadiusKm:          tt.minRadius,
-				RadiusKm:             10.0,
-				MaxRadiusKm:          tt.maxRadius,
+				MinRadiusKm:           tt.minRadius,
+				RadiusKm:              10.0,
+				MaxRadiusKm:           tt.maxRadius,
 				DensityCouriersPerKm2: tt.density,
 			}
 			result := z.GetSuggestedRadiusByDensity(tt.targetCouriers)
@@ -389,8 +389,8 @@ func TestDLQStore_PopNext_Empty(t *testing.T) {
 func TestDLQStore_PopNext_MaxRetriesExceeded(t *testing.T) {
 	dlq := NewDLQStore(10)
 	dlq.Push(&UnmatchedOrder{
-		OrderID:    "order-exhausted",
-		RetryCount: 3, // max retries
+		OrderID:       "order-exhausted",
+		RetryCount:    3, // max retries
 		LastAttemptAt: 0,
 	})
 
@@ -524,11 +524,11 @@ func TestMatchingEngine_AttemptMatch_StageProgression(t *testing.T) {
 
 	// Configure zone with small initial radius but large max
 	zoneMeta := &ZoneMetadata{
-		MinRadiusKm:          1.0,
-		RadiusKm:             2.0,     // stage1 = 2km
-		MaxRadiusKm:          10.0,    // stage3 = 10km
-		PeakRadiusMultiplier: 1.0,
-		MinCouriersThreshold: 3,
+		MinRadiusKm:           1.0,
+		RadiusKm:              2.0,  // stage1 = 2km
+		MaxRadiusKm:           10.0, // stage3 = 10km
+		PeakRadiusMultiplier:  1.0,
+		MinCouriersThreshold:  3,
 		DensityCouriersPerKm2: 0,
 	}
 	resolver.zoneMetadata[1] = zoneMeta
@@ -668,10 +668,10 @@ func TestMatchingEngine_AttemptMatch_FallbackCallback(t *testing.T) {
 
 	// Set high threshold so fallback triggers
 	zoneMeta := &ZoneMetadata{
-		MinRadiusKm:          1.0,
-		RadiusKm:             2.0,
-		MaxRadiusKm:          5.0,
-		MinCouriersThreshold: 10, // very high threshold
+		MinRadiusKm:           1.0,
+		RadiusKm:              2.0,
+		MaxRadiusKm:           5.0,
+		MinCouriersThreshold:  10, // very high threshold
 		DensityCouriersPerKm2: 0,
 	}
 	resolver.zoneMetadata[1] = zoneMeta
@@ -784,24 +784,24 @@ func TestMatchingEngine_CheckBatching(t *testing.T) {
 		expectedMatch bool
 	}{
 		{
-			name:          "close new order, acceptable detour",
-			existLat:      -23.5505, existLng: -46.6333,
-			newLat:        -23.5515, newLng: -46.6343, // ~0.15km from restaurant
-			restLat:       -23.5510, restLng: -46.6338,
+			name:     "close new order, acceptable detour",
+			existLat: -23.5505, existLng: -46.6333,
+			newLat: -23.5515, newLng: -46.6343, // ~0.15km from restaurant
+			restLat: -23.5510, restLng: -46.6338,
 			expectedMatch: true,
 		},
 		{
-			name:          "new order too far from existing",
-			existLat:      -23.5505, existLng: -46.6333,
-			newLat:        -23.6000, newLng: -46.7000, // ~8km away
-			restLat:       -23.5510, restLng: -46.6338,
+			name:     "new order too far from existing",
+			existLat: -23.5505, existLng: -46.6333,
+			newLat: -23.6000, newLng: -46.7000, // ~8km away
+			restLat: -23.5510, restLng: -46.6338,
 			expectedMatch: false,
 		},
 		{
-			name:          "same location as existing",
-			existLat:      -23.5505, existLng: -46.6333,
-			newLat:        -23.5505, newLng: -46.6333,
-			restLat:       -23.5510, restLng: -46.6338,
+			name:     "same location as existing",
+			existLat: -23.5505, existLng: -46.6333,
+			newLat: -23.5505, newLng: -46.6333,
+			restLat: -23.5510, restLng: -46.6338,
 			expectedMatch: true,
 		},
 	}
@@ -1123,10 +1123,10 @@ func TestMatchingEngine_AttemptMatch_ZeroRadiusZone(t *testing.T) {
 	store := NewCourierStore()
 	resolver := newMockZoneResolver()
 	zoneMeta := &ZoneMetadata{
-		MinRadiusKm:   0,
-		RadiusKm:      0,
-		MaxRadiusKm:   0,
-		MinCouriersThreshold: 3,
+		MinRadiusKm:           0,
+		RadiusKm:              0,
+		MaxRadiusKm:           0,
+		MinCouriersThreshold:  3,
 		DensityCouriersPerKm2: 0,
 	}
 	resolver.zoneMetadata[1] = zoneMeta
@@ -1202,8 +1202,8 @@ func TestMatchingEngine_AttemptMatch_MultipleCandidatesPicksBest(t *testing.T) {
 	engine := NewMatchingEngine(store, resolver)
 
 	// Alice is very close, Bob is farther
-	store.UpdateLocation(1, "Alice", -23.5505, -46.6333, "available")  // same spot
-	store.UpdateLocation(2, "Bob", -23.5520, -46.6350, "available")    // ~0.2km away
+	store.UpdateLocation(1, "Alice", -23.5505, -46.6333, "available")   // same spot
+	store.UpdateLocation(2, "Bob", -23.5520, -46.6350, "available")     // ~0.2km away
 	store.UpdateLocation(3, "Charlie", -23.5600, -46.6400, "available") // ~1km away
 
 	order := &dto.OrderDTO{
@@ -1232,11 +1232,11 @@ func TestMatchingEngine_DensityOverridesStage1(t *testing.T) {
 	// Zone with small base radius but high density should expand stage1
 	zoneMeta := &ZoneMetadata{
 		MinRadiusKm:           1.0,
-		RadiusKm:              2.0,     // base radius = 2km
+		RadiusKm:              2.0, // base radius = 2km
 		MaxRadiusKm:           20.0,
 		PeakRadiusMultiplier:  1.0,
 		MinCouriersThreshold:  3,
-		DensityCouriersPerKm2: 0.01,    // low density -> big suggested radius
+		DensityCouriersPerKm2: 0.01, // low density -> big suggested radius
 	}
 	resolver.zoneMetadata[1] = zoneMeta
 

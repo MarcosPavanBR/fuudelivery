@@ -126,11 +126,11 @@ func (h *DispatchHandler) TriggerDispatch(c *fiber.Ctx) error {
 			h.CourierStore.SetOrdersCount(best.DeliverymanID, best.CurrentOrders+1)
 
 			return c.JSON(dto.DispatchResponse{
-				OrderID:      req.OrderID,
-				Matched:      true,
-				CourierID:    best.DeliverymanID,
-				CourierName:  best.Name,
-				DistanceKm:   dist,
+				OrderID:     req.OrderID,
+				Matched:     true,
+				CourierID:   best.DeliverymanID,
+				CourierName: best.Name,
+				DistanceKm:  dist,
 			})
 		}
 	}

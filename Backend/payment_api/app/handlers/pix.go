@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 	"fmt"
@@ -11,8 +11,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
-
-
 
 func GeneratePIX(c *fiber.Ctx) error {
 	var req dto.PaymentRequest

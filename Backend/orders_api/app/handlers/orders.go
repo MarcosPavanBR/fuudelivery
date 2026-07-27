@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 	"encoding/json"
@@ -18,8 +18,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
-
-
 
 func CreateOrder(c *fiber.Ctx, sendMessageToClient func(clientID int64, message []byte) error) error {
 	var request dto.RequestPayload
@@ -219,12 +217,12 @@ func sendStatusPushNotification(order dto.RequestPayload, status string) {
 	pushTokensCollection := models.MongoDabase.Collection("push_tokens")
 
 	statusMessages := map[string]string{
-		"APPROVED":         "Seu pedido foi aprovado e está sendo preparado!",
-		"DONE":             "Seu pedido está pronto e saiu para entrega!",
+		"APPROVED":          "Seu pedido foi aprovado e está sendo preparado!",
+		"DONE":              "Seu pedido está pronto e saiu para entrega!",
 		"IN_ROUTE_DELIVERY": "Seu pedido está a caminho!",
-		"FINISHED":         "Seu pedido foi entregue! Bom apetite!",
-		"CANCELLED":        "Seu pedido foi cancelado.",
-		"SCHEDULED":        "Seu pedido foi agendado com sucesso!",
+		"FINISHED":          "Seu pedido foi entregue! Bom apetite!",
+		"CANCELLED":         "Seu pedido foi cancelado.",
+		"SCHEDULED":         "Seu pedido foi agendado com sucesso!",
 	}
 
 	msg, ok := statusMessages[status]

@@ -157,9 +157,9 @@ func TestUser_EmailValidation(t *testing.T) {
 
 func TestUser_RolePermissions(t *testing.T) {
 	tests := []struct {
-		role          models.UserRole
-		canApprove    bool
-		canViewOnly   bool
+		role        models.UserRole
+		canApprove  bool
+		canViewOnly bool
 	}{
 		{models.RoleAdmin, true, false},
 		{models.RoleOperator, true, false},

@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 	"bytes"
@@ -13,13 +13,11 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-
 func mongoCtx() context.Context {
-ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-_ = cancel
-return ctx
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	_ = cancel
+	return ctx
 }
-
 
 type PushTicket struct {
 	Status string `json:"status"`

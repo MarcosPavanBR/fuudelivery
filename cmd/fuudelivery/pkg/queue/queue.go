@@ -12,13 +12,13 @@ import (
 )
 
 var (
-	ctx          = context.Background()
-	rdb          *redis.Client
-	useRedis     bool
+	ctx            = context.Background()
+	rdb            *redis.Client
+	useRedis       bool
 	internalQueues = make(map[string]chan []byte)
-	internalMu   sync.Mutex
-	clients      = make(map[int64]interface{})
-	clientsMu    sync.Mutex
+	internalMu     sync.Mutex
+	clients        = make(map[int64]interface{})
+	clientsMu      sync.Mutex
 )
 
 type Message struct {

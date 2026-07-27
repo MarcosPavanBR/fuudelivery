@@ -16,12 +16,12 @@ const (
 // User representa um usuario do sistema de pagamentos.
 // Pode ser um administrador, operador ou visualizador.
 type User struct {
-	ID        string   `json:"id" bson:"_id,omitempty"`    // ID unico (pode ser email ou UUID)
-	Email     string   `json:"email" bson:"email"`         // Email (usado como login)
-	Name      string   `json:"name" bson:"name"`           // Nome completo
-	Password  string   `json:"-" bson:"password"`          // Hash da senha (nunca retorna na API)
-	Role      UserRole `json:"role" bson:"role"`           // Nivel de acesso
-	Active    bool     `json:"active" bson:"active"`       // Se a conta esta ativa
+	ID        string    `json:"id" bson:"_id,omitempty"`      // ID unico (pode ser email ou UUID)
+	Email     string    `json:"email" bson:"email"`           // Email (usado como login)
+	Name      string    `json:"name" bson:"name"`             // Nome completo
+	Password  string    `json:"-" bson:"password"`            // Hash da senha (nunca retorna na API)
+	Role      UserRole  `json:"role" bson:"role"`             // Nivel de acesso
+	Active    bool      `json:"active" bson:"active"`         // Se a conta esta ativa
 	CreatedAt time.Time `json:"created_at" bson:"created_at"` // Data de criacao
 	UpdatedAt time.Time `json:"updated_at" bson:"updated_at"` // Data da ultima atualizacao
 }

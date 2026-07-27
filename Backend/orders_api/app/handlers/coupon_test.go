@@ -133,10 +133,10 @@ func TestCalculateDiscount_Percentage(t *testing.T) {
 
 func TestCalculateDiscount_Fixed(t *testing.T) {
 	tests := []struct {
-		name           string
-		orderValue     float64
-		discountValue  float64
-		expectedFinal  float64
+		name          string
+		orderValue    float64
+		discountValue float64
+		expectedFinal float64
 	}{
 		{"10 off 100", 100.0, 10.0, 90.0},
 		{"50 off 30", 30.0, 50.0, 0.0}, // cant go below 0

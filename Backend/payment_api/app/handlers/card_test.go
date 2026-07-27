@@ -94,10 +94,10 @@ func TestCard_DefaultName(t *testing.T) {
 
 func TestProcessPayment_MethodRouting(t *testing.T) {
 	tests := []struct {
-		method     string
-		isCard     bool
-		isPix      bool
-		isInvalid  bool
+		method    string
+		isCard    bool
+		isPix     bool
+		isInvalid bool
 	}{
 		{"credit", true, false, false},
 		{"debit", true, false, false},

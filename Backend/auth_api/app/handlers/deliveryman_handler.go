@@ -42,9 +42,9 @@ func LoginDeliveryMan(c *fiber.Ctx) error {
 func CreateDeliveryMan(c *fiber.Ctx) error {
 	var request struct {
 		dto.CreateDeliveryManRequest
-		ZoneID    *uint   `json:"zone_id,omitempty"`
-		Status    string  `json:"status"`
-		MaxOrders int     `json:"max_orders"`
+		ZoneID    *uint  `json:"zone_id,omitempty"`
+		Status    string `json:"status"`
+		MaxOrders int    `json:"max_orders"`
 	}
 	if err := c.BodyParser(&request); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to parse request body"})
@@ -118,7 +118,7 @@ func UpdateDeliveryManWallet(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{
-		"message": "Wallet ID updated successfully",
+		"message":           "Wallet ID updated successfully",
 		"payment_wallet_id": deliveryMan.PaymentWalletID,
 	})
 }

@@ -14,10 +14,10 @@ import (
 
 func TestDefaultSplitRules_StandardPayment(t *testing.T) {
 	payment := &models.Payment{
-		Amount:         100.0,
-		DeliveryAmount: 15.0,
+		Amount:          100.0,
+		DeliveryAmount:  15.0,
 		EstablishmentID: 12345,
-		CustomerID:     67890,
+		CustomerID:      67890,
 	}
 
 	rules := defaultSplitRules(payment, 5.0, 85.0)
@@ -49,10 +49,10 @@ func TestDefaultSplitRules_StandardPayment(t *testing.T) {
 
 func TestDefaultSplitRules_WithDelivery(t *testing.T) {
 	payment := &models.Payment{
-		Amount:         200.0,
-		DeliveryAmount: 10.0,
+		Amount:          200.0,
+		DeliveryAmount:  10.0,
 		EstablishmentID: 100,
-		CustomerID:     200,
+		CustomerID:      200,
 	}
 
 	rules := defaultSplitRules(payment, 5.0, 85.0)
@@ -74,13 +74,13 @@ func TestDefaultSplitRules_WithDelivery(t *testing.T) {
 
 func TestDefaultSplitRules_NoDelivery(t *testing.T) {
 	payment := &models.Payment{
-		Amount:         100.0,
-		DeliveryAmount: 0,
+		Amount:          100.0,
+		DeliveryAmount:  0,
 		EstablishmentID: 100,
-		CustomerID:     200,
+		CustomerID:      200,
 	}
 
-	rules := defaultSplitRules(payment)
+	rules := defaultSplitRules(payment, 5.0, 85.0)
 
 	for _, rule := range rules {
 		if rule.ReceiverType == "deliveryman" {
@@ -92,13 +92,13 @@ func TestDefaultSplitRules_NoDelivery(t *testing.T) {
 func TestDefaultSplitRules_CustomerCredit(t *testing.T) {
 	// When delivery is low, customer gets credit
 	payment := &models.Payment{
-		Amount:         200.0,
-		DeliveryAmount: 0,
+		Amount:          200.0,
+		DeliveryAmount:  0,
 		EstablishmentID: 100,
-		CustomerID:     200,
+		CustomerID:      200,
 	}
 
-	rules := defaultSplitRules(payment)
+	rules := defaultSplitRules(payment, 5.0, 85.0)
 
 	// Platform: 10.0, Establishment: 170.0, Customer: 20.0
 	hasCustomer := false
@@ -118,13 +118,13 @@ func TestDefaultSplitRules_CustomerCredit(t *testing.T) {
 func TestDefaultSplitRules_HighDeliveryAdjustsEstablishment(t *testing.T) {
 	// When delivery exceeds 10% of total, establishment amount is reduced
 	payment := &models.Payment{
-		Amount:         100.0,
-		DeliveryAmount: 20.0, // 20% - high
+		Amount:          100.0,
+		DeliveryAmount:  20.0, // 20% - high
 		EstablishmentID: 100,
-		CustomerID:     200,
+		CustomerID:      200,
 	}
 
-	rules := defaultSplitRules(payment)
+	rules := defaultSplitRules(payment, 5.0, 85.0)
 
 	// Platform: 5.0, Establishment: should be reduced, Delivery: 20.0
 	var estAmount float64
@@ -142,13 +142,13 @@ func TestDefaultSplitRules_HighDeliveryAdjustsEstablishment(t *testing.T) {
 
 func TestDefaultSplitRules_TotalEqualsPaymentAmount(t *testing.T) {
 	payment := &models.Payment{
-		Amount:         150.0,
-		DeliveryAmount: 10.0,
+		Amount:          150.0,
+		DeliveryAmount:  10.0,
 		EstablishmentID: 100,
-		CustomerID:     200,
+		CustomerID:      200,
 	}
 
-	rules := defaultSplitRules(payment)
+	rules := defaultSplitRules(payment, 5.0, 85.0)
 
 	var totalSplit float64
 	for _, rule := range rules {
@@ -165,8 +165,8 @@ func TestDefaultSplitRules_TotalEqualsPaymentAmount(t *testing.T) {
 
 func TestWebhookStatusMapping(t *testing.T) {
 	tests := []struct {
-		apiStatus    string
-		expected     string
+		apiStatus string
+		expected  string
 	}{
 		{"paid", "CONFIRMED"},
 		{"CONFIRMED", "CONFIRMED"},

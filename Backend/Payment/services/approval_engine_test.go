@@ -129,7 +129,7 @@ func TestApprovalEngine_ProcessPayment_LowRisk(t *testing.T) {
 		Score:            0,
 		Level:            models.RiskLow,
 		RequiresApproval: false,
-		Reasons:         []string{},
+		Reasons:          []string{},
 	}
 
 	// Apply the same decision logic as ProcessPayment
@@ -181,7 +181,7 @@ func TestApprovalEngine_ProcessPayment_HighRisk(t *testing.T) {
 		Score:            45,
 		Level:            models.RiskHigh,
 		RequiresApproval: true,
-		Reasons:         []string{"high amount", "suspicious frequency"},
+		Reasons:          []string{"high amount", "suspicious frequency"},
 	}
 
 	simulateProcessPaymentDecision(payment, assessment)
@@ -227,7 +227,7 @@ func TestApprovalEngine_ProcessPayment_CriticalRisk(t *testing.T) {
 		Score:            75,
 		Level:            models.RiskCritical,
 		RequiresApproval: true,
-		Reasons:         []string{"very high amount", "many chargebacks"},
+		Reasons:          []string{"very high amount", "many chargebacks"},
 	}
 
 	simulateProcessPaymentDecision(payment, assessment)
@@ -259,7 +259,7 @@ func TestApprovalEngine_ProcessPayment_MediumRisk(t *testing.T) {
 		Score:            25,
 		Level:            models.RiskMedium,
 		RequiresApproval: false,
-		Reasons:         []string{"moderate amount"},
+		Reasons:          []string{"moderate amount"},
 	}
 
 	simulateProcessPaymentDecision(payment, assessment)
@@ -287,75 +287,75 @@ func TestApprovalEngine_ProcessPayment_MediumRisk(t *testing.T) {
 // testing conventions from risk_scorer_test.go.
 func TestApprovalEngine_ProcessPayment_RiskDecisionTable(t *testing.T) {
 	tests := []struct {
-		name              string
-		score             float64
-		level             models.RiskLevel
-		requiresApproval  bool
-		expectedStatus    models.PaymentStatus
+		name               string
+		score              float64
+		level              models.RiskLevel
+		requiresApproval   bool
+		expectedStatus     models.PaymentStatus
 		expectedApprovedBy string
 	}{
 		{
-			name:              "risk low auto-approves",
-			score:             0,
-			level:             models.RiskLow,
-			requiresApproval:  false,
-			expectedStatus:    models.PaymentApproved,
+			name:               "risk low auto-approves",
+			score:              0,
+			level:              models.RiskLow,
+			requiresApproval:   false,
+			expectedStatus:     models.PaymentApproved,
 			expectedApprovedBy: "system",
 		},
 		{
-			name:              "risk low borderline auto-approves",
-			score:             19,
-			level:             models.RiskLow,
-			requiresApproval:  false,
-			expectedStatus:    models.PaymentApproved,
+			name:               "risk low borderline auto-approves",
+			score:              19,
+			level:              models.RiskLow,
+			requiresApproval:   false,
+			expectedStatus:     models.PaymentApproved,
 			expectedApprovedBy: "system",
 		},
 		{
-			name:              "risk medium auto-approves",
-			score:             25,
-			level:             models.RiskMedium,
-			requiresApproval:  false,
-			expectedStatus:    models.PaymentApproved,
+			name:               "risk medium auto-approves",
+			score:              25,
+			level:              models.RiskMedium,
+			requiresApproval:   false,
+			expectedStatus:     models.PaymentApproved,
 			expectedApprovedBy: "system",
 		},
 		{
-			name:              "risk medium high auto-approves",
-			score:             39,
-			level:             models.RiskMedium,
-			requiresApproval:  false,
-			expectedStatus:    models.PaymentApproved,
+			name:               "risk medium high auto-approves",
+			score:              39,
+			level:              models.RiskMedium,
+			requiresApproval:   false,
+			expectedStatus:     models.PaymentApproved,
 			expectedApprovedBy: "system",
 		},
 		{
-			name:              "risk high goes pending",
-			score:             40,
-			level:             models.RiskHigh,
-			requiresApproval:  true,
-			expectedStatus:    models.PaymentPending,
+			name:               "risk high goes pending",
+			score:              40,
+			level:              models.RiskHigh,
+			requiresApproval:   true,
+			expectedStatus:     models.PaymentPending,
 			expectedApprovedBy: "",
 		},
 		{
-			name:              "risk high borderline goes pending",
-			score:             59,
-			level:             models.RiskHigh,
-			requiresApproval:  true,
-			expectedStatus:    models.PaymentPending,
+			name:               "risk high borderline goes pending",
+			score:              59,
+			level:              models.RiskHigh,
+			requiresApproval:   true,
+			expectedStatus:     models.PaymentPending,
 			expectedApprovedBy: "",
 		},
 		{
-			name:              "risk critical goes pending",
-			score:             60,
-			level:             models.RiskCritical,
-			requiresApproval:  true,
-			expectedStatus:    models.PaymentPending,
+			name:               "risk critical goes pending",
+			score:              60,
+			level:              models.RiskCritical,
+			requiresApproval:   true,
+			expectedStatus:     models.PaymentPending,
 			expectedApprovedBy: "",
 		},
 		{
-			name:              "risk critical max goes pending",
-			score:             100,
-			level:             models.RiskCritical,
-			requiresApproval:  true,
-			expectedStatus:    models.PaymentPending,
+			name:               "risk critical max goes pending",
+			score:              100,
+			level:              models.RiskCritical,
+			requiresApproval:   true,
+			expectedStatus:     models.PaymentPending,
 			expectedApprovedBy: "",
 		},
 	}
@@ -420,10 +420,10 @@ func TestApprovalEngine_ProcessPayment_AmountThresholds(t *testing.T) {
 	scorer := NewRiskScorer()
 
 	tests := []struct {
-		name            string
-		amount          float64
+		name                string
+		amount              float64
 		expectedAmountScore float64
-		expectsAutoApprove bool // true if amount alone should not trigger approval
+		expectsAutoApprove  bool // true if amount alone should not trigger approval
 	}{
 		{"zero amount no risk", 0.0, 0, true},
 		{"small amount no risk", 50.0, 0, true},
@@ -432,7 +432,7 @@ func TestApprovalEngine_ProcessPayment_AmountThresholds(t *testing.T) {
 		{"200 moderate risk", 200.0, 10, true},
 		{"201 high risk", 201.0, 20, true},
 		{"500 high risk", 500.0, 20, true},
-		{"501 very high risk", 501.0, 30, false},  // 30 alone < 40, but combined with other factors can reach high
+		{"501 very high risk", 501.0, 30, false}, // 30 alone < 40, but combined with other factors can reach high
 		{"1000 very high risk", 1000.0, 30, false},
 	}
 
@@ -492,8 +492,8 @@ func TestApprovalEngine_ApprovePayment_InvalidHex(t *testing.T) {
 	engine := NewApprovalEngine()
 
 	tests := []struct {
-		name    string
-		hexID   string
+		name  string
+		hexID string
 	}{
 		{"empty string", ""},
 		{"too short", "abc123"},
@@ -568,8 +568,8 @@ func TestApprovalEngine_RejectPayment_InvalidHex(t *testing.T) {
 	engine := NewApprovalEngine()
 
 	tests := []struct {
-		name    string
-		hexID   string
+		name  string
+		hexID string
 	}{
 		{"empty string", ""},
 		{"too short", "abc123"},
@@ -728,8 +728,8 @@ func TestApprovalEngine_RejectPayment_PendingLogic(t *testing.T) {
 
 func TestApprovalEngine_HexToObjectID_ValidIDs(t *testing.T) {
 	tests := []struct {
-		name    string
-		hexID   string
+		name  string
+		hexID string
 	}{
 		{"all zeros", "000000000000000000000000"},
 		{"all fs", "ffffffffffffffffffffffff"},
@@ -789,10 +789,10 @@ func TestApprovalEngine_ProcessPayment_AmountToDecisionPipeline(t *testing.T) {
 	scorer := NewRiskScorer()
 
 	tests := []struct {
-		name            string
-		amount          float64
-		expectedStatus  models.PaymentStatus
-		expectedBy      string
+		name           string
+		amount         float64
+		expectedStatus models.PaymentStatus
+		expectedBy     string
 	}{
 		{"R$10 auto-approved", 10.0, models.PaymentApproved, "system"},
 		{"R$50 auto-approved", 50.0, models.PaymentApproved, "system"},
@@ -846,17 +846,17 @@ func TestApprovalEngine_ProcessPayment_AmountToDecisionPipeline(t *testing.T) {
 
 func TestApprovalEngine_ProcessPayment_PreservesExistingFields(t *testing.T) {
 	payment := &models.Payment{
-		OrderID:          "order_preserve_001",
-		CustomerID:       "cust_preserve_001",
-		CustomerName:     "Joao Silva",
-		CustomerEmail:    "joao@example.com",
-		EstablishmentID:  "est_preserve_001",
+		OrderID:           "order_preserve_001",
+		CustomerID:        "cust_preserve_001",
+		CustomerName:      "Joao Silva",
+		CustomerEmail:     "joao@example.com",
+		EstablishmentID:   "est_preserve_001",
 		EstablishmentName: "Restaurante Bom Sabor",
-		Amount:           75.50,
-		DeliveryAmount:   12.90,
-		Method:           models.PaymentMethodPix,
-		Reference:        "ref_abc123",
-		GatewayID:        "gw_xyz789",
+		Amount:            75.50,
+		DeliveryAmount:    12.90,
+		Method:            models.PaymentMethodPix,
+		Reference:         "ref_abc123",
+		GatewayID:         "gw_xyz789",
 	}
 
 	assessment := &RiskAssessment{
@@ -1008,10 +1008,10 @@ func TestApprovalEngine_DecisionLogic_ConsistencyWithRiskLevels(t *testing.T) {
 
 	// Test boundary scores
 	boundaryTests := []struct {
-		name              string
-		score             float64
-		expectedLevel     models.RiskLevel
-		expectedApproval  bool
+		name             string
+		score            float64
+		expectedLevel    models.RiskLevel
+		expectedApproval bool
 	}{
 		{"score 0 is low, auto", 0, models.RiskLow, false},
 		{"score 19 is low, auto", 19, models.RiskLow, false},

@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 	"encoding/json"
@@ -12,8 +12,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
-
-
 
 func ReceiveMessage(msg string, sendMessageToClient func(clientID int64, message []byte) error) {
 	var orderMsg dto.RequestPayload

@@ -116,8 +116,8 @@ func CreateSponsoredListing(c *fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"message":  "Sponsored listing created successfully",
-		"sponsor":  sponsor,
+		"message": "Sponsored listing created successfully",
+		"sponsor": sponsor,
 	})
 }
 
@@ -312,9 +312,9 @@ func GetFeaturedEstablishments(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{
-		"zone_id":     zoneID,
-		"total":       len(featured),
-		"featured":    featured,
+		"zone_id":  zoneID,
+		"total":    len(featured),
+		"featured": featured,
 	})
 }
 
@@ -332,9 +332,9 @@ func ListSponsoredByZone(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{
-		"zone_id":    zoneID,
-		"total":      len(sponsors),
-		"sponsors":   sponsors,
+		"zone_id":  zoneID,
+		"total":    len(sponsors),
+		"sponsors": sponsors,
 	})
 }
 

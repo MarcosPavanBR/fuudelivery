@@ -42,19 +42,19 @@ func getEnv(key, fallback string) string {
 
 // CreatePixRequest representa os dados para criar uma cobranca PIX.
 type CreatePixRequest struct {
-	Amount        float64 `json:"amount"`         // Valor em R$
-	CustomerID    string  `json:"customer_id"`    // ID do cliente
-	CustomerName  string  `json:"customer_name"`  // Nome do cliente
-	CustomerEmail string  `json:"customer_email"` // Email do cliente
+	Amount        float64 `json:"amount"`                   // Valor em R$
+	CustomerID    string  `json:"customer_id"`              // ID do cliente
+	CustomerName  string  `json:"customer_name"`            // Nome do cliente
+	CustomerEmail string  `json:"customer_email"`           // Email do cliente
 	CustomerPhone string  `json:"customer_phone,omitempty"` // Telefone (opcional)
-	OrderID       string  `json:"order_id"`       // ID do pedido
+	OrderID       string  `json:"order_id"`                 // ID do pedido
 }
 
 // CreatePixResponse representa a resposta apos criar uma cobranca PIX.
 type CreatePixResponse struct {
 	ID           string `json:"id"`             // ID da cobranca no AbacatePay
 	Status       string `json:"status"`         // Status da cobranca
-	PixQRCode    string `json:"pix_qr_code"`   // QR Code em base64
+	PixQRCode    string `json:"pix_qr_code"`    // QR Code em base64
 	PixCopyPaste string `json:"pix_copy_paste"` // Codigo PIX para copiar/colar
 }
 

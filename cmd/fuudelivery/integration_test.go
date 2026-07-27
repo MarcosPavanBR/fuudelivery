@@ -2,7 +2,7 @@
 
 // Package main - Testes de integracao do fluxo completo:
 //
-//   Auth  →  Order  →  Payment  →  Split
+//	Auth  →  Order  →  Payment  →  Split
 //
 // Sobe containers reais (MongoDB + Postgres) via testcontainers-go,
 // inicializa o app Fiber com todas as rotas reais e exercita o caminho
@@ -12,8 +12,8 @@
 //
 // Rodar com:
 //
-//   docker ps                              (verificar se Docker esta de pe)
-//   go test -tags=integration -v -run TestFullFlow ./cmd/fuudelivery/
+//	docker ps                              (verificar se Docker esta de pe)
+//	go test -tags=integration -v -run TestFullFlow ./cmd/fuudelivery/
 //
 // Pre-requisitos:
 //   - Docker em execucao
@@ -31,8 +31,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/carloshomar/vercardapio/auth_api/app/models"
 	"github.com/carloshomar/fuudelivery/pkg/health"
+	"github.com/carloshomar/vercardapio/auth_api/app/models"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"

@@ -13,13 +13,13 @@ import (
 
 // EstablishmentReport representa o relatorio consolidado de um restaurante.
 type EstablishmentReport struct {
-	TotalRevenue    float64            `json:"total_revenue"`
-	TotalOrders     int64              `json:"total_orders"`
-	AvgTicket       float64            `json:"avg_ticket"`
-	DeliveryRevenue float64            `json:"delivery_revenue"`
-	OrdersByStatus  map[string]int64   `json:"orders_by_status"`
-	RevenueByDay    []DayRevenue       `json:"revenue_by_day"`
-	PaymentMethods  map[string]int64   `json:"payment_methods"`
+	TotalRevenue    float64          `json:"total_revenue"`
+	TotalOrders     int64            `json:"total_orders"`
+	AvgTicket       float64          `json:"avg_ticket"`
+	DeliveryRevenue float64          `json:"delivery_revenue"`
+	OrdersByStatus  map[string]int64 `json:"orders_by_status"`
+	RevenueByDay    []DayRevenue     `json:"revenue_by_day"`
+	PaymentMethods  map[string]int64 `json:"payment_methods"`
 }
 
 // DayRevenue representa a receita de um dia especifico.

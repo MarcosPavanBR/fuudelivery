@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 	"encoding/json"
@@ -12,8 +12,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
-
-
 
 func ProcessSplit(c *fiber.Ctx) error {
 	var req dto.SplitPaymentRequest
@@ -62,11 +60,11 @@ func ProcessSplit(c *fiber.Ctx) error {
 	go notifySplitToOrderQueue(payment.OrderID, req.PaymentID, rules)
 
 	return c.Status(200).JSON(fiber.Map{
-		"payment_id": req.PaymentID,
-		"status":     "SPLIT",
+		"payment_id":  req.PaymentID,
+		"status":      "SPLIT",
 		"split_rules": rules,
-		"total":      payment.Amount,
-		"message":    "Payment split processed successfully",
+		"total":       payment.Amount,
+		"message":     "Payment split processed successfully",
 	})
 }
 
@@ -77,10 +75,10 @@ func notifySplitToOrderQueue(orderID, paymentID string, rules []models.SplitRule
 	}
 
 	msg := map[string]interface{}{
-		"order_id":    orderID,
-		"payment_id":  paymentID,
-		"status":      "PAYMENT_SPLIT",
-		"split_rules": rules,
+		"order_id":     orderID,
+		"payment_id":   paymentID,
+		"status":       "PAYMENT_SPLIT",
+		"split_rules":  rules,
 		"processed_at": time.Now().Format(time.RFC3339),
 	}
 

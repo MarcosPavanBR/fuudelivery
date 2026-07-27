@@ -204,7 +204,7 @@ func UpdateEstablishmentWallet(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{
-		"message": "Wallet ID updated successfully",
+		"message":           "Wallet ID updated successfully",
 		"payment_wallet_id": establishment.PaymentWalletID,
 	})
 }
@@ -230,10 +230,10 @@ func DeleteEstablishment(c *fiber.Ctx) error {
 // EstablishmentWithSponsor carrega metadados de patrocinio para um estabelecimento.
 type EstablishmentWithSponsor struct {
 	models.Establishment
-	IsSponsored    bool   `json:"is_sponsored"`
-	SponsorPlan    string `json:"sponsor_plan,omitempty"`
-	SponsorPriority int   `json:"sponsor_priority,omitempty"`
-	HasBanner      bool   `json:"has_banner,omitempty"`
+	IsSponsored     bool   `json:"is_sponsored"`
+	SponsorPlan     string `json:"sponsor_plan,omitempty"`
+	SponsorPriority int    `json:"sponsor_priority,omitempty"`
+	HasBanner       bool   `json:"has_banner,omitempty"`
 }
 
 // ListEstablishmentsRanked retorna estabelecimentos abertos ordenados com patrocinados no topo.
@@ -288,10 +288,10 @@ func ListEstablishmentsRanked(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{
-		"zone_id":        zoneID,
-		"total":          len(result),
+		"zone_id":         zoneID,
+		"total":           len(result),
 		"total_sponsored": countSponsored(result),
-		"establishments": result,
+		"establishments":  result,
 	})
 }
 

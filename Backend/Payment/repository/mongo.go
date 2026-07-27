@@ -17,16 +17,16 @@ import (
 // Variaveis globais que representam as colecoes do MongoDB.
 // Inicializadas na funcao Connect().
 var (
-	Client              *mongo.Client         // Cliente MongoDB
-	Database            *mongo.Database       // Banco de dados ativo
-	Payments            *mongo.Collection     // Colecao de pagamentos
-	Chargebacks         *mongo.Collection     // Colecao de estornos
-	Wallets             *mongo.Collection     // Colecao de carteiras
-	WalletTransactions  *mongo.Collection     // Colecao de transacoes das carteiras
-	Evidences           *mongo.Collection     // Colecao de evidencias
-	Users               *mongo.Collection     // Colecao de usuarios
-	ProcessedOrders     *mongo.Collection     // Trava de idempotencia: 1 doc por order_id ja processado
-	Payouts             *mongo.Collection     // Solicitacoes de saque Pix
+	Client             *mongo.Client     // Cliente MongoDB
+	Database           *mongo.Database   // Banco de dados ativo
+	Payments           *mongo.Collection // Colecao de pagamentos
+	Chargebacks        *mongo.Collection // Colecao de estornos
+	Wallets            *mongo.Collection // Colecao de carteiras
+	WalletTransactions *mongo.Collection // Colecao de transacoes das carteiras
+	Evidences          *mongo.Collection // Colecao de evidencias
+	Users              *mongo.Collection // Colecao de usuarios
+	ProcessedOrders    *mongo.Collection // Trava de idempotencia: 1 doc por order_id ja processado
+	Payouts            *mongo.Collection // Solicitacoes de saque Pix
 )
 
 // Connect estabelece a conexao com o MongoDB, inicializa as colecoes

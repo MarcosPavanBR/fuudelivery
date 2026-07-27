@@ -5,8 +5,8 @@ package handlers
 import (
 	"strconv"
 
-	"github.com/gofiber/fiber/v2"
 	"github.com/carloshomar/vercardapio/payment/services"
+	"github.com/gofiber/fiber/v2"
 )
 
 // WalletHandler e responsavel pelas rotas de carteiras.

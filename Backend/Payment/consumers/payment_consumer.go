@@ -15,9 +15,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-redis/redis/v8"
 	"github.com/carloshomar/vercardapio/payment/models"
 	"github.com/carloshomar/vercardapio/payment/services"
+	"github.com/go-redis/redis/v8"
 )
 
 const paymentQueueKey = "queue:payments"

@@ -1,4 +1,4 @@
-﻿package handlers
+package handlers
 
 import (
 	"time"
@@ -8,8 +8,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
-
-
 
 type ScheduleRequest struct {
 	OrderID     string `json:"order_id"`

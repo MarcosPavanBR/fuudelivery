@@ -107,7 +107,7 @@ type ZoneMetadata struct {
 	PeakHourEnd           string
 	CitySize              string
 	DensityCouriersPerKm2 float64
-	MinDeliveryFee         float64
+	MinDeliveryFee        float64
 	SurgeMultiplier       float64
 	MinCouriersThreshold  int
 	AllowBatching         bool

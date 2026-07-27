@@ -44,14 +44,14 @@ func TestRequestPayload_EmptyEstablishmentId(t *testing.T) {
 
 func TestUpdateOrderStatusRequest_ValidStatuses(t *testing.T) {
 	validStatuses := map[string]bool{
-		"REQUEST_APPROVE": true,
-		"APPROVED":        true,
+		"REQUEST_APPROVE":   true,
+		"APPROVED":          true,
 		"IN_ROUTE_DELIVERY": true,
-		"DONE":            true,
-		"FINISHED":        true,
-		"CANCELLED":       true,
-		"SCHEDULED":       true,
-		"PREPARING":       true,
+		"DONE":              true,
+		"FINISHED":          true,
+		"CANCELLED":         true,
+		"SCHEDULED":         true,
+		"PREPARING":         true,
 	}
 
 	for status, expected := range validStatuses {

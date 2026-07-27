@@ -127,6 +127,22 @@ O README.md foi atualizado em 2026-07-26 para refletir o FuuDelivery:
 
 ---
 
+## Itens resolvidos na auditoria de julho/2026
+
+### Backend
+- ✅ **AutoMigrate sem checagem de erro**: `database.go` agora verifica e loga erros do `AutoMigrate`
+- ✅ **Fila de pedidos migrada para Redis**: `publishToOrderQueue()` nao depende mais de RabbitMQ
+- ✅ **Admin password sem fallback**: `ADMIN_PASSWORD` agora causa `log.Fatal` se nao configurada
+- ✅ **AppComida com autenticacao**: Clientes agora usam phone + senha com bcrypt e JWT
+- ✅ **Calibracao por zona**: `GetUnmatchedRateForZone()` e `GetMatchTimeP90ForZone()` implementados
+- ✅ **CI gate no deploy**: Deploy agora depende do CI passar primeiro
+
+### Documentacao
+- ✅ `docker-compose.yml`: Marcado como LEGADO com aviso
+- ✅ `gaps-funcionais.md`: Atualizado (este arquivo)
+
+---
+
 ## Ainda pendente
 
 ### Rate limiting (P1)

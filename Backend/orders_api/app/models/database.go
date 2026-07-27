@@ -53,7 +53,7 @@ func ConnectPostgresDatabase() {
 		panic(fmt.Sprintf("Falha ao conectar ao banco de dados PostgreSQL após %d tentativas", maxRetries))
 	}
 
-	database.AutoMigrate(
+	if err := database.AutoMigrate(
 		&Category{},
 		&CategoryProducts{},
 		&Product{},
@@ -68,7 +68,11 @@ func ConnectPostgresDatabase() {
 		&LoyaltyTransaction{},
 		&Review{},
 		&Batch{},
-	)
+	); err != nil {
+		log.Printf("[CRITICAL] Falha no AutoMigrate do PostgreSQL: %v. "+
+			"O servidor continuara, mas tabelas podem estar ausentes. "+
+			"Execute scripts/migrate-batches.sql manualmente se necessario.", err)
+	}
 
 	DB = database
 }

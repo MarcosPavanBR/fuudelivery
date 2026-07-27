@@ -8,12 +8,19 @@ import React, {
   ReactNode,
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "expo-secure-store";
 import LoadingPage from "@/components/LoadingPage";
 
+interface UserData {
+  id: number;
+  name: string;
+  phone: string;
+}
+
 interface ApiContextProps {
-  login(token: any): void;
+  login(token: string, userData: UserData): Promise<void>;
   isLogged: boolean;
-  getUserData(): any;
+  getUserData(): UserData | null;
   isLoading: boolean;
   setIsLoading(status: boolean): void;
   logout(): void;
@@ -28,13 +35,21 @@ interface ApiProviderProps {
 export const ApiProvider: React.FC<ApiProviderProps> = ({ children }) => {
   const [isLogged, setIsLogged] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [userData, setUserData] = useState<UserData | null>(null);
 
   useEffect(() => {
     const loadUserFromStorage = async () => {
       try {
-        const token = await AsyncStorage.getItem(Strings.token_jwt);
+        // Tenta carregar o JWT do SecureStore (onde a api.tsx já procura)
+        const token = await SecureStore.getItemAsync(Strings.token_jwt);
         if (token) {
           setIsLogged(true);
+
+          // Carrega dados do usuario do AsyncStorage
+          const storedUserData = await AsyncStorage.getItem("USER_DATA");
+          if (storedUserData) {
+            setUserData(JSON.parse(storedUserData));
+          }
         }
       } catch (error) {
         console.error("Error loading user from storage:", error);
@@ -46,22 +61,27 @@ export const ApiProvider: React.FC<ApiProviderProps> = ({ children }) => {
   }, []);
 
   const logout = async () => {
-    await AsyncStorage.setItem(Strings.token_jwt, "");
+    await SecureStore.deleteItemAsync(Strings.token_jwt);
+    await AsyncStorage.removeItem("USER_DATA");
+    setUserData(null);
     setIsLogged(false);
   };
 
-  async function getUserData() {
-    const token = await AsyncStorage.getItem(Strings.token_jwt);
-    return JSON.parse(token as any);
+  function getUserData(): UserData | null {
+    return userData;
   }
 
-  const login = async (token: any) => {
+  const login = async (token: string, userDataParam: UserData) => {
     if (token) {
       try {
-        await AsyncStorage.setItem(Strings.token_jwt, JSON.stringify(token));
+        // Armazena o JWT no SecureStore (onde a api.tsx já procura)
+        await SecureStore.setItemAsync(Strings.token_jwt, token);
+        // Armazena dados do usuario no AsyncStorage para acesso rapido
+        await AsyncStorage.setItem("USER_DATA", JSON.stringify(userDataParam));
+        setUserData(userDataParam);
         setIsLogged(true);
       } catch (error) {
-        console.error("Error storing token:", error);
+        console.error("Error storing credentials:", error);
       }
     }
   };

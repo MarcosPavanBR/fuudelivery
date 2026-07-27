@@ -15,7 +15,7 @@ export default function Perfil() {
   const nav = useNavigation();
 
   async function init() {
-    setUser(await getUserData());
+    setUser(getUserData() as any);
   }
 
   useEffect(() => {
@@ -32,12 +32,12 @@ export default function Perfil() {
       <View style={styles.userDataContainer}>
         <View style={styles.infoBox}>
           <Text style={styles.label}>{Texts.nome_es}</Text>
-          <Text style={styles.userInfo}>{user?.nome}</Text>
+          <Text style={styles.userInfo}>{user?.name}</Text>
         </View>
 
         <View style={styles.infoBox}>
           <Text style={styles.label}>{Texts.telefone}</Text>
-          <Text style={styles.userInfo}>{user?.phone}</Text>
+          <Text style={styles.userInfo}>{user?.email}</Text>
         </View>
 
         <TouchableOpacity

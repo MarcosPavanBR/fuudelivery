@@ -12,12 +12,10 @@ import (
 // Config armazena todas as configuracoes do servico.
 // Cada campo corresponde a uma variavel de ambiente.
 type Config struct {
-	MongoURI           string // URI de conexao com MongoDB (MONGO_URI)
-	MongoDatabase      string // Nome do banco de dados (PAYMENT_MONGO_DATABASE)
-	RabbitConnection   string // URL de conexao RabbitMQ (RABBIT_CONNECTION)
-	RabbitPaymentQueue string // Nome da fila de pagamentos (RABBIT_PAYMENT_QUEUE)
-	JWTSecret          string // Chave secreta para tokens JWT (JWT_SECRET)
-	Port               string // Porta do servidor HTTP (PORT)
+	MongoURI      string // URI de conexao com MongoDB (MONGO_URI)
+	MongoDatabase string // Nome do banco de dados (PAYMENT_MONGO_DATABASE)
+	JWTSecret     string // Chave secreta para tokens JWT (JWT_SECRET)
+	Port          string // Porta do servidor HTTP (PORT)
 }
 
 // AppConfig e a instancia global de configuracao.
@@ -38,12 +36,10 @@ func Load() {
 	}
 
 	AppConfig = &Config{
-		MongoURI:           getEnv("MONGO_URI", "mongodb://localhost:27017"),
-		MongoDatabase:      getEnv("PAYMENT_MONGO_DATABASE", "payment"),
-		RabbitConnection:   getEnv("RABBIT_CONNECTION", "amqp://guest:guest@localhost:5672/"),
-		RabbitPaymentQueue: getEnv("RABBIT_PAYMENT_QUEUE", "payment_queue"),
-		JWTSecret:          jwtSecret,
-		Port:               getEnv("PORT", "8084"),
+		MongoURI:      getEnv("MONGO_URI", "mongodb://localhost:27017"),
+		MongoDatabase: getEnv("PAYMENT_MONGO_DATABASE", "payment"),
+		JWTSecret:     jwtSecret,
+		Port:          getEnv("PORT", "8084"),
 	}
 }
 

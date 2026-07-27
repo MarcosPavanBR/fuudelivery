@@ -9,7 +9,6 @@ package consumers
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"os"
 	"sync"
@@ -33,7 +32,7 @@ type RedisPaymentConsumer struct {
 // PaymentMessage representa a mensagem recebida da fila de pagamentos.
 type PaymentMessage struct {
 	OrderID         string  `json:"order_id"`
-	EstablishmentID int64   `json:"establishment_id"`
+	EstablishmentID string  `json:"establishment_id"`
 	Amount          float64 `json:"amount"`
 	DeliveryAmount  float64 `json:"delivery_amount"`
 	Status          string  `json:"status"`
@@ -130,7 +129,7 @@ func (r *RedisPaymentConsumer) processMessage(msg PaymentMessage) {
 	// Converte a mensagem para o modelo de pagamento esperado pelo WalletService
 	payment := &models.Payment{
 		OrderID:         msg.OrderID,
-		EstablishmentID: fmt.Sprintf("%d", msg.EstablishmentID),
+		EstablishmentID: msg.EstablishmentID,
 		Amount:          msg.Amount,
 		DeliveryAmount:  msg.DeliveryAmount,
 		Status:          models.PaymentApproved,

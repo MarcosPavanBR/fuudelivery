@@ -42,6 +42,8 @@ services:
         value: "https://fuudelivery-api.onrender.com"
       - key: ABACATE_PAY_API_KEY
         sync: false
+      - key: ALLOWED_ORIGINS
+        value: "https://fuudelivery-web.onrender.com,https://fuudelivery-admin-lv7f.onrender.com,https://fuudelivery-payment-panel.onrender.com"
     healthCheckPath: /health
 
   # ============================================================
@@ -58,7 +60,7 @@ services:
         destination: /index.html
     envVars:
       - key: REACT_APP_API_URL
-        value: https://fuudelivery-api-8y6l.onrender.com
+        value: https://fuudelivery-api.onrender.com
 
   # ============================================================
   # ADMIN — Painel Administrativo (React)
@@ -74,10 +76,10 @@ services:
         destination: /index.html
     envVars:
       - key: REACT_APP_API_URL
-        value: https://fuudelivery-api-8y6l.onrender.com
+        value: https://fuudelivery-api.onrender.com
 
   # ============================================================
-  # REDIS — Cache + GEO para motor de despacho
+  # REDIS — Cache + Fila de pagamentos (BRPop)
   # ============================================================
   - type: redis
     name: fuudelivery-redis
@@ -99,16 +101,19 @@ services:
         sync: false
       - key: PAYMENT_MONGO_DATABASE
         value: "fuudelivery_payments"
-      - key: RABBIT_CONNECTION
-        sync: false
-      - key: RABBIT_PAYMENT_QUEUE
-        value: "payment_queue"
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: fuudelivery-redis
+          property: connectionString
       - key: JWT_SECRET
         sync: false
       - key: ABACATE_PAY_API_KEY
         sync: false
       - key: ABACATE_PAY_WEBHOOK_SECRET
         sync: false
+      - key: ALLOWED_ORIGINS
+        value: "https://fuudelivery-web.onrender.com,https://fuudelivery-admin-lv7f.onrender.com,https://fuudelivery-payment-panel.onrender.com"
     healthCheckPath: /health
 
   # ============================================================

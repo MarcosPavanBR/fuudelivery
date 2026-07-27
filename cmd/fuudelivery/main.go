@@ -21,6 +21,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/bson"
+	"golang.org/x/time/rate"
 	"gorm.io/gorm"
 
 	// Models (database initialization)
@@ -51,40 +52,45 @@ import (
 	"github.com/carloshomar/fuudelivery/pkg/upload"
 )
 
-// Rate limiter simples: contador de requisicoes por IP por minuto.
-// Usa apenas stdlib para evitar dependencia externa (golang.org/x/time).
-type ipCounter struct {
-	count   int
-	resetAt time.Time
+// Rate limiter por IP usando golang.org/x/time/rate (token bucket).
+// Entries stale sao limpas periodicamente para evitar memory leak.
+type ipLimiter struct {
+	limiter  *rate.Limiter
+	lastSeen time.Time
 }
 
 var (
-	rateCounters   = make(map[string]*ipCounter)
-	rateCountersMu sync.Mutex
+	ipLimiters   = make(map[string]*ipLimiter)
+	ipLimitersMu sync.Mutex
 )
 
+func getIPLimiter(ip string, rps rate.Limit, burst int) *rate.Limiter {
+	ipLimitersMu.Lock()
+	defer ipLimitersMu.Unlock()
+
+	li, exists := ipLimiters[ip]
+	if !exists {
+		li = &ipLimiter{limiter: rate.NewLimiter(rps, burst)}
+		ipLimiters[ip] = li
+	}
+	li.lastSeen = time.Now()
+	return li.limiter
+}
+
 func rateLimitMiddleware(maxPerMinute int) fiber.Handler {
+	rps := rate.Limit(float64(maxPerMinute) / 60.0) // convert per-minute to per-second
 	return func(c *fiber.Ctx) error {
 		ip := c.Get("X-Forwarded-For")
 		if ip == "" {
 			ip = c.IP()
 		}
 
-		rateCountersMu.Lock()
-		counter, exists := rateCounters[ip]
-		now := time.Now()
-		if !exists || now.After(counter.resetAt) {
-			counter = &ipCounter{resetAt: now.Add(1 * time.Minute)}
-			rateCounters[ip] = counter
-		}
-		counter.count++
-		if counter.count > maxPerMinute {
-			rateCountersMu.Unlock()
+		limiter := getIPLimiter(ip, rps, maxPerMinute)
+		if !limiter.Allow() {
 			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
 				"error": "Muitas requisicoes. Tente novamente mais tarde.",
 			})
 		}
-		rateCountersMu.Unlock()
 		return c.Next()
 	}
 }
@@ -93,9 +99,14 @@ func startRateLimitCleanup() {
 	go func() {
 		for {
 			time.Sleep(10 * time.Minute)
-			rateCountersMu.Lock()
-			rateCounters = make(map[string]*ipCounter)
-			rateCountersMu.Unlock()
+			cutoff := time.Now().Add(-10 * time.Minute)
+			ipLimitersMu.Lock()
+			for ip, li := range ipLimiters {
+				if li.lastSeen.Before(cutoff) {
+					delete(ipLimiters, ip)
+				}
+			}
+			ipLimitersMu.Unlock()
 		}
 	}()
 }
@@ -998,8 +1009,13 @@ func main() {
 	// Middleware
 	app.Use(logger.New())
 	app.Use(recover.New())
+
+	allowedOrigins := os.Getenv("ALLOWED_ORIGINS")
+	if allowedOrigins == "" {
+		allowedOrigins = "https://fuudelivery-web.onrender.com,https://fuudelivery-admin-lv7f.onrender.com,https://fuudelivery-payment-panel.onrender.com"
+	}
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     "https://fuudelivery-web.onrender.com,https://fuudelivery-admin-lv7f.onrender.com,https://fuudelivery-payment-panel.onrender.com",
+		AllowOrigins:     allowedOrigins,
 		AllowCredentials: true,
 		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
 		AllowHeaders:     "Origin,Content-Type,Accept,Authorization",

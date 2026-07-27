@@ -699,6 +699,10 @@ func setupAuthRoutes(app *fiber.App) {
 	app.Post("/delivery-man/register", authHandlers.CreateDeliveryMan)
 	app.Get("/delivery-man", adminRequired, authHandlers.ListAllDeliveryMen)
 	app.Put("/delivery-man/:id/wallet", protectedRoute, authHandlers.UpdateDeliveryManWallet)
+
+	// === Rotas de Cliente (AppComida) ===
+	app.Post("/clients/register", rateLimitMiddleware(5), authHandlers.RegisterClient)
+	app.Post("/clients/login", rateLimitMiddleware(10), authHandlers.LoginClient)
 }
 
 func setupOrdersRoutes(app *fiber.App) {

@@ -1,3 +1,14 @@
+# ⚠️ ATENCAO: Este docker-compose reflete uma arquitetura LEGADO (multi-servico)
+# que NAO corresponde ao que roda em producao hoje.
+#
+# Em producao (Render), o sistema opera como MONOLITO unificado
+# (cmd/fuudelivery) + microsservico Payment (Backend/Payment).
+# Nao ha NGINX, RabbitMQ ou 5 databases separados em producao.
+#
+# Para desenvolvimento local, use `go run main.go` em cmd/fuudelivery
+# ou Backend/Payment individualmente.
+# Veja o README.md para instrucoes atualizadas.
+
 services:
   api-gateway:
     image: nginx:latest

@@ -41,8 +41,9 @@ func bootstrapAdminUser() {
 
 	password := os.Getenv("ADMIN_PASSWORD")
 	if password == "" {
-		password = "changeme"
-		log.Println("Warning: No ADMIN_PASSWORD env var, using default password. Set ADMIN_PASSWORD in Render dashboard.")
+		log.Fatal("FATAL: ADMIN_PASSWORD nao configurado. " +
+			"Defina ADMIN_PASSWORD no Dashboard do Render (Environment > Secret Files) " +
+			"antes de iniciar o servico. Gere uma senha forte com: openssl rand -hex 16")
 	}
 
 	admin := &models.User{

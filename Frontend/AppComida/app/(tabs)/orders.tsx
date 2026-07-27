@@ -25,13 +25,9 @@ export default function TabTwoScreen() {
 
   function sortObjectsByLastModified(arr: any) {
     arr.sort((a: any, b: any) => {
-      if (a.lastModified === undefined) {
-        return -1;
-      } else if (b.lastModified === undefined) {
-        return 1;
-      } else {
-        return 0;
-      }
+      const aTime = a.lastModified ? new Date(a.lastModified).getTime() : 0;
+      const bTime = b.lastModified ? new Date(b.lastModified).getTime() : 0;
+      return bTime - aTime;
     });
     return arr;
   }

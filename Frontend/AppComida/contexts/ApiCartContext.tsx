@@ -40,7 +40,7 @@ interface ApiContextProps {
 
   setHiddenCart(state: boolean): void;
   setEstablishment(establishment: any): void;
-  getValueDelivery(ns: number, id: string): Promise<any>;
+  getValueDelivery(ns: number, id: string | number): Promise<any>;
   distance: number | null;
   setMyLocation(location: object): void;
   location: any;
@@ -105,7 +105,7 @@ export const ApiCartProvider: React.FC<ApiCartProviderProps> = ({
     return true;
   };
 
-  const getValueDelivery = async (ns: number, id: number) => {
+  const getValueDelivery = async (ns: number, id: string | number) => {
     try {
       const { data } = await api.post(
         "/api/order/delivery/calculate-delivery-value",

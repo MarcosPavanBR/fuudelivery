@@ -50,11 +50,11 @@ export default function OnboardingScreen() {
 
     setLoading(true);
     try {
-      const user = await getUserData();
+      const user = getUserData();
       const res = await api.post("/establishments", {
         name: form.name.trim(),
-        email: user?.phone || "",
-        phone: form.phone.trim() || user?.phone || "",
+        email: user?.email || "",
+        phone: form.phone.trim() || "",
         address: form.address.trim(),
         city: form.city.trim(),
         state: form.state.trim(),

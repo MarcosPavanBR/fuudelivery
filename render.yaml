@@ -28,14 +28,6 @@ services:
         sync: false
       - key: MONGO_DATABASE
         value: "fuudelivery"
-      - key: RABBIT_CONNECTION
-        sync: false
-      - key: RABBIT_ORDER_QUEUE
-        value: "RABBIT_ORDER_QUEUE"
-      - key: RABBIT_DELIVERY_QUEUE
-        value: "MS_DELIVERY_QUEUE"
-      - key: RABBIT_PAYMENT_QUEUE
-        value: "payment_queue"
       - key: APP_URL
         value: "https://fuudelivery-web.onrender.com"
       - key: API_BASE_URL
@@ -111,6 +103,8 @@ services:
       - key: ABACATE_PAY_API_KEY
         sync: false
       - key: ABACATE_PAY_WEBHOOK_SECRET
+        sync: false
+      - key: ADMIN_PASSWORD
         sync: false
       - key: ALLOWED_ORIGINS
         value: "https://fuudelivery-web.onrender.com,https://fuudelivery-admin-lv7f.onrender.com,https://fuudelivery-payment-panel.onrender.com"

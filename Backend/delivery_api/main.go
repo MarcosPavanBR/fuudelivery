@@ -2,15 +2,12 @@ package main
 
 import (
 	"log"
-	"os"
 	"strconv"
 	"sync"
-	"time"
 
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/joho/godotenv"
-	"github.com/streadway/amqp"
 
 	"github.com/carloshomar/vercardapio/delivery_api/app/handlers"
 	"github.com/carloshomar/vercardapio/delivery_api/app/models"
@@ -40,13 +37,12 @@ func main() {
 	}
 
 	// Iniciar o servidor HTTP
-	go startHTTPServer()
+	startHTTPServer()
 
-	// Iniciar o servidor que escuta a fila
-	startQueueListener()
+	// NOTA: Fila RabbitMQ removida. O monolito gerencia filas via Redis.
+	log.Println("[DELIVERY_API] RabbitMQ removido — usando HTTP direto via monolito")
 
 	// Mantém a aplicação em execução indefinidamente
-	// até que seja explicitamente encerrada
 	<-make(chan struct{})
 }
 
@@ -108,60 +104,7 @@ func startHTTPServer() {
 	app.Listen(":3000")
 }
 
-func startQueueListener() {
-	// Estabelecer conexão com o servidor de mensagens
-	dsn := os.Getenv("RABBIT_CONNECTION")
-	queueName := os.Getenv("RABBIT_DELIVERY_QUEUE")
-
-	var conn *amqp.Connection
-	var err error
-	for {
-		conn, err = amqp.Dial(dsn)
-		if err == nil {
-			break
-		}
-		log.Printf("Erro ao conectar ao servidor de mensagens: %s. Tentando novamente em 5 segundos...", err)
-		time.Sleep(5 * time.Second)
-	}
-	defer conn.Close()
-
-	ch, err := conn.Channel()
-	if err != nil {
-		log.Fatalf("Erro ao abrir canal: %s", err)
-	}
-	defer ch.Close()
-
-	queue, err := ch.QueueDeclare(
-		queueName,
-		true,
-		false,
-		false,
-		false,
-		nil,
-	)
-	if err != nil {
-		log.Fatalf("Erro ao declarar a fila: %s", err)
-	}
-
-	// Loop infinito para consumir mensagens continuamente
-	for {
-		msgs, err := ch.Consume(
-			queue.Name,
-			"",    // Consumer
-			true,  // Auto-ack
-			false, // Exclusive
-			false, // No-local
-			false, // No-wait
-			nil,   // Arguments
-		)
-		if err != nil {
-			log.Fatalf("Erro ao registrar o consumidor: %s", err)
-		}
-
-		// Processar mensagens recebidas
-		for msg := range msgs {
-			bodyStr := string(msg.Body)
-			handlers.CreateSolicitation(bodyStr, sendMessageToClient)
-		}
-	}
+// CreateSolicitation exposta para compatibilidade — delega ao handler real.
+func CreateSolicitation(body string, sendFn func(int64, []byte) error) {
+	handlers.CreateSolicitation(body, sendFn)
 }

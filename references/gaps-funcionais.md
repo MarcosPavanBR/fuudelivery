@@ -4,12 +4,13 @@
 
 ### 1. Pagamento — Ponte entre monólito e Payment Service ✅
 
-**Resolvido em**: commit `2b45b15`
+**Resolvido em**: commit `2b45b15` + atualizado em 2026-07-27
 
 **Solução implementada**: `publishToPaymentQueue()` em `payment_api/app/handlers/webhook.go`
-- Quando o webhook do AbacatePay confirma um pagamento, publica em `RABBIT_PAYMENT_QUEUE`
+- Quando o webhook do AbacatePay confirma um pagamento, publica em fila Redis
 - O `PaymentConsumer` no `Backend/Payment` consome a mensagem e credita na carteira do restaurante
-- Se RabbitMQ não estiver configurado, a mensagem é ignorada silenciosamente
+- Fila migrada de RabbitMQ para Redis (2026-07-27)
+- Se Redis não estiver configurado, a mensagem é ignorada silenciosamente
 
 ### 2. Página de cadastro de restaurante ✅
 
@@ -94,12 +95,12 @@
 - Recebe pedidos do frontend
 - Cria cobranças via AbacatePay (PIX/cartão)
 - Processa webhooks de confirmação
-- Publica em `RABBIT_ORDER_QUEUE` (para orders_api) e `RABBIT_PAYMENT_QUEUE` (para Payment Service)
+- Publica em fila Redis (para Payment Service)
 - Calcula split de pagamento
 - Callback de loyalty points
 
 **`Payment`** (microsserviço):
-- Consome mensagens da fila de pagamentos
+- Consome mensagens da fila Redis de pagamentos
 - Aprova/rejeita pagamentos (automático ou manual)
 - Calcula score de risco (4 fatores)
 - Gerencia carteiras digitais (credit/debit atômico)
@@ -111,7 +112,7 @@
 A separação é intencional e benéfica:
 - `payment_api` é leve e rápido (gateway)
 - `Payment` é pesado e analítico (approvals, wallets, reports)
-- Conectados via RabbitMQ com fallback para memória
+- Conectados via Redis (migrado de RabbitMQ em 2026-07-27)
 
 ---
 
@@ -139,16 +140,37 @@ O README.md foi atualizado em 2026-07-26 para refletir o FuuDelivery:
 
 ### Documentacao
 - ✅ `docker-compose.yml`: Marcado como LEGADO com aviso
+- ✅ `docker-compose.payment.yml`: Atualizado para Redis (removido RabbitMQ)
+- ✅ `render.yaml`: Variáveis RabbitMQ removidas, Redis adicionado ao Payment Service
 - ✅ `gaps-funcionais.md`: Atualizado (este arquivo)
+- ✅ `seguranca.md`: Atualizado (rate limiting marcado como implementado)
 
 ---
 
 ## Ainda pendente
 
-### Rate limiting (P1)
+### Payment Service offline (P0)
 
-- [ ] Implementar rate limiting para login, registro, pagamento e carteira
-- [ ] Ver `references/seguranca.md` para especificações
+- [ ] Fazer rollback do Payment Service no Render Dashboard
+- [ ] Configurar REDIS_URL manualmente no Dashboard (Environment → Secret Files)
+- [ ] Verificar health check: `https://fuudelivery-payment.onrender.com/health`
+
+### Credenciais no histórico do git (P0)
+
+- [ ] Rodar BFG Repo-Cleaner para remover CREDENTIALS.md e .env do histórico
+- [ ] Rotacionar todas as credenciais expostas
+
+### GitHub Secrets para deploy automático (P1)
+
+- [ ] Configurar `RENDER_API_KEY` no GitHub Secrets
+- [ ] Configurar `RENDER_SERVICE_ID_API`, `RENDER_SERVICE_ID_WEB`, etc.
+- [ ] Testar deploy automático via push ao master
+
+### Apps mobile nas lojas (P1)
+
+- [ ] Publicar AppComida no Google Play / App Store
+- [ ] Publicar AppEntrega no Google Play / App Store
+- [ ] Configurar push notifications (Firebase)
 
 ### Shared MongoDB container nos testes (tech-debt)
 
@@ -164,4 +186,4 @@ O README.md foi atualizado em 2026-07-26 para refletir o FuuDelivery:
 
 ---
 
-*Última atualização: 2026-07-26*
+*Última atualização: 2026-07-27*

@@ -3,12 +3,10 @@ package handlers
 import (
 	"encoding/json"
 	"log"
-	"os"
 	"time"
 
 	"github.com/carloshomar/vercardapio/orders_api/app/dto"
 	"github.com/carloshomar/vercardapio/orders_api/app/models"
-	"github.com/streadway/amqp"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
@@ -50,17 +48,6 @@ func ReceiveMessage(msg string, sendMessageToClient func(clientID int64, message
 	_, err = collection.UpdateOne(mongoCtx(), filter, update)
 	if err != nil {
 		log.Printf("Erro ao atualizar o documento: %s", err)
-
-	}
-
-	if orderMsg.DeliveryMan.Status == "FINISHED" {
-		var order dto.RequestPayload
-		collection.FindOne(mongoCtx(), filter).Decode(&order)
-		order.OrderId = orderID.Hex()
-		orderBytes, err := json.Marshal(&order)
-		if err == nil {
-			PublishMessage(orderBytes)
-		}
 	}
 
 	jsonData, _ := json.Marshal(orderMsg)
@@ -69,64 +56,9 @@ func ReceiveMessage(msg string, sendMessageToClient func(clientID int64, message
 	log.Println("Documento atualizado com sucesso.")
 }
 
+// PublishMessage envia mensagem para fila de delivery.
+// NOTA: RabbitMQ foi removido — stub mantido para compatibilidade.
 func PublishMessage(body []byte) error {
-	dsn := os.Getenv("RABBIT_CONNECTION")
-	if dsn == "" {
-		log.Println("[QUEUE] RabbitMQ não configurado, mensagem ignorada")
-		return nil
-	}
-
-	queueName := os.Getenv("RABBIT_DELIVERY_QUEUE")
-	if queueName == "" {
-		log.Println("[QUEUE] RABBIT_DELIVERY_QUEUE não configurado, mensagem ignorada")
-		return nil
-	}
-
-	conn, err := amqp.Dial(dsn)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	ch, err := conn.Channel()
-	if err != nil {
-		return err
-	}
-	defer ch.Close()
-
-	_, err = ch.QueueDeclare(
-		queueName,
-		true,  // Durable
-		false, // Delete when unused
-		false, // Exclusive
-		false, // No-wait
-		nil,   // Arguments
-	)
-	if err != nil {
-		return err
-	}
-
-	// Publicar a mensagem na fila
-	err = ch.Publish(
-		"",        // Exchange
-		queueName, // Routing key
-		false,     // Mandatory
-		false,     // Immediate
-		amqp.Publishing{
-			ContentType: "text/plain",
-			Body:        body,
-		})
-	if err != nil {
-		return err
-	}
-
-	// log.Printf(" [x] Sent %s", body)
-
+	log.Println("[QUEUE] RabbitMQ removido — mensagem ignorada (fila via Redis no monolito)")
 	return nil
-}
-
-func failOnError(err error, msg string) {
-	if err != nil {
-		log.Printf("[ERRO] %s: %s", msg, err)
-	}
 }

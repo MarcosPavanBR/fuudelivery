@@ -1,70 +1,11 @@
 package handlers
 
-import (
-	"log"
-	"os"
+import "log"
 
-	"github.com/streadway/amqp"
-)
-
-func failOnError(err error, msg string) {
-	if err != nil {
-		log.Printf("[ERRO] %s: %s", msg, err)
-	}
-}
-
+// PublishMessage envia uma mensagem para a fila de pedidos.
+// NOTA: RabbitMQ foi removido do sistema. Esta funcao e um stub.
+// A fila real e gerenciada pelo monolito via Redis.
 func PublishMessage(body []byte) error {
-	dsn := os.Getenv("RABBIT_CONNECTION")
-	if dsn == "" {
-		log.Println("[QUEUE] RabbitMQ não configurado, mensagem ignorada")
-		return nil
-	}
-
-	queueName := os.Getenv("RABBIT_ORDER_QUEUE")
-	if queueName == "" {
-		log.Println("[QUEUE] RABBIT_ORDER_QUEUE não configurado, mensagem ignorada")
-		return nil
-	}
-
-	conn, err := amqp.Dial(dsn)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	ch, err := conn.Channel()
-	if err != nil {
-		return err
-	}
-	defer ch.Close()
-
-	_, err = ch.QueueDeclare(
-		queueName,
-		true,  // Durable
-		false, // Delete when unused
-		false, // Exclusive
-		false, // No-wait
-		nil,   // Arguments
-	)
-	if err != nil {
-		return err
-	}
-
-	// Publicar a mensagem na fila
-	err = ch.Publish(
-		"",        // Exchange
-		queueName, // Routing key
-		false,     // Mandatory
-		false,     // Immediate
-		amqp.Publishing{
-			ContentType: "text/plain",
-			Body:        body,
-		})
-	if err != nil {
-		return err
-	}
-
-	// log.Printf(" [x] Sent %s", body)
-
+	log.Println("[QUEUE] RabbitMQ removido — mensagem ignorada (fila via Redis no monolito)")
 	return nil
 }

@@ -265,12 +265,27 @@ func initDispatchEngine(db *gorm.DB) {
 			// Converte ZoneMetadata para ZoneInfo
 			zoneInfos := make([]dispatchServices.ZoneInfo, len(zones))
 			for i, z := range zones {
-				zoneInfos[i] = dispatchServices.ZoneInfo{
-					ID:        z.ID,
-					CenterLat: 0, // Idealmente viria do centroide da zona
-					CenterLng: 0,
-					RadiusKm:  z.RadiusKm,
+			// Calcula centroide real a partir dos estabelecimentos da zona
+			var centerLat, centerLng float64
+			if db != nil {
+				var ests []models.Establishment
+				db.Select("lat, long").Where("zone_id = ? AND lat != 0", z.ID).Find(&ests)
+				if len(ests) > 0 {
+					sumLat, sumLng := 0.0, 0.0
+					for _, e := range ests {
+						sumLat += e.Lat
+						sumLng += e.Long
+					}
+					centerLat = sumLat / float64(len(ests))
+					centerLng = sumLng / float64(len(ests))
 				}
+			}
+			zoneInfos[i] = dispatchServices.ZoneInfo{
+				ID:        z.ID,
+				CenterLat: centerLat,
+				CenterLng: centerLng,
+				RadiusKm:  z.RadiusKm,
+			}
 			}
 			courierStore.RecalculateAllDensities(zoneInfos)
 		}
@@ -347,14 +362,29 @@ type splitMetricsProvider struct {
 }
 
 func (s *splitMetricsProvider) GetMonthlyOrders(zoneID uint) int {
-	// Placeholder: em producao, consultaria a tabela de orders no PostgreSQL
-	// filtrando por estabelecimentos vinculados a esta zona
-	return 100 // valor ficticio para o job rodar
+	// Conta pedidos para estabelecimentos vinculados a esta zona
+	if s.DB == nil {
+		return 0
+	}
+	var count int64
+	s.DB.Raw(
+		"SELECT COUNT(*) FROM orders " +
+			"JOIN establishments ON establishments.id = orders.establishment_id " +
+			"WHERE establishments.zone_id = ?", zoneID,
+	).Scan(&count)
+	return int(count)
 }
 
 func (s *splitMetricsProvider) GetActiveCouriers(zoneID uint) int {
-	// Placeholder: em producao, consultaria a tabela de couriers no PostgreSQL
-	return 5 // valor ficticio para o job rodar
+	// Conta entregadores com status 'available' ou 'busy' vinculados a esta zona
+	if s.DB == nil {
+		return 0
+	}
+	var count int64
+	s.DB.Model(&models.DeliveryMan{}).
+		Where("zone_id = ? AND status IN ('available', 'busy')", zoneID).
+		Count(&count)
+	return int(count)
 }
 
 // zoneDBResolver implementa dispatchServices.ZoneResolver usando GORM.
@@ -949,7 +979,7 @@ func validateRequiredEnv() {
 
 	// Em producao, valida tambem as de pagamento
 	if os.Getenv("GO_ENV") == "production" {
-		prodRequired := []string{"ABACATE_PAY_API_KEY", "RABBIT_CONNECTION"}
+		prodRequired := []string{"ABACATE_PAY_API_KEY", "REDIS_URL"}
 		for _, key := range prodRequired {
 			if os.Getenv(key) == "" {
 				log.Printf("[ENV] WARNING: %s nao configurado — funcionalidade limitada", key)

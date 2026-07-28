@@ -188,7 +188,7 @@ type MatchingEngine struct {
 	totalOrders     int64     // total de pedidos processados
 
 	// Metricas por zona (para calibracao independente)
-	zoneMetrics    map[uint]*ZoneCalibrationMetrics
+	zoneMetrics   map[uint]*ZoneCalibrationMetrics
 	zoneMetricsMu sync.RWMutex
 }
 

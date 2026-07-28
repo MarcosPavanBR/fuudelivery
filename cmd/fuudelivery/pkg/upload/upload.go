@@ -44,11 +44,11 @@ func HandleImageUpload(c *fiber.Ctx) error {
 
 	// Valida entidade
 	validEntities := map[string]string{
-		"products":     "products",
-		"categories":   "categories",
-		"restaurants":  "restaurants",
-		"additionals":  "additionals",
-		"reviews":      "reviews",
+		"products":    "products",
+		"categories":  "categories",
+		"restaurants": "restaurants",
+		"additionals": "additionals",
+		"reviews":     "reviews",
 	}
 	folder, ok := validEntities[entity]
 	if !ok {

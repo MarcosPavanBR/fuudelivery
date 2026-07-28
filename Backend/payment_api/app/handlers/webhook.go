@@ -26,8 +26,8 @@ const (
 func publishToOrderQueue(body []byte) error {
 	redisURL := os.Getenv("REDIS_URL")
 	if redisURL == "" {
-		log.Printf("ALERTA: [ORDER_QUEUE] REDIS_URL nao configurado. "+
-			"Confirmacao de pedido nao sera encaminhada. "+
+		log.Printf("ALERTA: [ORDER_QUEUE] REDIS_URL nao configurado. " +
+			"Confirmacao de pedido nao sera encaminhada. " +
 			"Verifique se o servico Redis (fuudelivery-redis) esta ativo.")
 		return nil
 	}

@@ -46,14 +46,18 @@ func ConnectDatabase() {
 		panic(fmt.Sprintf("Falha ao conectar ao banco de dados após %d tentativas", maxRetries))
 	}
 
-	database.AutoMigrate(&User{})
-	database.AutoMigrate(&Establishment{})
-	database.AutoMigrate(&DeliveryMan{})
-	database.AutoMigrate(&BusinessHours{})
-	database.AutoMigrate(&Zone{})
-	database.AutoMigrate(&Subscription{})
-	database.AutoMigrate(&SponsoredListing{})
-	database.AutoMigrate(&Client{})
+	if err := database.AutoMigrate(
+		&User{},
+		&Establishment{},
+		&DeliveryMan{},
+		&BusinessHours{},
+		&Zone{},
+		&Subscription{},
+		&SponsoredListing{},
+		&Client{},
+	); err != nil {
+		log.Printf("[CRITICAL] Falha no AutoMigrate do auth_api: %v", err)
+	}
 
 	// Atualiza DeliveryMan com campos do motor de despacho se nao existirem
 	// (GORM AutoMigrate adiciona colunas novas, mas nao remove)

@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"log"
-	"os"
 	"time"
 
 	"github.com/carloshomar/vercardapio/payment_api/app/dto"
@@ -57,7 +56,8 @@ func ProcessSplit(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to save split rules"})
 	}
 
-	go notifySplitToOrderQueue(payment.OrderID, req.PaymentID, rules)
+	// NOTA: RabbitMQ removido. Notificacao de split e feita via Redis pelo monolito.
+	log.Printf("[SPLIT] Split processado: payment=%s order=%s rules=%d", req.PaymentID, payment.OrderID, len(rules))
 
 	return c.Status(200).JSON(fiber.Map{
 		"payment_id":  req.PaymentID,
@@ -68,27 +68,8 @@ func ProcessSplit(c *fiber.Ctx) error {
 	})
 }
 
+// notifySplitToOrderQueue — stub mantido para compatibilidade.
+// RabbitMQ foi removido. O monolito gerencia filas via Redis.
 func notifySplitToOrderQueue(orderID, paymentID string, rules []models.SplitRule) {
-	queueName := os.Getenv("RABBIT_ORDER_QUEUE")
-	if queueName == "" {
-		return
-	}
-
-	msg := map[string]interface{}{
-		"order_id":     orderID,
-		"payment_id":   paymentID,
-		"status":       "PAYMENT_SPLIT",
-		"split_rules":  rules,
-		"processed_at": time.Now().Format(time.RFC3339),
-	}
-
-	body, err := json.Marshal(msg)
-	if err != nil {
-		log.Printf("Failed to marshal split notification: %v", err)
-		return
-	}
-
-	if err := publishToOrderQueue(body); err != nil {
-		log.Printf("Failed to publish split notification: %v", err)
-	}
+	log.Printf("[SPLIT] Notificacao de split: order=%s payment=%s (RabbitMQ removido, ignora)", orderID, paymentID)
 }

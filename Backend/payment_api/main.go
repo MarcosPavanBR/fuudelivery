@@ -3,15 +3,12 @@ package main
 import (
 	"encoding/json"
 	"log"
-	"os"
 	"strconv"
 	"sync"
-	"time"
 
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/joho/godotenv"
-	"github.com/streadway/amqp"
 
 	"github.com/carloshomar/vercardapio/payment_api/app/models"
 	"github.com/carloshomar/vercardapio/payment_api/app/routes"
@@ -37,7 +34,9 @@ func main() {
 	}
 
 	go startHTTPServer()
-	startQueueListener()
+
+	// NOTA: Fila RabbitMQ removida. O monolito gerencia filas via Redis.
+	log.Println("[PAYMENT_API] RabbitMQ removido — usando HTTP direto via monolito")
 
 	<-make(chan struct{})
 }
@@ -81,6 +80,7 @@ func startHTTPServer() {
 			}
 			log.Printf("recv: %s", msg)
 
+			// Echo message back to client
 			if err = c.WriteMessage(mt, msg); err != nil {
 				log.Println("write:", err)
 				break
@@ -93,69 +93,20 @@ func startHTTPServer() {
 	app.Listen(":3000")
 }
 
-func startQueueListener() {
-	dsn := os.Getenv("RABBIT_CONNECTION")
-	queueName := os.Getenv("RABBIT_PAYMENT_QUEUE")
-
-	var conn *amqp.Connection
-	var err error
-	for {
-		conn, err = amqp.Dial(dsn)
-		if err == nil {
-			break
-		}
-		log.Printf("Erro ao conectar ao servidor de mensagens: %s. Tentando novamente em 5 segundos...", err)
-		time.Sleep(5 * time.Second)
-	}
-	defer conn.Close()
-
-	ch, err := conn.Channel()
-	if err != nil {
-		log.Fatalf("Erro ao abrir canal: %s", err)
-	}
-	defer ch.Close()
-
-	queue, err := ch.QueueDeclare(
-		queueName,
-		true,
-		false,
-		false,
-		false,
-		nil,
-	)
-	if err != nil {
-		log.Fatalf("Erro ao declarar a fila: %s", err)
+// processPaymentMessage — stub para compatibilidade com testes.
+func processPaymentMessage(msgBody []byte) {
+	var paymentMsg map[string]interface{}
+	if err := json.Unmarshal(msgBody, &paymentMsg); err != nil {
+		log.Printf("Erro ao decodificar mensagem: %s", err)
+		return
 	}
 
-	for {
-		msgs, err := ch.Consume(
-			queue.Name,
-			"",
-			true,
-			false,
-			false,
-			false,
-			nil,
-		)
-		if err != nil {
-			log.Fatalf("Erro ao registrar o consumidor: %s", err)
-		}
+	log.Printf("Mensagem de pagamento processada (RabbitMQ removido): %s", string(msgBody))
 
-		for msg := range msgs {
-			var paymentMsg map[string]interface{}
-			if err := json.Unmarshal(msg.Body, &paymentMsg); err != nil {
-				log.Printf("Erro ao decodificar mensagem: %s", err)
-				continue
-			}
-
-			log.Printf("Mensagem recebida da fila %s: %s", queueName, string(msg.Body))
-
-			// Notify connected WebSocket clients about payment status update
-			clientsMu.Lock()
-			for _, client := range clients {
-				client.WriteMessage(websocket.TextMessage, msg.Body)
-			}
-			clientsMu.Unlock()
-		}
+	// Notify connected WebSocket clients
+	clientsMu.Lock()
+	for _, client := range clients {
+		client.WriteMessage(websocket.TextMessage, msgBody)
 	}
+	clientsMu.Unlock()
 }

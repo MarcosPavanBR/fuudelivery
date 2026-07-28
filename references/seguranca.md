@@ -1,19 +1,21 @@
 # Segurança — FuuDelivery
 
+> **Última atualização:** 2026-07-27
+
 ## 🔴 Prioridade 0 — Exposição de Credenciais
 
-O arquivo `.fuudelivery-config/CREDENTIALS.md` foi commitado no repositório público junto com `Frontend/WebRestaurant/.env`. Isso expõe:
+O arquivo `.fuudelivery-config/CREDENTIALS.md` foi commitado no repositório público. O arquivo foi removido do tracking, **mas o conteúdo permanece no histórico do git**.
 
-| Credencial | Serviço | Risco |
+| Credencial | Serviço | Status |
 |---|---|---|
-| MongoDB Atlas password | Banco de dados | Acesso total ao banco de produção |
-| Redis password | Fila/pubsub | Manipulação de filas e cache |
-| Supabase password | PostgreSQL | Acesso total ao banco relacional |
-| AbacatePay API Key | Gateway de pagamento | Transações financeiras |
-| AbacatePay Webhook Secret | Webhooks | Falsificação de webhooks |
-| JWT Secret | Autenticação | Forjar tokens de qualquer usuário |
-| Render API Token | Deploy | Deploy/destroy de serviços |
-| Admin password (`123456`) | Login admin | Conta admin comprometida |
+| MongoDB Atlas password | Banco de dados | ⚠️ Precisa rotação |
+| Redis password | Fila/pubsub | ✅ Gerenciado pelo Render |
+| Supabase password | PostgreSQL | ⚠️ Precisa rotação |
+| AbacatePay API Key | Gateway de pagamento | ⚠️ Precisa rotação |
+| AbacatePay Webhook Secret | Webhooks | ⚠️ Precisa rotação |
+| JWT Secret | Autenticação | ✅ Configurado (log.Fatal se vazio) |
+| Render API Token | Deploy | ⚠️ Exposto em scripts/set-render-env.sh |
+| Admin password | Login admin | ✅ Configurado via Render API |
 
 ### Guia Completo de Rotação de Credenciais
 
@@ -142,77 +144,38 @@ O repositório `github.com/MarcosPavanBR/fuudelivery` é público. Considere:
 - [ ] .env removido do histórico do git (BFG)
 - [ ] Todas as credenciais rotacionadas (Atlas, Supabase, Redis, AbacatePay, JWT, Render)
 - [ ] Senha do admin alterada para forte (16+ caracteres)
-- [ ] Rate limiting em login, registro e pagamento (PENDENTE — ver task #4)
-- [ ] govulncheck e npm audit no CI (✅ Implementado)
+- [x] Rate limiting em login, registro e pagamento (✅ Implementado — ver seção abaixo)
+- [x] govulncheck e npm audit no CI (✅ Implementado)
 - [ ] Repo verified como público (ou tornar privado)
 - [ ] Nenhum `.env` com credenciais de produção commitado
 
 ---
 
-## P1 — Rate Limiting (PENDENTE)
+## P1 — Rate Limiting (✅ Implementado)
 
-### Rotas que precisam de rate limiting
+### Implementação atual
 
-| Rota | Método | Limite sugerido | Justificativa |
+Rate limiting está ativo em dois locais:
+
+1. **Monolito** (`cmd/fuudelivery/main.go`): `rateLimitMiddleware` aplicado em:
+   - `/users/register` — 3 req/min por IP
+   - `/users/login` — 5 req/min por IP
+   - `/admin/bootstrap` — 3 req/min por IP
+   - `/payments/webhook` — 100 req/min por IP
+
+2. **Payment Service** (`Backend/Payment/middleware/ratelimit.go`): Token bucket para:
+   - Login: 5 req/min por IP
+   - Pagamento: 10 req/min por user
+
+### Rotas com rate limiting
+
+| Rota | Método | Limite | Local |
 |---|---|---|---|
-| `/auth/login` | POST | 5 req/min por IP | Brute force |
-| `/auth/register` | POST | 3 req/min por IP | Spam de contas |
-| `/payments/create` | POST | 10 req/min por user | Fraude |
-| `/payments/webhook` | POST | 100 req/min por IP | AbacatePay retry |
-| `/wallets/*/credit` | POST | 20 req/min por user | Manipulação de saldo |
-| `/wallets/*/debit` | POST | 20 req/min por user | Manipulação de saldo |
-
-### Implementação sugerida (Go + Fiber)
-
-```go
-// middleware/ratelimit.go
-package middleware
-
-import (
-    "time"
-    "github.com/gofiber/fiber/v2"
-    "github.com/gofiber/fiber/v2/middleware/limiter"
-)
-
-// LoginRateLimit limita tentativas de login por IP
-func LoginRateLimit() fiber.Handler {
-    return limiter.New(limiter.Config{
-        Max:        5,
-        Expiration: 1 * time.Minute,
-        KeyGenerator: func(c *fiber.Ctx) string {
-            return c.IP()
-        },
-        LimitReached: func(c *fiber.Ctx) error {
-            return c.Status(429).JSON(fiber.Map{
-                "error": "Muitas tentativas de login. Tente novamente em 1 minuto.",
-            })
-        },
-    })
-}
-
-// PaymentRateLimit limita operações de pagamento por usuário
-func PaymentRateLimit() fiber.Handler {
-    return limiter.New(limiter.Config{
-        Max:        10,
-        Expiration: 1 * time.Minute,
-        KeyGenerator: func(c *fiber.Ctx) string {
-            userID, _ := c.Locals("user_id").(string)
-            return userID
-        },
-        LimitReached: func(c *fiber.Ctx) error {
-            return c.Status(429).JSON(fiber.Map{
-                "error": "Limite de operações excedido.",
-            })
-        },
-    })
-}
-```
-
-### Dependência necessária
-
-```bash
-go get github.com/gofiber/fiber/v2/middleware/limiter
-```
+| `/users/login` | POST | 5 req/min por IP | Monolito |
+| `/users/register` | POST | 3 req/min por IP | Monolito |
+| `/admin/bootstrap` | POST | 3 req/min por IP | Monolito |
+| `/payments/webhook` | POST | 100 req/min por IP | Monolito |
+| `/payments/create` | POST | 10 req/min por user | Payment Service |
 
 ---
 
@@ -240,4 +203,4 @@ Roda para: WebRestaurant, WebAdmin, PaymentPanel
 
 ---
 
-*Última atualização: 2026-07-26*
+*Última atualização: 2026-07-27*

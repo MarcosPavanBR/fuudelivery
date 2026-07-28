@@ -8,7 +8,9 @@ import React, {
   ReactNode,
 } from "react";
 import * as SecureStore from "expo-secure-store";
+import { Alert } from "react-native";
 import LoadingPage from "@/components/LoadingPage";
+import { jwtDecode } from "jwt-decode";
 
 interface UserData {
   id?: number;
@@ -37,9 +39,7 @@ interface ApiProviderProps {
 
 function decodeJWT(token: string): UserData | null {
   try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+    const payload: any = jwtDecode(token);
     return {
       id: payload.id,
       name: payload.name,
@@ -48,7 +48,8 @@ function decodeJWT(token: string): UserData | null {
       role: payload.role,
       establishment_id: payload.establishment_id,
     };
-  } catch {
+  } catch (e) {
+    console.error("Failed to decode JWT:", e);
     return null;
   }
 }
@@ -98,7 +99,8 @@ export const ApiProvider: React.FC<ApiProviderProps> = ({ children }) => {
       try {
         const decoded = decodeJWT(tokenValue);
         if (!decoded) {
-          console.error("Invalid JWT token");
+          console.error("Invalid JWT token - decode failed");
+          Alert.alert("Erro", "Não foi possível validar o token. Tente novamente.");
           return;
         }
 
@@ -116,6 +118,7 @@ export const ApiProvider: React.FC<ApiProviderProps> = ({ children }) => {
         }
       } catch (error) {
         console.error("Error storing token:", error);
+        Alert.alert("Erro", "Falha ao salvar sessão. Tente novamente.");
       }
     }
   };

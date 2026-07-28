@@ -151,6 +151,9 @@ function formatDate(dataString: string) {
   }
 }
 
+export const getApiUrl = () =>
+  process.env.EXPO_PUBLIC_API_URL || "https://fuudelivery-api-8y6l.onrender.com";
+
 export default {
   formatCurrency,
   formatDate,
@@ -161,7 +164,5 @@ export default {
   calcularDistancia,
   orderByImage,
   getLocationDistance,
+  getApiUrl,
 };
-
-export const getApiUrl = () => 
-  process.env.EXPO_PUBLIC_API_URL || "https://fuudelivery-api-8y6l.onrender.com";

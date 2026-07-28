@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="pt-BBR">
+<html lang="pt-BR">
 <head>
   <!-- FuuPayment Panel — Painel de gestao de pagamentos standalone -->
-  <!-- Funcionalidades: Login, Dashboard, Tabela de pagamentos, Modal de detalhes -->
+  <!-- Funcionalidades: Login, Dashboard, Tabela de pagamentos, Chargebacks, Carteiras -->
   <!-- Conecta ao Payment Service via REST API (fuudelivery-payment.onrender.com) -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,69 +10,99 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0f; color: #e0e0e0; }
-    
+
     .login-screen { display: flex; justify-content: center; align-items: center; min-height: 100vh; }
     .login-box { background: #1a1a2e; padding: 40px; border-radius: 12px; width: 400px; }
-    .login-box h1 { color: #00ff88; margin-bottom: 20px; text-align: center; }
-    .login-box input { width: 100%; padding: 12px; margin: 8px 0; background: #16213e; border: 1px solid #333; border-radius: 6px; color: #fff; }
-    .login-box button { width: 100%; padding: 12px; background: #00ff88; color: #000; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
-    
+    .login-box h1 { color: #00ff88; margin-bottom: 20px; text-align: center; font-size: 28px; }
+    .login-box input { width: 100%; padding: 12px; margin: 8px 0; background: #16213e; border: 1px solid #333; border-radius: 6px; color: #fff; font-size: 14px; }
+    .login-box button { width: 100%; padding: 12px; background: #00ff88; color: #000; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 16px; margin-top: 8px; }
+    .login-box button:hover { background: #00cc6a; }
+    .login-box .error { color: #ff4444; font-size: 13px; margin-top: 8px; display: none; }
+
     .app { display: none; }
     .header { background: #1a1a2e; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; }
     .header h1 { color: #00ff88; font-size: 20px; }
-    .header button { background: #ff4444; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; }
-    
+    .header .user-info { display: flex; align-items: center; gap: 12px; }
+    .header .user-info span { color: #888; font-size: 14px; }
+    .header button { background: #ff4444; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+    .header button:hover { background: #cc3333; }
+
     .tabs { display: flex; background: #16213e; border-bottom: 1px solid #333; }
-    .tab { padding: 12px 24px; cursor: pointer; border-bottom: 2px solid transparent; }
+    .tab { padding: 12px 24px; cursor: pointer; border-bottom: 2px solid transparent; color: #888; font-size: 14px; font-weight: 500; transition: all 0.2s; }
+    .tab:hover { color: #ccc; }
     .tab.active { border-bottom-color: #00ff88; color: #00ff88; }
-    
+
     .content { padding: 24px; }
-    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
-    .stat-card { background: #1a1a2e; padding: 20px; border-radius: 8px; }
-    .stat-card h3 { color: #888; font-size: 14px; margin-bottom: 8px; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: #1a1a2e; padding: 20px; border-radius: 8px; border: 1px solid #222; }
+    .stat-card h3 { color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
     .stat-card .value { font-size: 28px; font-weight: bold; }
     .stat-card .value.green { color: #00ff88; }
     .stat-card .value.red { color: #ff4444; }
     .stat-card .value.yellow { color: #ffaa00; }
-    
-    .table-container { background: #1a1a2e; border-radius: 8px; overflow: hidden; }
+    .stat-card .value.blue { color: #4488ff; }
+
+    .table-container { background: #1a1a2e; border-radius: 8px; overflow: hidden; border: 1px solid #222; }
     table { width: 100%; border-collapse: collapse; }
-    th { background: #16213e; padding: 12px; text-align: left; font-size: 14px; color: #888; }
-    td { padding: 12px; border-bottom: 1px solid #333; }
+    th { background: #16213e; padding: 12px 16px; text-align: left; font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+    td { padding: 12px 16px; border-bottom: 1px solid #222; font-size: 14px; }
     tr:hover { background: #16213e; }
-    
-    .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
-    .badge.pending { background: #ffaa0033; color: #ffaa00; }
-    .badge.approved { background: #00ff8833; color: #00ff88; }
-    .badge.rejected { background: #ff444433; color: #ff4444; }
-    .badge.high { background: #ff444433; color: #ff4444; }
-    .badge.critical { background: #ff000033; color: #ff0000; }
-    
-    .btn { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin: 2px; }
+    .empty-state { text-align: center; padding: 48px; color: #666; }
+    .empty-state p { margin-top: 8px; font-size: 14px; }
+
+    .badge { padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; display: inline-block; }
+    .badge.pending { background: #ffaa0022; color: #ffaa00; border: 1px solid #ffaa0044; }
+    .badge.approved { background: #00ff8822; color: #00ff88; border: 1px solid #00ff8844; }
+    .badge.rejected { background: #ff444422; color: #ff4444; border: 1px solid #ff444444; }
+    .badge.completed { background: #4488ff22; color: #4488ff; border: 1px solid #4488ff44; }
+    .badge.open { background: #ffaa0022; color: #ffaa00; border: 1px solid #ffaa0044; }
+    .badge.closed { background: #66666622; color: #888; border: 1px solid #66666644; }
+    .badge.high { background: #ff444422; color: #ff4444; border: 1px solid #ff444444; }
+    .badge.critical { background: #ff000022; color: #ff0000; border: 1px solid #ff000044; }
+    .badge.low { background: #00ff8822; color: #00ff88; border: 1px solid #00ff8844; }
+    .badge.medium { background: #ffaa0022; color: #ffaa00; border: 1px solid #ffaa0044; }
+
+    .btn { padding: 6px 14px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; margin: 2px; transition: opacity 0.2s; }
+    .btn:hover { opacity: 0.85; }
     .btn-approve { background: #00ff88; color: #000; }
     .btn-reject { background: #ff4444; color: #fff; }
-    
-    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); justify-content: center; align-items: center; }
-    .modal-content { background: #1a1a2e; padding: 24px; border-radius: 12px; width: 500px; }
-    .modal-content h2 { margin-bottom: 16px; }
-    .modal-content input, .modal-content textarea { width: 100%; padding: 10px; margin: 8px 0; background: #16213e; border: 1px solid #333; border-radius: 6px; color: #fff; }
+    .btn-details { background: #333; color: #ccc; }
+    .btn-renew { background: #4488ff; color: #fff; }
+
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); justify-content: center; align-items: center; z-index: 100; }
+    .modal-content { background: #1a1a2e; padding: 28px; border-radius: 12px; width: 500px; border: 1px solid #333; }
+    .modal-content h2 { margin-bottom: 16px; color: #fff; }
+    .modal-content input, .modal-content textarea, .modal-content select {
+      width: 100%; padding: 10px 12px; margin: 6px 0; background: #16213e; border: 1px solid #333;
+      border-radius: 6px; color: #fff; font-size: 14px;
+    }
+    .modal-content label { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-top: 8px; display: block; }
     .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
+    .modal-actions .btn { padding: 10px 20px; font-size: 14px; }
+
+    .loading { text-align: center; padding: 48px; color: #666; }
+    .loading::after { content: ''; display: inline-block; width: 20px; height: 20px; border: 2px solid #333; border-top-color: #00ff88; border-radius: 50%; animation: spin 0.8s linear infinite; margin-left: 8px; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
   <div class="login-screen" id="loginScreen">
     <div class="login-box">
       <h1>FuuPayment</h1>
-      <input type="email" id="email" placeholder="Email">
-      <input type="password" id="password" placeholder="Password">
+      <input type="email" id="email" placeholder="Email" autocomplete="email">
+      <input type="password" id="password" placeholder="Password" autocomplete="current-password">
       <button onclick="login()">Entrar</button>
+      <div class="error" id="loginError"></div>
     </div>
   </div>
 
   <div class="app" id="app">
     <div class="header">
       <h1>FuuPayment Panel</h1>
-      <button onclick="logout()">Sair</button>
+      <div class="user-info">
+        <span id="userEmail"></span>
+        <button onclick="logout()">Sair</button>
+      </div>
     </div>
     <div class="tabs">
       <div class="tab active" onclick="showTab('payments')">Pagamentos</div>
@@ -82,13 +112,28 @@
     <div class="content" id="content"></div>
   </div>
 
+  <!-- Reject Modal -->
   <div class="modal" id="rejectModal">
     <div class="modal-content">
       <h2>Rejeitar Pagamento</h2>
-      <textarea id="rejectReason" placeholder="Motivo da rejeição" rows="4"></textarea>
+      <label>Motivo</label>
+      <textarea id="rejectReason" placeholder="Descreva o motivo da rejeicao..." rows="4"></textarea>
       <div class="modal-actions">
-        <button class="btn btn-reject" onclick="confirmReject()">Confirmar</button>
-        <button class="btn" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-reject" onclick="confirmReject()">Confirmar Rejeicao</button>
+        <button class="btn btn-details" onclick="closeModal()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chargeback Detail Modal -->
+  <div class="modal" id="chargebackModal">
+    <div class="modal-content">
+      <h2>Detalhes do Chargeback</h2>
+      <div id="chargebackDetails"></div>
+      <div class="modal-actions">
+        <button class="btn btn-approve" id="cbApproveBtn" onclick="resolveChargeback('approved')">Aprovar</button>
+        <button class="btn btn-reject" id="cbRejectBtn" onclick="resolveChargeback('rejected')">Rejeitar</button>
+        <button class="btn btn-details" onclick="closeChargebackModal()">Fechar</button>
       </div>
     </div>
   </div>
@@ -98,21 +143,30 @@
     // FuuPayment Panel — Cliente JavaScript
     // =====================================================
 
-    // URL base do Payment Service (detecta automaticamente localhost vs producao)
-    const API_URL = window.location.hostname === 'localhost' ? 'http://localhost:8084' : 'https://fuudelivery-payment.onrender.com';
-    let token = '';       // Token JWT para autenticacao
-    let currentTab = 'payments';  // Aba ativa
-    let pendingRejectId = null;   // ID do pagamento pendente de rejeicao
+    const API_URL = window.location.hostname === 'localhost'
+      ? 'http://localhost:8084'
+      : 'https://fuudelivery-payment.onrender.com';
 
-    /**
-     * login() — Autentica o usuario via API.
-     * Envia email/senha para POST /api/auth/login.
-     * Se sucesso, esconde tela de login e carrega aba de pagamentos.
-     */
+    let token = '';
+    let currentUser = null;
+    let currentTab = 'payments';
+    let pendingRejectId = null;
+    let pendingChargebackId = null;
+
+    // === AUTH ===
+
     async function login() {
       const email = document.getElementById('email').value;
       const password = document.getElementById('password').value;
-      
+      const errEl = document.getElementById('loginError');
+      errEl.style.display = 'none';
+
+      if (!email || !password) {
+        errEl.textContent = 'Preencha email e senha';
+        errEl.style.display = 'block';
+        return;
+      }
+
       try {
         const resp = await fetch(`${API_URL}/api/auth/login`, {
           method: 'POST',
@@ -122,87 +176,107 @@
         const data = await resp.json();
         if (data.token) {
           token = data.token;
+          currentUser = data.user || { email };
           document.getElementById('loginScreen').style.display = 'none';
           document.getElementById('app').style.display = 'block';
+          document.getElementById('userEmail').textContent = currentUser.email || email;
           loadTab('payments');
+        } else {
+          errEl.textContent = data.error || 'Credenciais invalidas';
+          errEl.style.display = 'block';
         }
       } catch (err) {
-        alert('Erro ao fazer login');
+        errEl.textContent = 'Erro ao conectar ao servidor';
+        errEl.style.display = 'block';
       }
     }
 
-    /** logout() — Limpa token e volta para tela de login */
     function logout() {
       token = '';
+      currentUser = null;
       document.getElementById('loginScreen').style.display = 'flex';
       document.getElementById('app').style.display = 'none';
     }
 
-    /** showTab() — Troca a aba ativa e recarrega o conteudo */
+    // === TABS ===
+
     function showTab(tab) {
       currentTab = tab;
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-      event.target.classList.add('active');
+      document.querySelector(`.tab[onclick="showTab('${tab}')"]`).classList.add('active');
       loadTab(tab);
     }
 
-    /**
-     * loadTab() — Carrega o conteudo da aba selecionada.
-     * Para 'payments': busca stats + lista de pagamentos e renderiza tabela.
-     * Para 'chargebacks' e 'wallets': placeholder (em breve).
-     */
     async function loadTab(tab) {
       const content = document.getElementById('content');
-      
-      if (tab === 'payments') {
-        const statsResp = await fetch(`${API_URL}/api/payments/stats`, { headers: { 'Authorization': `Bearer ${token}` } });
-        const stats = await statsResp.json();
-        
-        content.innerHTML = `
-          <div class="stats">
-            <div class="stat-card"><h3>Total</h3><div class="value">${stats.total || 0}</div></div>
-            <div class="stat-card"><h3>Pendentes</h3><div class="value yellow">${stats.pending || 0}</div></div>
-            <div class="stat-card"><h3>Aprovados</h3><div class="value green">${stats.approved || 0}</div></div>
-            <div class="stat-card"><h3>Rejeitados</h3><div class="value red">${stats.rejected || 0}</div></div>
-            <div class="stat-card"><h3>Alto Risco</h3><div class="value red">${stats.high_risk || 0}</div></div>
-          </div>
-          <div class="table-container">
-            <table>
-              <thead><tr><th>Pedido</th><th>Cliente</th><th>Valor</th><th>Risco</th><th>Status</th><th>Ações</th></tr></thead>
-              <tbody id="paymentsTable"></tbody>
-            </table>
-          </div>
-        `;
-        
-        const listResp = await fetch(`${API_URL}/api/payments/?limit=50`, { headers: { 'Authorization': `Bearer ${token}` } });
-        const listData = await listResp.json();
-        const tbody = document.getElementById('paymentsTable');
-        
-        (listData.payments || []).forEach(p => {
-          const tr = document.createElement('tr');
-          tr.innerHTML = `
-            <td>${p.order_id}</td>
-            <td>${p.customer_name || p.customer_id}</td>
-            <td>R$ ${p.amount.toFixed(2)}</td>
-            <td><span class="badge ${p.risk_level}">${p.risk_level}</span></td>
-            <td><span class="badge ${p.status}">${p.status}</span></td>
-            <td>
-              ${p.status === 'pending' ? `
-                <button class="btn btn-approve" onclick="approvePayment('${p.id}')">Aprovar</button>
-                <button class="btn btn-reject" onclick="showRejectModal('${p.id}')">Rejeitar</button>
-              ` : '-'}
-            </td>
-          `;
-          tbody.appendChild(tr);
-        });
-      } else if (tab === 'chargebacks') {
-        content.innerHTML = '<p>Chargebacks em breve...</p>';
-      } else if (tab === 'wallets') {
-        content.innerHTML = '<p>Carteiras em breve...</p>';
+      content.innerHTML = '<div class="loading">Carregando</div>';
+
+      try {
+        if (tab === 'payments') await renderPayments(content);
+        else if (tab === 'chargebacks') await renderChargebacks(content);
+        else if (tab === 'wallets') await renderWallets(content);
+      } catch (err) {
+        content.innerHTML = `<div class="empty-state"><p>Erro ao carregar dados: ${err.message}</p></div>`;
       }
     }
 
-    /** approvePayment() — Aprova um pagamento via POST /api/payments/:id/approve */
+    // === PAYMENTS TAB ===
+
+    async function renderPayments(content) {
+      const [statsResp, listResp] = await Promise.all([
+        fetch(`${API_URL}/api/payments/stats`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_URL}/api/payments/?limit=100`, { headers: { 'Authorization': `Bearer ${token}` } })
+      ]);
+      const stats = await statsResp.json();
+      const listData = await listResp.json();
+      const payments = listData.payments || listData || [];
+
+      content.innerHTML = `
+        <div class="stats">
+          <div class="stat-card"><h3>Total</h3><div class="value">${stats.total || payments.length || 0}</div></div>
+          <div class="stat-card"><h3>Pendentes</h3><div class="value yellow">${stats.pending || 0}</div></div>
+          <div class="stat-card"><h3>Aprovados</h3><div class="value green">${stats.approved || 0}</div></div>
+          <div class="stat-card"><h3>Rejeitados</h3><div class="value red">${stats.rejected || 0}</div></div>
+          <div class="stat-card"><h3>Alto Risco</h3><div class="value red">${stats.high_risk || 0}</div></div>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead><tr><th>Pedido</th><th>Cliente</th><th>Valor</th><th>Risco</th><th>Status</th><th>Data</th><th>Acoes</th></tr></thead>
+            <tbody id="paymentsTable"></tbody>
+          </table>
+        </div>
+      `;
+
+      const tbody = document.getElementById('paymentsTable');
+      if (payments.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nenhum pagamento encontrado</td></tr>';
+        return;
+      }
+
+      payments.forEach(p => {
+        const tr = document.createElement('tr');
+        const amount = typeof p.amount === 'number' ? p.amount.toFixed(2) : (p.amount || '0.00');
+        const riskLevel = p.risk_level || 'low';
+        const status = p.status || 'pending';
+        const date = p.created_at ? new Date(p.created_at).toLocaleDateString('pt-BR') : '-';
+        tr.innerHTML = `
+          <td style="font-family:monospace">${p.order_id || p.id || '-'}</td>
+          <td>${p.customer_name || p.customer_id || '-'}</td>
+          <td style="font-weight:600">R$ ${amount}</td>
+          <td><span class="badge ${riskLevel}">${riskLevel}</span></td>
+          <td><span class="badge ${status}">${status}</span></td>
+          <td style="color:#888">${date}</td>
+          <td>
+            ${status === 'pending' ? `
+              <button class="btn btn-approve" onclick="approvePayment('${p.id}')">Aprovar</button>
+              <button class="btn btn-reject" onclick="showRejectModal('${p.id}')">Rejeitar</button>
+            ` : '<span style="color:#666">-</span>'}
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
     async function approvePayment(id) {
       await fetch(`${API_URL}/api/payments/${id}/approve`, {
         method: 'POST',
@@ -211,19 +285,17 @@
       loadTab(currentTab);
     }
 
-    /** showRejectModal() — Abre modal para informar motivo da rejeicao */
     function showRejectModal(id) {
       pendingRejectId = id;
+      document.getElementById('rejectReason').value = '';
       document.getElementById('rejectModal').style.display = 'flex';
     }
 
-    /** closeModal() — Fecha modal de rejeicao e limpa estado */
     function closeModal() {
       document.getElementById('rejectModal').style.display = 'none';
       pendingRejectId = null;
     }
 
-    /** confirmReject() — Envia rejeicao com motivo via POST /api/payments/:id/reject */
     async function confirmReject() {
       if (!pendingRejectId) return;
       const reason = document.getElementById('rejectReason').value;
@@ -235,6 +307,204 @@
       closeModal();
       loadTab(currentTab);
     }
+
+    // === CHARGEBACKS TAB ===
+
+    async function renderChargebacks(content) {
+      let chargebacks = [];
+      try {
+        const resp = await fetch(`${API_URL}/api/chargebacks?limit=100`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          chargebacks = data.chargebacks || data || [];
+          if (!Array.isArray(chargebacks)) chargebacks = [];
+        }
+      } catch (e) {
+        // Payment service may be offline
+      }
+
+      const pending = chargebacks.filter(c => c.status === 'pending').length;
+      const approved = chargebacks.filter(c => c.status === 'approved').length;
+      const rejected = chargebacks.filter(c => c.status === 'rejected').length;
+
+      content.innerHTML = `
+        <div class="stats">
+          <div class="stat-card"><h3>Total</h3><div class="value">${chargebacks.length}</div></div>
+          <div class="stat-card"><h3>Pendentes</h3><div class="value yellow">${pending}</div></div>
+          <div class="stat-card"><h3>Aprovados</h3><div class="value green">${approved}</div></div>
+          <div class="stat-card"><h3>Rejeitados</h3><div class="value red">${rejected}</div></div>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead><tr><th>ID</th><th>Pedido</th><th>Cliente</th><th>Valor</th><th>Motivo</th><th>Status</th><th>Data</th><th>Acoes</th></tr></thead>
+            <tbody id="chargebacksTable"></tbody>
+          </table>
+        </div>
+      `;
+
+      const tbody = document.getElementById('chargebacksTable');
+      if (chargebacks.length === 0) {
+        tbody.innerHTML = `
+          <tr><td colspan="8" class="empty-state">
+            <p>Nenhum chargeback registrado</p>
+          </td></tr>
+        `;
+        return;
+      }
+
+      chargebacks.forEach(cb => {
+        const tr = document.createElement('tr');
+        const amount = typeof cb.amount === 'number' ? cb.amount.toFixed(2) : (cb.amount || '0.00');
+        const status = cb.status || 'pending';
+        const date = cb.created_at ? new Date(cb.created_at).toLocaleDateString('pt-BR') : '-';
+        tr.innerHTML = `
+          <td style="font-family:monospace;font-size:12px">${(cb.id || '').substring(0, 8)}</td>
+          <td style="font-family:monospace">${cb.order_id || '-'}</td>
+          <td>${cb.customer_name || cb.customer_id || '-'}</td>
+          <td style="font-weight:600">R$ ${amount}</td>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${cb.reason || '-'}</td>
+          <td><span class="badge ${status}">${status}</span></td>
+          <td style="color:#888">${date}</td>
+          <td>
+            ${status === 'pending' ? `
+              <button class="btn btn-details" onclick="showChargebackDetail('${cb.id}')">Detalhes</button>
+            ` : '<span style="color:#666">-</span>'}
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function showChargebackDetail(id) {
+      pendingChargebackId = id;
+      const detailsEl = document.getElementById('chargebackDetails');
+      detailsEl.innerHTML = '<div class="loading">Carregando</div>';
+      document.getElementById('chargebackModal').style.display = 'flex';
+      document.getElementById('cbApproveBtn').style.display = 'inline-block';
+      document.getElementById('cbRejectBtn').style.display = 'inline-block';
+
+      fetch(`${API_URL}/api/chargebacks/${id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      }).then(r => r.json()).then(cb => {
+        detailsEl.innerHTML = `
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+            <div><label style="color:#888;font-size:12px">Pedido</label><p style="font-family:monospace">${cb.order_id || '-'}</p></div>
+            <div><label style="color:#888;font-size:12px">Cliente</label><p>${cb.customer_name || cb.customer_id || '-'}</p></div>
+            <div><label style="color:#888;font-size:12px">Valor</label><p style="font-weight:600">R$ ${(cb.amount || 0).toFixed(2)}</p></div>
+            <div><label style="color:#888;font-size:12px">Status</label><p><span class="badge ${cb.status}">${cb.status || 'pending'}</span></p></div>
+          </div>
+          <div style="margin-bottom:12px">
+            <label style="color:#888;font-size:12px">Motivo do Chargeback</label>
+            <p style="background:#16213e;padding:12px;border-radius:6px;margin-top:4px">${cb.reason || 'Nao informado'}</p>
+          </div>
+          ${cb.evidence ? `
+            <div>
+              <label style="color:#888;font-size:12px">Evidencias</label>
+              <p style="background:#16213e;padding:12px;border-radius:6px;margin-top:4px">${cb.evidence}</p>
+            </div>
+          ` : ''}
+        `;
+        if (cb.status !== 'pending') {
+          document.getElementById('cbApproveBtn').style.display = 'none';
+          document.getElementById('cbRejectBtn').style.display = 'none';
+        }
+      }).catch(() => {
+        detailsEl.innerHTML = '<p style="color:#ff4444">Erro ao carregar detalhes</p>';
+      });
+    }
+
+    async function resolveChargeback(status) {
+      if (!pendingChargebackId) return;
+      const reason = status === 'rejected' ? prompt('Motivo da rejeicao:') : '';
+      if (status === 'rejected' && !reason) return;
+
+      await fetch(`${API_URL}/api/chargebacks/${pendingChargebackId}/${status === 'approved' ? 'approve' : 'reject'}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason, resolved_by: currentUser?.email || 'admin' })
+      });
+      closeChargebackModal();
+      loadTab(currentTab);
+    }
+
+    function closeChargebackModal() {
+      document.getElementById('chargebackModal').style.display = 'none';
+      pendingChargebackId = null;
+    }
+
+    // === WALLETS TAB ===
+
+    async function renderWallets(content) {
+      let wallets = [];
+      try {
+        const resp = await fetch(`${API_URL}/api/wallets?limit=100`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          wallets = data.wallets || data || [];
+          if (!Array.isArray(wallets)) wallets = [];
+        }
+      } catch (e) {
+        // Payment service may be offline
+      }
+
+      const totalBalance = wallets.reduce((sum, w) => sum + (w.balance || 0), 0);
+      const activeWallets = wallets.filter(w => (w.balance || 0) > 0).length;
+
+      content.innerHTML = `
+        <div class="stats">
+          <div class="stat-card"><h3>Total Carteiras</h3><div class="value">${wallets.length}</div></div>
+          <div class="stat-card"><h3>Com Saldo</h3><div class="value green">${activeWallets}</div></div>
+          <div class="stat-card"><h3>Saldo Total</h3><div class="value blue">R$ ${totalBalance.toFixed(2)}</div></div>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead><tr><th>ID</th><th>Usuario</th><th>Tipo</th><th>Saldo</th><th>Criada em</th></tr></thead>
+            <tbody id="walletsTable"></tbody>
+          </table>
+        </div>
+      `;
+
+      const tbody = document.getElementById('walletsTable');
+      if (wallets.length === 0) {
+        tbody.innerHTML = `
+          <tr><td colspan="5" class="empty-state">
+            <p>Nenhuma carteira encontrada</p>
+          </td></tr>
+        `;
+        return;
+      }
+
+      wallets.forEach(w => {
+        const tr = document.createElement('tr');
+        const balance = typeof w.balance === 'number' ? w.balance.toFixed(2) : (w.balance || '0.00');
+        const balanceColor = (w.balance || 0) > 0 ? 'green' : '';
+        const typeName = w.user_type === 'customer' ? 'Cliente' : w.user_type === 'establishment' ? 'Restaurante' : w.user_type === 'courier' ? 'Entregador' : (w.user_type || '-');
+        const date = w.created_at ? new Date(w.created_at).toLocaleDateString('pt-BR') : '-';
+        tr.innerHTML = `
+          <td style="font-family:monospace;font-size:12px">${(w.id || '').substring(0, 8)}</td>
+          <td>${w.user_name || w.user_id || '-'}</td>
+          <td><span class="badge ${w.user_type === 'customer' ? 'approved' : w.user_type === 'courier' ? 'pending' : 'completed'}">${typeName}</span></td>
+          <td style="font-weight:600" class="${balanceColor}">R$ ${balance}</td>
+          <td style="color:#888">${date}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // === KEYBOARD SHORTCUTS ===
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeModal();
+        closeChargebackModal();
+      }
+      if (e.key === 'Enter' && document.getElementById('loginScreen').style.display !== 'none') {
+        login();
+      }
+    });
   </script>
 </body>
 </html>

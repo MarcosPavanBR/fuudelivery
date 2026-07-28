@@ -265,27 +265,27 @@ func initDispatchEngine(db *gorm.DB) {
 			// Converte ZoneMetadata para ZoneInfo
 			zoneInfos := make([]dispatchServices.ZoneInfo, len(zones))
 			for i, z := range zones {
-			// Calcula centroide real a partir dos estabelecimentos da zona
-			var centerLat, centerLng float64
-			if db != nil {
-				var ests []models.Establishment
-				db.Select("lat, long").Where("zone_id = ? AND lat != 0", z.ID).Find(&ests)
-				if len(ests) > 0 {
-					sumLat, sumLng := 0.0, 0.0
-					for _, e := range ests {
-						sumLat += e.Lat
-						sumLng += e.Long
+				// Calcula centroide real a partir dos estabelecimentos da zona
+				var centerLat, centerLng float64
+				if db != nil {
+					var ests []models.Establishment
+					db.Select("lat, long").Where("zone_id = ? AND lat != 0", z.ID).Find(&ests)
+					if len(ests) > 0 {
+						sumLat, sumLng := 0.0, 0.0
+						for _, e := range ests {
+							sumLat += e.Lat
+							sumLng += e.Long
+						}
+						centerLat = sumLat / float64(len(ests))
+						centerLng = sumLng / float64(len(ests))
 					}
-					centerLat = sumLat / float64(len(ests))
-					centerLng = sumLng / float64(len(ests))
 				}
-			}
-			zoneInfos[i] = dispatchServices.ZoneInfo{
-				ID:        z.ID,
-				CenterLat: centerLat,
-				CenterLng: centerLng,
-				RadiusKm:  z.RadiusKm,
-			}
+				zoneInfos[i] = dispatchServices.ZoneInfo{
+					ID:        z.ID,
+					CenterLat: centerLat,
+					CenterLng: centerLng,
+					RadiusKm:  z.RadiusKm,
+				}
 			}
 			courierStore.RecalculateAllDensities(zoneInfos)
 		}
@@ -368,8 +368,8 @@ func (s *splitMetricsProvider) GetMonthlyOrders(zoneID uint) int {
 	}
 	var count int64
 	s.DB.Raw(
-		"SELECT COUNT(*) FROM orders " +
-			"JOIN establishments ON establishments.id = orders.establishment_id " +
+		"SELECT COUNT(*) FROM orders "+
+			"JOIN establishments ON establishments.id = orders.establishment_id "+
 			"WHERE establishments.zone_id = ?", zoneID,
 	).Scan(&count)
 	return int(count)

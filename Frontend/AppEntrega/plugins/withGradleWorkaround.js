@@ -1,27 +1,29 @@
-// Plugin Expo para adicionar workaround do erro Gradle 'release' property
+// Plugin Expo para criar o software component 'release' que o
+// expo-modules-core e react-native precisam para publicar Maven.
+// Sem este plugin, o build Gradle falha com:
+// "Could not get unknown property 'release' for SoftwareComponent container"
 const { withAppBuildGradle } = require("expo/config-plugins");
 
-const withGradleWorkaround = (config) => {
-  return withAppBuildGradle(config, (config) => {
-    const workaround = `
-// WORKAROUND: Fix react-native-maps Gradle error
+const GRADLE_WORKAROUND = `
+// WORKAROUND: Create 'release' software component for expo-modules-core
+// and react-native publishing. Without this, Gradle fails with:
 // "Could not get unknown property 'release' for SoftwareComponent container"
-afterEvaluate {
-    try {
-        publishing {
-            publications {
-                release(MavenPublication) {
-                    from components.release
-                }
-            }
-        }
-    } catch (Exception e) {
-        // Ignore - not all projects have publishing configured
+project.afterEvaluate {
+    def releaseSoftwareComponent = project.components.findByName("release")
+    if (releaseSoftwareComponent == null) {
+        project.components.add(
+            project.objects.newInstance(
+                org.gradle.api.internal.component.DefaultSoftwareComponent,
+                "release"
+            )
+        )
     }
 }`;
 
-    if (!config.modResults.contents.includes("WORKAROUND: Fix react-native-maps")) {
-      config.modResults.contents += workaround;
+const withGradleWorkaround = (config) => {
+  return withAppBuildGradle(config, (config) => {
+    if (!config.modResults.contents.includes("WORKAROUND: Create")) {
+      config.modResults.contents += GRADLE_WORKAROUND;
     }
     return config;
   });

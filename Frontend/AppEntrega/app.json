@@ -45,9 +45,7 @@
         "projectId": "7a618e89-0652-4be6-999c-473fb5054a63"
       }
     },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "1.0.0",
     "owner": "pavanbr"
   }
 }

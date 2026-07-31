@@ -448,3 +448,7 @@ RABBIT_*.env
 
 # Freebuff Desktop
 .freebuff/
+
+# APK build output
+dist-apks/
+.agents/

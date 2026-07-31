@@ -94,8 +94,19 @@ func startHTTPServer() {
 	app.Get("/health", func(c *fiber.Ctx) error {
 		mongoCheck := health.MongoCheck(models.MongoClient)
 		postgresCheck := health.DatabaseCheck(models.DB)
+		status := health.OverallStatus(mongoCheck, postgresCheck)
+		if status != "up" {
+			return c.Status(503).JSON(fiber.Map{
+				"status":  status,
+				"service": "orders_api",
+				"checks": fiber.Map{
+					"mongodb":  mongoCheck,
+					"postgres": postgresCheck,
+				},
+			})
+		}
 		return c.JSON(fiber.Map{
-			"status":  health.OverallStatus(mongoCheck, postgresCheck),
+			"status":  status,
 			"service": "orders_api",
 			"checks": fiber.Map{
 				"mongodb":  mongoCheck,

@@ -4,11 +4,11 @@ go 1.23.0
 
 require (
 	github.com/carloshomar/vercardapio/auth_api v0.0.0
-	github.com/go-redis/redis/v8 v8.11.5
+	github.com/go-redis/redis/v8 v8.11.5 // indirect
 	github.com/gofiber/contrib/websocket v1.3.4
 	github.com/gofiber/fiber/v2 v2.52.6
 	github.com/joho/godotenv v1.5.1
-	go.mongodb.org/mongo-driver v1.17.3
+	go.mongodb.org/mongo-driver v1.17.9
 )
 
 replace github.com/carloshomar/vercardapio/auth_api => ../auth_api
@@ -46,8 +46,13 @@ require (
 	golang.org/x/sys v0.32.0 // indirect
 	golang.org/x/text v0.24.0 // indirect
 	gorm.io/driver/postgres v1.5.11 // indirect
-	gorm.io/gorm v1.25.12 // indirect
+	gorm.io/gorm v1.31.2 // indirect
 )
 
 replace github.com/carloshomar/fuudelivery/pkg/queue => ../../pkg/queue
+
 require github.com/carloshomar/fuudelivery/pkg/queue v0.0.0
+
+require github.com/carloshomar/fuudelivery/pkg/health v0.0.0
+
+replace github.com/carloshomar/fuudelivery/pkg/health => ../../pkg/health

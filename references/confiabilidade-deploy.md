@@ -162,4 +162,4 @@ Quando o domínio `fuudelivery.com.br` estiver configurado:
 
 ---
 
-*Última atualização: 2026-07-26*
+*Última atualização: 2026-07-31*

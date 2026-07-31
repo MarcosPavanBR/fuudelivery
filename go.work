@@ -1,13 +1,12 @@
 go 1.23.0
 
 use (
+	./pkg/queue
+	./Backend/Payment
 	./Backend/auth_api
 	./Backend/chat_api
 	./Backend/delivery_api
 	./Backend/orders_api
 	./Backend/payment_api
-	./Backend/Payment
 	./cmd/fuudelivery
 )
-
-

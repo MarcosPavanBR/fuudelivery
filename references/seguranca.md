@@ -1,6 +1,6 @@
 # Segurança — FuuDelivery
 
-> **Última atualização:** 2026-07-27
+> **Última atualização:** 2026-07-31
 
 ## 🔴 Prioridade 0 — Exposição de Credenciais
 
@@ -203,4 +203,4 @@ Roda para: WebRestaurant, WebAdmin, PaymentPanel
 
 ---
 
-*Última atualização: 2026-07-27*
+*Última atualização: 2026-07-31*

@@ -48,3 +48,6 @@ require (
 	gorm.io/driver/postgres v1.5.11 // indirect
 	gorm.io/gorm v1.25.12 // indirect
 )
+
+replace github.com/carloshomar/fuudelivery/pkg/queue => ../../pkg/queue
+require github.com/carloshomar/fuudelivery/pkg/queue v0.0.0

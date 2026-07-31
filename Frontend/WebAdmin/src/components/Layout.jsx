@@ -20,6 +20,7 @@ const menuItems = [
   { path: "/orders", label: "Pedidos", iconKey: "orders" },
   { path: "/delivery-men", label: "Entregadores", iconKey: "delivery-men" },
   { path: "/payments", label: "Pagamentos", iconKey: "payments" },
+  { path: "/financeiro", label: "Financeiro", iconKey: "payments" },
   { path: "/settings", label: "Configuracoes", iconKey: "settings" },
 ];
 

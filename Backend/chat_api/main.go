@@ -10,6 +10,7 @@ package main
 import (
 	"log"
 
+	"github.com/carloshomar/fuudelivery/pkg/health"
 	"github.com/carloshomar/vercardapio/chat_api/app/models"
 	"github.com/carloshomar/vercardapio/chat_api/app/routes"
 	"github.com/gofiber/fiber/v2"
@@ -25,7 +26,16 @@ func main() {
 
 	app := fiber.New()
 
-	app.Get("/health", func(c *fiber.Ctx) error { return c.JSON(fiber.Map{"status": "ok", "service": "chat_api"}) })
+	app.Get("/health", func(c *fiber.Ctx) error {
+		mongoCheck := health.MongoCheck(models.MongoClient)
+		return c.JSON(fiber.Map{
+			"status":  mongoCheck.Status,
+			"service": "chat_api",
+			"checks": fiber.Map{
+				"mongodb": mongoCheck,
+			},
+		})
+	})
 
 	routes.SetupRoutes(app)
 

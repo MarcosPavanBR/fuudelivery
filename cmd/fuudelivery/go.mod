@@ -62,3 +62,5 @@ replace github.com/carloshomar/vercardapio/payment_api => ../../Backend/payment_
 replace github.com/carloshomar/vercardapio/chat_api => ../../Backend/chat_api
 
 replace github.com/carloshomar/fuudelivery/pkg/queue => ../../pkg/queue
+
+replace github.com/carloshomar/fuudelivery/pkg/health => ../../pkg/health

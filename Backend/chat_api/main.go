@@ -1,3 +1,10 @@
+// Package main e o ponto de entrada da Chat API.
+//
+// Chat em tempo real entre cliente, restaurante e entregador.
+// Persistencia em MongoDB, WebSocket para mensagens.
+//
+// Porta padrao: 3000
+// Endpoints: GET /chat/messages/:orderId, POST /chat/message
 package main
 
 import (
@@ -17,6 +24,8 @@ func main() {
 	models.ConnectMongoDatabase()
 
 	app := fiber.New()
+
+	app.Get("/health", func(c *fiber.Ctx) error { return c.JSON(fiber.Map{"status": "ok", "service": "chat_api"}) })
 
 	routes.SetupRoutes(app)
 

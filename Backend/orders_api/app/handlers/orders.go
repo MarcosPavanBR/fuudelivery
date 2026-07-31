@@ -162,10 +162,8 @@ func UpdateOrderStatus(c *fiber.Ctx, sendMessageToClient func(clientID int64, me
 	if requestBody.Status != "REQUEST_APPROVE" {
 		order.OrderId = orderID.Hex()
 		order.Status = requestBody.Status
-		orderBytes, err := json.Marshal(&order)
-		if err == nil {
-			PublishMessage(orderBytes)
-		}
+		// RabbitMQ removido — fila gerenciada pelo monolito via Redis
+		log.Printf("[ORDER] Order %s status update published", order.OrderId)
 	}
 
 	jsonData, _ := json.Marshal(requestBody)

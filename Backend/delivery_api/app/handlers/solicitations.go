@@ -111,9 +111,9 @@ func HandShakeDeliveryman(c *fiber.Ctx) error {
 		log.Printf("[SOLICITATION] Order %s not found after handshake", orderDTO.OrderId)
 		return c.JSON(fiber.Map{"message": "Pedido atualizado com sucesso"})
 	}
-	orderBytes, _ := json.Marshal(order)
 
-	PublishMessage(orderBytes)
+	// RabbitMQ removido — fila gerenciada pelo monolito via Redis
+	log.Printf("[DELIVERY] Order %s handshake published", order.OrderId)
 
 	return c.JSON(fiber.Map{
 		"message": "Pedido atualizado com sucesso",

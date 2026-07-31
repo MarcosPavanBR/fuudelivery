@@ -27,12 +27,22 @@ func main() {
 	app := fiber.New()
 
 	app.Get("/health", func(c *fiber.Ctx) error {
-		mongoCheck := health.MongoCheck(models.MongoClient)
+		mongodbCheck := health.MongoCheck(models.MongoClient)
+		status := health.OverallStatus(mongodbCheck)
+		if status != "up" {
+			return c.Status(503).JSON(fiber.Map{
+				"status":  status,
+				"service": "chat_api",
+				"checks": fiber.Map{
+					"mongodb": mongodbCheck,
+				},
+			})
+		}
 		return c.JSON(fiber.Map{
-			"status":  mongoCheck.Status,
+			"status":  status,
 			"service": "chat_api",
 			"checks": fiber.Map{
-				"mongodb": mongoCheck,
+				"mongodb": mongodbCheck,
 			},
 		})
 	})

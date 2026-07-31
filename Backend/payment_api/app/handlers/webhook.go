@@ -1,91 +1,43 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"log"
-	"os"
 	"time"
 
+	"github.com/carloshomar/fuudelivery/pkg/queue"
 	"github.com/carloshomar/vercardapio/payment_api/app/models"
 	"github.com/carloshomar/vercardapio/payment_api/app/services"
-	"github.com/go-redis/redis/v8"
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
 const (
-	paymentRedisQueueKey = "queue:payments"
-	orderRedisQueueKey   = "queue:orders"
+	paymentRedisQueueKey = "payments"
+	orderRedisQueueKey   = "orders"
 )
 
-// publishToOrderQueue publica uma mensagem na fila de pedidos usando Redis.
-// Migrado de RabbitMQ (streadway/amqp) para Redis, mesma abordagem da
-// publishToPaymentQueue. Usa LPush + BRPop, mesma instancia Redis
-// provisionada pelo Render (fuudelivery-redis).
+// publishToOrderQueue publica uma mensagem na fila de pedidos usando
+// o pacote compartilhado pkg/queue (Redis LPush ou Go channels fallback).
 func publishToOrderQueue(body []byte) error {
-	redisURL := os.Getenv("REDIS_URL")
-	if redisURL == "" {
-		log.Printf("ALERTA: [ORDER_QUEUE] REDIS_URL nao configurado. " +
-			"Confirmacao de pedido nao sera encaminhada. " +
-			"Verifique se o servico Redis (fuudelivery-redis) esta ativo.")
-		return nil
-	}
-
-	opts, err := redis.ParseURL(redisURL)
-	if err != nil {
-		log.Printf("ALERTA: [ORDER_QUEUE] Erro ao parsear REDIS_URL: %v", err)
+	q := queue.New()
+	if err := q.Publish(orderRedisQueueKey, body); err != nil {
+		log.Printf("[ORDER_QUEUE] Erro ao publicar: %v", err)
 		return err
 	}
-
-	client := redis.NewClient(opts)
-	defer client.Close()
-
-	ctx := context.Background()
-
-	// Publica na fila LPush (o consumer usa BRPop)
-	if err := client.LPush(ctx, orderRedisQueueKey, body).Err(); err != nil {
-		log.Printf("ALERTA: [ORDER_QUEUE] Erro ao publicar no Redis: %v", err)
-		return err
-	}
-
-	log.Printf("[ORDER_QUEUE] Confirmacao de pedido publicada no Redis: %s", string(body))
+	log.Printf("[ORDER_QUEUE] Confirmacao de pedido publicada: %s", string(body))
 	return nil
 }
 
-// publishToPaymentQueue publica uma mensagem na fila de pagamentos usando Redis.
-// Substitui a implementacao antiga com RabbitMQ (streadway/amqp).
-// Agora o Payment Service consome a mesma fila via BRPop no Redis.
-//
-// Usa o Redis ja provisionado pelo Render (fuudelivery-redis) via REDIS_URL,
-// eliminando a dependencia de um broker RabbitMQ externo.
+// publishToPaymentQueue publica uma mensagem na fila de pagamentos usando
+// o pacote compartilhado pkg/queue (Redis LPush ou Go channels fallback).
 func publishToPaymentQueue(body []byte) error {
-	redisURL := os.Getenv("REDIS_URL")
-	if redisURL == "" {
-		log.Printf("ALERTA: [PAYMENT_QUEUE] REDIS_URL nao configurado. " +
-			"Pagamento nao sera encaminhado para credito na carteira. " +
-			"Verifique se o servico Redis (fuudelivery-redis) esta ativo.")
-		return nil
-	}
-
-	opts, err := redis.ParseURL(redisURL)
-	if err != nil {
-		log.Printf("ALERTA: [PAYMENT_QUEUE] Erro ao parsear REDIS_URL: %v", err)
+	q := queue.New()
+	if err := q.Publish(paymentRedisQueueKey, body); err != nil {
+		log.Printf("[PAYMENT_QUEUE] Erro ao publicar: %v", err)
 		return err
 	}
-
-	client := redis.NewClient(opts)
-	defer client.Close()
-
-	ctx := context.Background()
-
-	// Publica na fila LPush (o consumer usa BRPop)
-	if err := client.LPush(ctx, paymentRedisQueueKey, body).Err(); err != nil {
-		log.Printf("ALERTA: [PAYMENT_QUEUE] Erro ao publicar no Redis: %v", err)
-		return err
-	}
-
-	log.Printf("[PAYMENT_QUEUE] Pagamento publicado no Redis: %s", string(body))
+	log.Printf("[PAYMENT_QUEUE] Pagamento publicado: %s", string(body))
 	return nil
 }
 

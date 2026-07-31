@@ -1,3 +1,10 @@
+// Package main e o ponto de entrada da Orders API.
+//
+// Responsavel por gerenciar pedidos, produtos, categorias, cupons,
+// fidelidade, agendamento, reviews e WebSocket em tempo real.
+//
+// Porta padrao: 3000
+// Endpoints: GET /ping, GET /orders/:id, POST /orders, etc.
 package main
 
 import (
@@ -9,7 +16,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/joho/godotenv"
 
-	"github.com/carloshomar/vercardapio/orders_api/app/handlers"
 	"github.com/carloshomar/vercardapio/orders_api/app/models"
 	"github.com/carloshomar/vercardapio/orders_api/app/routes"
 )
@@ -82,6 +88,9 @@ func startHTTPServer() {
 		}
 
 	}))
+
+	// Configurar rotas
+	app.Get("/health", func(c *fiber.Ctx) error { return c.JSON(fiber.Map{"status": "ok", "service": "orders_api"}) })
 
 	// Configurar rotas
 	routes.SetupRoutes(app, sendMessageToClient)

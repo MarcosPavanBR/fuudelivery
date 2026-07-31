@@ -12,7 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-redis/redis/v8"
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -1051,18 +1050,9 @@ func main() {
 		AllowHeaders:     "Origin,Content-Type,Accept,Authorization",
 	}))
 
-	// Health check
+	// Health check — reuses the Redis client from the queue singleton
 	app.Get("/health", func(c *fiber.Ctx) error {
-		// Tenta conectar Redis se REDIS_URL estiver configurado
-		var redisClient *redis.Client
-		redisURL := os.Getenv("REDIS_URL")
-		if redisURL != "" {
-			opts, err := redis.ParseURL(redisURL)
-			if err == nil {
-				redisClient = redis.NewClient(opts)
-				defer redisClient.Close()
-			}
-		}
+		redisClient := queue.GetClient()
 
 		postgresCheck := health.DatabaseCheck(models.DB)
 		mongodbCheck := health.MongoCheck(ordersModels.MongoClient)

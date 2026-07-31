@@ -4,12 +4,12 @@
 
 ### 1. Pagamento — Ponte entre monólito e Payment Service ✅
 
-**Resolvido em**: commit `2b45b15` + atualizado em 2026-07-27
+**Resolvido em**: commit `2b45b15` + atualizado em 2026-07-31
 
 **Solução implementada**: `publishToPaymentQueue()` em `payment_api/app/handlers/webhook.go`
 - Quando o webhook do AbacatePay confirma um pagamento, publica em fila Redis
 - O `PaymentConsumer` no `Backend/Payment` consome a mensagem e credita na carteira do restaurante
-- Fila migrada de RabbitMQ para Redis (2026-07-27)
+- Fila migrada de RabbitMQ para Redis (2026-07-31)
 - Se Redis não estiver configurado, a mensagem é ignorada silenciosamente
 
 ### 2. Página de cadastro de restaurante ✅
@@ -112,7 +112,7 @@
 A separação é intencional e benéfica:
 - `payment_api` é leve e rápido (gateway)
 - `Payment` é pesado e analítico (approvals, wallets, reports)
-- Conectados via Redis (migrado de RabbitMQ em 2026-07-27)
+- Conectados via Redis (migrado de RabbitMQ em 2026-07-31)
 
 ---
 
@@ -186,4 +186,4 @@ O README.md foi atualizado em 2026-07-26 para refletir o FuuDelivery:
 
 ---
 
-*Última atualização: 2026-07-27*
+*Última atualização: 2026-07-31*

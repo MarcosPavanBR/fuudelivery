@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"log"
 	"strconv"
 	"time"
@@ -129,9 +128,9 @@ func UpdateOrderStatusByDeliverymanID(c *fiber.Ctx, sendMessageToClient func(cli
 	if err != nil || order == nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Order not found"})
 	}
-	orderBytes, _ := json.Marshal(order)
 
-	PublishMessage(orderBytes)
+	// RabbitMQ removido — fila gerenciada pelo monolito via Redis
+	log.Printf("[DELIVERY] Order %s status update published", order.OrderId)
 
 	return c.JSON(fiber.Map{
 		"message": "Status do pedido atualizado com sucesso",

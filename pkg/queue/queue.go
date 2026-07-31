@@ -162,3 +162,33 @@ func (q *Queue) Close() {
 func (q *Queue) IsRedis() bool {
 	return q.useRedis
 }
+
+// --- Package-level convenience functions ---
+// Estas funcoes operam no singleton defaultQueue para compatibilidade
+// com chamadas como queue.Init(), queue.Publish(), queue.Subscribe().
+
+// Init inicializa a fila singleton. Chamar New() e suficiente;
+// esta funcao existe para compatibilidade com codigo legado.
+func Init() {
+	New()
+}
+
+// Publish envia uma mensagem usando a fila singleton.
+func Publish(queueName string, data []byte) error {
+	return New().Publish(queueName, data)
+}
+
+// PublishJSON serializa e envia uma mensagem usando a fila singleton.
+func PublishJSON(queueName string, payload interface{}) error {
+	return New().PublishJSON(queueName, payload)
+}
+
+// Subscribe consome mensagens da fila usando a fila singleton.
+func Subscribe(queueName string, handler func([]byte)) {
+	New().Subscribe(queueName, handler)
+}
+
+// CloseQueue encerra a conexao da fila singleton.
+func CloseQueue() {
+	New().Close()
+}

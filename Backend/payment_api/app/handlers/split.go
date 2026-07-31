@@ -1,9 +1,7 @@
 package handlers
 
 import (
-	"encoding/json"
 	"log"
-	"time"
 
 	"github.com/carloshomar/vercardapio/payment_api/app/dto"
 	"github.com/carloshomar/vercardapio/payment_api/app/models"

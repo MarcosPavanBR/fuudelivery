@@ -1,3 +1,10 @@
+// Package main e o ponto de entrada da Payment API.
+//
+// Gateway de pagamento que processa PIX e cartao via AbacatePay.
+// Webhook de confirmacao, split de pagamento e fila Redis.
+//
+// Porta padrao: 3000
+// Endpoints: POST /payments/pix/generate, POST /payments/webhook, etc.
 package main
 
 import (
@@ -87,6 +94,8 @@ func startHTTPServer() {
 			}
 		}
 	}))
+
+	app.Get("/health", func(c *fiber.Ctx) error { return c.JSON(fiber.Map{"status": "ok", "service": "payment_api"}) })
 
 	routes.SetupRoutes(app)
 

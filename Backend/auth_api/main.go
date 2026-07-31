@@ -10,6 +10,7 @@ package main
 import (
 	"log"
 
+	"github.com/carloshomar/fuudelivery/pkg/health"
 	"github.com/carloshomar/vercardapio/auth_api/app/models"
 	"github.com/carloshomar/vercardapio/auth_api/app/routes"
 	"github.com/gofiber/fiber/v2"
@@ -32,7 +33,16 @@ func main() {
 		AllowHeaders: "Origin,Content-Type,Accept,Authorization",
 	}))
 
-	app.Get("/health", func(c *fiber.Ctx) error { return c.JSON(fiber.Map{"status": "ok", "service": "auth_api"}) })
+	app.Get("/health", func(c *fiber.Ctx) error {
+		postgresCheck := health.DatabaseCheck(models.DB)
+		return c.JSON(fiber.Map{
+			"status":  postgresCheck.Status,
+			"service": "auth_api",
+			"checks": fiber.Map{
+				"postgres": postgresCheck,
+			},
+		})
+	})
 
 	routes.SetupRoutes(app)
 

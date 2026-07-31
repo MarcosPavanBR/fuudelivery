@@ -1,3 +1,10 @@
+// Package main e o ponto de entrada da Auth API.
+//
+// Autenticacao JWT, CRUD de usuarios, estabelecimentos,
+// delivery-men, clientes e zonas.
+//
+// Porta padrao: 3000
+// Endpoints: POST /users/login, GET /establishments, etc.
 package main
 
 import (
@@ -24,6 +31,8 @@ func main() {
 		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
 		AllowHeaders: "Origin,Content-Type,Accept,Authorization",
 	}))
+
+	app.Get("/health", func(c *fiber.Ctx) error { return c.JSON(fiber.Map{"status": "ok", "service": "auth_api"}) })
 
 	routes.SetupRoutes(app)
 

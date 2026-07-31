@@ -445,3 +445,6 @@ Backend/docs/
 
 # RabbitMQ (migrated to Redis)
 RABBIT_*.env
+
+# Freebuff Desktop
+.freebuff/

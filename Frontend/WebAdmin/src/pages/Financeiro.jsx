@@ -25,7 +25,7 @@ export default function Financeiro() {
   const [wallets, setWallets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("stats");
-  const [processing, setProcessing] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => { loadData(); }, []);
 
@@ -44,25 +44,25 @@ export default function Financeiro() {
   }
 
   async function approvePayment(id) {
-    setProcessing(id);
+    setIsProcessing(true);
     try {
       await paymentApi.post("/payments/" + id + "/approve");
       toast.success("Pagamento aprovado");
       await loadData();
     } catch (e) { toast.error(e.message); }
-    setProcessing(null);
+    setIsProcessing(false);
   }
 
   async function rejectPayment(id) {
     const motivo = prompt("Motivo da rejeicao:");
     if (!motivo?.trim()) return;
-    setProcessing(id);
+    setIsProcessing(true);
     try {
       await paymentApi.post("/payments/" + id + "/reject", { reason: motivo });
       toast.success("Pagamento rejeitado");
       await loadData();
     } catch (e) { toast.error(e.message); }
-    setProcessing(null);
+    setIsProcessing(false);
   }
 
   if (loading) return <div style={{ padding: 40, textAlign: "center" }}>Carregando...</div>;
@@ -118,13 +118,13 @@ export default function Financeiro() {
                   <td style={{ padding: "12px 16px" }}>
                     {p.status === "PENDING" && (
                       <div style={{ display: "flex", gap: 6 }}>
-                        <button disabled={processing === (p.id || p._id)} onClick={() => approvePayment(p.id || p._id)}
-                          style={{ padding: "4px 12px", borderRadius: 6, border: "none", background: "#10b981", color: "white", fontSize: 12, cursor: processing ? "wait" : "pointer", opacity: processing === (p.id || p._id) ? 0.5 : 1 }}>
-                          {processing === (p.id || p._id) ? "..." : "Aprovar"}
+                        <button disabled={isProcessing} onClick={() => approvePayment(p.id || p._id)}
+                          style={{ padding: "4px 12px", borderRadius: 6, border: "none", background: "#10b981", color: "white", fontSize: 12, cursor: isProcessing ? "wait" : "pointer", opacity: isProcessing ? 0.5 : 1 }}>
+                          {isProcessing ? "..." : "Aprovar"}
                         </button>
-                        <button disabled={processing === (p.id || p._id)} onClick={() => rejectPayment(p.id || p._id)}
-                          style={{ padding: "4px 12px", borderRadius: 6, border: "none", background: "#ef4444", color: "white", fontSize: 12, cursor: processing ? "wait" : "pointer", opacity: processing === (p.id || p._id) ? 0.5 : 1 }}>
-                          {processing === (p.id || p._id) ? "..." : "Rejeitar"}
+                        <button disabled={isProcessing} onClick={() => rejectPayment(p.id || p._id)}
+                          style={{ padding: "4px 12px", borderRadius: 6, border: "none", background: "#ef4444", color: "white", fontSize: 12, cursor: isProcessing ? "wait" : "pointer", opacity: isProcessing ? 0.5 : 1 }}>
+                          {isProcessing ? "..." : "Rejeitar"}
                         </button>
                       </div>
                     )}

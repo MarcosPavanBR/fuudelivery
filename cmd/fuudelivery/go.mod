@@ -14,6 +14,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/joho/godotenv v1.5.1
 	go.mongodb.org/mongo-driver v1.17.3
+	github.com/carloshomar/fuudelivery/pkg/queue v0.0.0
 	gorm.io/gorm v1.25.12
 )
 
@@ -59,3 +60,5 @@ replace github.com/carloshomar/vercardapio/delivery_api => ../../Backend/deliver
 replace github.com/carloshomar/vercardapio/payment_api => ../../Backend/payment_api
 
 replace github.com/carloshomar/vercardapio/chat_api => ../../Backend/chat_api
+
+replace github.com/carloshomar/fuudelivery/pkg/queue => ../../pkg/queue

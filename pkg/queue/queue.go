@@ -28,6 +28,8 @@ type Queue struct {
 	useRedis       bool
 	internalQueues map[string]chan []byte
 	mu             sync.Mutex
+	ctx            context.Context
+	cancel         context.CancelFunc
 }
 
 var (
@@ -41,8 +43,11 @@ var (
 // A conexao Redis e inicializada sob demanda na primeira chamada.
 func New() *Queue {
 	defaultOnce.Do(func() {
+		ctx, cancel := context.WithCancel(context.Background())
 		q := &Queue{
 			internalQueues: make(map[string]chan []byte),
+			ctx:            ctx,
+			cancel:         cancel,
 		}
 
 		redisURL := os.Getenv("REDIS_URL")
@@ -60,10 +65,10 @@ func New() *Queue {
 		}
 
 		client := redis.NewClient(opts)
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
+		pingCtx, pingCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer pingCancel()
 
-		if err := client.Ping(ctx).Err(); err != nil {
+		if err := client.Ping(pingCtx).Err(); err != nil {
 			log.Printf("[QUEUE] Erro ao conectar no Redis: %v, usando Go channels", err)
 			defaultQueue = q
 			return
@@ -81,7 +86,7 @@ func New() *Queue {
 // Se Redis estiver disponivel, usa LPush. Caso contrario, usa Go channels.
 func (q *Queue) Publish(queueName string, data []byte) error {
 	if q.useRedis && q.client != nil {
-		return q.client.LPush(context.Background(), "queue:"+queueName, data).Err()
+		return q.client.LPush(q.ctx, "queue:"+queueName, data).Err()
 	}
 
 	// Fallback: Go channel
@@ -118,8 +123,12 @@ func (q *Queue) Subscribe(queueName string, handler func([]byte)) {
 		go func() {
 			log.Printf("[QUEUE] Consumer Redis iniciado em %s...", queueName)
 			for {
-				result, err := q.client.BRPop(context.Background(), 0, "queue:"+queueName).Result()
+				result, err := q.client.BRPop(q.ctx, 0, "queue:"+queueName).Result()
 				if err != nil {
+					if q.ctx.Err() != nil {
+						log.Printf("[QUEUE] Consumer Redis encerrado em %s (shutdown)", queueName)
+						return
+					}
 					log.Printf("[QUEUE] Erro no BRPop (%s): %v, reconectando em 5s", queueName, err)
 					time.Sleep(5 * time.Second)
 					continue
@@ -150,8 +159,11 @@ func (q *Queue) Subscribe(queueName string, handler func([]byte)) {
 	}()
 }
 
-// Close encerra a conexao com Redis (se ativa).
+// Close encerra a conexao com Redis (se ativa) e cancela todas as goroutines de consumer.
 func (q *Queue) Close() {
+	if q.cancel != nil {
+		q.cancel()
+	}
 	if q.client != nil {
 		q.client.Close()
 		log.Println("[QUEUE] Conexao Redis encerrada")
@@ -161,6 +173,17 @@ func (q *Queue) Close() {
 // IsRedis retorna true se a fila esta usando Redis como transport.
 func (q *Queue) IsRedis() bool {
 	return q.useRedis
+}
+
+// GetClient retorna o cliente Redis da fila (nil se nao estiver usando Redis).
+// Utilizado pelo health endpoint para reutilizar a conexao existente.
+func (q *Queue) GetClient() *redis.Client {
+	return q.client
+}
+
+// GetClient retorna o cliente Redis da fila singleton.
+func GetClient() *redis.Client {
+	return New().GetClient()
 }
 
 // --- Package-level convenience functions ---

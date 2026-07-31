@@ -16,6 +16,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/joho/godotenv"
 
+	"github.com/carloshomar/fuudelivery/pkg/health"
 	"github.com/carloshomar/vercardapio/delivery_api/app/handlers"
 	"github.com/carloshomar/vercardapio/delivery_api/app/models"
 	"github.com/carloshomar/vercardapio/delivery_api/app/routes"
@@ -105,7 +106,16 @@ func startHTTPServer() {
 
 	}))
 
-	app.Get("/health", func(c *fiber.Ctx) error { return c.JSON(fiber.Map{"status": "ok", "service": "delivery_api"}) })
+	app.Get("/health", func(c *fiber.Ctx) error {
+		mongoCheck := health.MongoCheck(models.MongoClient)
+		return c.JSON(fiber.Map{
+			"status":  mongoCheck.Status,
+			"service": "delivery_api",
+			"checks": fiber.Map{
+				"mongodb": mongoCheck,
+			},
+		})
+	})
 
 	routes.SetupRoutes(app, sendMessageToClient)
 

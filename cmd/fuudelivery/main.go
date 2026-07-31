@@ -1064,16 +1064,37 @@ func main() {
 			}
 		}
 
+		postgresCheck := health.DatabaseCheck(models.DB)
+		mongodbCheck := health.MongoCheck(ordersModels.MongoClient)
+		redisCheck := health.RedisCheck(redisClient)
+		redisGeoCheck := health.RedisGeoCheck(redisClient)
+		batchesCheck := health.BatchCheck(ordersModels.DB)
+		status := health.OverallStatus(postgresCheck, mongodbCheck, redisCheck, redisGeoCheck, batchesCheck)
+		if status != "up" {
+			return c.Status(503).JSON(fiber.Map{
+				"status":  status,
+				"service": "fuudelivery",
+				"version": "1.0.0",
+				"checks": fiber.Map{
+					"postgres":  postgresCheck,
+					"mongodb":   mongodbCheck,
+					"redis":     redisCheck,
+					"redis_geo": redisGeoCheck,
+					"batches":   batchesCheck,
+				},
+				"time": time.Now().UTC(),
+			})
+		}
 		return c.JSON(fiber.Map{
 			"status":  "ok",
 			"service": "fuudelivery",
 			"version": "1.0.0",
 			"checks": fiber.Map{
-				"postgres":  health.DatabaseCheck(models.DB),
-				"mongodb":   health.MongoCheck(ordersModels.MongoClient),
-				"redis":     health.RedisCheck(redisClient),
-				"redis_geo": health.RedisGeoCheck(redisClient),
-				"batches":   health.BatchCheck(ordersModels.DB),
+				"postgres":  postgresCheck,
+				"mongodb":   mongodbCheck,
+				"redis":     redisCheck,
+				"redis_geo": redisGeoCheck,
+				"batches":   batchesCheck,
 			},
 			"time": time.Now().UTC(),
 		})

@@ -8,6 +8,7 @@ import Users from "./pages/Users.jsx";
 import Orders from "./pages/Orders.jsx";
 import DeliveryMen from "./pages/DeliveryMen.jsx";
 import Payments from "./pages/Payments.jsx";
+import Financeiro from "./pages/Financeiro.jsx";
 import Settings from "./pages/Settings.jsx";
 import Layout from "./components/Layout.jsx";
 import { FiLoader } from "react-icons/fi";
@@ -85,6 +86,7 @@ function AppRoutes() {
         <Route path="/orders" element={<Orders />} />
         <Route path="/delivery-men" element={<DeliveryMen />} />
         <Route path="/payments" element={<Payments />} />
+        <Route path="/financeiro" element={<Financeiro />} />
         <Route path="/settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,6 +1,6 @@
 # Testes e CI — FuuDelivery
 
-## Estado atual (2026-07-26)
+## Estado atual (2026-07-31)
 
 ### CI atual (`.github/workflows/ci.yml`)
 
@@ -149,4 +149,4 @@ govulncheck ./...
 
 ---
 
-*Última atualização: 2026-07-26*
+*Última atualização: 2026-07-31*

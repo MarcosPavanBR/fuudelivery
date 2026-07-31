@@ -1,3 +1,10 @@
+// Package main e o ponto de entrada da Delivery API.
+//
+// Responsavel por rastreamento de entregadores, matching engine,
+// calibracao de zonas, decay de split e WebSocket em tempo real.
+//
+// Porta padrao: 3000
+// Endpoints: GET /solicitation-orders, POST /deliveryman/status, etc.
 package main
 
 import (
@@ -97,6 +104,8 @@ func startHTTPServer() {
 		}
 
 	}))
+
+	app.Get("/health", func(c *fiber.Ctx) error { return c.JSON(fiber.Map{"status": "ok", "service": "delivery_api"}) })
 
 	routes.SetupRoutes(app, sendMessageToClient)
 

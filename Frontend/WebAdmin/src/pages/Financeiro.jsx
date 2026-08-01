@@ -26,6 +26,7 @@ export default function Financeiro() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("stats");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [rejectModal, setRejectModal] = useState({ open: false, id: null, motivo: "" });
 
   useEffect(() => { loadData(); }, []);
 
@@ -54,8 +55,13 @@ export default function Financeiro() {
   }
 
   async function rejectPayment(id) {
-    const motivo = prompt("Motivo da rejeicao:");
+    setRejectModal({ open: true, id, motivo: "" });
+  }
+
+  async function confirmReject() {
+    const { id, motivo } = rejectModal;
     if (!motivo?.trim()) return;
+    setRejectModal({ ...rejectModal, open: false });
     setIsProcessing(true);
     try {
       await paymentApi.post("/payments/" + id + "/reject", { reason: motivo });
@@ -150,6 +156,33 @@ export default function Financeiro() {
             </div>
           ))}
           {wallets.length === 0 && <div style={{ gridColumn: "1 / -1", padding: 40, textAlign: "center", color: "#9ca3af" }}>Nenhuma carteira encontrada</div>}
+        </div>
+      )}
+
+      {rejectModal.open && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
+          onClick={() => setRejectModal({ ...rejectModal, open: false })}>
+          <div style={{ background: "white", borderRadius: 12, padding: 24, width: 400, maxWidth: "90vw" }}
+            onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 12 }}>Motivo da Rejeicao</h3>
+            <textarea
+              value={rejectModal.motivo}
+              onChange={e => setRejectModal({ ...rejectModal, motivo: e.target.value })}
+              placeholder="Descreva o motivo..."
+              rows={4}
+              style={{ width: "100%", padding: 10, border: "1px solid #d1d5db", borderRadius: 8, fontSize: 14, resize: "vertical", boxSizing: "border-box" }}
+            />
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+              <button onClick={() => setRejectModal({ ...rejectModal, open: false })}
+                style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid #d1d5db", background: "white", cursor: "pointer", fontWeight: 600 }}>
+                Cancelar
+              </button>
+              <button onClick={confirmReject} disabled={!rejectModal.motivo?.trim()}
+                style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: rejectModal.motivo?.trim() ? "#ef4444" : "#fca5a5", color: "white", cursor: rejectModal.motivo?.trim() ? "pointer" : "not-allowed", fontWeight: 600 }}>
+                Rejeitar
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

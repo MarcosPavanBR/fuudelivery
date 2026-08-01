@@ -30,6 +30,12 @@ COPY Backend/chat_api/go.sum ./Backend/chat_api/
 COPY Backend/Payment/go.mod ./Backend/Payment/
 COPY Backend/Payment/go.sum ./Backend/Payment/
 
+# Copy shared package go.mod files
+COPY pkg/health/go.mod ./pkg/health/
+COPY pkg/health/go.sum ./pkg/health/
+COPY pkg/queue/go.mod ./pkg/queue/
+COPY pkg/queue/go.sum ./pkg/queue/
+
 # Download dependencies
 RUN cd cmd/fuudelivery && go mod download
 

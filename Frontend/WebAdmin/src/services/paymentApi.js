@@ -1,18 +1,29 @@
 import axios from "axios";
 
-const paymentApi = axios.create({
-  baseURL: window.location.hostname === "localhost"
+// Payment Service URL — separate from the main API
+// In production, both run on Render. Locally, Payment runs on port 8084.
+const PAYMENT_BASE_URL =
+  process.env.REACT_APP_PAYMENT_API_URL ||
+  (window.location.hostname === "localhost"
     ? "http://localhost:8084/api"
-    : "https://fuudelivery-payment.onrender.com/api",
+    : "https://fuudelivery-payment.onrender.com/api");
+
+const paymentApi = axios.create({
+  baseURL: PAYMENT_BASE_URL,
   timeout: 15000,
   headers: { "Content-Type": "application/json" },
 });
 
-paymentApi.interceptors.request.use((config) => {
-  const token = localStorage.getItem("fuu_admin_token");
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-}, (error) => Promise.reject(error));
+paymentApi.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem("fuu_admin_token");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
 
 paymentApi.interceptors.response.use(
   (response) => response,

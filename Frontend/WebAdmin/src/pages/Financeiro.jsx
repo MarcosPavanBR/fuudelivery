@@ -61,11 +61,11 @@ export default function Financeiro() {
   async function confirmReject() {
     const { id, motivo } = rejectModal;
     if (!motivo?.trim()) return;
-    setRejectModal({ ...rejectModal, open: false });
     setIsProcessing(true);
     try {
       await paymentApi.post("/payments/" + id + "/reject", { reason: motivo });
       toast.success("Pagamento rejeitado");
+      setRejectModal({ open: false, id: null, motivo: "" });
       await loadData();
     } catch (e) { toast.error(e.message); }
     setIsProcessing(false);
@@ -177,9 +177,9 @@ export default function Financeiro() {
                 style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid #d1d5db", background: "white", cursor: "pointer", fontWeight: 600 }}>
                 Cancelar
               </button>
-              <button onClick={confirmReject} disabled={!rejectModal.motivo?.trim()}
-                style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: rejectModal.motivo?.trim() ? "#ef4444" : "#fca5a5", color: "white", cursor: rejectModal.motivo?.trim() ? "pointer" : "not-allowed", fontWeight: 600 }}>
-                Rejeitar
+              <button onClick={confirmReject} disabled={!rejectModal.motivo?.trim() || isProcessing}
+                style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: rejectModal.motivo?.trim() && !isProcessing ? "#ef4444" : "#fca5a5", color: "white", cursor: rejectModal.motivo?.trim() && !isProcessing ? "pointer" : "not-allowed", fontWeight: 600 }}>
+                {isProcessing ? "Enviando..." : "Rejeitar"}
               </button>
             </div>
           </div>

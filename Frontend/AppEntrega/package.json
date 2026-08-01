@@ -9,7 +9,6 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "test": "jest --watchAll",
-    "postinstall": "patch-package",
     "update:": "NODE_ENV=production pkill -f expo; expo export --experimental-bundle --clear --output-dir dist/${APP_BUILD}-${APP_ENV} && eas update --auto --branch=${BRANCH} --input-dir dist/${APP_BUILD}-${APP_ENV}"
   },
   "jest": {
@@ -49,7 +48,6 @@
     "@types/react": "~18.2.79",
     "jest": "^29.4.0",
     "jest-expo": "^51.0.0",
-    "patch-package": "^8.0.1",
     "react-test-renderer": "18.2.0",
     "typescript": "~5.3.3"
   },

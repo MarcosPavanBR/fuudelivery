@@ -253,6 +253,156 @@ npm install
 npx expo start
 ```
 
+## Building APKs
+
+Os APKs são gerados via **EAS Build** (Expo Application Services), que compila na nuvem.
+
+### Pré-requisitos
+
+```bash
+# Instalar EAS CLI globalmente
+npm install -g eas-cli
+
+# Login na sua conta Expo
+eas login
+
+# Verificar que está logado
+eas whoami
+```
+
+### AppComida (App do Cliente)
+
+```bash
+cd Frontend/AppComida
+npx eas build --platform android --profile preview
+```
+
+O `preview` profile gera um **APK** (não AAB), pronto para instalar diretamente no Android.
+
+### AppEntrega (App do Entregador)
+
+```bash
+cd Frontend/AppEntrega
+npx eas build --platform android --profile preview
+```
+
+### Monitorar Builds
+
+```bash
+# Listar builds recentes
+eas build:list --platform android --limit 5
+```
+
+Ou acesse: https://expo.dev/accounts/pavanbr/projects/my-app/builds
+
+### Download do APK
+
+Após o build completar, o link de download aparece no terminal e no dashboard do Expo. O APK fica disponível por 30 dias.
+
+### Erros Comuns e Soluções
+
+#### ❌ `Plugin [id: 'expo-module-gradle-plugin'] was not found`
+
+**Causa:** O `expo prebuild` não gera o `settings.gradle` com autolinking correto porque:
+- Versões do `expo`, `expo-secure-store` e `expo-modules-core` estão desalinhadas no `package.json`
+- Um config plugin (como `withGradleWorkaround`) interfere no autolinking
+- Um patch do `patch-package` modifica arquivos Gradle que conflitam com o plugin
+
+**Solução:**
+```bash
+# 1. Alinhar versões com Expo
+npx expo install --check
+
+# 2. Regenerar a pasta android/ do zero
+npx expo prebuild --clean
+
+# 3. Remover config plugins desnecessários do app.json
+#    Mantenha apenas: ["expo-router"]
+#    Remova: ["./plugins/withGradleWorkaround"]
+
+# 4. Remover patches que modificam Gradle
+rm -f patches/expo-modules-core+*.patch
+
+# 5. Remover patch-package se não houver mais patches
+#    Remova "postinstall": "patch-package" do package.json
+
+# 6. Build novamente
+eas build --platform android --profile preview
+```
+
+> **Regra de ouro:** Se AppComida builda e AppEntrega não, verifique se o `app.json` de ambos
+> tem os mesmos plugins e nenhuma patch que modifique Gradle. O problema quase sempre é um
+> config plugin ou patch interferindo no autolinking do `expo-module-gradle-plugin`.
+
+#### ❌ `npm install` ou `yarn install` trava / timeout
+
+**Causa:** Cache corrompido, proxy corporativo, ou Windows Defender escaneando `node_modules`.
+
+**Solução:**
+```bash
+# Limpar cache
+rm -rf node_modules package-lock.json
+npm cache clean --force
+
+# Instalar com flags de compatibilidade
+npm install --legacy-peer-deps
+
+# Ou usar yarn
+yarn install
+```
+
+#### ❌ `expo-router` plugin not found during EAS build
+
+**Causa:** `node_modules` incompleto — o EAS CLI precisa resolver plugins localmente antes de enviar para a nuvem.
+
+**Solução:**
+```bash
+rm -rf node_modules
+npm install --legacy-peer-deps
+eas build --platform android --profile preview
+```
+
+#### ❌ Build funciona local mas falha no EAS
+
+**Causa:** O EAS Cloud pode ter versões diferentes de Node.js ou Expo CLI.
+
+**Solução:** Verifique o `eas.json` e adicione:
+```json
+{
+  "cli": {
+    "version": ">= 7.3.0"
+  },
+  "build": {
+    "preview": {
+      "android": {
+        "buildType": "apk"
+      }
+    }
+  }
+}
+```
+
+### Gerar APKs Localmente (alternativa)
+
+```bash
+# Requer Android SDK instalado localmente
+cd Frontend/AppComida
+npx expo prebuild --clean
+cd android && ./gradlew assembleRelease
+
+# APK gerado em:
+# android/app/build/outputs/apk/release/app-release.apk
+```
+
+> **Nota:** Certifique-se de que `ANDROID_HOME` está configurado apontando para o Android SDK.
+> Exemplo: `export ANDROID_HOME=$HOME/Library/Android/sdk` (macOS/Linux) ou
+> `set ANDROID_HOME=%LOCALAPPDATA%\Android\Sdk` (Windows).
+
+Ou use o script automatizado:
+```bash
+bash scripts/build-apks.sh
+```
+
 ## Variáveis de Ambiente
 
 ### Monolith (fuudelivery-api)

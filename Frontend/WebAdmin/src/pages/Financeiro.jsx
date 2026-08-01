@@ -161,7 +161,7 @@ export default function Financeiro() {
 
       {rejectModal.open && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
-          onClick={() => setRejectModal({ ...rejectModal, open: false })}>
+          onClick={() => !isProcessing && setRejectModal({ ...rejectModal, open: false })}>
           <div style={{ background: "white", borderRadius: 12, padding: 24, width: 400, maxWidth: "90vw" }}
             onClick={e => e.stopPropagation()}>
             <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 12 }}>Motivo da Rejeicao</h3>

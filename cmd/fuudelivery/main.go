@@ -1051,6 +1051,8 @@ func main() {
 	}))
 
 	// Health check — reuses the Redis client from the queue singleton
+	// HTTP 503 only when critical databases (Postgres/MongoDB) are down.
+	// Redis degradation returns HTTP 200 with status "degraded".
 	app.Get("/health", func(c *fiber.Ctx) error {
 		redisClient := queue.GetClient()
 
@@ -1059,24 +1061,19 @@ func main() {
 		redisCheck := health.RedisCheck(redisClient)
 		redisGeoCheck := health.RedisGeoCheck(redisClient)
 		batchesCheck := health.BatchCheck(ordersModels.DB)
-		status := health.OverallStatus(postgresCheck, mongodbCheck, redisCheck, redisGeoCheck, batchesCheck)
-		if status != "up" {
-			return c.Status(503).JSON(fiber.Map{
-				"status":  status,
-				"service": "fuudelivery",
-				"version": "1.0.0",
-				"checks": fiber.Map{
-					"postgres":  postgresCheck,
-					"mongodb":   mongodbCheck,
-					"redis":     redisCheck,
-					"redis_geo": redisGeoCheck,
-					"batches":   batchesCheck,
-				},
-				"time": time.Now().UTC(),
-			})
+
+		// Critical checks: Postgres and MongoDB
+		criticalStatus := health.OverallStatus(postgresCheck, mongodbCheck)
+		// All checks: includes Redis and batches
+		allStatus := health.OverallStatus(postgresCheck, mongodbCheck, redisCheck, redisGeoCheck, batchesCheck)
+
+		statusCode := 200
+		if criticalStatus != "up" {
+			statusCode = 503
 		}
-		return c.JSON(fiber.Map{
-			"status":  "ok",
+
+		return c.Status(statusCode).JSON(fiber.Map{
+			"status":  allStatus,
 			"service": "fuudelivery",
 			"version": "1.0.0",
 			"checks": fiber.Map{

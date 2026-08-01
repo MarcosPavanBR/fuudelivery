@@ -32,8 +32,7 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router",
-      "./plugins/withGradleWorkaround"
+      "expo-router"
     ],
     "experiments": {
       "typedRoutes": true
@@ -46,7 +45,9 @@
         "projectId": "7a618e89-0652-4be6-999c-473fb5054a63"
       }
     },
-    "runtimeVersion": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "owner": "pavanbr"
   }
 }

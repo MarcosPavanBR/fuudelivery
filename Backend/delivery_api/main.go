@@ -31,9 +31,8 @@ func sendMessageToClient(clientID int64, message []byte) error {
 	if client, ok := clients[clientID]; ok {
 		return client.WriteMessage(websocket.TextMessage, message)
 	}
-	log.Println("Enviando socket")
-	log.Printf("Id: %d", clientID)
-	log.Println(string(message))
+	// Cliente nao conectado — mensagem descartada sem erro.
+	log.Printf("[WS] Cliente %d nao conectado, mensagem descartada (%d bytes)", clientID, len(message))
 	return nil
 }
 
@@ -67,11 +66,6 @@ func startHTTPServer() {
 	})
 
 	app.Get("/ws/:id", websocket.New(func(c *websocket.Conn) {
-		log.Println(c.Locals("allowed"))
-		log.Println(c.Params("id"))
-		log.Println(c.Query("v"))
-		log.Println(c.Cookies("session"))
-
 		clientIDStr := c.Params("id")
 		clientID, _ := strconv.ParseInt(clientIDStr, 10, 64)
 
@@ -106,26 +100,7 @@ func startHTTPServer() {
 
 	}))
 
-	app.Get("/health", func(c *fiber.Ctx) error {
-		mongodbCheck := health.MongoCheck(models.MongoClient)
-		status := health.OverallStatus(mongodbCheck)
-		if status != "up" {
-			return c.Status(503).JSON(fiber.Map{
-				"status":  status,
-				"service": "delivery_api",
-				"checks": fiber.Map{
-					"mongodb": mongodbCheck,
-				},
-			})
-		}
-		return c.JSON(fiber.Map{
-			"status":  status,
-			"service": "delivery_api",
-			"checks": fiber.Map{
-				"mongodb": mongodbCheck,
-			},
-		})
-	})
+	app.Get("/health", health.FiberHandler("delivery_api", health.MongoCheck(models.MongoClient)))
 
 	routes.SetupRoutes(app, sendMessageToClient)
 

@@ -33,26 +33,7 @@ func main() {
 		AllowHeaders: "Origin,Content-Type,Accept,Authorization",
 	}))
 
-	app.Get("/health", func(c *fiber.Ctx) error {
-		postgresCheck := health.DatabaseCheck(models.DB)
-		status := health.OverallStatus(postgresCheck)
-		if status != "up" {
-			return c.Status(503).JSON(fiber.Map{
-				"status":  status,
-				"service": "auth_api",
-				"checks": fiber.Map{
-					"postgres": postgresCheck,
-				},
-			})
-		}
-		return c.JSON(fiber.Map{
-			"status":  status,
-			"service": "auth_api",
-			"checks": fiber.Map{
-				"postgres": postgresCheck,
-			},
-		})
-	})
+	app.Get("/health", health.FiberHandler("auth_api", health.DatabaseCheck(models.DB)))
 
 	routes.SetupRoutes(app)
 

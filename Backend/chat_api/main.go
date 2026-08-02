@@ -26,26 +26,7 @@ func main() {
 
 	app := fiber.New()
 
-	app.Get("/health", func(c *fiber.Ctx) error {
-		mongodbCheck := health.MongoCheck(models.MongoClient)
-		status := health.OverallStatus(mongodbCheck)
-		if status != "up" {
-			return c.Status(503).JSON(fiber.Map{
-				"status":  status,
-				"service": "chat_api",
-				"checks": fiber.Map{
-					"mongodb": mongodbCheck,
-				},
-			})
-		}
-		return c.JSON(fiber.Map{
-			"status":  status,
-			"service": "chat_api",
-			"checks": fiber.Map{
-				"mongodb": mongodbCheck,
-			},
-		})
-	})
+	app.Get("/health", health.FiberHandler("chat_api", health.MongoCheck(models.MongoClient)))
 
 	routes.SetupRoutes(app)
 

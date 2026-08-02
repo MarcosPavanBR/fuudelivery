@@ -1,0 +1,26 @@
+# Code Owners - FuuDelivery
+
+# Default owner for everything
+* @marcospavanbr
+
+# Backend Go services
+Backend/ @marcospavanbr
+cmd/ @marcospavanbr
+pkg/ @marcospavanbr
+
+# Frontend applications
+Frontend/AppComida/ @marcospavanbr
+Frontend/AppEntrega/ @marcospavanbr
+Frontend/WebRestaurant/ @marcospavanbr
+Frontend/WebAdmin/ @marcospavanbr
+Frontend/PaymentPanel/ @marcospavanbr
+
+# CI/CD and infrastructure
+.github/ @marcospavanbr
+render.yaml @marcospavanbr
+Dockerfile @marcospavanbr
+docker-compose*.yml @marcospavanbr
+
+# Documentation
+*.md @marcospavanbr
+references/ @marcospavanbr

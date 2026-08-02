@@ -40,15 +40,25 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Build APK
-        run: eas build --platform android --profile preview --non-interactive
+        run: |
+          OUTPUT=$(eas build --platform android --profile preview --non-interactive --json)
+          echo "$OUTPUT" > build-output.json
+          BUILD_ID=$(echo "$OUTPUT" | jq -r '.id')
+          if [ -z "$BUILD_ID" ] || [ "$BUILD_ID" = "null" ]; then
+            echo "ERROR: Failed to extract build ID from EAS output"
+            echo "$OUTPUT"
+            exit 1
+          fi
+          echo "BUILD_ID=$BUILD_ID" >> $GITHUB_ENV
+          echo "Build ID: $BUILD_ID"
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
       - name: Download APK artifact
         run: |
-          BUILD_ID=$(eas build:list --platform android --limit 1 --json | jq -r '.[0].id')
-          echo "Build ID: $BUILD_ID"
-          eas build:download --id $BUILD_ID --platform android --path ./artifacts
+          echo "Downloading build $BUILD_ID"
+          mkdir -p artifacts
+          eas build:download --id "$BUILD_ID" --platform android --path ./artifacts
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 

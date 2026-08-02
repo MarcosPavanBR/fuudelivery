@@ -14,10 +14,13 @@ echo "╚═══════════════════════�
 echo ""
 
 FAILURES=0
+TIMEOUT=60  # Render free-tier cold starts can take 30-60s
 
 # API Health (with detailed checks)
 echo "── API (fuudelivery-api) ──"
-API_HEALTH=$(curl -s --max-time 15 https://fuudelivery-api-8y6l.onrender.com/health 2>/dev/null || echo '{"status":"error"}')
+# Warmup: first request may trigger cold start
+curl -s --max-time $TIMEOUT -o /dev/null https://fuudelivery-api-8y6l.onrender.com/ 2>/dev/null || true
+API_HEALTH=$(curl -s --max-time $TIMEOUT https://fuudelivery-api-8y6l.onrender.com/health 2>/dev/null || echo '{"status":"error"}')
 API_STATUS=$(echo "$API_HEALTH" | grep -o '"status":"[^"]*"' | tail -1 | cut -d'"' -f4)
 if [ "$API_STATUS" = "ok" ]; then
     ok "API is healthy"
@@ -38,7 +41,9 @@ fi
 # Payment Service
 echo ""
 echo "── Payment Service ──"
-PAY_HEALTH=$(curl -s --max-time 15 https://fuudelivery-payment.onrender.com/health 2>/dev/null || echo '{"status":"error"}')
+# Warmup: first request may trigger cold start
+curl -s --max-time $TIMEOUT -o /dev/null https://fuudelivery-payment.onrender.com/ 2>/dev/null || true
+PAY_HEALTH=$(curl -s --max-time $TIMEOUT https://fuudelivery-payment.onrender.com/health 2>/dev/null || echo '{"status":"error"}')
 PAY_STATUS=$(echo "$PAY_HEALTH" | grep -o '"status":"[^"]*"' | tail -1 | cut -d'"' -f4)
 if [ "$PAY_STATUS" = "ok" ]; then
     ok "Payment Service is healthy"
@@ -51,6 +56,8 @@ fi
 echo ""
 echo "── Static Sites ──"
 for site in "WebRestaurant:https://fuudelivery-web.onrender.com" "WebAdmin:https://fuudelivery-admin-lv7f.onrender.com" "PaymentPanel:https://fuudelivery-payment-panel.onrender.com"; do
+    # Warmup static sites (fast, but include for consistency)
+    curl -s --max-time 10 -o /dev/null "$(echo $site | cut -d: -f2-)" 2>/dev/null || true
     NAME=$(echo "$site" | cut -d: -f1)
     URL=$(echo "$site" | cut -d: -f2-)
     HTTP_CODE=$(curl -s --max-time 10 -o /dev/null -w "%{http_code}" "$URL" 2>/dev/null || echo "000")

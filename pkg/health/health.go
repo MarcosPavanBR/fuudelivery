@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/mongo"
 	"gorm.io/gorm"
 )
@@ -110,4 +111,39 @@ func BatchCheck(db *gorm.DB) Check {
 		return Check{Name: "batches", Status: "degraded", Error: err.Error()}
 	}
 	return Check{Name: "batches", Status: "up", Latency: time.Since(start).String()}
+}
+
+// FiberHandler monta o handler HTTP (Fiber) padrao para o endpoint /health.
+//
+// Retorna HTTP 200 com status "up" quando todos os checks passam, ou HTTP 503
+// com o status real ("degraded"/"down") caso contrario — o que permite que o
+// Render (ou qualquer load balancer) marque o servico como unhealthy.
+//
+// Uso:
+//
+//	app.Get("/health", health.FiberHandler("delivery_api",
+//		health.MongoCheck(models.MongoClient),
+//	))
+func FiberHandler(service string, checks ...Check) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		status := OverallStatus(checks...)
+		payload := fiber.Map{
+			"status":  status,
+			"service": service,
+			"checks":  toFiberMap(checks),
+		}
+		if status != "up" {
+			return c.Status(fiber.StatusServiceUnavailable).JSON(payload)
+		}
+		return c.JSON(payload)
+	}
+}
+
+// toFiberMap converte a lista de checks em um mapa {nome: check} para o JSON.
+func toFiberMap(checks []Check) fiber.Map {
+	result := make(fiber.Map, len(checks))
+	for _, check := range checks {
+		result[check.Name] = check
+	}
+	return result
 }

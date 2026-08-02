@@ -51,11 +51,6 @@ func startHTTPServer() {
 	})
 
 	app.Get("/ws/:id", websocket.New(func(c *websocket.Conn) {
-		log.Println(c.Locals("allowed"))
-		log.Println(c.Params("id"))
-		log.Println(c.Query("v"))
-		log.Println(c.Cookies("session"))
-
 		clientIDStr := c.Params("id")
 		clientID, _ := strconv.ParseInt(clientIDStr, 10, 64)
 
@@ -91,29 +86,10 @@ func startHTTPServer() {
 	}))
 
 	// Configurar rotas
-	app.Get("/health", func(c *fiber.Ctx) error {
-		mongoCheck := health.MongoCheck(models.MongoClient)
-		postgresCheck := health.DatabaseCheck(models.DB)
-		status := health.OverallStatus(mongoCheck, postgresCheck)
-		if status != "up" {
-			return c.Status(503).JSON(fiber.Map{
-				"status":  status,
-				"service": "orders_api",
-				"checks": fiber.Map{
-					"mongodb":  mongoCheck,
-					"postgres": postgresCheck,
-				},
-			})
-		}
-		return c.JSON(fiber.Map{
-			"status":  status,
-			"service": "orders_api",
-			"checks": fiber.Map{
-				"mongodb":  mongoCheck,
-				"postgres": postgresCheck,
-			},
-		})
-	})
+	app.Get("/health", health.FiberHandler("orders_api",
+		health.MongoCheck(models.MongoClient),
+		health.DatabaseCheck(models.DB),
+	))
 
 	// Configurar rotas
 	routes.SetupRoutes(app, sendMessageToClient)

@@ -1,45 +1,179 @@
-name: Release
+name: Release APKs
 
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  release:
-    name: Create Release
+  # ──────────────────────────────────────────────
+  # Build AppComida (client APK)
+  # ──────────────────────────────────────────────
+  build-appcomida:
+    name: Build AppComida
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Frontend/AppComida
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: Frontend/AppComida/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build APK
+        run: eas build --platform android --profile preview --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Download APK from EAS
+        run: |
+          BUILD_ID=$(eas build:list --platform android --limit 1 --json | jq -r '.[0].id')
+          echo "Build ID: $BUILD_ID"
+          mkdir -p artifacts
+          eas build:download --id "$BUILD_ID" --platform android --path ./artifacts
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: appcomida-apk
+          path: Frontend/AppComida/artifacts/*.apk
+          retention-days: 5
+
+  # ──────────────────────────────────────────────
+  # Build AppEntrega (delivery driver APK)
+  # ──────────────────────────────────────────────
+  build-appentrega:
+    name: Build AppEntrega
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Frontend/AppEntrega
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: Frontend/AppEntrega/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build APK
+        run: eas build --platform android --profile preview --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Download APK from EAS
+        run: |
+          BUILD_ID=$(eas build:list --platform android --limit 1 --json | jq -r '.[0].id')
+          echo "Build ID: $BUILD_ID"
+          mkdir -p artifacts
+          eas build:download --id "$BUILD_ID" --platform android --path ./artifacts
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: appentrega-apk
+          path: Frontend/AppEntrega/artifacts/*.apk
+          retention-days: 5
+
+  # ──────────────────────────────────────────────
+  # Create GitHub Release with both APKs
+  # ──────────────────────────────────────────────
+  release:
+    name: Create GitHub Release
+    needs: [build-appcomida, build-appentrega]
+    runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # full history for changelog generation
 
-      - name: Install git-cliff
+      - name: Download both APK artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Verify APKs downloaded
         run: |
-          curl -sSfL https://raw.githubusercontent.com/orhun/git-cliff/main/install-deb.sh | sh
-
-      - name: Generate Changelog
-        id: changelog
-        run: |
-          # Generate changelog scoped to this tag
-          git cliff --tag "${{ github.ref_name }}" -o CHANGELOG.md
-
-          # Pass to next step
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          cat CHANGELOG.md >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          echo "=== Downloaded artifacts ==="
+          find artifacts -type f -name "*.apk" -exec ls -lh {} \;
+          echo ""
+          echo "=== Count ==="
+          APK_COUNT=$(find artifacts -type f -name "*.apk" | wc -l)
+          echo "APK files found: $APK_COUNT"
+          if [ "$APK_COUNT" -lt 2 ]; then
+            echo "ERROR: Expected 2 APK files, found $APK_COUNT"
+            exit 1
+          fi
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
-          body_path: CHANGELOG.md
+          name: "${{ github.ref_name }} — FuuDelivery"
+          generate_release_notes: true
           draft: false
-          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
+          prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') || contains(github.ref_name, 'alpha') }}
+          files: |
+            artifacts/appcomida-apk/*.apk
+            artifacts/appentrega-apk/*.apk
+          body: |
+            ## 📱 APKs
+
+            | App | Description | File |
+            |-----|-------------|------|
+            | **FuuDelivery** | App do cliente (fazer pedidos) | `appcomida-apk/*.apk` |
+            | **FuuEntrega** | App do entregador (receber entregas) | `appentrega-apk/*.apk` |
+
+            ## 📦 Installation
+
+            1. Download the `.apk` file for your role
+            2. Enable "Install from unknown sources" on your Android device
+            3. Open the APK file to install
+
+            ## 🔗 Links
+
+            - **API:** https://fuudelivery-api-8y6l.onrender.com
+            - **Payment Service:** https://fuudelivery-payment.onrender.com
+            - **WebAdmin:** https://fuudelivery-admin-lv7f.onrender.com
+            - **WebRestaurant:** https://fuudelivery-web-lv7f.onrender.com
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

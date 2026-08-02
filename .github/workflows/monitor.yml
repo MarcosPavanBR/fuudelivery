@@ -1,0 +1,52 @@
+# monitor.yml — Scheduled production health checks
+#
+# Runs verify-deploy.sh against the live FuuDelivery services every 30 minutes.
+# The job FAILS whenever any service is unhealthy (script exit code = failure count),
+# which surfaces as a red run in GitHub Actions and can be wired to notifications.
+# A workflow_dispatch trigger allows on-demand checks from the Actions tab.
+name: Monitor Production
+
+on:
+  schedule:
+    # Every 30 minutes — Render free-tier cold starts can take 30-60s,
+    # so verify-deploy.sh already retries 3x with 10s intervals.
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  health:
+    name: Health Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run verify-deploy.sh
+        id: verify
+        # Script prints a summary per service and exits with the number of failures.
+        # `|| true` keeps the run green here so we can still emit the summary;
+        # the final step below converts an unhealthy state into a failed job.
+        run: |
+          set +e
+          bash scripts/verify-deploy.sh 2>&1 | tee verify-output.txt
+          FAILURES=${PIPESTATUS[0]}
+          echo "failures=$FAILURES" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload health check log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: health-check-log
+          path: verify-output.txt
+          retention-days: 7
+
+      - name: Fail job if services unhealthy
+        if: steps.verify.outputs.failures != '0'
+        run: |
+          echo "::error::One or more production services are unhealthy (exit code ${{ steps.verify.outputs.failures }})"
+          cat verify-output.txt
+          exit 1

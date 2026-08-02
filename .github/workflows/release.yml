@@ -45,6 +45,11 @@ jobs:
           OUTPUT=$(eas build --platform android --profile preview --non-interactive --json)
           echo "$OUTPUT" > build-output.json
           BUILD_ID=$(echo "$OUTPUT" | jq -r '.id')
+          if [ -z "$BUILD_ID" ] || [ "$BUILD_ID" = "null" ]; then
+            echo "ERROR: Failed to extract build ID from EAS output"
+            echo "$OUTPUT"
+            exit 1
+          fi
           echo "BUILD_ID=$BUILD_ID" >> $GITHUB_ENV
           echo "Build ID: $BUILD_ID"
         env:
@@ -100,6 +105,11 @@ jobs:
           OUTPUT=$(eas build --platform android --profile preview --non-interactive --json)
           echo "$OUTPUT" > build-output.json
           BUILD_ID=$(echo "$OUTPUT" | jq -r '.id')
+          if [ -z "$BUILD_ID" ] || [ "$BUILD_ID" = "null" ]; then
+            echo "ERROR: Failed to extract build ID from EAS output"
+            echo "$OUTPUT"
+            exit 1
+          fi
           echo "BUILD_ID=$BUILD_ID" >> $GITHUB_ENV
           echo "Build ID: $BUILD_ID"
         env:

@@ -212,6 +212,100 @@ test('renders menu item title', () => {
 - **Frontend**: Test critical user interactions
 - **Integration**: Test API endpoints with real database (Docker)
 
+## Payment System (FuuPayment)
+
+The payment system is a standalone Go service (`Backend/Payment`) that handles payment processing, digital wallets, chargebacks, and risk scoring. It communicates with the monolith (`cmd/fuudelivery`) via Redis queues.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    MONOLITH (cmd/fuudelivery)                       │
+│                    Go 1.23 + Fiber v2                               │
+│                                                                     │
+│  payment_api/webhook.go ──LPush──▶ queue:payments                   │
+│                                    │                                │
+│                                    │  Redis LPush/BRPop             │
+│                                    ▼                                │
+│  cmd/fuudelivery/main.go ◀──Subscribe── queue:payment_updates       │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+                    ┌─────────┴─────────┐
+                    ▼                   ▼
+┌───────────────────────┐  ┌───────────────────────────────────────────┐
+│   PAYMENT SERVICE     │  │           INFRAESTRUTURA                   │
+│   (Backend/Payment)   │  │                                           │
+│                       │  │  MongoDB — pagamentos, carteiras,         │
+│   consumers/          │  │               estornos                    │
+│     └─ BRPop ────────┼──│  Redis — fila + cache                     │
+│                       │  │  AbacatePay — gateway PIX/Cartão          │
+│   services/           │  │                                           │
+│     └─ approval_engine│  └───────────────────────────────────────────┘
+│     └─ wallet_service │
+│     └─ risk_scorer    │
+└───────────────────────┘
+```
+
+### Communication Flow
+
+1. **Payment API** (`payment_api/webhook.go`) receives webhook from AbacatePay
+2. Publishes payment confirmation to `queue:payments` via Redis LPush
+3. **Payment Service** (`consumers/payment_consumer.go`) consumes from `queue:payments` via Redis BRPop
+4. Processes payment: updates MongoDB, credits wallet, checks risk score
+5. Publishes status update to `queue:payment_updates` via Redis LPush
+6. **Monolith** (`cmd/fuudelivery/main.go`) subscribes to `queue:payment_updates` and updates order status
+
+### Running Locally
+
+```bash
+# Start MongoDB
+docker run -d --name mongodb -p 27017:27017 mongo:6
+
+# Start Redis (optional — uses Go channels fallback if not available)
+docker run -d --name redis -p 6379:6379 redis:7
+
+# Start Payment Service
+cd Backend/Payment
+go mod tidy
+go run main.go
+
+# Start Monolith (in separate terminal)
+cmd/fuudelivery
+go run main.go
+```
+
+### Environment Variables
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `MONGO_URI` | MongoDB connection string | Yes |
+| `JWT_SECRET` | JWT signing secret (must match monolith) | Yes |
+| `REDIS_URL` | Redis URL for queue communication | Recommended |
+| `ABACATE_PAY_API_KEY` | AbacatePay API key | Yes (production) |
+| `ABACATE_PAY_WEBHOOK_SECRET` | Webhook secret for signature verification | Yes (production) |
+
+### Testing Payment Flows
+
+```bash
+# Run unit tests
+cd Backend/Payment
+go test ./...
+
+# Run integration tests (requires Docker)
+go test -tags=integration ./... -v
+
+# Run specific test suite
+go test ./services/... -v           # Wallet, chargeback, approval tests
+go test ./consumers/... -v         # Redis consumer tests
+```
+
+### Key Concepts
+
+- **Risk Scoring**: 4 factors (amount, frequency, establishment history, chargeback history)
+- **Wallet Operations**: Atomic `$inc` operations on MongoDB to prevent race conditions
+- **Split Payment**: 5% platform, 85% restaurant, delivery fee to driver
+- **Idempotency**: Transaction deduplication via `TransactionExistsByReference`
+
 ## Pull Request Process
 
 ### 1. Create a Branch

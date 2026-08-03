@@ -97,35 +97,75 @@ curl -s -o /dev/null -w "%{http_code}" https://fuudelivery-payment-panel.onrende
 
 ### Arquitetura atual
 
-O sistema usa Redis como fila/pubsub com fallback para canais Go em memória:
+O sistema usa **Redis Streams com consumer groups** (`pkg/queue`) como transport
+de mensagens, com fallback para canais Go em memória quando o Redis não está
+configurado:
 
 ```
-Producer (API) → Redis Channel → Consumer (Payment)
-                    ↓ (se Redis indisponível)
-              Go Channel (in-memory) → Consumer
+Producer (API) ──XAdd──▶ Stream (queue:<nome>) ──XReadGroup──▶ Consumer (Payment)
+                              │  ├─ XAck (confirmação explícita)
+                              │  ├─ retry: falha deixa a mensagem pendente
+                              │  └─ DLQ (queue:<nome>:dlq) após maxRetries
+                              │
+                              └─ (se Redis indisponível)
+                                   Go Channel (in-memory) → Consumer
 ```
 
-### Risco: Perda silenciosa de eventos no fallback
+### Garantias (Redis Streams)
 
-Quando o Redis cai:
+- **Entrega at-least-once**: mensagens só são removidas do pending entries list
+  (PEL) após `XAck` explícito — sucesso do handler.
+- **Persistência**: mensagens ficam no stream mesmo se o consumer reiniciar ou o
+  deploy ocorrer no meio do processamento (sem perda de eventos).
+- **Retry com limite**: handler que falha deixa a mensagem pendente; o reclaim
+  loop (`XPendingExt` + `XClaim`) reprocessa após `reclaimIdle` (30s).
+- **Dead-letter queue**: após `maxRetries` (3) tentativas, a mensagem é movida
+  para `queue:<nome>:dlq` com o motivo da falha e a original é confirmada.
+- **Reclaim pós-crash**: mensagens de consumers que caíram são reivindicadas e
+  reprocessadas por outro consumer do mesmo grupo.
+
+### Risco residual: fallback em memória (apenas dev/local)
+
+Quando o Redis cai ou não está configurado (`REDIS_URL` ausente):
 1. O producer continua publicando em canais Go em memória
 2. O consumer continua consumindo
 3. **MAS**: se o consumer reiniciar, os eventos em memória são perdidos
-4. Não há persistência, não há retry, não há dead letter queue
+4. Não há persistência, retry nem DLQ no fallback
 
 ### Mitigação
 
 - Monitorar se o fallback está ativo (log quando `REDIS_URL` não está configurado)
 - Em produção, o Redis do Render tem alta disponibilidade — o fallback é para dev/local
 - **NÃO confiar no fallback em memória para dados financeiros**
+- Com `REDIS_URL` configurado, mensagens de pagamento **não se perdem** em
+  restart/deploy (Streams + consumer groups)
 
 ### O que acontece se o Redis cair em produção
 
 1. Pagamentos já processados não são afetados
 2. Novos pagamentos continuam sendo recebidos (API não depende de Redis)
-3. A fila de processamento assíncrono para em memória
-4. Se o consumer reiniciar, pagamentos pendentes na fila em memória são perdidos
-5. **Ação necessária**: reprocessar manualmente os pagamentos pendentes ou usar retry do AbacatePay
+3. O producer tenta `XAdd` e o erro é logado; sem Redis, cai para Go channels
+4. Com Redis restabelecido, os Streams retomam com as mensagens pendentes
+   (reclaim) — sem reprocessamento manual
+5. **Ação necessária** (apenas se o fallback em memória foi usado e o consumer
+   reiniciou): reprocessar manualmente os pagamentos pendentes
+
+### Monitorando a fila em produção
+
+```bash
+# Tamanho do stream (mensagens não processadas no backlog)
+redis-cli XLEN queue:payments
+
+# Mensagens pendentes no consumer group (não confirmadas)
+redis-cli XPENDING queue:payments fuudelivery-consumers
+
+# Dead-letter queue (mensagens que esgotaram as tentativas)
+redis-cli XLEN queue:payments:dlq
+redis-cli XRANGE queue:payments:dlq - +
+```
+
+> **Alerta:** se `XPENDING` cresce sem parar, há handler falhando repetidamente;
+> se `queue:*:dlq` acumula, há mensagens que precisam de investigação manual.
 
 ## Rollback
 

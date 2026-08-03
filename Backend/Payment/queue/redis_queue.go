@@ -39,18 +39,21 @@ func Publish(msg PaymentMessage) error {
 }
 
 // Subscribe inicia o loop de consumo da fila de pagamentos via pkg/queue compartilhado.
-// Bloqueia em BRPop ate receber mensagens. Executa handler para cada uma.
+// Usa SubscribeFunc para ativar retry/DLQ: mensagens que falham ao decodificar
+// (ou cujo handler retorna erro) ficam pendentes e, apos maxRetries tentativas,
+// sao movidas para a dead-letter queue do pkg/queue (queue:payments:dlq).
 func Subscribe(handler func(PaymentMessage)) {
 	q := sharedqueue.New()
-	q.Subscribe(paymentQueueKey, func(data []byte) {
+	q.SubscribeFunc(paymentQueueKey, func(data []byte) error {
 		var msg PaymentMessage
 		if err := json.Unmarshal(data, &msg); err != nil {
 			log.Printf("[REDIS_QUEUE] Erro ao decodificar mensagem: %v", err)
-			return
+			return err // nao confirma -> retry -> DLQ apos maxRetries
 		}
 		log.Printf("[REDIS_QUEUE] Mensagem recebida: order=%s amount=%.2f status=%s",
 			msg.OrderID, msg.Amount, msg.Status)
 		handler(msg)
+		return nil
 	})
 }
 

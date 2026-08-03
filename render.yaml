@@ -11,6 +11,8 @@ services:
     envVars:
       - key: PORT
         value: "3000"
+      - key: GO_VERSION
+        value: "1.23"
       - key: GO_ENV
         value: production
       - key: JWT_SECRET
@@ -31,7 +33,7 @@ services:
       - key: APP_URL
         value: "https://fuudelivery-web.onrender.com"
       - key: API_BASE_URL
-        value: "https://fuudelivery-api.onrender.com"
+        value: "https://fuudelivery-api-8y6l.onrender.com"
       - key: ABACATE_PAY_API_KEY
         sync: false
       - key: ALLOWED_ORIGINS
@@ -52,7 +54,7 @@ services:
         destination: /index.html
     envVars:
       - key: REACT_APP_API_URL
-        value: https://fuudelivery-api.onrender.com
+        value: https://fuudelivery-api-8y6l.onrender.com
 
   # ============================================================
   # ADMIN — Painel Administrativo (React)
@@ -68,7 +70,7 @@ services:
         destination: /index.html
     envVars:
       - key: REACT_APP_API_URL
-        value: https://fuudelivery-api.onrender.com
+        value: https://fuudelivery-api-8y6l.onrender.com
 
   # ============================================================
   # REDIS — Cache + Fila de pagamentos (BRPop)
@@ -89,6 +91,8 @@ services:
     envVars:
       - key: PORT
         value: "8084"
+      - key: GO_VERSION
+        value: "1.23"
       - key: MONGO_URI
         sync: false
       - key: PAYMENT_MONGO_DATABASE

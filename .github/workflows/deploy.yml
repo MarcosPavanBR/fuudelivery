@@ -8,11 +8,13 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Gate: só permite deploy se o CI Gate passou (ou em disparo manual).
+  # Este job SEMPRE roda; se o CI falhou, falha o pipeline e bloqueia o deploy.
   check-ci-status:
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion != 'success' && github.event_name != 'workflow_dispatch' }}
     steps:
-      - name: CI did not pass
+      - name: Verifica resultado do CI Gate
+        if: ${{ github.event_name != 'workflow_dispatch' && github.event.workflow_run.conclusion != 'success' }}
         run: |
           echo "CI workflow did not pass (conclusion: ${{ github.event.workflow_run.conclusion }})."
           echo "Fix CI failures before deploying."

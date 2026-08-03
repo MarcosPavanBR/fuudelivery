@@ -110,6 +110,9 @@ Fork do [vercardapio/appdelivery](https://github.com/carloshomar/appdelivery) es
 | fuudelivery-web | Static site | https://fuudelivery-web.onrender.com |
 | fuudelivery-admin | Static site | https://fuudelivery-admin-lv7f.onrender.com |
 | fuudelivery-payment-panel | Static site | https://fuudelivery-payment-panel.onrender.com |
+
+> **📌 Referência de URLs:** todos os links de produção (serviços, health checks,
+> CORS, apps mobile) estão organizados em [`references/URLS.md`](references/URLS.md).
 | fuudelivery-redis | Redis | Gerenciado pelo Render |
 
 ## Features

@@ -3,7 +3,7 @@
 # FUUDELIVERY — Seed Data Script
 # Run this ONCE after first deploy to initialize essential data.
 # Usage: bash scripts/seed-data.sh <API_URL> <ADMIN_TOKEN>
-# Example: bash scripts/seed-data.sh https://fuudelivery-api.onrender.com admin_jwt_token
+# Example: bash scripts/seed-data.sh https://fuudelivery-api-8y6l.onrender.com admin_jwt_token
 # ============================================================
 
 set -euo pipefail

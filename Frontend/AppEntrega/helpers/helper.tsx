@@ -225,5 +225,7 @@ export default {
   formatDateNoHour,
 };
 
+// URL da API de produção (fallback). Sobrescrita por EXPO_PUBLIC_API_URL
+// no build (ver eas.json). Lista canônica de URLs em references/URLS.md.
 export const getApiUrl = () => 
   process.env.EXPO_PUBLIC_API_URL || "https://fuudelivery-api-8y6l.onrender.com";

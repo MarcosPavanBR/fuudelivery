@@ -78,6 +78,9 @@ func main() {
 	// 4. Configura middleware global
 	app.Use(logger.New())
 
+	// CORS: origens permitidas. Lista canônica em references/URLS.md.
+	// Origens: WebRestaurant, WebAdmin, PaymentPanel (produção).
+	// Pode ser sobrescrita pela env var ALLOWED_ORIGINS (render.yaml).
 	allowedOrigins := os.Getenv("ALLOWED_ORIGINS")
 	if allowedOrigins == "" {
 		allowedOrigins = "https://fuudelivery-web.onrender.com,https://fuudelivery-admin-lv7f.onrender.com,https://fuudelivery-payment-panel.onrender.com"

@@ -1,5 +1,7 @@
 import axios from "axios";
 
+// API principal (monolito). Sobrescrita por REACT_APP_API_URL no build.
+// Lista canônica de URLs em references/URLS.md.
 const api = axios.create({
   baseURL: "https://fuudelivery-api-8y6l.onrender.com",
   timeout: 15000,

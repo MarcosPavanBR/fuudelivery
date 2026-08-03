@@ -1,6 +1,8 @@
 import axios from "axios";
 import Strings from "../constants/Strings";
 
+// URL da API de produção (fallback). Sobrescrita por REACT_APP_API_URL
+// no build. Lista canônica de URLs em references/URLS.md.
 const API_BASE_URL =
   process.env.REACT_APP_API_URL ||
   process.env.API_URL ||

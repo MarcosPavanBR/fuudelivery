@@ -1,5 +1,8 @@
 # Guia de Deploy em Producao - FuuDelivery
 
+> **📌 Referência central de URLs:** ver `references/URLS.md` — mapa de todos os
+> serviços, endpoints de health, CORS e histórico de correções de URLs.
+
 ## Status Atual (Agosto 2026)
 
 | Servico | URL | Status |
@@ -12,6 +15,9 @@
 | Redis | Render Managed | Online |
 | MongoDB Atlas | Cloud | Connected |
 | PostgreSQL (Supabase) | Cloud | Connected |
+
+> **Nota (2026-08-02):** corrigida a variável `API_BASE_URL` abaixo — apontava para
+> `fuudelivery-api.onrender.com` (404). Ver `references/URLS.md` para o histórico.
 
 ---
 
@@ -52,7 +58,7 @@ O deploy e automatizado via GitHub Actions. Push para master dispara:
 | MONGO_URI | MongoDB Atlas (secret) |
 | MONGO_DATABASE | fuudelivery |
 | APP_URL | https://fuudelivery-web.onrender.com |
-| API_BASE_URL | https://fuudelivery-api.onrender.com |
+| API_BASE_URL | https://fuudelivery-api-8y6l.onrender.com |
 | ABACATE_PAY_API_KEY | API key AbacatePay (secret) |
 | ALLOWED_ORIGINS | CORS origins |
 

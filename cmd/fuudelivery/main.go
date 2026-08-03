@@ -45,9 +45,11 @@ import (
 	// Batch expiry
 	orderServices "github.com/carloshomar/vercardapio/orders_api/app/services"
 
-	// Queue + Health + Upload
+	// Queue + Health + Upload + Metrics + Search
 	"github.com/carloshomar/fuudelivery/pkg/health"
+	"github.com/carloshomar/fuudelivery/pkg/metrics"
 	"github.com/carloshomar/fuudelivery/pkg/queue"
+	"github.com/carloshomar/fuudelivery/pkg/search"
 	"github.com/carloshomar/fuudelivery/pkg/upload"
 )
 
@@ -1039,6 +1041,9 @@ func main() {
 	app.Use(logger.New())
 	app.Use(recover.New())
 
+	// Metricas HTTP (contadores por rota+status) — expostas em GET /metrics
+	app.Use(metrics.Middleware())
+
 	// CORS: origens permitidas. Lista canônica em references/URLS.md.
 	// Origens: WebRestaurant, WebAdmin, PaymentPanel (produção).
 	// Pode ser sobrescrita pela env var ALLOWED_ORIGINS (render.yaml).
@@ -1093,6 +1098,13 @@ func main() {
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok", "service": "fuudelivery"})
 	})
+
+	// Metricas em formato Prometheus text (para Prometheus/Grafana/BetterStack/UptimeRobot)
+	app.Get("/metrics", metrics.Handler)
+
+	// Busca full-text basica (Fase 3 — construcao nova): GET /search?q=...
+	// Busca estabelecimentos e produtos no PostgreSQL (ILIKE + scoring).
+	app.Get("/search", search.NewHandler(models.DB))
 
 	// Mount all routes
 	setupWebSocketRoutes(app)

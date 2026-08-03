@@ -36,7 +36,7 @@ Fork do [vercardapio/appdelivery](https://github.com/carloshomar/appdelivery) es
 │  └──────────────────────────────────────────────────────────────┘  │
 │                                                                     │
 │  ┌──────────────────────────────────────────────────────────────┐  │
-│  │  Queue (Redis LPush/BRPop + Go channels fallback)            │  │
+│  │  Queue (Redis Streams + consumer groups + DLQ + fallback)    │  │
 │  └──────────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────────┘
                               │
@@ -66,7 +66,7 @@ Fork do [vercardapio/appdelivery](https://github.com/carloshomar/appdelivery) es
 | **Fiber** | v2 | Framework HTTP (inspirado em Express) |
 | **MongoDB** | Atlas | Banco para pagamentos, chat, entregas, pedidos |
 | **PostgreSQL** | Supabase | Banco para auth, usuários, estabelecimentos, zonas |
-| **Redis** | Render | Fila de mensagens (LPush/BRPop) + cache |
+| **Redis** | Render | Fila de mensagens (Streams + consumer groups) + cache |
 | **GORM** | v2 | ORM para PostgreSQL |
 | **go-redis** | v8 | Cliente Redis |
 | **golang-jwt** | v5 | Autenticação JWT |
@@ -127,7 +127,7 @@ Fork do [vercardapio/appdelivery](https://github.com/carloshomar/appdelivery) es
 - Saque via PIX
 
 ### Comunicação
-- Redis: fila LPush/BRPop entre monolito e Payment Service
+- Redis: fila via Streams (XAdd/XReadGroup) entre monolito e Payment Service, com retry e DLQ
 - WebSocket: atualizações em tempo real (pedidos, entregas, chat)
 - Go channels: fallback in-memory quando Redis não configurado
 
@@ -160,11 +160,11 @@ fuudelivery/
 ├── Backend/
 │   ├── Payment/              # Microserviço de pagamentos (aprovação, carteiras, chargebacks)
 │   │   ├── config/           # Configuração e variáveis de ambiente
-│   │   ├── consumers/        # Consumer Redis (BRPop)
+│   │   ├── consumers/        # Consumer Redis (Streams/XReadGroup)
 │   │   ├── handlers/         # Handlers HTTP (pagamentos, carteiras, chargebacks, relatórios)
 │   │   ├── middleware/       # JWT auth + rate limiting
 │   │   ├── models/          # Modelos de dados (Payment, Wallet, Chargeback, etc.)
-│   │   ├── queue/           # Fila Redis (LPush/BRPop)
+│   │   ├── queue/           # Fila Redis (Streams + retry + DLQ)
 │   │   ├── repository/      # Acesso a dados (MongoDB)
 │   │   └── services/        # Lógica de negócio (aprovação, risco, carteiras)
 │   ├── auth_api/            # Autenticação JWT, CRUD de usuários e estabelecimentos
@@ -177,7 +177,7 @@ fuudelivery/
 │   └── fuudelivery/         # Monolith principal (API Gateway)
 │       └── pkg/
 │           ├── health/      # Health checks (Postgres, MongoDB, Redis)
-│           ├── queue/       # Fila Redis + Go channels fallback
+│           ├── queue/       # Fila Redis Streams + fallback + DLQ
 │           ├── storage/     # Conexão MongoDB
 │           └── upload/      # Upload de imagens
 ├── Frontend/

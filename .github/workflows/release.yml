@@ -189,9 +189,10 @@ jobs:
 
             ## 🔗 Links
 
-            - **API:** https://fuudelivery-api-8y6l.onrender.com
+            - **API (Monolito):** https://fuudelivery-api-8y6l.onrender.com
             - **Payment Service:** https://fuudelivery-payment.onrender.com
+            - **WebRestaurant:** https://fuudelivery-web.onrender.com
             - **WebAdmin:** https://fuudelivery-admin-lv7f.onrender.com
-            - **WebRestaurant:** https://fuudelivery-web-lv7f.onrender.com
+            - **PaymentPanel:** https://fuudelivery-payment-panel.onrender.com
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

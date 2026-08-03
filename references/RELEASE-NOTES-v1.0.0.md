@@ -180,9 +180,14 @@ Todos os 5 microserviços expõem `GET /health`:
 
 - **Produção API:** https://fuudelivery-api-8y6l.onrender.com/health
 - **WebRestaurant:** https://fuudelivery-web.onrender.com
-- **WebAdmin:** https://fuudelivery-admin.onrender.com
-- **PaymentPanel:** https://fuudelivery-payment.onrender.com
+- **WebAdmin:** https://fuudelivery-admin-lv7f.onrender.com
+- **PaymentPanel:** https://fuudelivery-payment-panel.onrender.com
 - **Repositório:** https://github.com/MarcosPavanBR/fuudelivery
+
+> **Nota (2026-08-02):** URLs corrigidas na auditoria de deploy. As URLs antigas
+> `fuudelivery-api.onrender.com`, `fuudelivery-admin.onrender.com` e
+> `fuudelivery-web-lv7f.onrender.com` retornavam 404 (mortas) e foram substituídas
+> pelas URLs ativas documentadas em `references/URLS.md`.
 
 ---
 

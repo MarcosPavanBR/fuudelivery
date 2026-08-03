@@ -91,10 +91,13 @@ func main() {
 		AllowHeaders: "Origin,Content-Type,Accept,Authorization",
 	}))
 
-	// 5. Rota de health check para monitoramento
+	// 5. Rotas públicas: health check + índice da API na raiz
+	// GET /health — monitoramento (Render/UptimeRobot)
 	app.Get("/health", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{"status": "ok", "service": "payment"})
+		return c.JSON(handlers.HealthPayload())
 	})
+	// GET / — índice da API (identity + status + endpoints). Ver handlers/index_handler.go
+	app.Get("/", handlers.Index)
 
 	// 6. Inicializa handlers
 	ph := handlers.NewPaymentHandler()    // Pagamentos

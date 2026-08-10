@@ -13,6 +13,9 @@ WORKDIR /app
 
 # Copy go.work and all go.mod files first for dependency caching
 COPY go.work .
+# go.work.sum acompanha o go.work no modo workspace — sem ele, o
+# `go mod download` falha com "missing go.sum entry" no CI/Docker.
+COPY go.work.sum .
 COPY cmd/fuudelivery/go.mod ./cmd/fuudelivery/
 COPY cmd/fuudelivery/go.sum ./cmd/fuudelivery/
 

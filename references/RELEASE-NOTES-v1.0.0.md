@@ -27,7 +27,7 @@ FuuDelivery é uma plataforma completa de delivery de alimentos inspirada no mod
 - **Patrocínios** — Listings patrocinados com ranking
 
 ### Frontend — Apps Mobile (React Native / Expo SDK 51)
-- **AppComida (CoopFood)** — App do cliente com:
+- **AppComida (FuuDelivery)** — App do cliente com:
   - Cardápio, carrinho, checkout PIX
   - Tracking em tempo real ("Fuu Pulse")
   - Chat com restaurante
@@ -36,7 +36,7 @@ FuuDelivery é uma plataforma completa de delivery de alimentos inspirada no mod
   - Onboarding de restaurantes
   - Dark mode e i18n
 
-- **AppEntrega (CoopBike)** — App do entregador com:
+- **AppEntrega (FuuDelivery Entregas)** — App do entregador com:
   - Lista de solicitações
   - Aceitar/rejeitar entregas
   - Navegação com OSRM

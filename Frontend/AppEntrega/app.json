@@ -1,12 +1,13 @@
 {
   "expo": {
-    "name": "CoopBike",
-    "slug": "my-app",
+    "name": "FuuDelivery Entregas",
+    "slug": "entrega",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "coopbike",
+    "scheme": "fuuentrega",
     "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
     "splash": {
       "image": "./assets/images/splash.png",
       "resizeMode": "contain",
@@ -17,10 +18,10 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.coopdelivery.delivery"
+      "bundleIdentifier": "com.fuudelivery.entrega"
     },
     "android": {
-      "package": "com.coopdelivery.delivery",
+      "package": "com.fuudelivery.entrega",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"

@@ -1,10 +1,10 @@
 import React from "react";
-import ReactDOM from "react-dom"; // Corrigido
+import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App";
 import reportWebVitals from "./reportWebVitals";
 
-const root = ReactDOM.createRoot(document.getElementById("root"));
+const root = createRoot(document.getElementById("root"));
 root.render(<App />);
 
 // Se você quiser começar a medir o desempenho em sua aplicação, passe uma função

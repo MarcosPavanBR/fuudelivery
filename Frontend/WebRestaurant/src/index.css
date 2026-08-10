@@ -1,8 +1,58 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
+/* @imports devem preceder todas as regras — fontes antes do Tailwind */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+/* ============================================================
+   Tailwind CSS v4 — configuração CSS-first (@theme)
+   Migrado de tailwind.config.js (webpack) para @theme.
+   Gera utilidades: bg-fuu-red, shadow-card, animate-fade-in, etc.
+   ============================================================ */
+@theme {
+  /* Cores da marca FuuDelivery */
+  --color-fuu-red: #EA1D2C;
+  --color-fuu-red-dark: #C41420;
+  --color-fuu-red-light: #FEF2F2;
+  --color-fuu-yellow: #F7A11E;
+  --color-fuu-yellow-light: #FFFBEB;
+  --color-fuu-orange: #FF6B35;
+  --color-customRed: #EA1D2C;
+  --color-customRed2: #FF4444;
+  --color-menu1: #EA1D2C;
+  --color-menu2: #C41420;
+  --color-primary: #EA1D2C;
+
+  /* Fontes */
+  --font-display: "Inter", "Segoe UI", sans-serif;
+  --font-body: "Inter", "Segoe UI", sans-serif;
+
+  /* Bordas */
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+
+  /* Sombras */
+  --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.06);
+  --shadow-card-hover: 0 8px 24px rgba(234, 29, 44, 0.12);
+  --shadow-sidebar: 4px 0 24px rgba(0, 0, 0, 0.08);
+  --shadow-modal: 0 20px 60px rgba(0, 0, 0, 0.2);
+
+  /* Animações */
+  --animate-fade-in: fadeIn 0.3s ease-in-out;
+  --animate-slide-up: slideUp 0.3s ease-out;
+  --animate-slide-in-left: slideInLeft 0.3s ease-out;
+
+  @keyframes fadeIn {
+    0% { opacity: 0; }
+    100% { opacity: 1; }
+  }
+  @keyframes slideUp {
+    0% { transform: translateY(10px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+  }
+  @keyframes slideInLeft {
+    0% { transform: translateX(-20px); opacity: 0; }
+    100% { transform: translateX(0); opacity: 1; }
+  }
+}
 
 * {
   margin: 0;

@@ -1,11 +1,11 @@
 import React, { useState } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { FiMenu, FiX, FiHome, FiBuilding2, FiUsers, FiShoppingBag, FiTruck, FiCreditCard, FiSettings, FiLogOut, FiBarChart2, FiChevronLeft } from "react-icons/fi";
+import { FiMenu, FiX, FiHome, FiUsers, FiShoppingBag, FiTruck, FiCreditCard, FiSettings, FiLogOut, FiBarChart2, FiChevronLeft } from "react-icons/fi";
 
 const iconMap = {
   dashboard: FiBarChart2,
-  establishments: FiBuilding2,
+  establishments: FiHome,
   users: FiUsers,
   orders: FiShoppingBag,
   "delivery-men": FiTruck,

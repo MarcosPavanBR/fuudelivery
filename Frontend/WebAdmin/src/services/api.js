@@ -1,14 +1,22 @@
 import axios from "axios";
 
-// API principal (monolito). Sobrescrita por REACT_APP_API_URL no build.
-// Lista canônica de URLs em references/URLS.md.
+// API principal (monolito). Sobrescrita por REACT_APP_API_URL ou VITE_API_URL
+// no build (Vite expõe via import.meta.env). Lista canônica em references/URLS.md.
+const API_BASE_URL =
+  import.meta.env.REACT_APP_API_URL ||
+  import.meta.env.VITE_API_URL ||
+  "https://fuudelivery-api-8y6l.onrender.com";
+
 const api = axios.create({
-  baseURL: "https://fuudelivery-api-8y6l.onrender.com",
+  baseURL: API_BASE_URL,
   timeout: 15000,
   headers: {
     "Content-Type": "application/json",
   },
 });
+
+// Export for use by other services that need the base URL
+export const getApiBaseUrl = () => API_BASE_URL;
 
 api.interceptors.request.use(
   (config) => {

@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { FiUsers, FiShoppingBag, FiTruck, FiDollarSign, FiTrendingUp, FiActivity, FiBuilding2, FiMapPin, FiClock } from "react-icons/fi";
+import { FiUsers, FiShoppingBag, FiTruck, FiDollarSign, FiTrendingUp, FiActivity, FiHome, FiMapPin, FiClock } from "react-icons/fi";
 import api from "../services/api";
 
 const statCards = [
-  { label: "Restaurantes Ativos", value: "0", icon: FiBuilding2, color: "#EA1D2C", bg: "#FEF2F2" },
+  { label: "Restaurantes Ativos", value: "0", icon: FiHome, color: "#EA1D2C", bg: "#FEF2F2" },
   { label: "Total de Usuários", value: "0", icon: FiUsers, color: "#F7A11E", bg: "#FFFBEB" },
   { label: "Pedidos Hoje", value: "0", icon: FiShoppingBag, color: "#10B981", bg: "#ECFDF5" },
   { label: "Entregadores Online", value: "0", icon: FiTruck, color: "#3B82F6", bg: "#DBEAFE" },
@@ -91,7 +91,7 @@ export default function Dashboard() {
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: "Restaurantes Ativos", value: stats.restaurants, IconComp: FiBuilding2, color: "#EA1D2C", bg: "#FEF2F2" },
+            { label: "Restaurantes Ativos", value: stats.restaurants, IconComp: FiHome, color: "#EA1D2C", bg: "#FEF2F2" },
             { label: "Total de Usuarios", value: stats.users, IconComp: FiUsers, color: "#F7A11E", bg: "#FFFBEB" },
             { label: "Pedidos Hoje", value: stats.todayOrders, IconComp: FiShoppingBag, color: "#10B981", bg: "#ECFDF5" },
             { label: "Entregadores Online", value: stats.onlineDrivers, IconComp: FiTruck, color: "#3B82F6", bg: "#DBEAFE" },

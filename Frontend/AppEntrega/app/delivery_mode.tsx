@@ -56,7 +56,7 @@ export default function DeliveryMode({ showIcon }: any) {
     setLoading(true);
 
     try {
-      const { data } = await api.post("/api/delivery/deliveryman/status", {
+      const { data } = await api.post("/deliveryman/status", {
         order_id: order.order_id,
         deliveryman: {
           id: deliveryman.id,

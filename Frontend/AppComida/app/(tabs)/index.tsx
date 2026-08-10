@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ScrollView, StyleSheet, Text } from "react-native";
+import { RefreshControl, ScrollView, StyleSheet, Text } from "react-native";
 
 import Colors from "@/constants/Colors";
 import { useIsFocused, useNavigation } from "@react-navigation/native";
@@ -7,6 +7,7 @@ import { APP_MODE, APP_MODE_OPTIONS } from "@/config/config";
 import EstablishmentView from "@/components/EstablishmentView";
 import Establishment from "../establishment";
 import { useCartApi } from "@/contexts/ApiCartContext";
+import { removeCached, CACHE_KEYS } from "@/config/cache";
 
 import { View } from "@/components/Themed";
 import Texts from "@/constants/Texts";
@@ -24,10 +25,19 @@ function TabTwo() {
   const isFocused = useIsFocused();
 
   const [estabelecimentos, setEstabelecimentos] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
 
   async function init() {
     const resp = await establishmentsModel.getEstablishment();
     setEstabelecimentos(resp);
+  }
+
+  // Pull-to-refresh: invalida o cache da lista e busca de novo.
+  async function onRefresh() {
+    setRefreshing(true);
+    removeCached(CACHE_KEYS.ESTABLISHMENTS);
+    await init();
+    setRefreshing(false);
   }
 
   useEffect(() => {
@@ -47,6 +57,9 @@ function TabTwo() {
         paddingTop: 10,
       }}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
     >
       {estabelecimentos.length === 0 ? (
         <View style={styles.container}>

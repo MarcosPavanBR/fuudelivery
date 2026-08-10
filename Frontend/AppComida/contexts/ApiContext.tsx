@@ -1,16 +1,17 @@
 // ApiContext.tsx
-import Strings from "@/constants/Strings";
 import React, {
   createContext,
   useContext,
   useState,
   useEffect,
+  useRef,
   ReactNode,
 } from "react";
-import * as SecureStore from "expo-secure-store";
 import { Alert } from "react-native";
 import LoadingPage from "@/components/LoadingPage";
 import { jwtDecode } from "jwt-decode";
+import { setToken, getToken, clearToken } from "@/config/tokenStorage";
+import { setOnUnauthorized } from "@/services/api";
 
 interface UserData {
   id?: number;
@@ -63,7 +64,7 @@ export const ApiProvider: React.FC<ApiProviderProps> = ({ children }) => {
   useEffect(() => {
     const loadUserFromStorage = async () => {
       try {
-        const storedToken = await SecureStore.getItemAsync(Strings.token_jwt);
+        const storedToken = await getToken();
         if (storedToken) {
           const decoded = decodeJWT(storedToken);
           if (decoded) {
@@ -71,7 +72,7 @@ export const ApiProvider: React.FC<ApiProviderProps> = ({ children }) => {
             setUserData(decoded);
             setIsLogged(true);
           } else {
-            await SecureStore.deleteItemAsync(Strings.token_jwt);
+            await clearToken();
           }
         }
       } catch (error) {
@@ -84,11 +85,23 @@ export const ApiProvider: React.FC<ApiProviderProps> = ({ children }) => {
   }, []);
 
   const logout = async () => {
-    await SecureStore.deleteItemAsync(Strings.token_jwt);
+    await clearToken();
     setToken(null);
     setUserData(null);
     setIsLogged(false);
   };
+
+  // Registra o logout como callback de sessão expirada (401) —
+  // o interceptor de api.tsx chama, e o nav.tsx redireciona ao login.
+  const logoutRef = useRef(logout);
+  logoutRef.current = logout;
+
+  useEffect(() => {
+    setOnUnauthorized(() => {
+      logoutRef.current();
+    });
+    return () => setOnUnauthorized(null);
+  }, []);
 
   const getUserData = (): UserData | null => {
     return userData;
@@ -105,7 +118,7 @@ export const ApiProvider: React.FC<ApiProviderProps> = ({ children }) => {
         }
 
         const mergedData = { ...decoded, ...extraData };
-        await SecureStore.setItemAsync(Strings.token_jwt, tokenValue);
+        await setToken(tokenValue);
         setToken(tokenValue);
         setUserData(mergedData);
         setIsLogged(true);

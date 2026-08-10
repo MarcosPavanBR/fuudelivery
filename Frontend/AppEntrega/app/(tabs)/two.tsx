@@ -19,7 +19,7 @@ export default function TabTwoScreen() {
     setLoad(true);
     try {
       const { data } = await api.get(
-        "/api/delivery/deliveryman/extrato/" + user.id
+        "/deliveryman/extrato/" + user.id
       );
       setOrders(data);
     } catch (e) {

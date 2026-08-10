@@ -28,7 +28,7 @@ const ConfirmScreen = () => {
     setLoading(true);
     try {
       const { data } = await api.put(
-        "/api/delivery/solicitation-orders/hand-shake",
+        "/solicitation-orders/hand-shake",
         {
           order_id: order.order_id,
           deliveryman: delivery,

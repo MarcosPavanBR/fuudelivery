@@ -1,10 +1,9 @@
-import { createContext, useState, useEffect, useContext } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { createContext, useState, useEffect, useContext, useRef } from "react";
 
-import api from "@/services/api";
+import api, { setOnUnauthorized } from "@/services/api";
+import { setToken, getToken, clearToken } from "@/config/tokenStorage";
 import { Buffer } from "buffer";
 import useWebSocket from "react-use-websocket";
-import Strings from "@/constants/Strings";
 import { useNavigation } from "expo-router";
 import * as React from "react";
 import { Alert } from "react-native";
@@ -51,7 +50,7 @@ const AuthProvider = ({ children }: any) => {
   const nav = useNavigation();
 
   // const { sendJsonMessage, lastMessage, lastJsonMessage } = useWebSocket(
-  //   api.getUri().replace("http", "ws") + "/api/delivery/ws/" + user?.id,
+  //   api.getUri().replace("http", "ws") + "/ws/delivery/" + user?.id,
   //   {
   //     reconnectInterval: 1000,
   //     retryOnError: true,
@@ -86,7 +85,7 @@ const AuthProvider = ({ children }: any) => {
 
     try {
       const { data } = await api.get(
-        "/api/delivery/deliveryman/has-active/" + user?.id
+        "/deliveryman/has-active/" + user?.id
       );
       setInWork({ status: data !== null, order: data });
 
@@ -98,13 +97,13 @@ const AuthProvider = ({ children }: any) => {
 
   const login = async (email: string, password: string) => {
     try {
-      const response = await api.post("/api/auth/delivery-man/login", {
+      const response = await api.post("/delivery-man/login", {
         email,
         password,
       });
       const { token } = response.data;
 
-      await AsyncStorage.setItem(Strings.token_jwt, token);
+      await setToken(token);
 
       // Decodifica o token para obter os dados do usuário
       const parts = token
@@ -139,7 +138,7 @@ const AuthProvider = ({ children }: any) => {
     phone: string
   ) => {
     try {
-      const response = await api.post("/api/auth/delivery-man/register", {
+      const response = await api.post("/delivery-man/register", {
         email,
         password,
         name,
@@ -147,7 +146,7 @@ const AuthProvider = ({ children }: any) => {
       });
       const { token } = response.data;
 
-      await AsyncStorage.setItem(Strings.token_jwt, token);
+      await setToken(token);
 
       // Decodifica o token para obter os dados do usuário
       const parts = token
@@ -181,7 +180,7 @@ const AuthProvider = ({ children }: any) => {
 
   const logout = async () => {
     try {
-      await AsyncStorage.removeItem(Strings.token_jwt);
+      await clearToken();
       // Limpa o estado do usuário e finaliza o carregamento
       setUser(null);
       setIsLoading(false);
@@ -191,9 +190,21 @@ const AuthProvider = ({ children }: any) => {
     }
   };
 
+  // Registra o logout como callback de sessão expirada (401) —
+  // o interceptor de api.tsx chama, e o nav.tsx redireciona ao login.
+  const logoutRef = useRef(logout);
+  logoutRef.current = logout;
+
+  useEffect(() => {
+    setOnUnauthorized(() => {
+      logoutRef.current();
+    });
+    return () => setOnUnauthorized(null);
+  }, []);
+
   const getUser = async () => {
     try {
-      const token = await AsyncStorage.getItem(Strings.token_jwt);
+      const token = await getToken();
       if (token) {
         const parts = token
           .split(".")

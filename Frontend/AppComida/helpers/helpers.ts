@@ -1,4 +1,5 @@
 import * as Location from "expo-location";
+import { getApiUrl, getWsUrl } from "@/config/api";
 
 function formatCurrency(value: number): string {
   // Formate o valor como dinheiro brasileiro (BRL)
@@ -151,10 +152,9 @@ function formatDate(dataString: string) {
   }
 }
 
-// URL da API de produção (fallback). Sobrescrita por EXPO_PUBLIC_API_URL
-// no build (ver eas.json). Lista canônica de URLs em references/URLS.md.
-export const getApiUrl = () =>
-  process.env.EXPO_PUBLIC_API_URL || "https://fuudelivery-api-8y6l.onrender.com";
+// getApiUrl/getWsUrl centralizados em config/api.ts — fonte única de URLs
+// (ver references/URLS.md). Re-export mantém compatibilidade com imports existentes.
+export { getApiUrl, getWsUrl };
 
 export default {
   formatCurrency,
@@ -167,4 +167,5 @@ export default {
   orderByImage,
   getLocationDistance,
   getApiUrl,
+  getWsUrl,
 };

@@ -5,7 +5,7 @@ import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 import "react-native-reanimated";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { useColorScheme } from "@/components/useColorScheme";
 
@@ -13,6 +13,7 @@ import "../global.css";
 import { ApiProvider } from "@/contexts/ApiContext";
 import NavStack from "./nav";
 import { ApiCartProvider } from "@/contexts/ApiCartContext";
+import { migrateLegacyData } from "@/config/legacyMigration";
 
 export { ErrorBoundary } from "expo-router";
 
@@ -28,6 +29,15 @@ export default function RootLayout() {
     ...FontAwesome.font,
   });
 
+  // Migração one-time de dados legados (AsyncStorage → MMKV/SecureStore).
+  // Espera terminar ANTES de montar os providers, para que ApiContext e
+  // ApiCartContext leiam o token/localização já migrados (sem race condition).
+  const [migrationDone, setMigrationDone] = useState(false);
+
+  useEffect(() => {
+    migrateLegacyData().finally(() => setMigrationDone(true));
+  }, []);
+
   useEffect(() => {
     if (error) throw error;
   }, [error]);
@@ -38,7 +48,7 @@ export default function RootLayout() {
     }
   }, [loaded]);
 
-  if (!loaded) {
+  if (!loaded || !migrationDone) {
     return null;
   }
 

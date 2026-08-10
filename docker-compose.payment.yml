@@ -1,8 +1,10 @@
 services:
   payment-service:
     build:
-      context: ./Backend/Payment
-      dockerfile: Dockerfile
+      # Contexto = raiz do repo: o módulo Backend/Payment depende do pacote
+      # compartilhado pkg/queue via replace ../../pkg/queue (fora de ./Backend/Payment)
+      context: .
+      dockerfile: Backend/Payment/Dockerfile
     ports:
       - "8084:8084"
     environment:

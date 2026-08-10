@@ -35,8 +35,8 @@
 
 | App | URL da API | Onde está definida |
 |-----|-----------|--------------------|
-| **AppComida** (cliente) | `https://fuudelivery-api-8y6l.onrender.com` | `helpers/helpers.ts` (fallback) + `eas.json` (`EXPO_PUBLIC_API_URL`) |
-| **AppEntrega** (entregador) | `https://fuudelivery-api-8y6l.onrender.com` | `helpers/helper.tsx` (fallback) + `eas.json` (`EXPO_PUBLIC_API_URL`) |
+| **AppComida** (cliente) | `https://fuudelivery-api-8y6l.onrender.com` | `config/api.ts` (`API_URL` — fonte única) → consumida por `services/api.tsx`, `helpers/helpers.ts` e `LiveTrackingReadonly.tsx` |
+| **AppEntrega** (entregador) | `https://fuudelivery-api-8y6l.onrender.com` | `config/api.ts` (`API_URL` — fonte única) → consumida por `services/api.tsx` e `helpers/helper.tsx` |
 | **WebRestaurant** | `https://fuudelivery-api-8y6l.onrender.com` | `src/services/api.js` + env `REACT_APP_API_URL` |
 | **WebAdmin** | `https://fuudelivery-api-8y6l.onrender.com` | `src/services/api.js` + env `REACT_APP_API_URL` |
 | **WebAdmin** (pagamentos) | `https://fuudelivery-payment.onrender.com/api` | `src/services/paymentApi.js` + env `REACT_APP_PAYMENT_API_URL` |
@@ -81,3 +81,9 @@ https://fuudelivery-payment-panel.onrender.com
 > **Nota:** as URLs `-8y6l`/`-lv7f` são o sufixo aleatório que o Render atribui a cada
 > serviço. Se um serviço for recriado no Render, o sufixo muda — atualizar este arquivo
 > e o `render.yaml` em conjunto.
+>
+> **Apps mobile:** a URL da API de cada app vive em `config/api.ts` (constante `API_URL`),
+> que também expõe `getApiUrl()` (override via `EXPO_PUBLIC_API_URL` p/ dev/staging) e
+> `getWsUrl()` (derivada para WebSocket). Para trocar a URL de produção dos apps, edite
+> **apenas** a constante `API_URL` nos dois `config/api.ts` e o `eas.json` não precisa
+> de mudanças (os blocos `env` duplicados foram removidos na centralização).

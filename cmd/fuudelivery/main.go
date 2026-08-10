@@ -857,18 +857,19 @@ func setupDispatchRoutes(app *fiber.App) {
 
 func setupPaymentRoutes(app *fiber.App) {
 	app.Get("/payments/all", adminRequired, paymentHandlers.ListAllPayments)
-	app.Post("/payments/pix/generate", protectedRoute, paymentHandlers.GeneratePIX)
-	app.Post("/payments/card/tokenize", protectedRoute, paymentHandlers.TokenizeCard)
-	app.Post("/payments/card/charge", protectedRoute, paymentHandlers.ChargeCard)
-	app.Post("/payments/process", protectedRoute, paymentHandlers.ProcessPayment)
-	app.Post("/payments/split", protectedRoute, paymentHandlers.ProcessSplit)
+	// Rate limit 20/min nos endpoints de dinheiro (proteção contra abuso/custo)
+	app.Post("/payments/pix/generate", protectedRoute, rateLimitMiddleware(20), paymentHandlers.GeneratePIX)
+	app.Post("/payments/card/tokenize", protectedRoute, rateLimitMiddleware(20), paymentHandlers.TokenizeCard)
+	app.Post("/payments/card/charge", protectedRoute, rateLimitMiddleware(20), paymentHandlers.ChargeCard)
+	app.Post("/payments/process", protectedRoute, rateLimitMiddleware(20), paymentHandlers.ProcessPayment)
+	app.Post("/payments/split", protectedRoute, rateLimitMiddleware(20), paymentHandlers.ProcessSplit)
 	app.Post("/payments/webhook", rateLimitMiddleware(100), paymentHandlers.HandlePaymentWebhook)
 	app.Get("/wallet/balance/:user_id", protectedRoute, paymentHandlers.GetBalance)
-	app.Post("/wallet/topup", protectedRoute, paymentHandlers.TopUp)
-	app.Post("/wallet/deduct", protectedRoute, paymentHandlers.DeductFromWallet)
-	app.Post("/asaas/wallet/create", protectedRoute, paymentHandlers.CreateAsaasWallet)
+	app.Post("/wallet/topup", protectedRoute, rateLimitMiddleware(20), paymentHandlers.TopUp)
+	app.Post("/wallet/deduct", protectedRoute, rateLimitMiddleware(20), paymentHandlers.DeductFromWallet)
+	app.Post("/asaas/wallet/create", protectedRoute, rateLimitMiddleware(20), paymentHandlers.CreateAsaasWallet)
 	app.Get("/asaas/wallet/:walletId/status", protectedRoute, paymentHandlers.GetAsaasWalletStatus)
-	app.Post("/asaas/payment/split", protectedRoute, paymentHandlers.CreateAsaasSplitPayment)
+	app.Post("/asaas/payment/split", protectedRoute, rateLimitMiddleware(20), paymentHandlers.CreateAsaasSplitPayment)
 }
 
 func setupSponsoredRoutes(app *fiber.App) {

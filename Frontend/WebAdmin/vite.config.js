@@ -15,6 +15,11 @@ import tailwindcss from "@tailwindcss/vite";
 export default defineConfig({
   plugins: [react(), tailwindcss()],
 
+  test: {
+    environment: "jsdom",
+    globals: true,
+  },
+
   // JSX em arquivos .js (herança do babel-loader do webpack): o esbuild
   // por padrão só trata .jsx/.tsx como JSX — o projeto usa .js com JSX.
   esbuild: {

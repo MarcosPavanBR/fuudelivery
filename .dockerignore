@@ -1,0 +1,22 @@
+# ============================================================
+# .dockerignore — FuuDelivery
+# Reduz o build context (essencial com context = raiz do repo)
+# ============================================================
+.git
+.freebuff
+.agents
+node_modules
+**/node_modules
+dist
+**/dist
+build
+**/build
+android
+**/android
+ios
+**/ios
+*.exe
+*.test
+server
+.env
+.env.local

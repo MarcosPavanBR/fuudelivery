@@ -1,0 +1,134 @@
+# ============================================================================
+# docker-compose.vps.yml — FuuDelivery em VPS (Ubuntu)
+# ============================================================================
+# Stack completa de produção para um VPS próprio:
+#   - fuudelivery-api      : monolito Go (auth + orders + delivery + chat + payment)
+#   - payment-service      : Payment Service (aprovação/backoffice de pagamentos)
+#   - payment-panel        : Painel Financeiro (nginx, estático)
+#   - web-restaurant       : Painel do Restaurante (Vite build, nginx)
+#   - web-admin             : Painel Administrativo (Vite build, nginx)
+#   - redis                : cache + fila de pagamentos (BRPop)
+#
+# Uso:
+#   cp .env.example .env && nano .env        # preencha as credenciais
+#   docker compose -f docker-compose.vps.yml up -d --build
+#
+# IMPORTANTE: todas as portas ficam presas a 127.0.0.1 — o nginx do HOST
+# (instalado no passo SSL/Certbot) é quem expõe 80/443 para a internet.
+# Nada é exposto publicamente fora do nginx.
+#
+# Referência: scripts/deploy-vps.md (guia passo a passo completo).
+# ============================================================================
+
+name: fuudelivery
+
+services:
+  # ── Monolito Go (API Gateway) ───────────────────────────────────────────
+  fuudelivery-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fuudelivery-api:latest
+    container_name: fuudelivery-api
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    env_file: .env
+    environment:
+      - PORT=3000
+      - GO_ENV=production
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  # ── Payment Service (aprovação/backoffice) ──────────────────────────────
+  payment-service:
+    build:
+      # Contexto = raiz do repo: o módulo depende de pkg/queue via
+      # replace ../../pkg/queue (fora de ./Backend/Payment)
+      context: .
+      dockerfile: Backend/Payment/Dockerfile
+    image: fuudelivery-payment:latest
+    container_name: fuudelivery-payment
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8084:8084"
+    env_file: .env
+    environment:
+      - PORT=8084
+      - PAYMENT_MONGO_DATABASE=${PAYMENT_MONGO_DATABASE:-fuudelivery_payments}
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8084/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  # ── Painel Financeiro (estático, nginx) ─────────────────────────────────
+  payment-panel:
+    build:
+      context: ./Frontend/PaymentPanel
+      dockerfile: Dockerfile
+    image: fuudelivery-payment-panel:latest
+    container_name: fuudelivery-payment-panel
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3001:80"
+    depends_on:
+      - payment-service
+
+  # ── Painel do Restaurante (Vite + React, nginx) ─────────────────────────
+  web-restaurant:
+    build:
+      context: ./Frontend/WebRestaurant
+      dockerfile: Dockerfile
+      args:
+        # URL da API injetada no build do Vite (REACT_APP_API_URL)
+        REACT_APP_API_URL: ${API_BASE_URL:-http://localhost:3000}
+    image: fuudelivery-web-restaurant:latest
+    container_name: fuudelivery-web-restaurant
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3002:80"
+
+  # ── Painel Administrativo (Vite + React, nginx) ─────────────────────────
+  web-admin:
+    build:
+      context: ./Frontend/WebAdmin
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_API_URL: ${API_BASE_URL:-http://localhost:3000}
+        REACT_APP_PAYMENT_API_URL: ${PAYMENT_API_BASE_URL:-http://localhost:8084}
+    image: fuudelivery-web-admin:latest
+    container_name: fuudelivery-web-admin
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3003:80"
+
+  # ── Redis (cache + fila de pagamentos) ──────────────────────────────────
+  # Se preferir usar um Redis gerenciado (ex.: Redis Cloud), remova este
+  # serviço e aponte REDIS_URL no .env para o serviço externo.
+  redis:
+    image: redis:7-alpine
+    container_name: fuudelivery-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  redis-data:

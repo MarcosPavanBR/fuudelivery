@@ -102,6 +102,18 @@ jobs:
         run: govulncheck ./...
 
   # ──────────────────────────────────────────────
+  # Mobile — API URL consistency (URLS.md vs config/api.ts)
+  # ──────────────────────────────────────────────
+  check-mobile-urls:
+    name: Check mobile API URL consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run URL consistency check
+        run: bash scripts/check-mobile-urls.sh
+
+  # ──────────────────────────────────────────────
   # Frontend — install, test, lint, build
   # ──────────────────────────────────────────────
   frontend-webrestaurant:
@@ -123,7 +135,8 @@ jobs:
         run: npm install
 
       - name: Run tests
-        run: npm test -- --watchAll=false
+        # vitest (substitui react-scripts test após a migração webpack → Vite)
+        run: npm test
 
       - name: Build
         run: npm run build

@@ -17,8 +17,12 @@ import (
 )
 
 const (
-	paymentRedisQueueKey = "payments"
-	orderRedisQueueKey   = "orders"
+	// paymentRedisQueueKey e o canal onde o webhook publica confirmacoes
+	// de pagamento. Deve coincidir com o canal escutado pelo monolito
+	// (cmd/fuudelivery/main.go startQueueListeners) para que a ponte
+	// WebSocket notifique o cliente em tempo real.
+	paymentRedisQueueKey = "payment_updates"
+	orderRedisQueueKey   = "order_updates"
 )
 
 // publishToOrderQueue publica uma mensagem na fila de pedidos usando

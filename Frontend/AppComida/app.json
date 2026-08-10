@@ -1,12 +1,13 @@
 {
   "expo": {
-    "name": "CoopFood",
+    "name": "FuuDelivery",
     "slug": "comida",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "myapp",
+    "scheme": "fuudelivery",
     "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
     "splash": {
       "image": "./assets/images/splash.png",
       "resizeMode": "contain",
@@ -23,7 +24,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.coopdelivery.food"
+      "package": "com.fuudelivery.comida"
     },
     "web": {
       "bundler": "metro",

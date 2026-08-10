@@ -13,18 +13,12 @@
         "buildType": "apk",
         "withoutCredentials": true
       },
-      "env": {
-        "EXPO_PUBLIC_API_URL": "https://fuudelivery-api-8y6l.onrender.com"
-      },
       "prebuildCommand": "npx expo prebuild --clean --platform android"
     },
     "production": {
       "android": {
         "buildType": "app-bundle",
         "withoutCredentials": true
-      },
-      "env": {
-        "EXPO_PUBLIC_API_URL": "https://fuudelivery-api-8y6l.onrender.com"
       },
       "prebuildCommand": "npx expo prebuild --clean --platform android"
     }

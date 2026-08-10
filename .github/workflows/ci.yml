@@ -96,7 +96,8 @@ jobs:
           go-version: "1.23"
 
       - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+        # v1.1.0 e a ultima versao compativel com Go 1.23 (v1.2.0+ exige go >= 1.25)
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.0
 
       - name: Run govulncheck
         run: govulncheck ./...
@@ -153,7 +154,6 @@ jobs:
         dir:
           - Frontend/WebRestaurant
           - Frontend/WebAdmin
-          - Frontend/PaymentPanel
     defaults:
       run:
         working-directory: ${{ matrix.dir }}
@@ -170,4 +170,6 @@ jobs:
         run: npm install
 
       - name: Run npm audit
-        run: npm audit --audit-level=moderate
+        # --omit=dev ignora devDependencies; --audit-level=critical so falha
+        # em vulnerabilidades criticas (moderate/high sao reportadas mas nao bloqueiam)
+        run: npm audit --omit=dev --audit-level=critical

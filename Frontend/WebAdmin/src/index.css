@@ -1,8 +1,24 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
+/* @imports devem preceder todas as regras — fontes antes do Tailwind */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+/* ============================================================
+   Tailwind CSS v4 — configuração CSS-first (@theme)
+   Migrado de tailwind.config.js (webpack) para @theme.
+   Gera utilidades: bg-fuu-red, text-fuu-red, etc.
+   ============================================================ */
+@theme {
+  /* Cores da marca FuuDelivery */
+  --color-fuu-red: #EA1D2C;
+  --color-fuu-red-dark: #C41420;
+  --color-fuu-red-light: #FEF2F2;
+  --color-fuu-yellow: #F7A11E;
+  --color-fuu-yellow-light: #FFFBEB;
+
+  /* Fontes */
+  --font-display: Inter, system-ui, sans-serif;
+  --font-body: Inter, system-ui, sans-serif;
+}
 
 * {
   margin: 0;

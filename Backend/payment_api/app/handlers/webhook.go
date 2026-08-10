@@ -1,8 +1,12 @@
 package handlers
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"log"
+	"os"
 	"time"
 
 	"github.com/carloshomar/fuudelivery/pkg/queue"
@@ -145,7 +149,42 @@ func publishPaymentApproved(abacatepayID string) {
 	}
 }
 
+// ValidateWebhookSignature verifica a assinatura HMAC-SHA256 do header
+// x-abacatepay-signature contra o body do webhook usando a secret configurada.
+// Retorna true se a assinatura for válida ou se a secret não estiver configurada
+// (fallback: a verificação via API AbacatePay continua sendo o check primário).
+func ValidateWebhookSignature(body []byte, signature string) bool {
+	secret := os.Getenv("ABACATE_PAY_WEBHOOK_SECRET")
+	if secret == "" {
+		// Secret não configurada —skip HMAC (a verificação via API é o check primário)
+		log.Println("[WEBHOOK] ABACATE_PAY_WEBHOOK_SECRET not set — skipping HMAC validation")
+		return true
+	}
+
+	if signature == "" {
+		log.Println("[WEBHOOK] Missing x-abacatepay-signature header")
+		return false
+	}
+
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(body)
+	expected := hex.EncodeToString(mac.Sum(nil))
+
+	if !hmac.Equal([]byte(expected), []byte(signature)) {
+		log.Printf("[WEBHOOK] HMAC mismatch: expected=%s got=%s", expected[:16]+"...", signature[:min(16, len(signature))]+"...")
+		return false
+	}
+	return true
+}
+
 func HandlePaymentWebhook(c *fiber.Ctx) error {
+	// --- HMAC signature validation (defense-in-depth) ---
+	body := c.Body()
+	signature := c.Get("x-abacatepay-signature")
+	if !ValidateWebhookSignature(body, signature) {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid webhook signature"})
+	}
+
 	var webhookData struct {
 		Event  string `json:"event"`
 		ID     string `json:"id"`

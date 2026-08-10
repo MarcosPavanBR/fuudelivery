@@ -6,10 +6,17 @@ import {
   TextInput,
   StyleSheet,
   ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import api from "@/services/api";
+import {
+  fetchWithCache,
+  removeCached,
+  CACHE_TTL,
+  CACHE_KEYS,
+} from "@/config/cache";
 import Colors from "@/constants/Colors";
 import HeaderMain from "@/components/HeaderMain";
 import { useCartApi } from "@/contexts/ApiCartContext";
@@ -21,26 +28,35 @@ export default function Establishment() {
   const [cadProdcts, setCadProdcts] = useState<any[]>([]);
   const [searchText, setSearchText] = useState("");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const { establishment } = useCartApi();
   const insets = useSafeAreaInsets();
 
   const init = async () => {
     try {
-      const categories = await api.get(
-        "/api/order/categories/product/" + establishment.id
+      // Cardápio com cache local (TTL 15 min) — evita 2 chamadas de rede
+      // a cada visita ao restaurante. Rede falhou → serve o último cache.
+      const categories = await fetchWithCache(
+        CACHE_KEYS.menuCategories(establishment.id),
+        async () => (await api.get("/api/order/categories/product/" + establishment.id)).data,
+        CACHE_TTL.MENU,
+        []
       );
 
-      const produtos = await api.get(
-        "/api/order/products/" + establishment.id
+      const produtos = await fetchWithCache(
+        CACHE_KEYS.menuProducts(establishment.id),
+        async () => (await api.get("/api/order/products/" + establishment.id)).data,
+        CACHE_TTL.MENU,
+        []
       );
 
       setCadProdcts([
-        ...categories.data,
+        ...categories,
         {
           Id: 9999,
           Name: Texts.todos,
           EstablishmentId: establishment.Id,
-          Products: helpers.orderByImage(produtos.data),
+          Products: helpers.orderByImage(produtos),
         },
       ]);
     } catch (e) {
@@ -53,6 +69,15 @@ export default function Establishment() {
   useEffect(() => {
     init();
   }, []);
+
+  // Pull-to-refresh: invalida o cache do cardápio e busca de novo.
+  async function onRefresh() {
+    setRefreshing(true);
+    removeCached(CACHE_KEYS.menuCategories(establishment.id));
+    removeCached(CACHE_KEYS.menuProducts(establishment.id));
+    await init();
+    setRefreshing(false);
+  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -77,6 +102,9 @@ export default function Establishment() {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
         >
           {cadProdcts
             .filter((cat) =>

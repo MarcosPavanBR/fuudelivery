@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useRef } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import MapView, { Marker } from "react-native-maps";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import Colors from "@/constants/Colors";
-import Strings from "@/constants/Strings";
+import { getWsUrl } from "@/config/api";
+import { useApi } from "@/contexts/ApiContext";
 
 interface LiveTrackingReadonlyProps {
   orderId: string;
@@ -27,6 +27,9 @@ export default function LiveTrackingReadonly({
   destinationLat,
   destinationLng,
 }: LiveTrackingReadonlyProps) {
+  // Token JWT do contexto (mesma fonte do SecureStore em ApiContext)
+  const { token } = useApi();
+
   const [deliveryLocation, setDeliveryLocation] =
     useState<DeliveryLocation | null>(null);
   const [connected, setConnected] = useState(false);
@@ -39,17 +42,13 @@ export default function LiveTrackingReadonly({
 
     const connectWebSocket = async () => {
       try {
-        const token = await AsyncStorage.getItem(Strings.token_jwt);
         if (!token) {
           setError("Token não encontrado");
           return;
         }
 
-        const wsUrl =
-          process.env.EXPO_PUBLIC_WS_URL ||
-          "wss://fuudelivery-api-8y6l.onrender.com";
         const ws = new WebSocket(
-          `${wsUrl}/ws/delivery/${orderId}?token=${token}`
+          `${getWsUrl()}/ws/delivery/${orderId}?token=${token}`
         );
 
         ws.onopen = () => {
@@ -91,7 +90,7 @@ export default function LiveTrackingReadonly({
         wsRef.current.close();
       }
     };
-  }, [orderId]);
+  }, [orderId, token]);
 
   useEffect(() => {
     if (mapRef.current && deliveryLocation) {

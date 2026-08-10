@@ -12,6 +12,7 @@ import Texts from "@/constants/Texts";
 import helpers from "@/helpers/helpers";
 import Colors from "@/constants/Colors";
 import api from "@/services/api";
+import { fetchWithCache, CACHE_TTL, CACHE_KEYS } from "@/config/cache";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useCartApi } from "@/contexts/ApiCartContext";
 
@@ -23,7 +24,13 @@ export default function Search() {
   const { establishment } = useCartApi();
 
   async function init() {
-    const { data } = await api.get("/api/order/products/" + establishment.id);
+    // Mesma chave do cardápio (establishment.tsx) → compartilha o cache.
+    const data = await fetchWithCache(
+      CACHE_KEYS.menuProducts(establishment.id),
+      async () => (await api.get("/api/order/products/" + establishment.id)).data,
+      CACHE_TTL.MENU,
+      []
+    );
     setProducts(data);
     setFilteredProducts(data);
   }

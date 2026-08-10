@@ -21,7 +21,7 @@ import helpers from "@/helpers/helpers";
 
 import * as Location from "expo-location";
 import api from "@/services/api";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import storage from "@/config/storage";
 import Strings from "@/constants/Strings";
 import { ESTABLISHMENT, PAYMENT_TYPE } from "@/config/config";
 
@@ -121,15 +121,19 @@ export const ApiCartProvider: React.FC<ApiCartProviderProps> = ({
     }
   };
 
-  async function getMyLocationStorange() {
-    const locs = await AsyncStorage.getItem(Strings.token_location);
+  function getMyLocationStorange() {
+    const locs = storage.getItem(Strings.token_location);
     if (locs) {
-      setLocation(JSON.parse(locs));
+      try {
+        setLocation(JSON.parse(locs));
+      } catch (e) {
+        console.log("[STORAGE] Falha ao ler localização salva", e);
+      }
     }
   }
 
-  async function setMyLocation(locs: any) {
-    await AsyncStorage.setItem(Strings.token_location, JSON.stringify(locs));
+  function setMyLocation(locs: any) {
+    storage.setItem(Strings.token_location, JSON.stringify(locs));
     setLocation(locs);
   }
 
@@ -141,7 +145,7 @@ export const ApiCartProvider: React.FC<ApiCartProviderProps> = ({
       );
       setDistance(dist);
 
-      await getMyLocationStorange();
+      getMyLocationStorange();
       if (dist) {
         const distVal = await getValueDelivery(dist, establishment.id);
         setDeliveryValue(distVal);

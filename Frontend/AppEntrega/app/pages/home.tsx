@@ -105,7 +105,7 @@ export default function Home() {
     if (loader) setLoading(true);
     try {
       const { data } = await api.get(
-        `/api/delivery/solicitation-orders?latitude=${mylocation.coords.latitude}&longitude=${mylocation.coords.longitude}&limitDistance=${Strings.distance_delivery_distance}`
+        `/solicitation-orders?latitude=${mylocation.coords.latitude}&longitude=${mylocation.coords.longitude}&limitDistance=${Strings.distance_delivery_distance}`
       );
 
       const marks = data.map((mak: any) => {

@@ -13,6 +13,7 @@ import { useColorScheme } from "@/components/useColorScheme";
 import Texts from "@/constants/Texts";
 import Colors from "@/constants/Colors";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { migrateLegacyData } from "@/config/legacyMigration";
 import StackNav from "./nav";
 import "react-native-reanimated";
 export {
@@ -35,6 +36,15 @@ export default function RootLayout() {
     ...FontAwesome.font,
   });
 
+  // Migração one-time de dados legados (AsyncStorage → SecureStore).
+  // Espera terminar ANTES de montar o AuthProvider, para que ele leia
+  // o token JWT já migrado (sem race condition).
+  const [migrationDone, setMigrationDone] = React.useState(false);
+
+  React.useEffect(() => {
+    migrateLegacyData().finally(() => setMigrationDone(true));
+  }, []);
+
   // Expo Router uses Error Boundaries to catch errors in the navigation tree.
   useEffect(() => {
     if (error) throw error;
@@ -46,7 +56,7 @@ export default function RootLayout() {
     }
   }, [loaded]);
 
-  if (!loaded) {
+  if (!loaded || !migrationDone) {
     return null;
   }
 

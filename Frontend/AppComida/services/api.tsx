@@ -1,19 +1,26 @@
 import axios from "axios";
-import * as SecureStore from "expo-secure-store";
-import Strings from "@/constants/Strings";
-import helpers from "@/helpers/helpers";
+import { getApiUrl } from "@/config/api";
+import { getToken, clearToken } from "@/config/tokenStorage";
 
 const api = axios.create({
-  baseURL: process.env.EXPO_PUBLIC_API_URL || helpers.getApiUrl(),
+  baseURL: getApiUrl(),
   timeout: 15000,
   headers: {
     "Content-Type": "application/json",
   },
 });
 
+// ─── Sessão expirada (401) ─────────────────────────────────────
+// O ApiContext registra aqui o logout() via setOnUnauthorized —
+// evita dependência circular (api.tsx não importa o contexto).
+let onUnauthorized: (() => void) | null = null;
+export function setOnUnauthorized(cb: (() => void) | null): void {
+  onUnauthorized = cb;
+}
+
 api.interceptors.request.use(
   async (config) => {
-    const toe = await SecureStore.getItemAsync(Strings.token_jwt);
+    const toe = await getToken();
     if (toe) {
       config.headers.Authorization = `Bearer ${toe}`;
     }
@@ -26,7 +33,8 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      SecureStore.deleteItemAsync(Strings.token_jwt);
+      clearToken();         // limpa o storage (sempre)
+      onUnauthorized?.();   // logout do contexto → nav.tsx mostra o login
     }
     return Promise.reject(error);
   }

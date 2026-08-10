@@ -14,6 +14,7 @@ import { Text, View } from "@/components/Themed";
 import Colors from "@/constants/Colors";
 import { Ionicons } from "@expo/vector-icons";
 import api from "@/services/api";
+import { removeCached, CACHE_KEYS } from "@/config/cache";
 import { useNavigation } from "@react-navigation/native";
 
 export default function OnboardingScreen() {
@@ -65,6 +66,10 @@ export default function OnboardingScreen() {
         min_order: parseFloat(form.min_order) || 20,
         delivery_time: parseInt(form.delivery_time, 10) || 40,
       });
+
+      // Invalida o cache da lista de estabelecimentos para o novo
+      // restaurante aparecer imediatamente (sem esperar o TTL).
+      removeCached(CACHE_KEYS.ESTABLISHMENTS);
 
       Alert.alert(
         "Restaurante criado!",

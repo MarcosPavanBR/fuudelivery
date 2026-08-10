@@ -1,8 +1,8 @@
 import api, { getApiBaseUrl } from "./api";
 
 const PAYMENT_API =
-  process.env.REACT_APP_PAYMENT_API_URL ||
-  process.env.PAYMENT_API_URL ||
+  import.meta.env.REACT_APP_PAYMENT_API_URL ||
+  import.meta.env.VITE_PAYMENT_API_URL ||
   getApiBaseUrl() + "/api/v1";
 
 // === WALLET (para o restaurante) ===

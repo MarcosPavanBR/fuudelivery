@@ -1,0 +1,61 @@
+/// <reference types="vitest/config" />
+// =============================================================
+// vite.config.js — WebRestaurant (Vite 6 + React 19 + Tailwind 4)
+// =============================================================
+// Migrado de webpack 5. Plugins:
+//   - @vitejs/plugin-react  → JSX + Fast Refresh (substitui babel-loader)
+//   - @tailwindcss/vite     → Tailwind CSS v4 (CSS-first, sem postcss.config.js)
+//   - vite-plugin-static-copy → copia o service worker do Firebase
+//                               (que vive em node_modules) para dist/
+//
+// public/ é copiado automaticamente pelo Vite (manifest, favicons,
+// _redirects, brand/) — substitui o CopyPlugin do webpack.
+// =============================================================
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
+import { viteStaticCopy } from "vite-plugin-static-copy";
+
+export default defineConfig({
+  plugins: [
+    react(),
+    tailwindcss(),
+    viteStaticCopy({
+      targets: [
+        {
+          // SW de push notifications do Firebase (copiado de node_modules)
+          src: "node_modules/firebase/firebase-messaging-sw.js",
+          dest: ".",
+        },
+      ],
+    }),
+  ],
+
+  // JSX em arquivos .js (herança do babel-loader do webpack): o esbuild
+  // por padrão só trata .jsx/.tsx como JSX — o projeto usa .js com JSX.
+  esbuild: {
+    loader: "jsx",
+    include: /src\/.*\.jsx?$/,
+    exclude: [],
+  },
+
+  // Vite usa import.meta.env.VITE_*; mantemos REACT_APP_* como alias
+  // para não quebrar o render.yaml (que injeta REACT_APP_API_URL no build).
+  envPrefix: ["VITE_", "REACT_APP_"],
+
+  server: {
+    host: "0.0.0.0",
+    port: 3000,
+  },
+
+  build: {
+    outDir: "dist",
+  },
+
+  // Configuração do vitest (substitui react-scripts test)
+  test: {
+    environment: "jsdom",
+    globals: true,
+    setupFiles: ["./src/test/setup.js"],
+  },
+});

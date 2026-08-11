@@ -14,6 +14,7 @@ import { ApiProvider } from "@/contexts/ApiContext";
 import NavStack from "./nav";
 import { ApiCartProvider } from "@/contexts/ApiCartContext";
 import { migrateLegacyData } from "@/config/legacyMigration";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 export { ErrorBoundary } from "expo-router";
 
@@ -52,7 +53,11 @@ export default function RootLayout() {
     return null;
   }
 
-  return <RootLayoutNav />;
+  return (
+    <ErrorBoundary screenName="AppComida">
+      <RootLayoutNav />
+    </ErrorBoundary>
+  );
 }
 
 function RootLayoutNav() {

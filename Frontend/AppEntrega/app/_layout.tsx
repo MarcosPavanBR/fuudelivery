@@ -15,6 +15,7 @@ import Colors from "@/constants/Colors";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { migrateLegacyData } from "@/config/legacyMigration";
 import StackNav from "./nav";
+import { ErrorBoundary as AppErrorBoundary } from "@/components/ErrorBoundary";
 import "react-native-reanimated";
 export {
   // Catch any errors thrown by the Layout component.
@@ -60,7 +61,11 @@ export default function RootLayout() {
     return null;
   }
 
-  return <RootLayoutNav />;
+  return (
+    <AppErrorBoundary screenName="AppEntrega">
+      <RootLayoutNav />
+    </AppErrorBoundary>
+  );
 }
 
 function RootLayoutNav() {

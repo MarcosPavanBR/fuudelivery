@@ -50,6 +50,7 @@ export const AuthProvider = ({ children }) => {
     }
   }, [user]);
   const { sendJsonMessage, lastMessage } = useWebSocket(wsUrl, {
+    enabled: !!wsUrl && !!user?.sub,
     reconnectInterval: 1000,
     retryOnError: true,
     reconnectAttempts: 5,

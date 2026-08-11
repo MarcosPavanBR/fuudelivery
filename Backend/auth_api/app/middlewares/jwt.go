@@ -1,3 +1,5 @@
+// Package middlewares fornece middleware de autenticacao JWT.
+// Inclui validacao, geracao e extracao de claims de tokens.
 package middlewares
 
 import (
@@ -11,6 +13,10 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// ValidateJWT valida o token JWT da requisicao HTTP.
+// Extrai o token do header Authorization (formato 'Bearer <token>'),
+// valida a assinatura HMAC-SHA256 e retorna o token parsed.
+// Retorna erro 401 se o token for invalido ou estiver expirado.
 func ValidateJWT(c *fiber.Ctx) (*jwt.Token, error) {
 	tokenString := c.Get("Authorization")
 	if len(tokenString) > 7 {
@@ -36,7 +42,9 @@ func ValidateJWT(c *fiber.Ctx) (*jwt.Token, error) {
 	return nil, fiber.NewError(fiber.StatusUnauthorized, "Invalid token")
 }
 
-func GenerateJWT(user *models.User, establishment *models.Establishment) (string, error) {
+func GenerateJWT(user *models.User, establishment *models.Establishment) (string, error) { // GenerateJWT gera um token JWT para um usuario autenticado.
+// O token contem: id, name, email, role, establishment_id (se aplicavel),
+// e expira em 7 dias. Assinado com HS256 usando JWT_SECRET.
 	// Expiração para 7 dias a partir de agora (hora UTC)
 	expirationTime := time.Now().UTC().Add(time.Hour * 24 * 7).Unix()
 
@@ -63,6 +71,8 @@ func GenerateJWT(user *models.User, establishment *models.Establishment) (string
 	return tokenString, nil
 }
 
+// GetUserIDFromToken extrai o ID do usuario autenticado do token JWT.
+// Retorna erro 401 se o token for invalido ou o claim 'id' nao existir.
 func GetUserIDFromToken(c *fiber.Ctx) (int64, error) {
 	token, err := ValidateJWT(c)
 	if err != nil {
@@ -82,6 +92,8 @@ func GetUserIDFromToken(c *fiber.Ctx) (int64, error) {
 	return int64(idFloat), nil
 }
 
+// GetEstablishmentIDFromToken extrai o ID do estabelecimento do token JWT.
+// Retorna erro 403 se o usuario nao pertencer a nenhum estabelecimento.
 func GetEstablishmentIDFromToken(c *fiber.Ctx) (int64, error) {
 	token, err := ValidateJWT(c)
 	if err != nil {
@@ -101,6 +113,8 @@ func GetEstablishmentIDFromToken(c *fiber.Ctx) (int64, error) {
 	return int64(estIDFloat), nil
 }
 
+// GetUserRoleFromToken extrai o papel (role) do usuario do token JWT.
+// Valores possiveis: 'admin', 'restaurant', 'deliverer', 'client'.
 func GetUserRoleFromToken(c *fiber.Ctx) (string, error) {
 	token, err := ValidateJWT(c)
 	if err != nil {
@@ -116,6 +130,8 @@ func GetUserRoleFromToken(c *fiber.Ctx) (string, error) {
 	return role, nil
 }
 
+// GenerateJWTDeliveryMan gera um token JWT para um entregador.
+// Similar ao GenerateJWT, mas sem campo establishment_id.
 func GenerateJWTDeliveryMan(user *models.DeliveryMan) (string, error) {
 	expirationTime := time.Now().UTC().Add(time.Hour * 24 * 7).Unix()
 

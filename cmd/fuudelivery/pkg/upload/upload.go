@@ -2,12 +2,15 @@
 package upload
 
 import (
+	"context"
 	"io"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/carloshomar/fuudelivery/pkg/storage"
 	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
+	"github.com/carloshomar/fuudelivery/auth_api/app/models"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -31,12 +34,22 @@ func HandleImageUpload(c *fiber.Ctx) error {
 		return c.Status(503).JSON(fiber.Map{"error": "Storage nao configurado. Configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY."})
 	}
 
-	if _, err := middlewares.ValidateJWT(c); err != nil {
+	userID, err := middlewares.GetUserIDFromToken(c)
+	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
 	}
 
 	entity := c.Params("entity")
 	entityID := c.Params("entityId")
+
+	// Verifica ownership: usuario so pode fazer upload para entidades do seu restaurante
+	if entity == "products" || entity == "categories" || entity == "additionals" {
+		if entityID != "" {
+			if !checkOwnership(userID, entity, entityID) {
+				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "You can only upload images for your own establishment"})
+			}
+		}
+	}
 
 	if entity == "" {
 		return c.Status(400).JSON(fiber.Map{"error": "entity is required (products, categories, restaurants, additionals)"})
@@ -103,6 +116,47 @@ func HandleImageUpload(c *fiber.Ctx) error {
 		"url":  publicURL,
 		"path": path,
 	})
+}
+
+// checkOwnership verifica se o usuario autenticado e dono da entidade.
+// Para products/categories/additionals, verifica se pertencem ao establishment do usuario.
+func checkOwnership(userID int64, entity, entityID string) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var user models.User
+	if err := models.DB.WithContext(ctx).First(&user, userID).Error; err != nil {
+		return false
+	}
+
+	if user.EstablishmentID == 0 {
+		return false // usuario sem restaurante vinculado
+	}
+
+	switch entity {
+	case "products":
+		var count int64
+		models.DB.WithContext(ctx).Table("products").
+			Where("id = ? AND establishment_id = ?", entityID, user.EstablishmentID).
+			Count(&count)
+		return count > 0
+	case "categories":
+		var count int64
+		models.DB.WithContext(ctx).Table("categories").
+			Where("id = ? AND establishment_id = ?", entityID, user.EstablishmentID).
+			Count(&count)
+		return count > 0
+	case "additionals":
+		// Additionals estao vinculados via product -> establishment
+		var count int64
+		models.DB.WithContext(ctx).Table("additionals").
+			Joins("JOIN products ON products.id = additionals.product_id").
+			Where("additionals.id = ? AND products.establishment_id = ?", entityID, user.EstablishmentID).
+			Count(&count)
+		return count > 0
+	default:
+		return true // restaurants/reviews: sem check por enquanto
+	}
 }
 
 // parseUint helper para converter string para uint.

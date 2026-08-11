@@ -44,7 +44,7 @@ export default function Layout() {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-gray-50 overflow-x-hidden" style={{ maxWidth: '100vw' }}>
       {mobileMenuOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
@@ -124,7 +124,7 @@ export default function Layout() {
         </div>
       </aside>
 
-      <div className={`flex-1 flex flex-col transition-all duration-300 ${sidebarOpen ? "lg:ml-64" : "lg:ml-20"}`}>
+      <div className={`flex-1 min-w-0 flex flex-col transition-all duration-300 ${sidebarOpen ? "lg:ml-64" : "lg:ml-20"}`} style={{ maxWidth: '100%' }}>
         <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/80 backdrop-blur-sm">
           <div className="flex items-center justify-between px-6 py-4">
             <div className="flex items-center gap-4">
@@ -135,14 +135,14 @@ export default function Layout() {
                 {sidebarOpen ? <FiChevronLeft className="h-5 w-5 text-gray-500" /> : <FiMenu className="h-5 w-5 text-gray-500" />}
               </button>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="hidden md:block relative">
-                <input type="text" placeholder="Buscar..." className="w-72 pl-10 pr-4 py-2 bg-gray-100 border-none rounded-xl text-sm text-gray-700 placeholder-gray-400 focus:bg-white focus:ring-2 transition-all" style={{ outline: "none" }} />
+            <div className="flex items-center gap-4 min-w-0">
+              <div className="hidden md:block relative flex-shrink-0">
+                <input type="text" placeholder="Buscar..." className="w-56 pl-10 pr-4 py-2 bg-gray-100 border-none rounded-xl text-sm text-gray-700 placeholder-gray-400 focus:bg-white focus:ring-2 transition-all" style={{ outline: "none" }} />
                 <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </div>
-              <div className="relative">
+              <div className="relative flex-shrink-0">
                 <button className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-100 transition-colors">
                   <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #EA1D2C, #C41420)" }}>
                     <span className="text-white font-bold text-sm">{user?.name?.charAt(0) || "A"}</span>

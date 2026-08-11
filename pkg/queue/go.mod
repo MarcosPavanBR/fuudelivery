@@ -1,6 +1,6 @@
 module github.com/carloshomar/fuudelivery/pkg/queue
 
-go 1.23.12
+go 1.25.0
 
 require (
 	github.com/alicebob/miniredis/v2 v2.38.0
@@ -13,5 +13,5 @@ require (
 	github.com/yuin/gopher-lua v1.1.1 // indirect
 	golang.org/x/net v0.42.0 // indirect
 	golang.org/x/sys v0.35.0 // indirect
-	golang.org/x/text v0.28.0 // indirect
+	golang.org/x/text v0.39.0 // indirect
 )

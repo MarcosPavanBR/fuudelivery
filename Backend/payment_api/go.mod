@@ -1,12 +1,12 @@
 module github.com/carloshomar/vercardapio/payment_api
 
-go 1.23.12
+go 1.25.0
 
 require (
 	github.com/carloshomar/vercardapio/auth_api v0.0.0
 	github.com/go-redis/redis/v8 v8.11.5 // indirect
 	github.com/gofiber/contrib/websocket v1.3.4
-	github.com/gofiber/fiber/v2 v2.52.6
+	github.com/gofiber/fiber/v2 v2.52.12
 	github.com/joho/godotenv v1.5.1
 	go.mongodb.org/mongo-driver v1.17.9
 )
@@ -42,9 +42,9 @@ require (
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
 	golang.org/x/crypto v0.40.0 // indirect
 	golang.org/x/net v0.42.0 // indirect
-	golang.org/x/sync v0.16.0 // indirect
+	golang.org/x/sync v0.21.0 // indirect
 	golang.org/x/sys v0.35.0 // indirect
-	golang.org/x/text v0.28.0 // indirect
+	golang.org/x/text v0.39.0 // indirect
 	gorm.io/driver/postgres v1.5.11 // indirect
 	gorm.io/gorm v1.31.2 // indirect
 )

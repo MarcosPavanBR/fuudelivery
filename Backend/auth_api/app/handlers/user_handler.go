@@ -1,3 +1,4 @@
+// Package handlers implementa os handlers HTTP para autenticacao e gerenciamento de usuarios.
 package handlers
 
 import (
@@ -12,6 +13,10 @@ import (
 	"github.com/carloshomar/fuudelivery/auth_api/app/models"
 )
 
+// CreateUser cadastra um novo usuario e seu estabelecimento associado.
+// Requer: name, email, password, establishment.name.
+// Cria usuario e estabelecimento em transacao atomica no PostgreSQL.
+// Retorna o usuario criado e um token JWT valido por 7 dias.
 func CreateUser(c *fiber.Ctx) error {
 	var request dto.CreateUserRequest
 	if err := c.BodyParser(&request); err != nil {
@@ -112,6 +117,9 @@ func ListAllUsers(c *fiber.Ctx) error {
 	return c.JSON(results)
 }
 
+// Login autentica um usuario existente.
+// Valida email e senha (bcrypt), busca o estabelecimento associado,
+// e retorna um token JWT valido por 7 dias.
 func Login(c *fiber.Ctx) error {
 	var request dto.LoginRequest
 	if err := c.BodyParser(&request); err != nil {
@@ -159,6 +167,9 @@ func GetUser(c *fiber.Ctx) error {
 	return c.JSON(user)
 }
 
+// ChangePassword altera a senha de um usuario.
+// Verifica que o usuario autenticado e o mesmo da requisicao.
+// Requer a senha atual (para confirmar identidade) e a nova senha (minimo 6 caracteres).
 func ChangePassword(c *fiber.Ctx) error {
 	userID := c.Params("id")
 
@@ -206,6 +217,8 @@ func ChangePassword(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "Password updated successfully"})
 }
 
+// DeleteUser remove uma conta de usuario.
+// Apenas o proprio usuario ou um admin podem deletar a conta.
 func DeleteUser(c *fiber.Ctx) error {
 	userID := c.Params("id")
 
@@ -236,6 +249,9 @@ func DeleteUser(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "Account deleted successfully"})
 }
 
+// BootstrapAdmin promove um usuario existente para papel 'admin'.
+// Requer ADMIN_BOOTSTRAP_SECRET configurado no ambiente.
+// Usado apenas para o setup inicial do sistema.
 func BootstrapAdmin(c *fiber.Ctx) error {
 	bootstrapSecret := os.Getenv("ADMIN_BOOTSTRAP_SECRET")
 	if bootstrapSecret == "" {

@@ -6,7 +6,7 @@ package handlers
 import (
 	"testing"
 
-	"github.com/carloshomar/vercardapio/auth_api/app/dto"
+	"github.com/carloshomar/fuudelivery/auth_api/app/dto"
 	"golang.org/x/crypto/bcrypt"
 )
 

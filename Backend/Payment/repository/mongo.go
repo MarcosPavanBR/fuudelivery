@@ -8,7 +8,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/carloshomar/vercardapio/payment/config"
+	"github.com/carloshomar/fuudelivery/payment/config"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"

@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/carloshomar/vercardapio/payment_api/app/models"
+	"github.com/carloshomar/fuudelivery/payment_api/app/models"
 )
 
 // TestWebhookPublishAlignsWithSubscriber verifica que os canais de fila

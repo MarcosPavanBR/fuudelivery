@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/carloshomar/vercardapio/payment/models"
-	"github.com/carloshomar/vercardapio/payment/repository"
+	"github.com/carloshomar/fuudelivery/payment/models"
+	"github.com/carloshomar/fuudelivery/payment/repository"
 )
 
 // =============================================================================

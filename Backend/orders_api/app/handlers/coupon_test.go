@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/carloshomar/vercardapio/orders_api/app/dto"
+	"github.com/carloshomar/fuudelivery/orders_api/app/dto"
 )
 
 // === Testes de CreateCoupon validation ===

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/carloshomar/vercardapio/payment_api/app/models"
+	"github.com/carloshomar/fuudelivery/payment_api/app/models"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/mongodb"
 	"go.mongodb.org/mongo-driver/bson"

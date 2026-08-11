@@ -7,7 +7,7 @@ package services
 import (
 	"testing"
 
-	"github.com/carloshomar/vercardapio/payment/models"
+	"github.com/carloshomar/fuudelivery/payment/models"
 )
 
 // === Testes de UserRole ===

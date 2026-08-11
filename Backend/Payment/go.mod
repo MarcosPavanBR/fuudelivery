@@ -1,4 +1,4 @@
-module github.com/carloshomar/vercardapio/payment
+module github.com/carloshomar/fuudelivery/payment
 
 go 1.25.0
 

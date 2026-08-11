@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/carloshomar/vercardapio/payment_api/app/services"
+	"github.com/carloshomar/fuudelivery/payment_api/app/services"
 	"github.com/gofiber/fiber/v2"
 )
 

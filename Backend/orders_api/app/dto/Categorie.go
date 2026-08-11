@@ -1,7 +1,7 @@
 package dto
 
 import (
-	"github.com/carloshomar/vercardapio/orders_api/app/models"
+	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 )
 
 type CategorieRequest struct {

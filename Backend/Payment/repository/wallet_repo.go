@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/carloshomar/vercardapio/payment/models"
+	"github.com/carloshomar/fuudelivery/payment/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"

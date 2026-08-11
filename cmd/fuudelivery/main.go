@@ -24,26 +24,26 @@ import (
 	"gorm.io/gorm"
 
 	// Models (database initialization)
-	"github.com/carloshomar/vercardapio/auth_api/app/models"
-	chatModels "github.com/carloshomar/vercardapio/chat_api/app/models"
-	deliveryModels "github.com/carloshomar/vercardapio/delivery_api/app/models"
-	ordersModels "github.com/carloshomar/vercardapio/orders_api/app/models"
-	paymentModels "github.com/carloshomar/vercardapio/payment_api/app/models"
+	"github.com/carloshomar/fuudelivery/auth_api/app/models"
+	chatModels "github.com/carloshomar/fuudelivery/chat_api/app/models"
+	deliveryModels "github.com/carloshomar/fuudelivery/delivery_api/app/models"
+	ordersModels "github.com/carloshomar/fuudelivery/orders_api/app/models"
+	paymentModels "github.com/carloshomar/fuudelivery/payment_api/app/models"
 
 	// Handlers
-	authHandlers "github.com/carloshomar/vercardapio/auth_api/app/handlers"
-	chatHandlers "github.com/carloshomar/vercardapio/chat_api/app/handlers"
-	deliveryHandlers "github.com/carloshomar/vercardapio/delivery_api/app/handlers"
-	ordersHandlers "github.com/carloshomar/vercardapio/orders_api/app/handlers"
-	paymentHandlers "github.com/carloshomar/vercardapio/payment_api/app/handlers"
+	authHandlers "github.com/carloshomar/fuudelivery/auth_api/app/handlers"
+	chatHandlers "github.com/carloshomar/fuudelivery/chat_api/app/handlers"
+	deliveryHandlers "github.com/carloshomar/fuudelivery/delivery_api/app/handlers"
+	ordersHandlers "github.com/carloshomar/fuudelivery/orders_api/app/handlers"
+	paymentHandlers "github.com/carloshomar/fuudelivery/payment_api/app/handlers"
 
 	// Middleware
-	"github.com/carloshomar/vercardapio/auth_api/app/middlewares"
+	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 
 	// Dispatch engine
-	dispatchServices "github.com/carloshomar/vercardapio/delivery_api/app/services"
+	dispatchServices "github.com/carloshomar/fuudelivery/delivery_api/app/services"
 	// Batch expiry
-	orderServices "github.com/carloshomar/vercardapio/orders_api/app/services"
+	orderServices "github.com/carloshomar/fuudelivery/orders_api/app/services"
 
 	// Queue + Health + Upload + Metrics + Search
 	"github.com/carloshomar/fuudelivery/pkg/health"

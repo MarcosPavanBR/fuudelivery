@@ -1,7 +1,7 @@
 package routes
 
 import (
-	"github.com/carloshomar/vercardapio/delivery_api/app/handlers"
+	"github.com/carloshomar/fuudelivery/delivery_api/app/handlers"
 	"github.com/gofiber/fiber/v2"
 )
 

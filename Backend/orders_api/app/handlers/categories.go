@@ -1,8 +1,8 @@
 package handlers
 
 import (
-	"github.com/carloshomar/vercardapio/orders_api/app/dto"
-	"github.com/carloshomar/vercardapio/orders_api/app/models"
+	"github.com/carloshomar/fuudelivery/orders_api/app/dto"
+	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
 )
 

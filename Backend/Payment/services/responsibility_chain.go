@@ -9,7 +9,7 @@ package services
 import (
 	"log"
 
-	"github.com/carloshomar/vercardapio/payment/models"
+	"github.com/carloshomar/fuudelivery/payment/models"
 )
 
 // Handler define a interface para os handlers da cadeia.

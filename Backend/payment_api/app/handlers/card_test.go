@@ -6,7 +6,7 @@ package handlers
 import (
 	"testing"
 
-	"github.com/carloshomar/vercardapio/payment_api/app/dto"
+	"github.com/carloshomar/fuudelivery/payment_api/app/dto"
 )
 
 // === Testes de validacao de cartao ===

@@ -5,7 +5,7 @@
 package handlers
 
 import (
-	"github.com/carloshomar/vercardapio/payment/repository"
+	"github.com/carloshomar/fuudelivery/payment/repository"
 	"github.com/gofiber/fiber/v2"
 )
 

@@ -10,7 +10,7 @@ import (
 type Client struct {
 	ID        uint      `gorm:"primaryKey;autoIncrement" json:"id"`
 	Name      string    `gorm:"not null" json:"name"`
-	Phone     string    `gorm:"uniqueIndex;not null" json:"phone"`
+	Phone     string    `gorm:"uniqueIndex:idx_clients_phone;not null" json:"phone"`
 	Password  string    `gorm:"not null" json:"-"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`

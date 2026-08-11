@@ -5,10 +5,10 @@ package services
 import (
 	"time"
 
-	"github.com/carloshomar/vercardapio/payment/config"
-	"github.com/carloshomar/vercardapio/payment/middleware"
-	"github.com/carloshomar/vercardapio/payment/models"
-	"github.com/carloshomar/vercardapio/payment/repository"
+	"github.com/carloshomar/fuudelivery/payment/config"
+	"github.com/carloshomar/fuudelivery/payment/middleware"
+	"github.com/carloshomar/fuudelivery/payment/models"
+	"github.com/carloshomar/fuudelivery/payment/repository"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )

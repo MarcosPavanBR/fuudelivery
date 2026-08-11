@@ -32,7 +32,7 @@ import (
 	"time"
 
 	"github.com/carloshomar/fuudelivery/pkg/health"
-	"github.com/carloshomar/vercardapio/auth_api/app/models"
+	"github.com/carloshomar/fuudelivery/auth_api/app/models"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"

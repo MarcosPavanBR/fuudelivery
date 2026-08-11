@@ -30,8 +30,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/carloshomar/vercardapio/payment/models"
-	"github.com/carloshomar/vercardapio/payment/repository"
+	"github.com/carloshomar/fuudelivery/payment/models"
+	"github.com/carloshomar/fuudelivery/payment/repository"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/mongodb"
 	"go.mongodb.org/mongo-driver/mongo"

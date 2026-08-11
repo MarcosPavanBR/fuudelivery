@@ -1,6 +1,6 @@
 package dto
 
-import "github.com/carloshomar/vercardapio/payment_api/app/models"
+import "github.com/carloshomar/fuudelivery/payment_api/app/models"
 
 type PaymentRequest struct {
 	OrderID         string  `json:"order_id"`

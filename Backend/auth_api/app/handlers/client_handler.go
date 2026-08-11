@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/carloshomar/vercardapio/auth_api/app/dto"
-	"github.com/carloshomar/vercardapio/auth_api/app/models"
+	"github.com/carloshomar/fuudelivery/auth_api/app/dto"
+	"github.com/carloshomar/fuudelivery/auth_api/app/models"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"

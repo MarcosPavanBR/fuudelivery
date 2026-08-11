@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/carloshomar/vercardapio/chat_api/app/dto"
-	"github.com/carloshomar/vercardapio/chat_api/app/models"
+	"github.com/carloshomar/fuudelivery/chat_api/app/dto"
+	"github.com/carloshomar/fuudelivery/chat_api/app/models"
 	"github.com/gofiber/fiber/v2"
 )
 

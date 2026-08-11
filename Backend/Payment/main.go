@@ -22,12 +22,12 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 
-	"github.com/carloshomar/vercardapio/payment/config"
-	"github.com/carloshomar/vercardapio/payment/consumers"
-	"github.com/carloshomar/vercardapio/payment/handlers"
-	"github.com/carloshomar/vercardapio/payment/middleware"
-	"github.com/carloshomar/vercardapio/payment/models"
-	"github.com/carloshomar/vercardapio/payment/repository"
+	"github.com/carloshomar/fuudelivery/payment/config"
+	"github.com/carloshomar/fuudelivery/payment/consumers"
+	"github.com/carloshomar/fuudelivery/payment/handlers"
+	"github.com/carloshomar/fuudelivery/payment/middleware"
+	"github.com/carloshomar/fuudelivery/payment/models"
+	"github.com/carloshomar/fuudelivery/payment/repository"
 )
 
 // bootstrapAdminUser cria o usuario admin no banco se nao existir.

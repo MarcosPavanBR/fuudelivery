@@ -3,8 +3,8 @@
 package handlers
 
 import (
-	"github.com/carloshomar/vercardapio/payment/models"
-	"github.com/carloshomar/vercardapio/payment/services"
+	"github.com/carloshomar/fuudelivery/payment/models"
+	"github.com/carloshomar/fuudelivery/payment/services"
 	"github.com/gofiber/fiber/v2"
 )
 

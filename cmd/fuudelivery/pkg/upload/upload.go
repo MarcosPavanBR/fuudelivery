@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/carloshomar/fuudelivery/pkg/storage"
-	"github.com/carloshomar/vercardapio/auth_api/app/middlewares"
+	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/gofiber/fiber/v2"
 )
 

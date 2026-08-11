@@ -5,7 +5,7 @@ package handlers
 import (
 	"strconv"
 
-	"github.com/carloshomar/vercardapio/payment/services"
+	"github.com/carloshomar/fuudelivery/payment/services"
 	"github.com/gofiber/fiber/v2"
 )
 

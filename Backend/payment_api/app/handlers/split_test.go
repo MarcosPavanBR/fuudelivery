@@ -6,8 +6,8 @@ package handlers
 import (
 	"testing"
 
-	"github.com/carloshomar/vercardapio/payment_api/app/dto"
-	"github.com/carloshomar/vercardapio/payment_api/app/models"
+	"github.com/carloshomar/fuudelivery/payment_api/app/dto"
+	"github.com/carloshomar/fuudelivery/payment_api/app/models"
 )
 
 // === Testes de calculo de split ===

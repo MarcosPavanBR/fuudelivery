@@ -75,7 +75,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="animate-fade-in space-y-8">
+    <div className="animate-fade-in space-y-8 min-w-0">
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -89,7 +89,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
           {[
             { label: "Restaurantes Ativos", value: stats.restaurants, IconComp: FiHome, color: "#EA1D2C", bg: "#FEF2F2" },
             { label: "Total de Usuarios", value: stats.users, IconComp: FiUsers, color: "#F7A11E", bg: "#FFFBEB" },

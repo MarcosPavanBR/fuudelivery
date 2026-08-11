@@ -309,7 +309,7 @@ const MenuLayout = ({ children }) => {
   const sidebarVisible = isMobile ? mobileOpen : isOpen;
 
   return (
-    <div className="flex min-h-screen" style={{ background: "var(--bg-secondary, #F5F5F5)" }}>
+    <div className="flex min-h-screen overflow-x-hidden" style={{ background: "var(--bg-secondary, #F5F5F5)", maxWidth: '100vw' }}>
       <SideMenu
         isOpen={isMobile ? mobileOpen : isOpen}
         isMobile={isMobile}
@@ -317,9 +317,10 @@ const MenuLayout = ({ children }) => {
       />
 
       <div
-        className="flex-1 flex flex-col transition-all duration-300 min-h-screen"
+        className="flex-1 min-w-0 flex flex-col transition-all duration-300 min-h-screen"
         style={{
           marginLeft: isMobile ? 0 : (isOpen ? "256px" : "72px"),
+          maxWidth: '100%',
         }}
       >
         <TopMenu toggleMenu={toggleMenu} isOpen={sidebarVisible} />

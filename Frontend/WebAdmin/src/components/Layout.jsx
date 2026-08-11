@@ -44,7 +44,7 @@ export default function Layout() {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50 overflow-x-hidden" style={{ maxWidth: '100vw' }}>
+    <div className="min-h-screen bg-gray-50">
       {mobileMenuOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
@@ -124,8 +124,8 @@ export default function Layout() {
         </div>
       </aside>
 
-      <div className={`flex-1 min-w-0 flex flex-col transition-all duration-300 ${sidebarOpen ? "lg:ml-64" : "lg:ml-20"}`} style={{ maxWidth: '100%' }}>
-        <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/80 backdrop-blur-sm">
+      <div className={`flex-1 min-w-0 flex flex-col transition-all duration-300 overflow-hidden ${sidebarOpen ? "lg:ml-64" : "lg:ml-20"}`} style={{ maxWidth: '100%' }}>
+        <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/80 backdrop-blur-sm overflow-hidden">
           <div className="flex items-center justify-between px-6 py-4">
             <div className="flex items-center gap-4">
               <button onClick={() => setSidebarOpen(!sidebarOpen)} className="lg:hidden p-2 rounded-xl hover:bg-gray-100 transition-colors">
@@ -156,7 +156,7 @@ export default function Layout() {
             </div>
           </div>
         </header>
-        <main className="flex-1 p-6">
+        <main className="flex-1 p-6 overflow-x-hidden">
           <Outlet />
         </main>
       </div>

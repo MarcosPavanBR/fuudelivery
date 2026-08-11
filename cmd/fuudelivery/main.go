@@ -368,11 +368,16 @@ func (s *splitMetricsProvider) GetMonthlyOrders(zoneID uint) int {
 		return 0
 	}
 	var count int64
-	s.DB.Raw(
+	err := s.DB.Raw(
 		"SELECT COUNT(*) FROM orders "+
 			"JOIN establishments ON establishments.id = orders.establishment_id "+
 			"WHERE establishments.zone_id = ?", zoneID,
-	).Scan(&count)
+	).Scan(&count).Error
+	if err != nil {
+		// Coluna establishment_id pode nao existir ainda (migration pendente)
+		log.Printf("[SPLIT_DECAY] GetMonthlyOrders fallback: %v", err)
+		return 0
+	}
 	return int(count)
 }
 
@@ -382,9 +387,13 @@ func (s *splitMetricsProvider) GetActiveCouriers(zoneID uint) int {
 		return 0
 	}
 	var count int64
-	s.DB.Model(&models.DeliveryMan{}).
+	err := s.DB.Model(&models.DeliveryMan{}).
 		Where("zone_id = ? AND status IN ('available', 'busy')", zoneID).
-		Count(&count)
+		Count(&count).Error
+	if err != nil {
+		log.Printf("[SPLIT_DECAY] GetActiveCouriers fallback: %v", err)
+		return 0
+	}
 	return int(count)
 }
 

@@ -1,8 +1,6 @@
-go 1.23.0
+go 1.23.12
 
 use (
-	./pkg/health
-	./pkg/queue
 	./Backend/Payment
 	./Backend/auth_api
 	./Backend/chat_api
@@ -10,4 +8,6 @@ use (
 	./Backend/orders_api
 	./Backend/payment_api
 	./cmd/fuudelivery
+	./pkg/health
+	./pkg/queue
 )

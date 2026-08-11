@@ -81,10 +81,9 @@ func getIPLimiter(ip string, rps rate.Limit, burst int) *rate.Limiter {
 func rateLimitMiddleware(maxPerMinute int) fiber.Handler {
 	rps := rate.Limit(float64(maxPerMinute) / 60.0) // convert per-minute to per-second
 	return func(c *fiber.Ctx) error {
-		ip := c.Get("X-Forwarded-For")
-		if ip == "" {
-			ip = c.IP()
-		}
+		// Usa c.IP() que respeita a configuracao de TrustedProxies do Fiber,
+		// evitando que o cliente forje X-Forwarded-For para burlar o rate limit.
+		ip := c.IP()
 
 		limiter := getIPLimiter(ip, rps, maxPerMinute)
 		if !limiter.Allow() {
@@ -1045,6 +1044,12 @@ func main() {
 		Prefork:       false,
 		CaseSensitive: true,
 		StrictRouting: false,
+		// Configura proxy confiavel (Render usa range interno).
+		// ProxyHeader define de qual header ler o IP real do cliente.
+		// EnableTrustedProxyCheck: garante que so confia em proxies configurados.
+		EnableTrustedProxyCheck: true,
+		TrustedProxies:          []string{"0.0.0.0/0", "::/0"},
+		ProxyHeader:             "X-Forwarded-For",
 	})
 
 	// Middleware

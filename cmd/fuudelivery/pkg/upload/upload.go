@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/carloshomar/fuudelivery/pkg/storage"
 	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/auth_api/app/models"
+	"github.com/carloshomar/fuudelivery/pkg/storage"
 	"github.com/gofiber/fiber/v2"
 )
 

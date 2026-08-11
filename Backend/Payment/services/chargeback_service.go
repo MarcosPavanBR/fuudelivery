@@ -6,8 +6,8 @@ package services
 import (
 	"time"
 
-	"github.com/carloshomar/vercardapio/payment/models"
-	"github.com/carloshomar/vercardapio/payment/repository"
+	"github.com/carloshomar/fuudelivery/payment/models"
+	"github.com/carloshomar/fuudelivery/payment/repository"
 )
 
 // ChargebackService e responsavel pelas operacoes de estorno.

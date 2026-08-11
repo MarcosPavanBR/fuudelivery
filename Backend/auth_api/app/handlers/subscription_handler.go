@@ -4,8 +4,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/carloshomar/vercardapio/auth_api/app/middlewares"
-	"github.com/carloshomar/vercardapio/auth_api/app/models"
+	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
+	"github.com/carloshomar/fuudelivery/auth_api/app/models"
 	"github.com/gofiber/fiber/v2"
 )
 

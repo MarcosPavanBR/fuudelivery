@@ -12,8 +12,8 @@ package services
 import (
 	"testing"
 
-	"github.com/carloshomar/vercardapio/payment/models"
-	"github.com/carloshomar/vercardapio/payment/repository"
+	"github.com/carloshomar/fuudelivery/payment/models"
+	"github.com/carloshomar/fuudelivery/payment/repository"
 	"github.com/stretchr/testify/require"
 )
 

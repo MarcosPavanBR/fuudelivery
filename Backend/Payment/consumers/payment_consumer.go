@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/carloshomar/vercardapio/payment/models"
-	"github.com/carloshomar/vercardapio/payment/services"
+	"github.com/carloshomar/fuudelivery/payment/models"
+	"github.com/carloshomar/fuudelivery/payment/services"
 	"github.com/go-redis/redis/v8"
 )
 

@@ -11,8 +11,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/carloshomar/vercardapio/delivery_api/app/dto"
-	"github.com/carloshomar/vercardapio/delivery_api/app/models"
+	"github.com/carloshomar/fuudelivery/delivery_api/app/dto"
+	"github.com/carloshomar/fuudelivery/delivery_api/app/models"
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/mongodb"

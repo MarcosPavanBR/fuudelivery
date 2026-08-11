@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/carloshomar/vercardapio/delivery_api/app/dto"
+	"github.com/carloshomar/fuudelivery/delivery_api/app/dto"
 )
 
 // UnmatchedOrder representa um pedido que nao encontrou entregador.

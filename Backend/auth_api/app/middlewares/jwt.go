@@ -43,8 +43,8 @@ func ValidateJWT(c *fiber.Ctx) (*jwt.Token, error) {
 }
 
 func GenerateJWT(user *models.User, establishment *models.Establishment) (string, error) { // GenerateJWT gera um token JWT para um usuario autenticado.
-// O token contem: id, name, email, role, establishment_id (se aplicavel),
-// e expira em 7 dias. Assinado com HS256 usando JWT_SECRET.
+	// O token contem: id, name, email, role, establishment_id (se aplicavel),
+	// e expira em 7 dias. Assinado com HS256 usando JWT_SECRET.
 	// Expiração para 7 dias a partir de agora (hora UTC)
 	expirationTime := time.Now().UTC().Add(time.Hour * 24 * 7).Unix()
 

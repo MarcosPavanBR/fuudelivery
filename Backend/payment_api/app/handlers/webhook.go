@@ -9,9 +9,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/carloshomar/fuudelivery/pkg/queue"
 	"github.com/carloshomar/fuudelivery/payment_api/app/models"
 	"github.com/carloshomar/fuudelivery/payment_api/app/services"
+	"github.com/carloshomar/fuudelivery/pkg/queue"
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson"
 )

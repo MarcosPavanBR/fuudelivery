@@ -1,0 +1,28 @@
+name: Fetch Render logs (temp)
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/render-env-check.yml'
+jobs:
+  logs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch recent logs
+        env:
+          RKEY: ${{ secrets.RENDER_API_KEY }}
+          SID: ${{ secrets.RENDER_SERVICE_ID_API }}
+        run: |
+          curl -s -H "Authorization: Bearer $RKEY" \
+            "https://api.render.com/v1/services/$SID/logs?limit=200" > /tmp/logs.json
+          echo "bytes: $(wc -c < /tmp/logs.json)"
+          python3 - <<'PYEOF'
+          import json
+          d = json.load(open('/tmp/logs.json'))
+          for line in d:
+              msg = line.get('message', '')
+              low = msg.lower()
+              if 'pix' in low or 'abacate' in low or 'failed' in low or 'error' in low:
+                  print(msg[:300])
+          PYEOF

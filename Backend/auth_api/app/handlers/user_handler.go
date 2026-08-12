@@ -137,14 +137,21 @@ func Login(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Incorrect credentials"})
 	}
 
-	var establishment models.Establishment
-	if err := models.DB.Where(&models.Establishment{
-		ID: user.EstablishmentID,
-	}).First(&establishment).Error; err != nil {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Incorrect credentials"})
+	// Usuarios sem estabelecimento (ex.: admin) nao devem ser vinculados a
+	// nenhum. NAO usar Where(&models.Establishment{ID: user.EstablishmentID}):
+	// condicao baseada em struct do GORM ignora campos com valor zero, entao
+	// ID: 0 vira uma query sem filtro (SELECT * FROM establishments LIMIT 1)
+	// e retorna o primeiro estabelecimento da tabela em vez de "nenhum".
+	var establishmentPtr *models.Establishment
+	if user.EstablishmentID != 0 {
+		var establishment models.Establishment
+		if err := models.DB.Where("id = ?", user.EstablishmentID).First(&establishment).Error; err != nil {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Incorrect credentials"})
+		}
+		establishmentPtr = &establishment
 	}
 
-	tokenString, jwtError := middlewares.GenerateJWT(&user, &establishment)
+	tokenString, jwtError := middlewares.GenerateJWT(&user, establishmentPtr)
 
 	if jwtError != nil {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Incorrect credentials"})

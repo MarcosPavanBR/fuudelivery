@@ -74,8 +74,8 @@ else
 fi
 
 echo ""
-echo "── Testing /health payment service ──"
-PAY_URL="${PAY_URL:-https://fuudelivery-payment.onrender.com}"
+echo "── Testing /health payment routes (monolith) ──"
+PAY_URL="${PAY_URL:-https://fuudelivery-api-8y6l.onrender.com}"
 pay_success=0
 pay_failed=0
 
@@ -88,10 +88,10 @@ for i in $(seq 1 20); do
   fi
 done
 
-echo "  Payment Service: $pay_success/20 successful"
+echo "  API (payment routes): $pay_success/20 successful"
 if [ $pay_failed -gt 0 ]; then
-  echo "⚠️  $pay_failed payment health checks failed"
+  echo "⚠️  $pay_failed API health checks failed"
 else
-  echo "✅ Payment Service healthy"
+  echo "✅ API healthy"
 fi
 echo ""

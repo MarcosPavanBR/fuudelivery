@@ -1064,7 +1064,7 @@ func main() {
 	// Pode ser sobrescrita pela env var ALLOWED_ORIGINS (render.yaml).
 	allowedOrigins := os.Getenv("ALLOWED_ORIGINS")
 	if allowedOrigins == "" {
-		allowedOrigins = "https://fuudelivery-web.onrender.com,https://fuudelivery-admin-lv7f.onrender.com,https://fuudelivery-payment-panel.onrender.com"
+		allowedOrigins = "https://fuudelivery-web.onrender.com,https://fuudelivery-admin-lv7f.onrender.com"
 	}
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     allowedOrigins,

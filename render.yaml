@@ -30,6 +30,8 @@ services:
         sync: false
       - key: MONGO_DATABASE
         value: "fuudelivery"
+      - key: PAYMENT_MONGO_DATABASE
+        value: "fuudelivery_payments"
       - key: APP_URL
         value: "https://fuudelivery-web.onrender.com"
       - key: API_BASE_URL
@@ -37,7 +39,7 @@ services:
       - key: ABACATE_PAY_API_KEY
         sync: false
       - key: ALLOWED_ORIGINS
-        value: "https://fuudelivery-web.onrender.com,https://fuudelivery-admin-lv7f.onrender.com,https://fuudelivery-payment-panel.onrender.com"
+        value: "https://fuudelivery-web.onrender.com,https://fuudelivery-admin-lv7f.onrender.com"
     healthCheckPath: /health
 
   # ============================================================
@@ -79,50 +81,3 @@ services:
     name: fuudelivery-redis
     plan: free
     maxmemoryPolicy: allkeys-lru
-
-  # ============================================================
-  # PAYMENT SERVICE — Microserviço isolado de pagamentos
-  # ============================================================
-  - type: web
-    name: fuudelivery-payment
-    env: go
-    buildCommand: cd Backend/Payment && go build -o ../../server .
-    startCommand: ./server
-    envVars:
-      - key: PORT
-        value: "8084"
-      - key: GO_VERSION
-        value: "1.23"
-      - key: MONGO_URI
-        sync: false
-      - key: PAYMENT_MONGO_DATABASE
-        value: "fuudelivery_payments"
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: fuudelivery-redis
-          property: connectionString
-      - key: JWT_SECRET
-        sync: false
-      - key: ABACATE_PAY_API_KEY
-        sync: false
-      - key: ABACATE_PAY_WEBHOOK_SECRET
-        sync: false
-      - key: ADMIN_PASSWORD
-        sync: false
-      - key: ALLOWED_ORIGINS
-        value: "https://fuudelivery-web.onrender.com,https://fuudelivery-admin-lv7f.onrender.com,https://fuudelivery-payment-panel.onrender.com"
-    healthCheckPath: /health
-
-  # ============================================================
-  # PAYMENT PANEL — Frontend do Payment Service (React)
-  # ============================================================
-  - type: web
-    name: fuudelivery-payment-panel
-    env: static
-    buildCommand: cd Frontend/PaymentPanel && npm install && npm run build
-    staticPublishPath: Frontend/PaymentPanel/dist
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html

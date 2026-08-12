@@ -105,11 +105,12 @@ Fork do [vercardapio/appdelivery](https://github.com/carloshomar/appdelivery) es
 
 | Serviço | Tipo | URL |
 |---|---|---|
-| fuudelivery-api | Go web service | https://fuudelivery-api-8y6l.onrender.com |
-| fuudelivery-payment | Go web service | https://fuudelivery-payment.onrender.com |
+| fuudelivery-api | Go web service (monolito) | https://fuudelivery-api-8y6l.onrender.com |
 | fuudelivery-web | Static site | https://fuudelivery-web.onrender.com |
 | fuudelivery-admin | Static site | https://fuudelivery-admin-lv7f.onrender.com |
-| fuudelivery-payment-panel | Static site | https://fuudelivery-payment-panel.onrender.com |
+
+> Os serviços isolados `fuudelivery-payment` e `fuudelivery-payment-panel` foram
+> removidos (2026-08): todas as rotas de pagamento vivem no monolito.
 
 > **📌 Referência de URLs:** todos os links de produção (serviços, health checks,
 > CORS, apps mobile) estão organizados em [`references/URLS.md`](references/URLS.md).

@@ -37,4 +37,8 @@ type Payment struct {
 	CreatedAt        time.Time          `bson:"created_at" json:"created_at"`
 	ConfirmedAt      *time.Time         `bson:"confirmed_at,omitempty" json:"confirmed_at,omitempty"`
 	WalletCreditedAt *time.Time         `bson:"wallet_credited_at,omitempty" json:"wallet_credited_at,omitempty"`
+	ApprovedBy       string             `bson:"approved_by,omitempty" json:"approved_by,omitempty"`
+	RejectedAt       *time.Time         `bson:"rejected_at,omitempty" json:"rejected_at,omitempty"`
+	RejectedBy       string             `bson:"rejected_by,omitempty" json:"rejected_by,omitempty"`
+	RejectionReason  string             `bson:"rejection_reason,omitempty" json:"rejection_reason,omitempty"`
 }

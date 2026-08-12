@@ -68,6 +68,26 @@ jobs:
         run: go test -tags=integration -v -timeout 20m -run 'TestFullFlow|TestErrorScenarios' ./
 
   # ──────────────────────────────────────────────
+  # Integration — payment_api (checkout E2E + admin Financeiro)
+  # (exige Docker + testcontainers MongoDB real)
+  # ──────────────────────────────────────────────
+  integration-payment-api:
+    name: Integration — payment_api (checkout + admin)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Backend/payment_api
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Run payment_api integration tests (testcontainers)
+        run: go test -tags=integration -v -timeout 20m -run 'TestCheckoutE2E' ./app/handlers/
+
+  # ──────────────────────────────────────────────
   # Formatting — all Go modules
   # ──────────────────────────────────────────────
   lint:

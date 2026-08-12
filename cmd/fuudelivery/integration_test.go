@@ -334,12 +334,9 @@ func TestFullFlowAuthOrderPayment(t *testing.T) {
 		json.NewDecoder(resp.Body).Decode(&body)
 		require.Equal(t, "ok", body["status"])
 		require.Equal(t, "fuudelivery", body["service"])
-	})
-
-	// ---- TESTE 2: Fluxo de Auth ----
-	var userToken string
+	}) 	// ---- TESTE 2: Fluxo de Auth ----
 	var establishmentID float64
-	var userID float64
+
 
 	t.Run("RegisterUser", func(t *testing.T) {
 		payload := map[string]string{
@@ -357,10 +354,6 @@ func TestFullFlowAuthOrderPayment(t *testing.T) {
 		var result map[string]interface{}
 		json.NewDecoder(resp.Body).Decode(&result)
 		require.NotEmpty(t, result["token"])
-		userToken = result["token"].(string)
-
-		userData := result["user"].(map[string]interface{})
-		userID = userData["id"].(float64)
 
 		estData := result["establishment"].(map[string]interface{})
 		establishmentID = estData["id"].(float64)

@@ -18,14 +18,14 @@ jobs:
           echo "HTTP fetched: $(wc -c < /tmp/envs.json) bytes"
           grep -oE '"envVarKey":"(MONGO_URI|PAYMENT_MONGO_DATABASE|MONGO_DATABASE|MONGO_DB|ABACATE_PAY_API_KEY|JWT_SECRET)"' /tmp/envs.json || echo "none of the target keys found"
           python3 - <<'PYEOF'
-import json
-data = json.load(open('/tmp/envs.json'))
-for e in data:
-    k = e.get('envVarKey','')
-    if k in ('MONGO_URI','PAYMENT_MONGO_DATABASE','MONGO_DATABASE','MONGO_DB','ABACATE_PAY_API_KEY','JWT_SECRET'):
-        v = e.get('value','')
-        if k in ('MONGO_URI','ABACATE_PAY_API_KEY','JWT_SECRET'):
-            print(k, '=', (v[:25] + '...') if len(v)>25 else 'SHORT')
-        else:
-            print(k, '=', v)
-PYEOF
+          import json
+          data = json.load(open('/tmp/envs.json'))
+          for e in data:
+              k = e.get('envVarKey','')
+              if k in ('MONGO_URI','PAYMENT_MONGO_DATABASE','MONGO_DATABASE','MONGO_DB','ABACATE_PAY_API_KEY','JWT_SECRET'):
+                  v = e.get('value','')
+                  if k in ('MONGO_URI','ABACATE_PAY_API_KEY','JWT_SECRET'):
+                      print(k, '=', (v[:25] + '...') if len(v)>25 else 'SHORT')
+                  else:
+                      print(k, '=', v)
+          PYEOF

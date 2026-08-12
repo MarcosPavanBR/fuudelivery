@@ -18,40 +18,16 @@ func GeneratePIX(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
-	email := req.CustomerEmail
-	if email == "" {
-		email = "cliente@email.com"
-	}
-
-	name := req.CustomerName
-	if name == "" {
-		name = "Cliente"
-	}
-
-	phone := req.CustomerPhone
-	if phone == "" {
-		phone = ""
-	}
-
 	description := fmt.Sprintf("Pedido %s", req.OrderID)
 
 	client := services.NewAbacatePayClient()
-	chargeReq := services.PIXChargeRequest{
-		Data: struct {
-			Amount      int64  `json:"amount"`
-			Description string `json:"description,omitempty"`
-			ExternalID  string `json:"externalId,omitempty"`
-			Customer    struct {
-				Name      string `json:"name,omitempty"`
-				TaxID     string `json:"taxId,omitempty"`
-				Email     string `json:"email,omitempty"`
-				Cellphone string `json:"cellphone,omitempty"`
-			} `json:"customer,omitempty"`
-		}{Amount: int64(req.Amount), Description: description, ExternalID: req.OrderID},
-	}
-	chargeReq.Data.Customer.Name = name
-	chargeReq.Data.Customer.Email = email
-	chargeReq.Data.Customer.Cellphone = phone
+	chargeReq := services.PIXChargeRequest{}
+	chargeReq.Data.Amount = int64(req.Amount)
+	chargeReq.Data.Description = description
+	chargeReq.Data.ExternalID = req.OrderID
+	// customer é opcional para PIX; se enviado, TODOS os campos (incl. taxId/CPF
+	// válido) são obrigatórios. O monolito não coleta CPF → omitir para não
+	// tomar 422 do gateway. (O AppComida poderá passar taxId no futuro.)
 
 	apiResp, err := client.CreatePIXCharge(chargeReq)
 	if err != nil {

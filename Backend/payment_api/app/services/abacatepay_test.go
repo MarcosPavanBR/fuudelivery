@@ -18,6 +18,13 @@ func TestCreatePIXCharge_V2Envelope(t *testing.T) {
 		if r.Method != http.MethodPost {
 			t.Errorf("method inesperado: %s", r.Method)
 		}
+		// Garante que customer vazio NÃO vai no JSON (omitempty com ponteiro).
+		var body map[string]interface{}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		data := body["data"].(map[string]interface{})
+		if _, hasCustomer := data["customer"]; hasCustomer {
+			t.Error("customer presente no JSON com valor vazio — gateway rejeita com 422")
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{
 			"success": true,

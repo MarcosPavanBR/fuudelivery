@@ -157,9 +157,7 @@ func ProcessPayment(c *fiber.Ctx) error {
 		pixReq.Data.Amount = int64(req.Amount)
 		pixReq.Data.Description = description
 		pixReq.Data.ExternalID = req.OrderID
-		pixReq.Data.Customer.Name = req.CustomerName
-		pixReq.Data.Customer.Email = email
-		pixReq.Data.Customer.Cellphone = req.CustomerPhone
+		// customer é opcional para PIX; sem CPF válido o gateway responde 422.
 
 		apiResp, err := client.CreatePIXCharge(pixReq)
 		if err != nil {

@@ -191,15 +191,6 @@ const Logo = ({ size = 40, variant = "full", className = "" }) => {
           strokeLinecap="round"
           opacity="0.45"
         />
-        <circle cx="98" cy="26" r="10" fill="url(#loginAccent)" />
-        <path
-          d="M94 22l4 4 4-4"
-          stroke="white"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          opacity="0.9"
-        />
       </svg>
       <div className="mt-5 text-center">
         <h1

@@ -153,13 +153,13 @@ func ProcessPayment(c *fiber.Ctx) error {
 	}
 
 	if req.Method == "pix" {
-		pixReq := services.PIXChargeRequest{
-			Amount:      req.Amount,
-			Description: description,
-		}
-		pixReq.Customer.Name = req.CustomerName
-		pixReq.Customer.Email = email
-		pixReq.Customer.Phone = req.CustomerPhone
+		pixReq := services.PIXChargeRequest{}
+		pixReq.Data.Amount = int64(req.Amount)
+		pixReq.Data.Description = description
+		pixReq.Data.ExternalID = req.OrderID
+		pixReq.Data.Customer.Name = req.CustomerName
+		pixReq.Data.Customer.Email = email
+		pixReq.Data.Customer.Cellphone = req.CustomerPhone
 
 		apiResp, err := client.CreatePIXCharge(pixReq)
 		if err != nil {

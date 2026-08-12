@@ -864,7 +864,13 @@ func setupDispatchRoutes(app *fiber.App) {
 }
 
 func setupPaymentRoutes(app *fiber.App) {
+	// Admin — painel Financeiro do WebAdmin
 	app.Get("/payments/all", adminRequired, paymentHandlers.ListAllPayments)
+	app.Get("/payments/", adminRequired, paymentHandlers.ListAllPayments)
+	app.Get("/payments/stats", adminRequired, paymentHandlers.GetPaymentStats)
+	app.Get("/wallets", adminRequired, paymentHandlers.ListWallets)
+	app.Post("/payments/:id/approve", adminRequired, rateLimitMiddleware(20), paymentHandlers.ApprovePayment)
+	app.Post("/payments/:id/reject", adminRequired, rateLimitMiddleware(20), paymentHandlers.RejectPayment)
 	// Rate limit 20/min nos endpoints de dinheiro (proteção contra abuso/custo)
 	app.Post("/payments/pix/generate", protectedRoute, rateLimitMiddleware(20), paymentHandlers.GeneratePIX)
 	app.Post("/payments/card/tokenize", protectedRoute, rateLimitMiddleware(20), paymentHandlers.TokenizeCard)

@@ -3,16 +3,21 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/carloshomar/fuudelivery/payment_api/app/models"
+	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/mongodb"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -239,4 +244,158 @@ func TestCheckoutE2E_QueueChannelAlignment(t *testing.T) {
 	require.NoError(t, json.Unmarshal(body, &parsed))
 	require.NotNil(t, parsed["order_id"])
 	require.NotNil(t, parsed["status"])
+}
+
+// Teste 5: Endpoints admin do painel Financeiro (monolito)
+// Cobre GET /payments/stats, POST /payments/:id/approve,
+// POST /payments/:id/reject e GET /wallets — as rotas que o WebAdmin
+// Financeiro.jsx usa e que antes viviam no serviço isolado removido.
+func TestCheckoutE2E_AdminEndpoints(t *testing.T) {
+	cleanup := setupCheckoutE2EEnv(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	paymentCollection := models.MongoDabase.Collection("payments")
+	walletCollection := models.MongoDabase.Collection("wallets")
+
+	// --- Seeds: 1 PENDING + 1 CONFIRMED + 1 wallet ---
+	pending := models.Payment{
+		OrderID:         "order-admin-pending",
+		CustomerID:      10,
+		EstablishmentID: 42,
+		Amount:          10000, // centavos: R$ 100,00
+		Method:          "pix",
+		Status:          "PENDING",
+		AbacatePayID:    "charge-admin-001",
+		CreatedAt:       time.Now(),
+	}
+	resPending, err := paymentCollection.InsertOne(ctx, pending)
+	require.NoError(t, err)
+	pendingID := resPending.InsertedID.(primitive.ObjectID).Hex()
+
+	confirmed := models.Payment{
+		OrderID:         "order-admin-confirmed",
+		CustomerID:      11,
+		EstablishmentID: 43,
+		Amount:          5000, // R$ 50,00
+		Method:          "pix",
+		Status:          "CONFIRMED",
+		AbacatePayID:    "charge-admin-002",
+		CreatedAt:       time.Now(),
+	}
+	_, err = paymentCollection.InsertOne(ctx, confirmed)
+	require.NoError(t, err)
+
+	_, err = walletCollection.InsertOne(ctx, bson.M{
+		"user_id":      42,
+		"user_type":    "establishment",
+		"balance":      8500, // R$ 85,00
+		"last_updated": time.Now(),
+	})
+	require.NoError(t, err)
+
+	app := fiber.New()
+
+	// --- GET /payments/stats ---
+	app.Get("/payments/stats", GetPaymentStats)
+	req := httptest.NewRequest(http.MethodGet, "/payments/stats", nil)
+	resp, err := app.Test(req, -1)
+	require.NoError(t, err)
+	require.Equal(t, 200, resp.StatusCode)
+
+	var stats map[string]interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&stats))
+	require.Equal(t, float64(2), stats["total"])
+	require.Equal(t, float64(1), stats["pending"])
+	require.Equal(t, float64(1), stats["confirmed"])
+	require.Equal(t, float64(0), stats["rejected"])
+	require.Equal(t, float64(15000), stats["total_amount"]) // 10000 + 5000
+
+	// --- POST /payments/:id/approve ---
+	app.Post("/payments/:id/approve", ApprovePayment)
+	req = httptest.NewRequest(http.MethodPost, "/payments/"+pendingID+"/approve", nil)
+	resp, err = app.Test(req, -1)
+	require.NoError(t, err)
+	require.Equal(t, 200, resp.StatusCode)
+
+	var approved map[string]interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&approved))
+	require.Equal(t, "CONFIRMED", approved["status"])
+
+	var stored models.Payment
+	err = paymentCollection.FindOne(ctx, bson.M{"_id": resPending.InsertedID}).Decode(&stored)
+	require.NoError(t, err)
+	require.Equal(t, "CONFIRMED", stored.Status)
+	require.NotNil(t, stored.ConfirmedAt)
+
+	// Reaprovar um pagamento já confirmado deve dar 409
+	req = httptest.NewRequest(http.MethodPost, "/payments/"+pendingID+"/approve", nil)
+	resp, err = app.Test(req, -1)
+	require.NoError(t, err)
+	require.Equal(t, 409, resp.StatusCode)
+
+	// --- POST /payments/:id/reject ---
+	app.Post("/payments/:id/reject", RejectPayment)
+	rejectBody := bytes.NewBufferString(`{"reason":"chargeback do cliente"}`)
+	req = httptest.NewRequest(http.MethodPost, "/payments/"+pendingID+"/reject", rejectBody)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = app.Test(req, -1)
+	require.NoError(t, err)
+	require.Equal(t, 409, resp.StatusCode, "já está CONFIRMED, não pode rejeitar")
+
+	// Cria um novo PENDING para rejeitar
+	pending2 := models.Payment{
+		OrderID:         "order-admin-reject",
+		CustomerID:      12,
+		EstablishmentID: 44,
+		Amount:          7000,
+		Method:          "pix",
+		Status:          "PENDING",
+		AbacatePayID:    "charge-admin-003",
+		CreatedAt:       time.Now(),
+	}
+	resPending2, err := paymentCollection.InsertOne(ctx, pending2)
+	require.NoError(t, err)
+	pending2ID := resPending2.InsertedID.(primitive.ObjectID).Hex()
+
+	rejectBody = bytes.NewBufferString(`{"reason":"fraude suspeita"}`)
+	req = httptest.NewRequest(http.MethodPost, "/payments/"+pending2ID+"/reject", rejectBody)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = app.Test(req, -1)
+	require.NoError(t, err)
+	require.Equal(t, 200, resp.StatusCode)
+
+	var rejected map[string]interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&rejected))
+	require.Equal(t, "REJECTED", rejected["status"])
+
+	err = paymentCollection.FindOne(ctx, bson.M{"_id": resPending2.InsertedID}).Decode(&stored)
+	require.NoError(t, err)
+	require.Equal(t, "REJECTED", stored.Status)
+	require.NotNil(t, stored.RejectedAt)
+
+	// --- GET /wallets ---
+	app.Get("/wallets", ListWallets)
+	req = httptest.NewRequest(http.MethodGet, "/wallets", nil)
+	resp, err = app.Test(req, -1)
+	require.NoError(t, err)
+	require.Equal(t, 200, resp.StatusCode)
+
+	var wallets []map[string]interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&wallets))
+	require.Len(t, wallets, 1)
+	require.Equal(t, "establishment", wallets[0]["owner_type"])
+	require.Equal(t, float64(8500), wallets[0]["balance"])
+
+	// --- Validação: ID inválido ---
+	req = httptest.NewRequest(http.MethodPost, "/payments/abc/approve", nil)
+	resp, err = app.Test(req, -1)
+	require.NoError(t, err)
+	require.Equal(t, 400, resp.StatusCode)
+
+	req = httptest.NewRequest(http.MethodPost, "/payments/ffffffffffffffffffffffff/reject", bytes.NewBufferString(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = app.Test(req, -1)
+	require.NoError(t, err)
+	require.Equal(t, 404, resp.StatusCode, "hex válido mas inexistente → not found")
 }

@@ -1,0 +1,26 @@
+name: Check Render Deploy Logs
+
+on:
+  workflow_dispatch:
+
+jobs:
+  logs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Buscar último deploy e logs
+        run: |
+          DEPLOY_ID=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            "https://api.render.com/v1/services/srv-d9e55qf41pts73e8q8dg/deploys?limit=1" | \
+            jq -r '.[0].deploy.id')
+          echo "Deploy ID: $DEPLOY_ID"
+          curl -s \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            "https://api.render.com/v1/services/srv-d9e55qf41pts73e8q8dg/deploys/$DEPLOY_ID" | \
+            jq -r '.deploy | "Status: \(.status)\nCommit: \(.commit.id // "n/a")\nFinished: \(.finishedAt // "running")"'
+          echo ""
+          echo "=== Erros de migration (se houver) ==="
+          curl -s \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            "https://api.render.com/v1/services/srv-d9e55qf41pts73e8q8dg/deploys/$DEPLOY_ID/events" | \
+            jq -r '.[] | .description // .details // ""' 2>/dev/null | grep -iE "Falha|AutoMigrate|CRITICAL|panic|ERROR" | head -20 || echo "Sem erros de migration encontrados"

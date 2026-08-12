@@ -453,3 +453,6 @@ RABBIT_*.env
 # APK build output
 dist-apks/
 .agents/
+
+# Ferramentas temporárias
+tools/

@@ -1,0 +1,16 @@
+name: Trigger Render Deploy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Disparar deploy do fuudelivery-api
+        run: |
+          RESP=$(curl -s -w "\n%{http_code}" -X POST \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            "https://api.render.com/v1/services/srv-d9e55qf41pts73e8q8dg/deploys")
+          echo "API deploy: $(echo "$RESP" | tail -1)"

@@ -262,49 +262,58 @@ func publishPaymentApproved(abacatepayID string) {
 		"confirmed_at": now,
 	}
 
-	// Credita a carteira do estabelecimento pelo share do split — somente na
-	// transição PENDING → CONFIRMED (e se ainda não foi creditado). Reprocessar
-	// o webhook (payment já CONFIRMED) não credita de novo (idempotência).
-	if payment.Status == "PENDING" && payment.EstablishmentCreditedAt == nil {
-		credit := establishmentShare(&payment)
-		if credit > 0 {
-			wallets := models.MongoDabase.Collection("wallets")
-			_, wErr := wallets.UpdateOne(
-				mongoCtx(),
-				bson.M{"user_id": payment.EstablishmentID},
-				bson.M{
-					"$inc": bson.M{"balance": credit},
-					"$set": bson.M{"last_updated": now},
-					"$setOnInsert": bson.M{
-						"_id":       primitive.NewObjectID(),
-						"user_id":   payment.EstablishmentID,
-						"user_type": "establishment",
+	// Credita a carteira do estabelecimento pelo share do split. O ledger é a
+	// fonte da verdade da idempotência: se já existe um crédito para este
+	// pagamento, reprocessar o webhook não credita de novo.
+	// (NÃO usar payment.Status == "PENDING" como guard: o webhook chama
+	// updateLocalPaymentStatus ANTES de publishPaymentApproved, então o
+	// pagamento recarregado aqui já está CONFIRMED e o guard nunca dispararia.)
+	if payment.EstablishmentCreditedAt == nil && payment.Status != "REFUNDED" {
+		ledger := models.MongoDabase.Collection("wallet_ledger")
+		existing, lErr := ledger.CountDocuments(mongoCtx(), bson.M{"payment_id": abacatepayID, "type": "credit"})
+		if lErr != nil {
+			log.Printf("[WALLET] WARNING: falha ao checar ledger do crédito user=%d: %v", payment.EstablishmentID, lErr)
+		} else if existing == 0 {
+			credit := establishmentShare(&payment)
+			if credit > 0 {
+				wallets := models.MongoDabase.Collection("wallets")
+				_, wErr := wallets.UpdateOne(
+					mongoCtx(),
+					bson.M{"user_id": payment.EstablishmentID},
+					bson.M{
+						"$inc": bson.M{"balance": credit},
+						"$set": bson.M{"last_updated": now},
+						"$setOnInsert": bson.M{
+							"_id":       primitive.NewObjectID(),
+							"user_id":   payment.EstablishmentID,
+							"user_type": "establishment",
+						},
 					},
-				},
-				options.Update().SetUpsert(true),
-			)
-			if wErr == nil {
-				setFields["establishment_credited_at"] = now
+					options.Update().SetUpsert(true),
+				)
+				if wErr == nil {
+					setFields["establishment_credited_at"] = now
 
-				var wallet models.Wallet
-				wallets.FindOne(mongoCtx(), bson.M{"user_id": payment.EstablishmentID}).Decode(&wallet)
+					var wallet models.Wallet
+					wallets.FindOne(mongoCtx(), bson.M{"user_id": payment.EstablishmentID}).Decode(&wallet)
 
-				ledgerEntry := bson.M{
-					"_id":           primitive.NewObjectID(),
-					"user_id":       payment.EstablishmentID,
-					"type":          "credit",
-					"amount":        credit,
-					"payment_id":    abacatepayID,
-					"balance_after": wallet.Balance,
-					"description":   "Credito do split do pedido " + payment.OrderID,
-					"created_at":    now,
+					ledgerEntry := bson.M{
+						"_id":           primitive.NewObjectID(),
+						"user_id":       payment.EstablishmentID,
+						"type":          "credit",
+						"amount":        credit,
+						"payment_id":    abacatepayID,
+						"balance_after": wallet.Balance,
+						"description":   "Credito do split do pedido " + payment.OrderID,
+						"created_at":    now,
+					}
+					if _, ledgerErr := ledger.InsertOne(mongoCtx(), ledgerEntry); ledgerErr != nil {
+						log.Printf("[WALLET] WARNING: falha ao gravar ledger do crédito user=%d: %v", payment.EstablishmentID, ledgerErr)
+					}
+					log.Printf("[WALLET] Carteira do estabelecimento %d creditada em %.2f (payment=%s)", payment.EstablishmentID, credit, abacatepayID)
+				} else {
+					log.Printf("[WALLET] WARNING: falha ao creditar carteira do estabelecimento %d: %v", payment.EstablishmentID, wErr)
 				}
-				if _, ledgerErr := models.MongoDabase.Collection("wallet_ledger").InsertOne(mongoCtx(), ledgerEntry); ledgerErr != nil {
-					log.Printf("[WALLET] WARNING: falha ao gravar ledger do crédito user=%d: %v", payment.EstablishmentID, ledgerErr)
-				}
-				log.Printf("[WALLET] Carteira do estabelecimento %d creditada em %.2f (payment=%s)", payment.EstablishmentID, credit, abacatepayID)
-			} else {
-				log.Printf("[WALLET] WARNING: falha ao creditar carteira do estabelecimento %d: %v", payment.EstablishmentID, wErr)
 			}
 		}
 	}

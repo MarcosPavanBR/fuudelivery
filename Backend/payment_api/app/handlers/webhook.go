@@ -223,13 +223,14 @@ func HandlePaymentWebhook(c *fiber.Ctx) error {
 	apiStatus, _ := apiCharge["status"].(string)
 	abacatepayStatus := ""
 	switch apiStatus {
-	case "paid", "CONFIRMED":
+	// API v2 usa status em maiúsculas: PAID, APPROVED, EXPIRED, REFUNDED, CANCELLED
+	case "paid", "PAID", "CONFIRMED", "APPROVED":
 		abacatepayStatus = "CONFIRMED"
-	case "expired":
+	case "expired", "EXPIRED":
 		abacatepayStatus = "EXPIRED"
-	case "refunded":
+	case "refunded", "REFUNDED":
 		abacatepayStatus = "REFUNDED"
-	case "cancelled":
+	case "cancelled", "CANCELLED":
 		abacatepayStatus = "CANCELLED"
 	default:
 		abacatepayStatus = apiStatus

@@ -37,12 +37,21 @@ func GeneratePIX(c *fiber.Ctx) error {
 
 	client := services.NewAbacatePayClient()
 	chargeReq := services.PIXChargeRequest{
-		Amount:      req.Amount,
-		Description: description,
+		Data: struct {
+			Amount      int64  `json:"amount"`
+			Description string `json:"description,omitempty"`
+			ExternalID  string `json:"externalId,omitempty"`
+			Customer    struct {
+				Name      string `json:"name,omitempty"`
+				TaxID     string `json:"taxId,omitempty"`
+				Email     string `json:"email,omitempty"`
+				Cellphone string `json:"cellphone,omitempty"`
+			} `json:"customer,omitempty"`
+		}{Amount: int64(req.Amount), Description: description, ExternalID: req.OrderID},
 	}
-	chargeReq.Customer.Name = name
-	chargeReq.Customer.Email = email
-	chargeReq.Customer.Phone = phone
+	chargeReq.Data.Customer.Name = name
+	chargeReq.Data.Customer.Email = email
+	chargeReq.Data.Customer.Cellphone = phone
 
 	apiResp, err := client.CreatePIXCharge(chargeReq)
 	if err != nil {

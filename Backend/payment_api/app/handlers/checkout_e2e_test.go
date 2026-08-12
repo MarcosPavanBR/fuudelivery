@@ -81,7 +81,9 @@ func TestCheckoutE2E_PaymentWebhookToSplit(t *testing.T) {
 	require.Equal(t, "PENDING", stored.Status)
 
 	splitRules := defaultSplitRules(&stored, 5.0, 85.0)
-	require.Len(t, splitRules, 3)
+	// amount=89.90, delivery=7.00: 5%+85%+delivery = 87.91 → sobra 1.99
+	// de cashback → regra "customer" adicionada → 4 regras.
+	require.Len(t, splitRules, 4)
 
 	require.Equal(t, "platform", splitRules[0].ReceiverType)
 	require.InDelta(t, 89.90*0.05, splitRules[0].Amount, 0.01)
@@ -91,6 +93,9 @@ func TestCheckoutE2E_PaymentWebhookToSplit(t *testing.T) {
 
 	require.Equal(t, "deliveryman", splitRules[2].ReceiverType)
 	require.InDelta(t, 7.00, splitRules[2].Amount, 0.01)
+
+	require.Equal(t, "customer", splitRules[3].ReceiverType)
+	require.InDelta(t, 89.90-89.90*0.05-89.90*0.85-7.00, splitRules[3].Amount, 0.01)
 
 	totalSplit := 0.0
 	for _, r := range splitRules {
@@ -216,7 +221,9 @@ func TestCheckoutE2E_SmallOrderNoNegativeSplit(t *testing.T) {
 	for _, r := range splitRules {
 		totalSplit += r.Amount
 	}
-	require.LessOrEqual(t, totalSplit, 5.01)
+	// delivery=7.00 > amount=5.00: o ajuste zera platform/establishment e
+	// o total fica igual à taxa de entrega (nunca excede, nunca fica negativo).
+	require.InDelta(t, 7.00, totalSplit, 0.01)
 }
 
 // Teste 4: Canais de fila alinhados

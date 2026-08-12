@@ -47,6 +47,27 @@ jobs:
         run: go test ./... -count=1 -timeout 60s
 
   # ──────────────────────────────────────────────
+  # Integration — fluxo completo de pagamento PIX
+  # (exige Docker + testcontainers: MongoDB + Postgres reais,
+  #  AbacatePay mockado por httptest.Server)
+  # ──────────────────────────────────────────────
+  integration-payments:
+    name: Integration — fluxo PIX (auth→order→payment→split→wallet)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cmd/fuudelivery
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Run integration tests (testcontainers)
+        run: go test -tags=integration -v -timeout 20m -run 'TestFullFlow|TestErrorScenarios' ./
+
+  # ──────────────────────────────────────────────
   # Formatting — all Go modules
   # ──────────────────────────────────────────────
   lint:

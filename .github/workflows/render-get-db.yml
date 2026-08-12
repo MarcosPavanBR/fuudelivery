@@ -1,0 +1,15 @@
+name: Get Render DB Connection
+
+on:
+  workflow_dispatch:
+
+jobs:
+  get-db:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Buscar DB_CONNECTION_STRING do serviço fuudelivery-api
+        run: |
+          curl -s \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            "https://api.render.com/v1/services/srv-d9e55qf41pts73e8q8dg/env-vars" | \
+            jq -r '.[] | "\(.envVar.key) = \(.envVar.value)"' | grep -iE "DB_CONNECTION|MONGO|SUPABASE|DATABASE" | sed 's/=\(.\{30\}\).*/=\1.../'

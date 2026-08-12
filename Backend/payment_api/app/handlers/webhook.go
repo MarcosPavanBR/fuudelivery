@@ -14,6 +14,7 @@ import (
 	"github.com/carloshomar/fuudelivery/pkg/queue"
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 const (
@@ -57,6 +58,9 @@ func updateLocalPaymentStatus(abacatepayID string, status string) {
 	if status == "paid" || status == "CONFIRMED" {
 		updateFields["confirmed_at"] = now
 	}
+	if status == "REFUNDED" {
+		updateFields["refunded_at"] = now
+	}
 
 	_, err := models.MongoDabase.Collection("payments").UpdateOne(
 		mongoCtx(),
@@ -65,6 +69,124 @@ func updateLocalPaymentStatus(abacatepayID string, status string) {
 	)
 	if err != nil {
 		log.Printf("Failed to update payment %s: %v", abacatepayID, err)
+	}
+}
+
+// establishmentShare soma o valor destinado ao estabelecimento nas split
+// rules do pagamento (receiver_type == "establishment"). É o crédito que
+// precisa ser revertido na carteira quando o pagamento é estornado.
+func establishmentShare(payment *models.Payment) float64 {
+	var share float64
+	for _, rule := range payment.SplitRules {
+		if rule.ReceiverType == "establishment" {
+			share += rule.Amount
+		}
+	}
+	return share
+}
+
+// processPaymentRefund trata o estorno/chargeback de um pagamento:
+//  1. Reverte o crédito da carteira do estabelecimento (somente se o
+//     pagamento estava CONFIRMED — só assim houve crédito a reverter);
+//  2. Publica o evento PAYMENT_REFUNDED nas filas order_updates/payment_updates
+//     para o monolito notificar o cliente em tempo real;
+//  3. Marca o pagamento como REFUNDED + refunded_at.
+//
+// Idempotente: um webhook reprocessado não debita duas vezes (a segunda
+// chamada encontra o status já REFUNDED e pula a reversão).
+func processPaymentRefund(abacatepayID string) {
+	var payment models.Payment
+	err := models.MongoDabase.Collection("payments").FindOne(
+		mongoCtx(),
+		bson.M{"abacatepay_id": abacatepayID},
+	).Decode(&payment)
+	if err != nil {
+		log.Printf("[REFUND] Payment not found for AbacatePay ID %s: %v", abacatepayID, err)
+		return
+	}
+
+	now := time.Now()
+
+	// Reversão do crédito do estabelecimento — somente pagamentos CONFIRMED
+	// tiveram split/crédito de carteira. Pagamentos PENDING/EXPIRED não têm
+	// nada a reverter.
+	if payment.Status == "CONFIRMED" {
+		reversal := establishmentShare(&payment)
+		if reversal > 0 {
+			wallets := models.MongoDabase.Collection("wallets")
+			res, wErr := wallets.UpdateOne(
+				mongoCtx(),
+				bson.M{
+					"user_id": payment.EstablishmentID,
+					"balance": bson.M{"$gte": reversal},
+				},
+				bson.M{
+					"$inc": bson.M{"balance": -reversal},
+					"$set": bson.M{"last_updated": now},
+				},
+			)
+			if wErr == nil && res.ModifiedCount > 0 {
+				var wallet models.Wallet
+				wallets.FindOne(mongoCtx(), bson.M{"user_id": payment.EstablishmentID}).Decode(&wallet)
+
+				ledgerEntry := bson.M{
+					"_id":           primitive.NewObjectID(),
+					"user_id":       payment.EstablishmentID,
+					"type":          "debit",
+					"amount":        reversal,
+					"payment_id":    abacatepayID,
+					"balance_after": wallet.Balance,
+					"description":   "Refund/chargeback: estorno do pagamento " + payment.OrderID,
+					"created_at":    now,
+				}
+				if _, ledgerErr := models.MongoDabase.Collection("wallet_ledger").InsertOne(mongoCtx(), ledgerEntry); ledgerErr != nil {
+					log.Printf("[REFUND] WARNING: falha ao gravar ledger do estorno user=%d: %v", payment.EstablishmentID, ledgerErr)
+				}
+				log.Printf("[REFUND] Carteira do estabelecimento %d debitada em %.2f (payment=%s)", payment.EstablishmentID, reversal, abacatepayID)
+			} else {
+				log.Printf("[REFUND] Carteira do estabelecimento %d NAO debitada (saldo insuficiente ou inexistente): %v", payment.EstablishmentID, wErr)
+			}
+		}
+
+		// Notifica o cliente em tempo real (ponte WebSocket do monolito)
+		orderMsg := map[string]interface{}{
+			"type":        "PAYMENT_REFUNDED",
+			"order_id":    payment.OrderID,
+			"payment_id":  payment.ID.Hex(),
+			"user_id":     payment.CustomerID,
+			"status":      "REFUNDED",
+			"amount":      payment.Amount,
+			"method":      payment.Method,
+			"refunded_at": now.Format(time.RFC3339),
+		}
+		if msgBody, mErr := json.Marshal(orderMsg); mErr == nil {
+			if pErr := publishToOrderQueue(msgBody); pErr != nil {
+				log.Printf("[REFUND] Falha ao publicar estorno na fila de pedidos: %v", pErr)
+			}
+		}
+
+		paymentMsg := map[string]interface{}{
+			"order_id":         payment.OrderID,
+			"establishment_id": payment.EstablishmentID,
+			"user_id":          payment.CustomerID,
+			"amount":           payment.Amount,
+			"delivery_amount":  payment.DeliveryAmount,
+			"status":           "refunded",
+		}
+		if msgBody, mErr := json.Marshal(paymentMsg); mErr == nil {
+			if pErr := publishToPaymentQueue(msgBody); pErr != nil {
+				log.Printf("[REFUND] Falha ao publicar estorno na fila de pagamentos: %v", pErr)
+			}
+		}
+	}
+
+	_, err = models.MongoDabase.Collection("payments").UpdateOne(
+		mongoCtx(),
+		bson.M{"abacatepay_id": abacatepayID},
+		bson.M{"$set": bson.M{"status": "REFUNDED", "refunded_at": now}},
+	)
+	if err != nil {
+		log.Printf("[REFUND] Falha ao marcar payment %s como REFUNDED: %v", abacatepayID, err)
 	}
 }
 
@@ -236,7 +358,13 @@ func HandlePaymentWebhook(c *fiber.Ctx) error {
 		abacatepayStatus = apiStatus
 	}
 
-	updateLocalPaymentStatus(chargeID, abacatepayStatus)
+	if abacatepayStatus == "REFUNDED" {
+		// Estorno/chargeback: reverte crédito da carteira do estabelecimento,
+		// notifica o cliente via fila e marca o pagamento como REFUNDED.
+		processPaymentRefund(chargeID)
+	} else {
+		updateLocalPaymentStatus(chargeID, abacatepayStatus)
+	}
 
 	if abacatepayStatus == "CONFIRMED" {
 		publishPaymentApproved(chargeID)

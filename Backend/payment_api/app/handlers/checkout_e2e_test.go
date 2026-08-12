@@ -576,3 +576,209 @@ func TestCheckoutE2E_WebhookRealFlow_Cashback(t *testing.T) {
 	require.Equal(t, "EXPIRED", stored.Status)
 	require.Empty(t, stored.SplitRules, "charge não paga não pode gerar split")
 }
+
+// TestCheckoutE2E_WebhookRealFlow_Refund cobre o fluxo de chargeback/reembolso:
+// webhook billing.refunded → verificação server-side (API mockada) → reversão
+// do crédito da carteira do estabelecimento → ledger de débito → evento
+// PAYMENT_REFUNDED nas filas → status REFUNDED. Também valida idempotência
+// (sem débito duplo), refund de pagamento nunca pago (sem reversão) e
+// saldo insuficiente (nunca deixa saldo negativo).
+func TestCheckoutE2E_WebhookRealFlow_Refund(t *testing.T) {
+	cleanup := setupCheckoutE2EEnv(t)
+	defer cleanup()
+
+	os.Unsetenv("REDIS_URL")
+
+	ctx := context.Background()
+	paymentCollection := models.MongoDabase.Collection("payments")
+	walletCollection := models.MongoDabase.Collection("wallets")
+	ledgerCollection := models.MongoDabase.Collection("wallet_ledger")
+
+	// Mock AbacatePay: charges com "refund" no id → REFUNDED, resto → PAID.
+	var mockCalls int32
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&mockCalls, 1)
+		chargeID := r.URL.Query().Get("id")
+		chargeStatus := "PAID"
+		if strings.Contains(chargeID, "refund") {
+			chargeStatus = "REFUNDED"
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"success":true,"data":{"id":%q,"status":%q,"amount":10000,"expiresAt":"2026-08-13T12:00:00Z"},"error":null}`, chargeID, chargeStatus)
+	}))
+	defer mock.Close()
+
+	os.Setenv("ABACATE_PAY_BASE_URL", mock.URL)
+	defer os.Unsetenv("ABACATE_PAY_BASE_URL")
+
+	os.Setenv("ABACATE_PAY_WEBHOOK_SECRET", "e2e-refund-secret")
+	defer os.Unsetenv("ABACATE_PAY_WEBHOOK_SECRET")
+
+	app := fiber.New()
+	app.Post("/api/payment/webhook", HandlePaymentWebhook)
+
+	postWebhook := func(t *testing.T, chargeID string, body []byte) *http.Response {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/api/payment/webhook", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("x-abacatepay-signature", computeHMAC(body, "e2e-refund-secret"))
+		resp, err := app.Test(req, -1)
+		require.NoError(t, err)
+		require.Equal(t, 200, resp.StatusCode)
+		return resp
+	}
+
+	// === Cenário 1: pagamento CONFIRMED → refund reverte a carteira ===
+	// amount=100, delivery=10 → split 5/85/10 = 100 (3 regras, est share 85).
+	confirmed := models.Payment{
+		OrderID:         "order-e2e-refund-001",
+		CustomerID:      500,
+		EstablishmentID: 42,
+		Amount:          100.00,
+		DeliveryAmount:  10.00,
+		Method:          "pix",
+		Status:          "CONFIRMED",
+		AbacatePayID:    "charge-e2e-refund-001",
+		SplitRules: []models.SplitRule{
+			{ReceiverType: "platform", Amount: 5.00, Percentage: 5.0},
+			{ReceiverType: "establishment", Amount: 85.00, Percentage: 85.0},
+			{ReceiverType: "deliveryman", Amount: 10.00, Percentage: 0},
+		},
+		CreatedAt: time.Now(),
+	}
+	_, err := paymentCollection.InsertOne(ctx, confirmed)
+	require.NoError(t, err)
+
+	_, err = walletCollection.InsertOne(ctx, bson.M{
+		"user_id":      42,
+		"user_type":    "establishment",
+		"balance":      200.0,
+		"last_updated": time.Now(),
+	})
+	require.NoError(t, err)
+
+	refundBody := []byte(`{"event":"billing.refunded","charge":{"id":"charge-e2e-refund-001","status":"REFUNDED","amount":100.00}}`)
+	postWebhook(t, "charge-e2e-refund-001", refundBody)
+
+	// Verificação server-side aconteceu
+	require.Equal(t, int32(1), atomic.LoadInt32(&mockCalls))
+
+	var stored models.Payment
+	err = paymentCollection.FindOne(ctx, bson.M{"abacatepay_id": "charge-e2e-refund-001"}).Decode(&stored)
+	require.NoError(t, err)
+	require.Equal(t, "REFUNDED", stored.Status)
+	require.NotNil(t, stored.RefundedAt)
+	require.Len(t, stored.SplitRules, 3, "refund não pode regenerar/duplicar split rules")
+
+	// Carteira do estabelecimento debitada: 200 - 85 (share do split) = 115
+	var wallet models.Wallet
+	err = walletCollection.FindOne(ctx, bson.M{"user_id": 42}).Decode(&wallet)
+	require.NoError(t, err)
+	require.InDelta(t, 115.0, wallet.Balance, 0.01, "chargeback deve reverter o crédito do estabelecimento")
+
+	// Ledger de débito gravado
+	count, err := ledgerCollection.CountDocuments(ctx, bson.M{
+		"user_id":    42,
+		"type":       "debit",
+		"payment_id": "charge-e2e-refund-001",
+	})
+	require.NoError(t, err)
+	require.Equal(t, int64(1), count, "deve existir 1 lançamento de débito no ledger")
+
+	// === Cenário 2: idempotência — reprocessar não debita de novo ===
+	postWebhook(t, "charge-e2e-refund-001", refundBody)
+
+	err = walletCollection.FindOne(ctx, bson.M{"user_id": 42}).Decode(&wallet)
+	require.NoError(t, err)
+	require.InDelta(t, 115.0, wallet.Balance, 0.01, "reprocessar webhook não pode debitar duas vezes")
+
+	count, err = ledgerCollection.CountDocuments(ctx, bson.M{
+		"user_id":    42,
+		"type":       "debit",
+		"payment_id": "charge-e2e-refund-001",
+	})
+	require.NoError(t, err)
+	require.Equal(t, int64(1), count, "ledger não pode ter débito duplicado")
+
+	// === Cenário 3: refund de pagamento PENDING (nunca pago) → sem reversão ===
+	pending := models.Payment{
+		OrderID:         "order-e2e-refund-pending",
+		CustomerID:      501,
+		EstablishmentID: 43,
+		Amount:          50.00,
+		DeliveryAmount:  5.00,
+		Method:          "pix",
+		Status:          "PENDING",
+		AbacatePayID:    "charge-e2e-refund-pending",
+		CreatedAt:       time.Now(),
+	}
+	_, err = paymentCollection.InsertOne(ctx, pending)
+	require.NoError(t, err)
+
+	_, err = walletCollection.InsertOne(ctx, bson.M{
+		"user_id":      43,
+		"user_type":    "establishment",
+		"balance":      500.0,
+		"last_updated": time.Now(),
+	})
+	require.NoError(t, err)
+
+	pendingRefund := []byte(`{"event":"billing.refunded","charge":{"id":"charge-e2e-refund-pending","status":"REFUNDED","amount":50.00}}`)
+	postWebhook(t, "charge-e2e-refund-pending", pendingRefund)
+
+	err = paymentCollection.FindOne(ctx, bson.M{"abacatepay_id": "charge-e2e-refund-pending"}).Decode(&stored)
+	require.NoError(t, err)
+	require.Equal(t, "REFUNDED", stored.Status)
+
+	err = walletCollection.FindOne(ctx, bson.M{"user_id": 43}).Decode(&wallet)
+	require.NoError(t, err)
+	require.InDelta(t, 500.0, wallet.Balance, 0.01, "pagamento nunca pago não pode reverter crédito")
+
+	// === Cenário 4: saldo insuficiente — nunca fica negativo ===
+	low := models.Payment{
+		OrderID:         "order-e2e-refund-low",
+		CustomerID:      502,
+		EstablishmentID: 44,
+		Amount:          100.00,
+		DeliveryAmount:  10.00,
+		Method:          "pix",
+		Status:          "CONFIRMED",
+		AbacatePayID:    "charge-e2e-refund-low",
+		SplitRules: []models.SplitRule{
+			{ReceiverType: "platform", Amount: 5.00, Percentage: 5.0},
+			{ReceiverType: "establishment", Amount: 85.00, Percentage: 85.0},
+			{ReceiverType: "deliveryman", Amount: 10.00, Percentage: 0},
+		},
+		CreatedAt: time.Now(),
+	}
+	_, err = paymentCollection.InsertOne(ctx, low)
+	require.NoError(t, err)
+
+	_, err = walletCollection.InsertOne(ctx, bson.M{
+		"user_id":      44,
+		"user_type":    "establishment",
+		"balance":      10.0, // < share de 85
+		"last_updated": time.Now(),
+	})
+	require.NoError(t, err)
+
+	lowRefund := []byte(`{"event":"billing.refunded","charge":{"id":"charge-e2e-refund-low","status":"REFUNDED","amount":100.00}}`)
+	postWebhook(t, "charge-e2e-refund-low", lowRefund)
+
+	err = paymentCollection.FindOne(ctx, bson.M{"abacatepay_id": "charge-e2e-refund-low"}).Decode(&stored)
+	require.NoError(t, err)
+	require.Equal(t, "REFUNDED", stored.Status)
+
+	err = walletCollection.FindOne(ctx, bson.M{"user_id": 44}).Decode(&wallet)
+	require.NoError(t, err)
+	require.InDelta(t, 10.0, wallet.Balance, 0.01, "saldo insuficiente: débito bloqueado, nunca negativo")
+
+	// Ledger não pode ter débito quando o saldo é insuficiente
+	count, err = ledgerCollection.CountDocuments(ctx, bson.M{
+		"user_id":    44,
+		"type":       "debit",
+		"payment_id": "charge-e2e-refund-low",
+	})
+	require.NoError(t, err)
+	require.Equal(t, int64(0), count)
+}

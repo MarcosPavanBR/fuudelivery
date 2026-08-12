@@ -1,4 +1,4 @@
-name: Render Env Check (temp)
+name: Render Env Check (temp2)
 on:
   workflow_dispatch:
   push:
@@ -9,23 +9,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Fetch env vars
+      - name: Dump raw response
         env:
           RKEY: ${{ secrets.RENDER_API_KEY }}
         run: |
           curl -s -H "Authorization: Bearer $RKEY" \
             "https://api.render.com/v1/services/srv-d9e55qf41pts73e8q8dg/env-vars" > /tmp/envs.json
-          echo "HTTP fetched: $(wc -c < /tmp/envs.json) bytes"
-          grep -oE '"envVarKey":"(MONGO_URI|PAYMENT_MONGO_DATABASE|MONGO_DATABASE|MONGO_DB|ABACATE_PAY_API_KEY|JWT_SECRET)"' /tmp/envs.json || echo "none of the target keys found"
+          echo "bytes: $(wc -c < /tmp/envs.json)"
+          echo "--- raw head ---"
+          head -c 2000 /tmp/envs.json
+          echo
+          echo "--- python parse ---"
           python3 - <<'PYEOF'
           import json
-          data = json.load(open('/tmp/envs.json'))
-          for e in data:
-              k = e.get('envVarKey','')
-              if k in ('MONGO_URI','PAYMENT_MONGO_DATABASE','MONGO_DATABASE','MONGO_DB','ABACATE_PAY_API_KEY','JWT_SECRET'):
-                  v = e.get('value','')
-                  if k in ('MONGO_URI','ABACATE_PAY_API_KEY','JWT_SECRET'):
-                      print(k, '=', (v[:25] + '...') if len(v)>25 else 'SHORT')
-                  else:
-                      print(k, '=', v)
+          try:
+              data = json.load(open('/tmp/envs.json'))
+              print('type:', type(data).__name__)
+              if isinstance(data, dict):
+                  print('keys:', list(data.keys())[:20])
+              elif isinstance(data, list):
+                  print('len:', len(data))
+                  if data:
+                      print('item0 keys:', list(data[0].keys())[:20])
+          except Exception as e:
+              print('parse error:', e)
           PYEOF

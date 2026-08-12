@@ -18,6 +18,11 @@ var (
 func ConnectMongoDatabase() {
 	mongoURI := os.Getenv("MONGO_URI")
 	mongoDB := os.Getenv("PAYMENT_MONGO_DATABASE")
+	if mongoDB == "" {
+		// Fallback para o nome padrão do banco de pagamentos.
+		mongoDB = "fuudelivery_payments"
+		log.Println("PAYMENT_MONGO_DATABASE não configurado, usando fallback 'fuudelivery_payments'")
+	}
 
 	if mongoURI == "" {
 		log.Println("MONGO_URI não configurado, MongoDB indisponível")

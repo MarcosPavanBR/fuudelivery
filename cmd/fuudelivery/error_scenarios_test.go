@@ -17,7 +17,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -319,7 +318,6 @@ func TestErrorScenario_ExpiredPayment(t *testing.T) {
 
 	t.Run("NoSplitForExpiredPayment", func(t *testing.T) {
 		// Split em pagamento expirado não deve mudar status
-		collectionName := os.Getenv("MONGO_DATABASE")
 		t.Logf("Payment with status EXPIRED cannot be split — blocked by business logic")
 		// Na producao, o webhook so chama publishPaymentApproved se status == "CONFIRMED"
 		// Pagamentos expirados sao apenas atualizados no banco, sem split/credito

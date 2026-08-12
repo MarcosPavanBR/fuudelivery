@@ -1,0 +1,29 @@
+{
+  "cli": {
+    "version": ">= 7.3.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk",
+        "withoutCredentials": true
+      },
+      "prebuildCommand": "npx expo prebuild --clean --platform android"
+    },
+    "production": {
+      "android": {
+        "buildType": "app-bundle",
+        "withoutCredentials": true
+      },
+      "prebuildCommand": "npx expo prebuild --clean --platform android"
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

@@ -124,6 +124,7 @@ const DashboardCharts = ({ establishmentId }) => {
       ),
       color: "#EA1D2C",
       bg: "#FEF2F2",
+      accent: "linear-gradient(135deg, #EA1D2C, #FF6B35)",
     },
     {
       label: "Receita da Semana",
@@ -135,6 +136,7 @@ const DashboardCharts = ({ establishmentId }) => {
       ),
       color: "#F7A11E",
       bg: "#FFFBEB",
+      accent: "linear-gradient(135deg, #F7A11E, #FBBF24)",
     },
     {
       label: "Ticket Médio",
@@ -146,8 +148,11 @@ const DashboardCharts = ({ establishmentId }) => {
       ),
       color: "#10B981",
       bg: "#ECFDF5",
+      accent: "linear-gradient(135deg, #10B981, #34D399)",
     },
   ];
+
+  const hasRevenue = stats.revenueByDay.some((d) => d.value > 0);
 
   return (
     <div className="mb-6 animate-fade-in">
@@ -156,10 +161,14 @@ const DashboardCharts = ({ establishmentId }) => {
         {statCards.map((card, i) => (
           <div
             key={i}
-            className="bg-white rounded-2xl p-5 shadow-card hover:shadow-card-hover transition-all duration-300 border border-gray-100"
+            className="relative bg-white rounded-2xl p-5 shadow-card hover:shadow-card-hover transition-all duration-300 border border-gray-100 overflow-hidden"
           >
+            <div
+              className="absolute left-0 top-0 bottom-0 w-1"
+              style={{ background: card.accent }}
+            />
             <div className="flex items-start justify-between">
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-medium text-gray-500">{card.label}</p>
                 <p
                   className="text-2xl font-bold mt-2"
@@ -169,7 +178,7 @@ const DashboardCharts = ({ establishmentId }) => {
                 </p>
               </div>
               <div
-                className="p-3 rounded-xl"
+                className="p-3 rounded-xl flex-shrink-0"
                 style={{ background: card.bg, color: card.color }}
               >
                 {card.icon}
@@ -184,30 +193,42 @@ const DashboardCharts = ({ establishmentId }) => {
         <h3 className="text-lg font-bold text-gray-900 mb-6">
           Receita por Dia
         </h3>
-        <div className="flex items-end justify-between h-48 gap-3">
-          {stats.revenueByDay.map((day, i) => (
-            <div key={i} className="flex flex-col items-center flex-1 h-full justify-end">
-              {day.value > 0 && (
-                <span className="text-xs font-semibold text-gray-700 mb-2">
-                  R${day.value}
+        {hasRevenue ? (
+          <div className="flex items-end justify-between h-48 gap-3">
+            {stats.revenueByDay.map((day, i) => (
+              <div key={i} className="flex flex-col items-center flex-1 h-full justify-end">
+                {day.value > 0 && (
+                  <span className="text-xs font-semibold text-gray-700 mb-2">
+                    R${day.value}
+                  </span>
+                )}
+                <div
+                  className="w-full rounded-t-lg transition-all duration-500 hover:opacity-80 cursor-pointer"
+                  style={{
+                    height: `${Math.max((day.value / maxRevenue) * 160, day.value > 0 ? 8 : 2)}px`,
+                    background:
+                      i === 5 || i === 6
+                        ? "linear-gradient(180deg, #F7A11E, #F59E0B)"
+                        : "linear-gradient(180deg, #EA1D2C, #FF6B35)",
+                  }}
+                />
+                <span className="text-xs font-medium text-gray-500 mt-2">
+                  {day.day}
                 </span>
-              )}
-              <div
-                className="w-full rounded-t-lg transition-all duration-500 hover:opacity-80 cursor-pointer"
-                style={{
-                  height: `${Math.max((day.value / maxRevenue) * 160, day.value > 0 ? 8 : 2)}px`,
-                  background:
-                    i === 5 || i === 6
-                      ? "linear-gradient(180deg, #F7A11E, #F59E0B)"
-                      : "linear-gradient(180deg, #EA1D2C, #FF6B35)",
-                }}
-              />
-              <span className="text-xs font-medium text-gray-500 mt-2">
-                {day.day}
-              </span>
-            </div>
-          ))}
-        </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-48 rounded-xl bg-gray-50 border border-dashed border-gray-200">
+            <svg className="w-10 h-10 text-gray-300 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v18h18M7 14l4-4 3 3 5-6" />
+            </svg>
+            <p className="text-sm font-medium text-gray-500">Sem receita ainda</p>
+            <p className="text-xs text-gray-400 mt-1">
+              Os pedidos concluídos aparecerão aqui
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Popular Products - placeholder until endpoint exists */}
@@ -246,8 +267,16 @@ const DashboardCharts = ({ establishmentId }) => {
             ))}
           </div>
         ) : (
-          <div className="text-center py-8 text-gray-400">
-            <p>Dados de produtos em breve</p>
+          <div className="text-center py-10">
+            <div className="mx-auto w-12 h-12 rounded-2xl bg-gray-50 flex items-center justify-center mb-3">
+              <svg className="w-6 h-6 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+            </div>
+            <p className="font-medium text-gray-500">Dados de produtos em breve</p>
+            <p className="text-xs text-gray-400 mt-1">
+              Os produtos mais vendidos aparecerão aqui
+            </p>
           </div>
         )}
       </div>

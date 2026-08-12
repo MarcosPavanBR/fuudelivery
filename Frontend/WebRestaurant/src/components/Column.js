@@ -33,6 +33,11 @@ const Column = ({ column, tasks }) => {
             {tasks.map((task, index) => (
               <Task key={task.id} task={task} index={index} />
             ))}
+            {tasks.length === 0 && !snapshot.isDraggingOver && (
+              <div className="h-full min-h-[170px] flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 text-gray-300">
+                <p className="text-xs font-medium">Nenhum pedido</p>
+              </div>
+            )}
             {provided.placeholder}
           </div>
         )}

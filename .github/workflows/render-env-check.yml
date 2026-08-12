@@ -9,20 +9,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Fetch API service env vars
+      - name: Fetch env vars
+        env:
+          RKEY: ${{ secrets.RENDER_API_KEY }}
         run: |
-          curl -s -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
-            "https://api.render.com/v1/services/srv-d9e55qf41pts73e8q8dg/env-vars" \
-            | python3 -c "
-import sys, json
-data = json.load(sys.stdin)
-keys = ['MONGO_URI','PAYMENT_MONGO_DATABASE','MONGO_DATABASE','MONGO_DB','ABACATE_PAY_API_KEY','JWT_SECRET']
+          curl -s -H "Authorization: Bearer $RKEY" \
+            "https://api.render.com/v1/services/srv-d9e55qf41pts73e8q8dg/env-vars" > /tmp/envs.json
+          echo "HTTP fetched: $(wc -c < /tmp/envs.json) bytes"
+          grep -oE '"envVarKey":"(MONGO_URI|PAYMENT_MONGO_DATABASE|MONGO_DATABASE|MONGO_DB|ABACATE_PAY_API_KEY|JWT_SECRET)"' /tmp/envs.json || echo "none of the target keys found"
+          python3 - <<'PYEOF'
+import json
+data = json.load(open('/tmp/envs.json'))
 for e in data:
     k = e.get('envVarKey','')
-    if k in keys:
+    if k in ('MONGO_URI','PAYMENT_MONGO_DATABASE','MONGO_DATABASE','MONGO_DB','ABACATE_PAY_API_KEY','JWT_SECRET'):
         v = e.get('value','')
         if k in ('MONGO_URI','ABACATE_PAY_API_KEY','JWT_SECRET'):
-            print(k, '=', (v[:25] + '...') if len(v)>25 else '***short***')
+            print(k, '=', (v[:25] + '...') if len(v)>25 else 'SHORT')
         else:
             print(k, '=', v)
-"
+PYEOF

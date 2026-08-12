@@ -17,6 +17,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -64,8 +65,21 @@ func setupErrorTestEnv(t *testing.T) (*fiber.App, func(), uint, uint, string) {
 	pgDSN, err := pgC.ConnectionString(ctx, "sslmode=disable")
 	require.NoError(t, err)
 
-	pgDB, err := gorm.Open(postgresdriver.Open(pgDSN), &gorm.Config{})
-	require.NoError(t, err)
+	// Retry com backoff: o container pode nao estar pronto logo apos o start
+	// (race classico de testcontainers em CI).
+	var pgDB *gorm.DB
+	for attempt := 0; attempt < 10; attempt++ {
+		pgDB, err = gorm.Open(postgresdriver.Open(pgDSN), &gorm.Config{})
+		if err == nil {
+			var ping int
+			if pingErr := pgDB.Raw("SELECT 1").Scan(&ping).Error; pingErr == nil && ping == 1 {
+				break
+			}
+			err = fmt.Errorf("postgres nao respondeu ao ping")
+		}
+		time.Sleep(2 * time.Second)
+	}
+	require.NoError(t, err, "conectar ao Postgres do testcontainer")
 	require.NoError(t, pgDB.AutoMigrate(
 		&models.User{},
 		&models.Establishment{},

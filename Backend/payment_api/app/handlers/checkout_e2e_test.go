@@ -782,3 +782,109 @@ func TestCheckoutE2E_WebhookRealFlow_Refund(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(0), count)
 }
+
+// TestCheckoutE2E_WebhookRealFlow_ZoneSplitConfig valida que o split usa os
+// percentuais customizados da zona do estabelecimento (via
+// GetSplitConfigForEstablishment, ligado pelo monólito) em vez do default
+// 5/85. Com zona 7%/80%, amount=100 e delivery=10: platform=7, estab=80,
+// delivery=10, cashback=3 → 4 receivers.
+func TestCheckoutE2E_WebhookRealFlow_ZoneSplitConfig(t *testing.T) {
+	cleanup := setupCheckoutE2EEnv(t)
+	defer cleanup()
+
+	os.Unsetenv("REDIS_URL")
+
+	ctx := context.Background()
+	paymentCollection := models.MongoDabase.Collection("payments")
+
+	// Mock AbacatePay: charge confirmada (PAID).
+	var mockCalls int32
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&mockCalls, 1)
+		chargeID := r.URL.Query().Get("id")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"success":true,"data":{"id":%q,"status":"PAID","amount":10000,"expiresAt":"2026-08-13T12:00:00Z"},"error":null}`, chargeID)
+	}))
+	defer mock.Close()
+
+	os.Setenv("ABACATE_PAY_BASE_URL", mock.URL)
+	defer os.Unsetenv("ABACATE_PAY_BASE_URL")
+
+	os.Setenv("ABACATE_PAY_WEBHOOK_SECRET", "e2e-zone-secret")
+	defer os.Unsetenv("ABACATE_PAY_WEBHOOK_SECRET")
+
+	// Ligação que o monólito faz em main(): resolver de split por zona.
+	// Zona com percentuais customizados 7%/80% para o estabelecimento 42.
+	var resolverCalls int32
+	savedResolver := GetSplitConfigForEstablishment
+	GetSplitConfigForEstablishment = func(establishmentID int64) (float64, float64) {
+		atomic.AddInt32(&resolverCalls, 1)
+		require.Equal(t, int64(42), establishmentID, "resolver deve receber o establishment_id do pagamento")
+		return 7.0, 80.0 // zona customizada: 7% plataforma / 80% estabelecimento
+	}
+	defer func() { GetSplitConfigForEstablishment = savedResolver }()
+
+	app := fiber.New()
+	app.Post("/api/payment/webhook", HandlePaymentWebhook)
+
+	payment := models.Payment{
+		OrderID:         "order-e2e-zone-split",
+		CustomerID:      900,
+		EstablishmentID: 42,
+		Amount:          100.00,
+		DeliveryAmount:  10.00,
+		Method:          "pix",
+		Status:          "PENDING",
+		AbacatePayID:    "charge-e2e-zone-split",
+		CreatedAt:       time.Now(),
+	}
+	_, err := paymentCollection.InsertOne(ctx, payment)
+	require.NoError(t, err)
+
+	webhookBody := []byte(`{"event":"billing.paid","charge":{"id":"charge-e2e-zone-split","status":"PAID","amount":100.00}}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/payment/webhook", bytes.NewReader(webhookBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-abacatepay-signature", computeHMAC(webhookBody, "e2e-zone-secret"))
+	resp, err := app.Test(req, -1)
+	require.NoError(t, err)
+	require.Equal(t, 200, resp.StatusCode)
+
+	// Verificação server-side + resolver de zona chamados de verdade.
+	require.Equal(t, int32(1), atomic.LoadInt32(&mockCalls))
+	require.Equal(t, int32(1), atomic.LoadInt32(&resolverCalls), "GetSplitConfigForEstablishment deve ser consultado no webhook")
+
+	var stored models.Payment
+	err = paymentCollection.FindOne(ctx, bson.M{"abacatepay_id": "charge-e2e-zone-split"}).Decode(&stored)
+	require.NoError(t, err)
+	require.Equal(t, "CONFIRMED", stored.Status)
+
+	// Split com percentuais da zona: 7/80/10 + cashback 3 → 4 regras.
+	require.Len(t, stored.SplitRules, 4, "7%%+80%%+delivery 10 = 97 → sobra 3 de cashback → 4 regras")
+
+	require.Equal(t, "platform", stored.SplitRules[0].ReceiverType)
+	require.InDelta(t, 7.0, stored.SplitRules[0].Amount, 0.01, "7%% de 100")
+	require.InDelta(t, 7.0, stored.SplitRules[0].Percentage, 0.01)
+
+	require.Equal(t, "establishment", stored.SplitRules[1].ReceiverType)
+	require.InDelta(t, 80.0, stored.SplitRules[1].Amount, 0.01, "80%% de 100")
+	require.InDelta(t, 80.0, stored.SplitRules[1].Percentage, 0.01)
+
+	require.Equal(t, "deliveryman", stored.SplitRules[2].ReceiverType)
+	require.InDelta(t, 10.0, stored.SplitRules[2].Amount, 0.01)
+
+	require.Equal(t, "customer", stored.SplitRules[3].ReceiverType)
+	require.InDelta(t, 3.0, stored.SplitRules[3].Amount, 0.01, "cashback: 100-7-80-10")
+
+	// O total dividido nunca excede o valor pago.
+	totalSplit := 0.0
+	for _, r := range stored.SplitRules {
+		totalSplit += r.Amount
+	}
+	require.InDelta(t, 100.0, totalSplit, 0.01)
+
+	// Controle: se o resolver NÃO tivesse sido usado, o split seria 5/85
+	// (platform 5, estab 85, delivery 10, cashback 0 → 3 regras). As regras
+	// acima só existem com a config da zona — prova que o default foi trocado.
+	require.Greater(t, stored.SplitRules[0].Percentage, 5.0, "percentual da plataforma deve vir da zona (7%%), nao do default 5%%")
+	require.Less(t, stored.SplitRules[1].Percentage, 85.0, "percentual do estabelecimento deve vir da zona (80%%), nao do default 85%%")
+}

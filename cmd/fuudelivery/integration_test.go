@@ -81,8 +81,22 @@ func TestFullFlowAuthOrderPayment(t *testing.T) {
 	pgDSN, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
 	require.NoError(t, err)
 
-	pgDB, err := gorm.Open(postgresdriver.Open(pgDSN), &gorm.Config{})
-	require.NoError(t, err)
+	// O container pode nao estar 100% pronto para aceitar conexoes
+	// logo apos o start (race classico de testcontainers em CI).
+	// Tenta conectar com backoff antes de desistir.
+	var pgDB *gorm.DB
+	for attempt := 0; attempt < 10; attempt++ {
+		pgDB, err = gorm.Open(postgresdriver.Open(pgDSN), &gorm.Config{})
+		if err == nil {
+			var ping int
+			if pingErr := pgDB.Raw("SELECT 1").Scan(&ping).Error; pingErr == nil && ping == 1 {
+				break
+			}
+			err = fmt.Errorf("postgres nao respondeu ao ping")
+		}
+		time.Sleep(2 * time.Second)
+	}
+	require.NoError(t, err, "conectar ao Postgres do testcontainer")
 	require.NoError(t, pgDB.AutoMigrate(
 		&models.User{},
 		&models.Establishment{},
@@ -334,9 +348,8 @@ func TestFullFlowAuthOrderPayment(t *testing.T) {
 		json.NewDecoder(resp.Body).Decode(&body)
 		require.Equal(t, "ok", body["status"])
 		require.Equal(t, "fuudelivery", body["service"])
-	}) 	// ---- TESTE 2: Fluxo de Auth ----
+	}) // ---- TESTE 2: Fluxo de Auth ----
 	var establishmentID float64
-
 
 	t.Run("RegisterUser", func(t *testing.T) {
 		payload := map[string]string{

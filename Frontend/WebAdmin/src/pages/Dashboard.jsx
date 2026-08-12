@@ -91,18 +91,19 @@ export default function Dashboard() {
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
           {[
-            { label: "Restaurantes Ativos", value: stats.restaurants, IconComp: FiHome, color: "#EA1D2C", bg: "#FEF2F2" },
-            { label: "Total de Usuarios", value: stats.users, IconComp: FiUsers, color: "#F7A11E", bg: "#FFFBEB" },
-            { label: "Pedidos Hoje", value: stats.todayOrders, IconComp: FiShoppingBag, color: "#10B981", bg: "#ECFDF5" },
-            { label: "Entregadores Online", value: stats.onlineDrivers, IconComp: FiTruck, color: "#3B82F6", bg: "#DBEAFE" },
+            { label: "Restaurantes Ativos", value: stats.restaurants, IconComp: FiHome, color: "#EA1D2C", bg: "#FEF2F2", accent: "linear-gradient(135deg, #EA1D2C, #FF6B35)" },
+            { label: "Total de Usuarios", value: stats.users, IconComp: FiUsers, color: "#F7A11E", bg: "#FFFBEB", accent: "linear-gradient(135deg, #F7A11E, #FBBF24)" },
+            { label: "Pedidos Hoje", value: stats.todayOrders, IconComp: FiShoppingBag, color: "#10B981", bg: "#ECFDF5", accent: "linear-gradient(135deg, #10B981, #34D399)" },
+            { label: "Entregadores Online", value: stats.onlineDrivers, IconComp: FiTruck, color: "#3B82F6", bg: "#DBEAFE", accent: "linear-gradient(135deg, #3B82F6, #60A5FA)" },
           ].map((stat, i) => (
-            <div key={i} className="bg-white rounded-2xl p-5 transition-all duration-300 border border-gray-100">
+            <div key={i} className="relative bg-white rounded-2xl p-5 transition-all duration-300 border border-gray-100 shadow-card hover:shadow-card-hover hover:-translate-y-0.5 overflow-hidden">
+              <div className="absolute left-0 top-0 bottom-0 w-1" style={{ background: stat.accent }} />
               <div className="flex items-start justify-between">
-                <div>
+                <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-500">{stat.label}</p>
                   <p className="text-3xl font-bold mt-2 text-gray-900">{stat.value}</p>
                 </div>
-                <div className="p-3 rounded-xl" style={{ background: stat.bg, color: stat.color }}>
+                <div className="p-3 rounded-xl flex-shrink-0" style={{ background: stat.bg, color: stat.color }}>
                   {stat.IconComp && <stat.IconComp className="h-6 w-6" />}
                 </div>
               </div>
@@ -130,8 +131,12 @@ export default function Dashboard() {
             <tbody className="divide-y divide-gray-100">
               {recentOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                    Nenhum pedido recente
+                  <td colSpan={6} className="px-6 py-16 text-center">
+                    <div className="mx-auto w-14 h-14 rounded-2xl bg-gray-50 flex items-center justify-center mb-3">
+                      <FiShoppingBag className="h-7 w-7 text-gray-300" />
+                    </div>
+                    <p className="font-medium text-gray-700">Nenhum pedido recente</p>
+                    <p className="text-sm text-gray-400 mt-1">Os pedidos aparecerão aqui assim que entrarem</p>
                   </td>
                 </tr>
               ) : (

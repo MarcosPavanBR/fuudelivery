@@ -424,6 +424,8 @@ func TestCheckoutE2E_WebhookRealFlow_Cashback(t *testing.T) {
 
 	ctx := context.Background()
 	paymentCollection := models.MongoDabase.Collection("payments")
+	walletCollection := models.MongoDabase.Collection("wallets")
+	ledgerCollection := models.MongoDabase.Collection("wallet_ledger")
 
 	// Mock da API AbacatePay v2: o webhook NÃO confia no body — verifica o
 	// status da charge consultando a API (aqui mockada). Conta as chamadas
@@ -535,6 +537,29 @@ func TestCheckoutE2E_WebhookRealFlow_Cashback(t *testing.T) {
 	}
 	require.InDelta(t, 89.90, totalSplit, 0.01)
 
+	// --- 2b. Crédito real na carteira do restaurante após o split ---
+	// A confirmação do webhook deve criar (upsert) a carteira do
+	// estabelecimento e creditar o share do split: 89.90 * 85% = 76.415.
+	var estWallet models.Wallet
+	err = walletCollection.FindOne(ctx, bson.M{"user_id": 42}).Decode(&estWallet)
+	require.NoError(t, err, "webhook confirmado deve criar a carteira do estabelecimento")
+	require.Equal(t, "establishment", estWallet.UserType)
+	require.InDelta(t, 89.90*0.85, estWallet.Balance, 0.01, "carteira do restaurante recebe o share do split")
+
+	// Marcador de crédito gravado no pagamento
+	err = paymentCollection.FindOne(ctx, bson.M{"abacatepay_id": "charge-e2e-cashback-001"}).Decode(&stored)
+	require.NoError(t, err)
+	require.NotNil(t, stored.EstablishmentCreditedAt, "pagamento deve registrar establishment_credited_at")
+
+	// Lançamento de crédito no ledger
+	creditCount, err := ledgerCollection.CountDocuments(ctx, bson.M{
+		"user_id":    42,
+		"type":       "credit",
+		"payment_id": "charge-e2e-cashback-001",
+	})
+	require.NoError(t, err)
+	require.Equal(t, int64(1), creditCount, "deve existir 1 lançamento de crédito no ledger")
+
 	// --- 3. Webhook idempotente: reprocessar não muda o status nem duplica ---
 	req = httptest.NewRequest(http.MethodPost, "/api/payment/webhook", bytes.NewReader(webhookBody))
 	req.Header.Set("Content-Type", "application/json")
@@ -547,6 +572,19 @@ func TestCheckoutE2E_WebhookRealFlow_Cashback(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "CONFIRMED", stored.Status, "reprocessar webhook não pode regredir o status")
 	require.Len(t, stored.SplitRules, 4, "reprocessar não pode duplicar split rules")
+
+	// Reprocessar não credita a carteira de novo (idempotência do crédito)
+	err = walletCollection.FindOne(ctx, bson.M{"user_id": 42}).Decode(&estWallet)
+	require.NoError(t, err)
+	require.InDelta(t, 89.90*0.85, estWallet.Balance, 0.01, "reprocessar webhook não pode creditar duas vezes")
+
+	creditCount, err = ledgerCollection.CountDocuments(ctx, bson.M{
+		"user_id":    42,
+		"type":       "credit",
+		"payment_id": "charge-e2e-cashback-001",
+	})
+	require.NoError(t, err)
+	require.Equal(t, int64(1), creditCount, "ledger não pode ter crédito duplicado")
 
 	// --- 4. Charge não paga (EXPIRED) → status EXPIRED, sem split ---
 	expired := models.Payment{
@@ -796,6 +834,7 @@ func TestCheckoutE2E_WebhookRealFlow_ZoneSplitConfig(t *testing.T) {
 
 	ctx := context.Background()
 	paymentCollection := models.MongoDabase.Collection("payments")
+	walletCollection := models.MongoDabase.Collection("wallets")
 
 	// Mock AbacatePay: charge confirmada (PAID).
 	var mockCalls int32
@@ -887,4 +926,11 @@ func TestCheckoutE2E_WebhookRealFlow_ZoneSplitConfig(t *testing.T) {
 	// acima só existem com a config da zona — prova que o default foi trocado.
 	require.Greater(t, stored.SplitRules[0].Percentage, 5.0, "percentual da plataforma deve vir da zona (7%%), nao do default 5%%")
 	require.Less(t, stored.SplitRules[1].Percentage, 85.0, "percentual do estabelecimento deve vir da zona (80%%), nao do default 85%%")
+
+	// Carteira do restaurante creditada pelo share da ZONA (80%), não 85%.
+	var estWallet models.Wallet
+	err = walletCollection.FindOne(ctx, bson.M{"user_id": 42}).Decode(&estWallet)
+	require.NoError(t, err, "webhook confirmado deve criar a carteira do estabelecimento")
+	require.Equal(t, "establishment", estWallet.UserType)
+	require.InDelta(t, 80.0, estWallet.Balance, 0.01, "carteira recebe o share da zona (80), não o default 85")
 }

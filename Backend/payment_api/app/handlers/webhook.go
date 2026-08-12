@@ -15,6 +15,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 const (
@@ -255,14 +256,63 @@ func publishPaymentApproved(abacatepayID string) {
 	splitRules := defaultSplitRules(&payment, platformPct, establishmentPct)
 	payment.SplitRules = splitRules
 
+	setFields := bson.M{
+		"status":       "CONFIRMED",
+		"split_rules":  splitRules,
+		"confirmed_at": now,
+	}
+
+	// Credita a carteira do estabelecimento pelo share do split — somente na
+	// transição PENDING → CONFIRMED (e se ainda não foi creditado). Reprocessar
+	// o webhook (payment já CONFIRMED) não credita de novo (idempotência).
+	if payment.Status == "PENDING" && payment.EstablishmentCreditedAt == nil {
+		credit := establishmentShare(&payment)
+		if credit > 0 {
+			wallets := models.MongoDabase.Collection("wallets")
+			_, wErr := wallets.UpdateOne(
+				mongoCtx(),
+				bson.M{"user_id": payment.EstablishmentID},
+				bson.M{
+					"$inc": bson.M{"balance": credit},
+					"$set": bson.M{"last_updated": now},
+					"$setOnInsert": bson.M{
+						"_id":       primitive.NewObjectID(),
+						"user_id":   payment.EstablishmentID,
+						"user_type": "establishment",
+					},
+				},
+				options.Update().SetUpsert(true),
+			)
+			if wErr == nil {
+				setFields["establishment_credited_at"] = now
+
+				var wallet models.Wallet
+				wallets.FindOne(mongoCtx(), bson.M{"user_id": payment.EstablishmentID}).Decode(&wallet)
+
+				ledgerEntry := bson.M{
+					"_id":           primitive.NewObjectID(),
+					"user_id":       payment.EstablishmentID,
+					"type":          "credit",
+					"amount":        credit,
+					"payment_id":    abacatepayID,
+					"balance_after": wallet.Balance,
+					"description":   "Credito do split do pedido " + payment.OrderID,
+					"created_at":    now,
+				}
+				if _, ledgerErr := models.MongoDabase.Collection("wallet_ledger").InsertOne(mongoCtx(), ledgerEntry); ledgerErr != nil {
+					log.Printf("[WALLET] WARNING: falha ao gravar ledger do crédito user=%d: %v", payment.EstablishmentID, ledgerErr)
+				}
+				log.Printf("[WALLET] Carteira do estabelecimento %d creditada em %.2f (payment=%s)", payment.EstablishmentID, credit, abacatepayID)
+			} else {
+				log.Printf("[WALLET] WARNING: falha ao creditar carteira do estabelecimento %d: %v", payment.EstablishmentID, wErr)
+			}
+		}
+	}
+
 	_, err = models.MongoDabase.Collection("payments").UpdateOne(
 		mongoCtx(),
 		bson.M{"abacatepay_id": abacatepayID},
-		bson.M{"$set": bson.M{
-			"status":       "CONFIRMED",
-			"split_rules":  splitRules,
-			"confirmed_at": now,
-		}},
+		bson.M{"$set": setFields},
 	)
 	if err != nil {
 		log.Printf("Failed to save split rules for AbacatePay ID %s: %v", abacatepayID, err)

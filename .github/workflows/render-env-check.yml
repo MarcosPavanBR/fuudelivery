@@ -14,11 +14,10 @@ jobs:
           RKEY: ${{ secrets.RENDER_API_KEY }}
           SID: ${{ secrets.RENDER_SERVICE_ID_API }}
         run: |
-          curl -s -H "Authorization: Bearer $RKEY" \
-            "https://api.render.com/v1/services/$SID/logs?limit=300" > /tmp/logs.txt
-          echo "bytes: $(wc -c < /tmp/logs.txt)"
-          echo "--- raw head ---"
-          head -c 500 /tmp/logs.txt
+          echo "=== attempt 1: /logs?limit=300 ==="
+          curl -s -i -H "Authorization: Bearer $RKEY" \
+            "https://api.render.com/v1/services/$SID/logs?limit=300" | head -c 800
           echo
-          echo "--- filtered lines ---"
-          grep -iE 'pix|abacate|failed|error|charge' /tmp/logs.txt | tail -25 || echo "(nada filtrado)"
+          echo "=== attempt 2: /logs?limit=50&startTime=2026-08-12T15:25:00Z ==="
+          curl -s -i -H "Authorization: Bearer $RKEY" \
+            "https://api.render.com/v1/services/$SID/logs?limit=50&startTime=2026-08-12T15%3A25%3A00Z" | head -c 800

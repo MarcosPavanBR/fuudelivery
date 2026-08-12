@@ -6,9 +6,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -405,4 +408,171 @@ func TestCheckoutE2E_AdminEndpoints(t *testing.T) {
 	resp, err = app.Test(req, -1)
 	require.NoError(t, err)
 	require.Equal(t, 404, resp.StatusCode, "hex válido mas inexistente → not found")
+}
+
+// TestCheckoutE2E_WebhookRealFlow_Cashback percorre o fluxo completo do
+// webhook real do AbacatePay: POST no HandlePaymentWebhook → verificação
+// server-side da charge na API (mockada) → atualização do status → split
+// com cashback (customer credit > 0), cobrindo a regra de 4 receivers:
+// platform, establishment, deliveryman e customer.
+func TestCheckoutE2E_WebhookRealFlow_Cashback(t *testing.T) {
+	cleanup := setupCheckoutE2EEnv(t)
+	defer cleanup()
+
+	// Sem Redis: o publish das filas cai no fallback de Go channels (não bloqueia).
+	os.Unsetenv("REDIS_URL")
+
+	ctx := context.Background()
+	paymentCollection := models.MongoDabase.Collection("payments")
+
+	// Mock da API AbacatePay v2: o webhook NÃO confia no body — verifica o
+	// status da charge consultando a API (aqui mockada). Conta as chamadas
+	// para provar que a verificação server-side aconteceu de verdade.
+	var mockCalls int32
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&mockCalls, 1)
+		if r.URL.Path != "/transparents/check" {
+			t.Errorf("path inesperado: %s", r.URL.Path)
+		}
+		chargeID := r.URL.Query().Get("id")
+		if chargeID == "" {
+			t.Error("query param id ausente no check")
+		}
+		// Charge expirada → status EXPIRED na API (cenário de não-pagamento).
+		chargeStatus := "PAID"
+		if strings.Contains(chargeID, "expired") {
+			chargeStatus = "EXPIRED"
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"success":true,"data":{"id":%q,"status":%q,"amount":8990,"expiresAt":"2026-08-13T12:00:00Z"},"error":null}`, chargeID, chargeStatus)
+	}))
+	defer mock.Close()
+
+	os.Setenv("ABACATE_PAY_BASE_URL", mock.URL)
+	defer os.Unsetenv("ABACATE_PAY_BASE_URL")
+
+	os.Setenv("ABACATE_PAY_WEBHOOK_SECRET", "e2e-webhook-secret")
+	defer os.Unsetenv("ABACATE_PAY_WEBHOOK_SECRET")
+
+	// amount=89.90, delivery=7.00, 5%+85%: platform=4.495, est=76.415,
+	// delivery=7.00 → sobra 1.99 de cashback (customer credit > 0) → 4 receivers.
+	payment := models.Payment{
+		OrderID:         "order-e2e-webhook-cashback",
+		CustomerID:      777,
+		CustomerPhone:   "+5511988887777",
+		EstablishmentID: 42,
+		Amount:          89.90,
+		DeliveryAmount:  7.00,
+		Method:          "pix",
+		Status:          "PENDING",
+		AbacatePayID:    "charge-e2e-cashback-001",
+		CreatedAt:       time.Now(),
+	}
+	_, err := paymentCollection.InsertOne(ctx, payment)
+	require.NoError(t, err)
+
+	app := fiber.New()
+	app.Post("/api/payment/webhook", HandlePaymentWebhook)
+
+	// Payload real do webhook v2 (evento billing.paid)
+	webhookBody := []byte(`{"event":"billing.paid","charge":{"id":"charge-e2e-cashback-001","status":"PAID","amount":89.90}}`)
+
+	// --- 1. HMAC inválido → 401, API não consultada, status intacto ---
+	req := httptest.NewRequest(http.MethodPost, "/api/payment/webhook", bytes.NewReader(webhookBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-abacatepay-signature", "assinatura-errada")
+	resp, err := app.Test(req, -1)
+	require.NoError(t, err)
+	require.Equal(t, 401, resp.StatusCode)
+	require.Equal(t, int32(0), atomic.LoadInt32(&mockCalls), "HMAC inválido não deve consultar a API")
+
+	var stored models.Payment
+	err = paymentCollection.FindOne(ctx, bson.M{"abacatepay_id": "charge-e2e-cashback-001"}).Decode(&stored)
+	require.NoError(t, err)
+	require.Equal(t, "PENDING", stored.Status, "HMAC inválido não pode mudar o status")
+
+	// --- 2. Webhook legítimo (HMAC válido) → CONFIRMED + split com cashback ---
+	req = httptest.NewRequest(http.MethodPost, "/api/payment/webhook", bytes.NewReader(webhookBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-abacatepay-signature", computeHMAC(webhookBody, "e2e-webhook-secret"))
+	resp, err = app.Test(req, -1)
+	require.NoError(t, err)
+	require.Equal(t, 200, resp.StatusCode)
+
+	var processed map[string]interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&processed))
+	require.Equal(t, "processed", processed["status"])
+
+	// A verificação server-side realmente consultou a API mockada.
+	require.Equal(t, int32(1), atomic.LoadInt32(&mockCalls), "webhook legítimo deve consultar a API para confirmar a charge")
+
+	err = paymentCollection.FindOne(ctx, bson.M{"abacatepay_id": "charge-e2e-cashback-001"}).Decode(&stored)
+	require.NoError(t, err)
+	require.Equal(t, "CONFIRMED", stored.Status)
+	require.NotNil(t, stored.ConfirmedAt)
+
+	// 4 receivers: platform + establishment + deliveryman + customer (cashback)
+	require.Len(t, stored.SplitRules, 4, "cashback > 0 deve gerar a 4ª regra (customer)")
+
+	require.Equal(t, "platform", stored.SplitRules[0].ReceiverType)
+	require.InDelta(t, 89.90*0.05, stored.SplitRules[0].Amount, 0.01)
+
+	require.Equal(t, "establishment", stored.SplitRules[1].ReceiverType)
+	require.Equal(t, int64(42), stored.SplitRules[1].ReceiverID)
+	require.InDelta(t, 89.90*0.85, stored.SplitRules[1].Amount, 0.01)
+
+	require.Equal(t, "deliveryman", stored.SplitRules[2].ReceiverType)
+	require.InDelta(t, 7.00, stored.SplitRules[2].Amount, 0.01)
+
+	require.Equal(t, "customer", stored.SplitRules[3].ReceiverType)
+	require.Equal(t, int64(777), stored.SplitRules[3].ReceiverID, "cashback vai para o customer_id do pagamento")
+	require.InDelta(t, 89.90-89.90*0.05-89.90*0.85-7.00, stored.SplitRules[3].Amount, 0.01)
+
+	// O total dividido nunca excede o valor pago (nenhum centavo inventado).
+	totalSplit := 0.0
+	for _, r := range stored.SplitRules {
+		totalSplit += r.Amount
+	}
+	require.InDelta(t, 89.90, totalSplit, 0.01)
+
+	// --- 3. Webhook idempotente: reprocessar não muda o status nem duplica ---
+	req = httptest.NewRequest(http.MethodPost, "/api/payment/webhook", bytes.NewReader(webhookBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-abacatepay-signature", computeHMAC(webhookBody, "e2e-webhook-secret"))
+	resp, err = app.Test(req, -1)
+	require.NoError(t, err)
+	require.Equal(t, 200, resp.StatusCode)
+
+	err = paymentCollection.FindOne(ctx, bson.M{"abacatepay_id": "charge-e2e-cashback-001"}).Decode(&stored)
+	require.NoError(t, err)
+	require.Equal(t, "CONFIRMED", stored.Status, "reprocessar webhook não pode regredir o status")
+	require.Len(t, stored.SplitRules, 4, "reprocessar não pode duplicar split rules")
+
+	// --- 4. Charge não paga (EXPIRED) → status EXPIRED, sem split ---
+	expired := models.Payment{
+		OrderID:         "order-e2e-webhook-expired",
+		CustomerID:      778,
+		EstablishmentID: 43,
+		Amount:          50.00,
+		DeliveryAmount:  5.00,
+		Method:          "pix",
+		Status:          "PENDING",
+		AbacatePayID:    "charge-e2e-expired-001",
+		CreatedAt:       time.Now(),
+	}
+	_, err = paymentCollection.InsertOne(ctx, expired)
+	require.NoError(t, err)
+
+	expiredBody := []byte(`{"event":"billing.expired","charge":{"id":"charge-e2e-expired-001","status":"EXPIRED","amount":50.00}}`)
+	req = httptest.NewRequest(http.MethodPost, "/api/payment/webhook", bytes.NewReader(expiredBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-abacatepay-signature", computeHMAC(expiredBody, "e2e-webhook-secret"))
+	resp, err = app.Test(req, -1)
+	require.NoError(t, err)
+	require.Equal(t, 200, resp.StatusCode)
+
+	err = paymentCollection.FindOne(ctx, bson.M{"abacatepay_id": "charge-e2e-expired-001"}).Decode(&stored)
+	require.NoError(t, err)
+	require.Equal(t, "EXPIRED", stored.Status)
+	require.Empty(t, stored.SplitRules, "charge não paga não pode gerar split")
 }

@@ -9,19 +9,40 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set PAYMENT_MONGO_DATABASE on api service
+      - name: Merge and set env vars
         env:
           RKEY: ${{ secrets.RENDER_API_KEY }}
           SID: ${{ secrets.RENDER_SERVICE_ID_API }}
         run: |
+          curl -s -H "Authorization: Bearer $RKEY" \
+            "https://api.render.com/v1/services/$SID/env-vars" > /tmp/current.json
+          echo "current: $(wc -c < /tmp/current.json) bytes"
+          python3 - <<'PYEOF'
+          import json, subprocess, os
+          cur = json.load(open('/tmp/current.json'))
+          envs = [e['envVar'] for e in cur]
+          keys = [e['key'] for e in envs]
+          print('current keys:', sorted(keys))
+          if 'PAYMENT_MONGO_DATABASE' not in keys:
+              envs.append({'key': 'PAYMENT_MONGO_DATABASE', 'value': 'fuudelivery_payments'})
+          json.dump(envs, open('/tmp/merged.json', 'w'))
+          print('merged count:', len(envs))
+          PYEOF
           curl -s -X PUT \
             -H "Authorization: Bearer $RKEY" \
             -H "Content-Type: application/json" \
             "https://api.render.com/v1/services/$SID/env-vars" \
-            -d '{"envVars":[{"key":"PAYMENT_MONGO_DATABASE","value":"fuudelivery_payments"}]}' > /tmp/resp.json
-          echo "bytes: $(wc -c < /tmp/resp.json)"
-          head -c 800 /tmp/resp.json
+            --data-binary @/tmp/merged.json > /tmp/resp.json
+          echo "resp: $(wc -c < /tmp/resp.json) bytes"
+          head -c 600 /tmp/resp.json
           echo
-          # confirma
+          echo "--- verify ---"
           curl -s -H "Authorization: Bearer $RKEY" \
-            "https://api.render.com/v1/services/$SID/env-vars" | grep -o '"PAYMENT_MONGO_DATABASE"' | head -1 || echo "NOT FOUND"
+            "https://api.render.com/v1/services/$SID/env-vars" > /tmp/after.json
+          python3 - <<'PYEOF'
+          import json
+          envs = json.load(open('/tmp/after.json'))
+          keys = sorted(e['envVar']['key'] for e in envs)
+          print('keys now:', keys)
+          print('PAYMENT_MONGO_DATABASE present:', 'PAYMENT_MONGO_DATABASE' in keys)
+          PYEOF

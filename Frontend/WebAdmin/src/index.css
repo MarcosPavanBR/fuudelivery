@@ -15,6 +15,10 @@
   --color-fuu-yellow: #F7A11E;
   --color-fuu-yellow-light: #FFFBEB;
 
+  /* Sombras customizadas */
+  --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.06);
+  --shadow-card-hover: 0 8px 24px rgba(234, 29, 44, 0.12);
+
   /* Fontes */
   --font-display: Inter, system-ui, sans-serif;
   --font-body: Inter, system-ui, sans-serif;
@@ -88,4 +92,15 @@ input:focus, textarea:focus, select:focus {
 
 .animate-slide-in-left {
   animation: slideInLeft 0.3s ease-out;
+}
+
+/* ============================================================
+   Sombras customizadas para cards
+   ============================================================ */
+.shadow-card {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
+.shadow-card-hover {
+  box-shadow: 0 8px 24px rgba(234, 29, 44, 0.12);
 }

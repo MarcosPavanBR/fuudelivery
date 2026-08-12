@@ -1,0 +1,70 @@
+name: Build AppRestaurante APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'Frontend/AppRestaurante/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Frontend/AppRestaurante
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: Frontend/AppRestaurante/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build APK
+        run: |
+          OUTPUT=$(eas build --platform android --profile preview --non-interactive --json)
+          echo "$OUTPUT" > build-output.json
+          BUILD_ID=$(echo "$OUTPUT" | jq -r '.id')
+          if [ -z "$BUILD_ID" ] || [ "$BUILD_ID" = "null" ]; then
+            echo "ERROR: Failed to extract build ID from EAS output"
+            echo "$OUTPUT"
+            exit 1
+          fi
+          echo "BUILD_ID=$BUILD_ID" >> $GITHUB_ENV
+          echo "Build ID: $BUILD_ID"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Download APK artifact
+        run: |
+          echo "Downloading build $BUILD_ID"
+          mkdir -p artifacts
+          eas build:download --id "$BUILD_ID" --platform android --path ./artifacts
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: AppRestaurante-APK
+          path: Frontend/AppRestaurante/artifacts/*.apk
+          retention-days: 30

@@ -114,7 +114,7 @@ func TestCheckoutE2E_PaymentWebhookToSplit(t *testing.T) {
 	err = paymentCollection.FindOne(ctx, bson.M{"abacatepay_id": "charge-e2e-test-001"}).Decode(&confirmed)
 	require.NoError(t, err)
 	require.Equal(t, "CONFIRMED", confirmed.Status)
-	require.Len(t, confirmed.SplitRules, 3)
+	require.Len(t, confirmed.SplitRules, 4)
 	require.NotNil(t, confirmed.ConfirmedAt)
 
 	orderMsg := map[string]interface{}{

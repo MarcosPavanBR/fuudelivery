@@ -39,6 +39,15 @@ export default defineConfig({
     exclude: [],
   },
 
+  // O dep-scan do Vite (optimizeDeps) ignora esbuild.loader acima — sem isso
+  // o `npm run dev` quebra ao escanear .js com JSX ("The JSX syntax extension
+  // is not currently enabled"). O build de produção não é afetado.
+  optimizeDeps: {
+    esbuildOptions: {
+      loader: { ".js": "jsx" },
+    },
+  },
+
   // Vite usa import.meta.env.VITE_*; mantemos REACT_APP_* como alias
   // para não quebrar o render.yaml (que injeta REACT_APP_API_URL no build).
   envPrefix: ["VITE_", "REACT_APP_"],

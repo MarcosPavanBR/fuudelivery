@@ -1,6 +1,9 @@
 name: Render Env Check (temp)
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/render-env-check.yml'
 jobs:
   check:
     runs-on: ubuntu-latest

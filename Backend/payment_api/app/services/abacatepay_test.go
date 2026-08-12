@@ -4,8 +4,27 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 )
+
+// TestNewAbacatePayClient_BaseURLOverride verifica que ABACATE_PAY_BASE_URL
+// sobrescreve a URL de produção (permite sandbox/mock em testes).
+func TestNewAbacatePayClient_BaseURLOverride(t *testing.T) {
+	defer os.Unsetenv("ABACATE_PAY_BASE_URL")
+
+	// Sem override → produção
+	os.Unsetenv("ABACATE_PAY_BASE_URL")
+	if got := NewAbacatePayClient().BaseURL; got != "https://api.abacatepay.com/v2" {
+		t.Errorf("BaseURL sem override = %q, esperava produção", got)
+	}
+
+	// Com override → URL customizada (sandbox/mock)
+	os.Setenv("ABACATE_PAY_BASE_URL", "http://127.0.0.1:9999/v2")
+	if got := NewAbacatePayClient().BaseURL; got != "http://127.0.0.1:9999/v2" {
+		t.Errorf("BaseURL com override = %q, esperava URL customizada", got)
+	}
+}
 
 // TestCreatePIXCharge_V2Envelope verifica que o client lê o envelope v2
 // ({success, data}) e extrai o base64 puro do brCodeBase64 (sem o prefixo

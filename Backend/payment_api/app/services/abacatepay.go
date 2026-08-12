@@ -114,9 +114,15 @@ type WebhookResponse struct {
 }
 
 func NewAbacatePayClient() *AbacatePayClient {
+	// ABACATE_PAY_BASE_URL permite apontar para sandbox/mock (usado nos
+	// testes E2E). Sem override, usa a API de producao.
+	baseURL := os.Getenv("ABACATE_PAY_BASE_URL")
+	if baseURL == "" {
+		baseURL = "https://api.abacatepay.com/v2"
+	}
 	return &AbacatePayClient{
 		APIKey:  os.Getenv("ABACATE_PAY_API_KEY"),
-		BaseURL: "https://api.abacatepay.com/v2",
+		BaseURL: baseURL,
 	}
 }
 

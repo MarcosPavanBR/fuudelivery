@@ -83,21 +83,17 @@ const LoginPage = () => {
       </div>
 
       {/* Right Panel - Login Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center px-6 py-12 bg-white">
+      <div className="w-full lg:w-1/2 flex items-center justify-center px-6 py-6 bg-white">
         <div className="w-full max-w-md animate-fade-in">
-          {/* Mobile Logo */}
-          <div className="lg:hidden mb-8 flex justify-center">
-            <Logo size={50} variant="login" />
+          {/* Mobile Logo (única) */}
+          <div className="lg:hidden mb-6 flex justify-center">
+            <Logo size={40} variant="login" />
           </div>
 
-          <div className="lg:hidden mb-8">
-            <Logo size={40} variant="mark" />
-          </div>
-
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold text-gray-900">
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold text-gray-900">
               {Texts.text_login}
-            </h2>
+            </h1>
             <p className="text-gray-500 mt-2 text-sm">
               Entre com suas credenciais para acessar o painel
             </p>
@@ -127,7 +123,7 @@ const LoginPage = () => {
                   type="email"
                   autoComplete="email"
                   required
-                  className="appearance-none block w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl placeholder-gray-400 text-gray-900 bg-gray-50 focus:bg-white transition-colors"
+                  className="appearance-none block w-full pl-10 pr-10 py-3 border border-gray-200 rounded-xl placeholder-gray-500 text-gray-900 bg-gray-50 focus:bg-white transition-colors"
                   placeholder="seu@email.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -152,7 +148,7 @@ const LoginPage = () => {
                   type="password"
                   autoComplete="current-password"
                   required
-                  className="appearance-none block w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl placeholder-gray-400 text-gray-900 bg-gray-50 focus:bg-white transition-colors"
+                  className="appearance-none block w-full pl-10 pr-10 py-3 border border-gray-200 rounded-xl placeholder-gray-500 text-gray-900 bg-gray-50 focus:bg-white transition-colors"
                   placeholder="Sua senha"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -170,8 +166,7 @@ const LoginPage = () => {
               </label>
               <a
                 href="#"
-                className="text-sm font-medium hover:underline"
-                style={{ color: "#EA1D2C" }}
+                className="text-sm font-medium text-gray-500 hover:text-gray-700 hover:underline"
               >
                 {Texts.esqueceu_senha}
               </a>
@@ -204,8 +199,7 @@ const LoginPage = () => {
               Não tem uma conta?{" "}
               <button
                 onClick={() => setCadastro(true)}
-                className="font-semibold hover:underline"
-                style={{ color: "#EA1D2C" }}
+                className="font-semibold text-gray-600 hover:text-fuu-red hover:underline"
               >
                 Cadastre-se
               </button>

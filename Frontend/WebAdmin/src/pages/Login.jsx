@@ -49,8 +49,6 @@ export default function Login() {
             </defs>
             <rect width="48" height="48" rx="14" fill="url(#loginGrad)" filter="url(#loginShadow)" />
             <path d="M14 14h12c4.4 0 8 3.6 8 8s-3.6 8-8 8h-4v8h-8V14zm8 12h4c2.2 0 4-1.8 4-4s-1.8-4-4-4h-4v8z" fill="white" />
-            <circle cx="38" cy="12" r="4" fill="#F7A11E" />
-            <path d="M35 10l3 2 3-2" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.9" />
           </svg>
           <div className="mt-10 text-white">
             <h2 className="text-3xl font-bold mb-4" style={{ lineHeight: 1.2 }}>
@@ -78,7 +76,7 @@ export default function Login() {
       </div>
 
       {/* Right Panel - Login Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center px-6 py-12 bg-white">
+      <div className="w-full lg:w-1/2 flex items-center justify-center px-6 py-6 bg-white">
         <div className="w-full max-w-md animate-fade-in">
           {/* Mobile Logo */}
           <div className="lg:hidden mb-8 flex justify-center">
@@ -95,12 +93,10 @@ export default function Login() {
               </defs>
               <rect width="48" height="48" rx="14" fill="url(#loginGrad2)" filter="url(#loginShadow2)" />
               <path d="M14 14h12c4.4 0 8 3.6 8 8s-3.6 8-8 8h-4v8h-8V14zm8 12h4c2.2 0 4-1.8 4-4s-1.8-4-4-4h-4v8z" fill="white" />
-              <circle cx="38" cy="12" r="4" fill="#F7A11E" />
-              <path d="M35 10l3 2 3-2" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.9" />
             </svg>
           </div>
 
-          <div className="mb-8">
+          <div className="mb-6">
             <h2 className="text-2xl font-bold text-gray-900">Entrar na conta</h2>
             <p className="text-gray-500 mt-2 text-sm">Acesse o painel administrativo do FuuDelivery</p>
           </div>
@@ -124,7 +120,7 @@ export default function Login() {
                   type="email"
                   autoComplete="email"
                   required
-                  className="block w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl text-sm bg-gray-50 placeholder-gray-400 text-gray-900 focus:bg-white transition-colors"
+                  className="block w-full pl-10 pr-10 py-3 border border-gray-200 rounded-xl text-sm bg-gray-50 placeholder-gray-500 text-gray-900 focus:bg-white transition-colors"
                   placeholder="seu@email.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -144,7 +140,7 @@ export default function Login() {
                   type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
                   required
-                  className="block w-full pl-10 pr-12 py-3 border border-gray-200 rounded-xl text-sm bg-gray-50 placeholder-gray-400 text-gray-900 focus:bg-white transition-colors"
+                  className="block w-full pl-10 pr-12 py-3 border border-gray-200 rounded-xl text-sm bg-gray-50 placeholder-gray-500 text-gray-900 focus:bg-white transition-colors"
                   placeholder="Sua senha"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -164,7 +160,7 @@ export default function Login() {
                 <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-fuu-red focus:ring-fuu-red" />
                 <span className="text-sm text-gray-600">Lembrar-me</span>
               </label>
-              <a href="#" className="text-sm font-medium hover:underline" style={{ color: "#EA1D2C" }}>
+              <a href="#" className="text-sm font-medium text-gray-500 hover:text-gray-700 hover:underline">
                 Esqueceu a senha?
               </a>
             </div>
@@ -192,7 +188,7 @@ export default function Login() {
           <div className="mt-8 text-center">
             <p className="text-sm text-gray-500">
               Não tem uma conta?{" "}
-              <button className="font-semibold hover:underline" style={{ color: "#EA1D2C" }}>
+              <button className="font-semibold text-gray-600 hover:text-fuu-red hover:underline">
                 Cadastre-se
               </button>
             </p>

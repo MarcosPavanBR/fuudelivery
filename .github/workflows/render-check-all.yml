@@ -1,0 +1,16 @@
+name: Check All Render Services
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Listar TODOS os serviços (incluindo cursor)
+        run: |
+          echo "=== Página 1 ==="
+          curl -s \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            "https://api.render.com/v1/services?limit=100&includePreviews=true" | \
+            jq -r '.[].service | "\(.id) | \(.name) | \(.type) | \(.serviceDetails.url // "no-url")"'

@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -328,8 +329,13 @@ func TestFullFlowAuthOrderPayment(t *testing.T) {
 
 	app.Get("/wallet/balance/:user_id", func(c *fiber.Ctx) error {
 		collection := mongoClient.Database("fuudelivery_test").Collection("wallets")
+		userID, err := strconv.ParseInt(c.Params("user_id"), 10, 64)
+		if err != nil {
+			return c.Status(400).JSON(fiber.Map{"error": "invalid user_id"})
+		}
+		// O topup grava user_id como int64; buscar com o mesmo tipo
 		var wallet map[string]interface{}
-		err := collection.FindOne(ctx, bson.M{"user_id": c.Params("user_id")}).Decode(&wallet)
+		err = collection.FindOne(ctx, bson.M{"user_id": userID}).Decode(&wallet)
 		if err != nil {
 			return c.JSON(fiber.Map{"balance": 0.0})
 		}
@@ -429,7 +435,10 @@ func TestFullFlowAuthOrderPayment(t *testing.T) {
 		require.Equal(t, "SPLIT", result["status"])
 
 		rules := result["split_rules"].([]interface{})
-		require.Len(t, rules, 4, "deve ter 4 regras: platform, establishment, deliveryman, customer")
+		// O split so inclui a regra "customer" quando existe cashback
+		// (credit > 0). Com 5+85+10 = 100%, nao ha cashback -> 3 regras.
+		// Mesmo contrato do checkout_e2e_test.go (payment_api).
+		require.Len(t, rules, 3, "deve ter 3 regras: platform, establishment, deliveryman")
 
 		// Verifica cada regra
 		var platformAmount, estAmount, deliveryAmount, customerAmount float64
@@ -450,7 +459,7 @@ func TestFullFlowAuthOrderPayment(t *testing.T) {
 		require.Equal(t, 5.0, platformAmount, "5%% de 100 = 5.0")
 		require.Equal(t, 85.0, estAmount, "85%% de 100 = 85.0")
 		require.Equal(t, 10.0, deliveryAmount, "taxa de entrega")
-		require.Equal(t, 0.0, customerAmount, "sem credito: 100-5-85-10 = 0")
+		require.Equal(t, 0.0, customerAmount, "sem cashback: 100-5-85-10 = 0 (regra customer ausente)")
 
 		t.Logf("Split: platform=%.1f establishment=%.1f delivery=%.1f customer=%.1f",
 			platformAmount, estAmount, deliveryAmount, customerAmount)

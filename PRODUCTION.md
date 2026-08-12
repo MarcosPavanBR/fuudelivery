@@ -8,11 +8,12 @@
 | Servico | URL | Status |
 |---------|-----|--------|
 | API (Monolito) | fuudelivery-api-8y6l.onrender.com | Online |
-| Payment Service | fuudelivery-payment.onrender.com | Online |
 | WebRestaurant | fuudelivery-web.onrender.com | Online |
 | WebAdmin | fuudelivery-admin-lv7f.onrender.com | Online |
-| PaymentPanel | fuudelivery-payment-panel.onrender.com | Online |
 | Redis | Render Managed | Online |
+
+> Os servicos isolados `fuudelivery-payment` e `fuudelivery-payment-panel` foram
+> removidos (2026-08): as rotas de pagamento rodam no monolito.
 | MongoDB Atlas | Cloud | Connected |
 | PostgreSQL (Supabase) | Cloud | Connected |
 
@@ -37,8 +38,6 @@ O deploy e automatizado via GitHub Actions. Push para master dispara:
 | RENDER_SERVICE_ID_API | ID servico API |
 | RENDER_SERVICE_ID_WEB | ID WebRestaurant |
 | RENDER_SERVICE_ID_ADMIN | ID WebAdmin |
-| RENDER_SERVICE_ID_PAYMENT | ID Payment Service |
-| RENDER_SERVICE_ID_PAYMENT_PANEL | ID PaymentPanel |
 | EXPO_TOKEN | Token Expo para APKs |
 
 ---

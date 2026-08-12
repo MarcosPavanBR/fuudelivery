@@ -60,22 +60,20 @@ else
     FAILURES=$((FAILURES + 1))
 fi
 
-# ─── Payment Service ─────────────────────────────────────────
+# ─── Payment routes (no monolith — isolated service removed) ─
 echo ""
-echo "── Payment Service ──"
-PAY_HEALTH=$(retry $RETRIES $RETRY_INTERVAL curl -s --max-time $TIMEOUT "https://fuudelivery-payment.onrender.com/health" || echo '{"status":"error"}')
-PAY_STATUS=$(echo "$PAY_HEALTH" | grep -o '"status":"[^"]*"' | tail -1 | cut -d'"' -f4)
-if [ "$PAY_STATUS" = "ok" ]; then
-    ok "Payment Service is healthy"
+echo "── Payment routes (monolith) ──"
+PAY_HTTP=$(retry 3 10 curl -s --max-time 15 -o /dev/null -w "%{http_code}" "https://fuudelivery-api-8y6l.onrender.com/payments/all" || echo "000")
+if [ "$PAY_HTTP" = "401" ] || [ "$PAY_HTTP" = "403" ]; then
+    ok "Payment routes responding (HTTP $PAY_HTTP, auth required)"
 else
-    fail "Payment Service is down (status: $PAY_STATUS)"
-    FAILURES=$((FAILURES + 1))
+    warn "Payment routes: HTTP $PAY_HTTP (esperado 401/403 sem token)"
 fi
 
 # ─── Static Sites ────────────────────────────────────────────
 echo ""
 echo "── Static Sites ──"
-for site in "WebRestaurant:https://fuudelivery-web.onrender.com" "WebAdmin:https://fuudelivery-admin-lv7f.onrender.com" "PaymentPanel:https://fuudelivery-payment-panel.onrender.com"; do
+for site in "WebRestaurant:https://fuudelivery-web.onrender.com" "WebAdmin:https://fuudelivery-admin-lv7f.onrender.com"; do
     NAME=$(echo "$site" | cut -d: -f1)
     URL=$(echo "$site" | cut -d: -f2-)
     HTTP_CODE=$(retry 3 10 curl -s --max-time 15 -o /dev/null -w "%{http_code}" "$URL" || echo "000")

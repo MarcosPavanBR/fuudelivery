@@ -29,10 +29,8 @@ if (-not $env:RENDER_API_KEY) {
 # Serviços
 $services = @{
     "fuudelivery-api" = "srv-d9e55qf41pts73e8q8dg"
-    "fuudelivery-payment" = "srv-d9gego3rjlhs739jgrfg"
     "fuudelivery-web" = "srv-d9edpar7uimc73fdotp0"
     "fuudelivery-admin" = "srv-d9elp2n41pts73f5kvf0"
-    "fuudelivery-payment-panel" = "srv-d9gefarrjlhs739jdl90"
 }
 
 # Env vars sensíveis

@@ -28,20 +28,25 @@ type AbacatePayClient struct {
 }
 
 // PIXChargeRequest é o corpo da cobrança PIX (v2 /transparents/create).
-// Amount em centavos.
+// Amount em centavos. Customer é ponteiro: omitempty não omite structs
+// aninhados, e o gateway rejeita "customer":{} vazio com 422.
 type PIXChargeRequest struct {
 	Method string `json:"method"`
 	Data   struct {
-		Amount      int64  `json:"amount"`
-		Description string `json:"description,omitempty"`
-		ExternalID  string `json:"externalId,omitempty"`
-		Customer    struct {
-			Name      string `json:"name,omitempty"`
-			TaxID     string `json:"taxId,omitempty"`
-			Email     string `json:"email,omitempty"`
-			Cellphone string `json:"cellphone,omitempty"`
-		} `json:"customer,omitempty"`
+		Amount      int64        `json:"amount"`
+		Description string       `json:"description,omitempty"`
+		ExternalID  string       `json:"externalId,omitempty"`
+		Customer    *PIXCustomer `json:"customer,omitempty"`
 	} `json:"data"`
+}
+
+// PIXCustomer são os dados do pagador. Para PIX é opcional; se enviado,
+// todos os campos (incl. taxId/CPF válido) são obrigatórios.
+type PIXCustomer struct {
+	Name      string `json:"name,omitempty"`
+	TaxID     string `json:"taxId,omitempty"`
+	Email     string `json:"email,omitempty"`
+	Cellphone string `json:"cellphone,omitempty"`
 }
 
 // PIXChargeResponse mantém os campos usados pelo monolito.

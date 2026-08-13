@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
@@ -214,7 +215,13 @@ func ListChargebacks(c *fiber.Ctx) error {
 		query["type"] = t
 	}
 	if uid := c.Query("user_id"); uid != "" {
-		query["user_id"] = uid
+		// user_id é int64 no wallet/ledger — converte para o filtro casar com
+		// o BSON numérico (string não casa com número no MongoDB).
+		if id, err := strconv.ParseInt(uid, 10, 64); err == nil {
+			query["user_id"] = id
+		} else {
+			query["user_id"] = uid
+		}
 	}
 	if pid := c.Query("payment_id"); pid != "" {
 		query["payment_id"] = pid

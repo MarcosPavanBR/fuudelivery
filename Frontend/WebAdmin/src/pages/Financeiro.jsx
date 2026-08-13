@@ -23,6 +23,9 @@ export default function Financeiro() {
   const [stats, setStats] = useState(null);
   const [payments, setPayments] = useState([]);
   const [wallets, setWallets] = useState([]);
+  const [chargebacks, setChargebacks] = useState([]);
+  const [cbSummary, setCbSummary] = useState({ credit_total: 0, debit_total: 0, net: 0 });
+  const [cbFilters, setCbFilters] = useState({ type: "", user_id: "", payment_id: "" });
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("stats");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -32,16 +35,40 @@ export default function Financeiro() {
 
   async function loadData() {
     try {
-      const [s, p, w] = await Promise.all([
+      const [s, p, w, c] = await Promise.all([
         paymentApi.get("/payments/stats").then(r => r.data).catch(() => ({})),
         paymentApi.get("/payments/").then(r => r.data).catch(() => []),
         paymentApi.get("/wallets").then(r => r.data).catch(() => []),
+        paymentApi.get("/chargebacks").then(r => r.data).catch(() => ({})),
       ]);
       setStats(s);
       setPayments(Array.isArray(p) ? p : []);
       setWallets(Array.isArray(w) ? w : []);
+      setChargebacks(Array.isArray(c?.chargebacks) ? c.chargebacks : []);
+      setCbSummary(c?.summary || { credit_total: 0, debit_total: 0, net: 0 });
     } catch (e) { toast.error("Erro ao carregar dados: " + e.message); }
     setLoading(false);
+  }
+
+  // Carrega o ledger com os filtros atuais da aba Chargebacks.
+  async function loadChargebacks(filters = cbFilters) {
+    const params = new URLSearchParams();
+    if (filters.type) params.append("type", filters.type);
+    if (filters.user_id) params.append("user_id", filters.user_id);
+    if (filters.payment_id) params.append("payment_id", filters.payment_id);
+    const qs = params.toString();
+    try {
+      const { data } = await paymentApi.get("/chargebacks" + (qs ? "?" + qs : ""));
+      setChargebacks(Array.isArray(data?.chargebacks) ? data.chargebacks : []);
+      setCbSummary(data?.summary || { credit_total: 0, debit_total: 0, net: 0 });
+    } catch (e) { toast.error("Erro ao buscar chargebacks: " + e.message); }
+  }
+
+  function applyCbFilters() { loadChargebacks(cbFilters); }
+
+  function resetCbFilters() {
+    setCbFilters({ type: "", user_id: "", payment_id: "" });
+    loadChargebacks({ type: "", user_id: "", payment_id: "" });
   }
 
   async function approvePayment(id) {
@@ -82,11 +109,11 @@ export default function Financeiro() {
     <div style={{ padding: 24 }}>
       <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 24 }}>Financeiro</h1>
       <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
-        {["stats", "payments", "wallets"].map(t => (
+        {["stats", "payments", "wallets", "chargebacks"].map(t => (
           <button key={t} onClick={() => setTab(t)}
             style={{ padding: "8px 20px", borderRadius: 8, border: "none", cursor: "pointer", fontWeight: 600,
               background: tab === t ? "#6366f1" : "#f3f4f6", color: tab === t ? "white" : "#374151" }}>
-            {t === "stats" ? "Resumo" : t === "payments" ? "Pagamentos" : "Carteiras"}
+            {t === "stats" ? "Resumo" : t === "payments" ? "Pagamentos" : t === "wallets" ? "Carteiras" : "Chargebacks"}
           </button>
         ))}
       </div>
@@ -156,6 +183,70 @@ export default function Financeiro() {
             </div>
           ))}
           {wallets.length === 0 && <div style={{ gridColumn: "1 / -1", padding: 40, textAlign: "center", color: "#9ca3af" }}>Nenhuma carteira encontrada</div>}
+        </div>
+      )}
+
+      {tab === "chargebacks" && (
+        <div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, marginBottom: 16 }}>
+            <StatCard icon={FiCheck} label="Total de créditos" value={"R$ " + (cbSummary?.credit_total || 0).toFixed(2)} color="#10b981" />
+            <StatCard icon={FiAlertTriangle} label="Total de débitos" value={"R$ " + (cbSummary?.debit_total || 0).toFixed(2)} color="#ef4444" />
+            <StatCard icon={FiDollarSign} label="Saldo líquido" value={"R$ " + (cbSummary?.net || 0).toFixed(2)} color="#6366f1" />
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
+            <select value={cbFilters.type} onChange={e => setCbFilters({ ...cbFilters, type: e.target.value })}
+              style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #d1d5db", background: "white", fontSize: 13 }}>
+              <option value="">Todos os tipos</option>
+              <option value="credit">Crédito</option>
+              <option value="debit">Débito</option>
+            </select>
+            <input value={cbFilters.user_id} onChange={e => setCbFilters({ ...cbFilters, user_id: e.target.value })}
+              placeholder="user_id" style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #d1d5db", background: "white", fontSize: 13 }} />
+            <input value={cbFilters.payment_id} onChange={e => setCbFilters({ ...cbFilters, payment_id: e.target.value })}
+              placeholder="payment_id" style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #d1d5db", background: "white", fontSize: 13 }} />
+            <button onClick={applyCbFilters}
+              style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#6366f1", color: "white", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              Filtrar
+            </button>
+            <button onClick={resetCbFilters}
+              style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid #d1d5db", background: "white", color: "#374151", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              Limpar
+            </button>
+          </div>
+          <div style={{ background: "white", borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead><tr style={{ background: "#f9fafb" }}>
+                {["Usuário", "Tipo", "Valor", "Payment", "Saldo após", "Descrição", "Data"].map(h => (
+                  <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 12, color: "#6b7280" }}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {chargebacks.map((c, i) => (
+                  <tr key={c._id || i} style={{ borderTop: "1px solid #f3f4f6" }}>
+                    <td style={{ padding: "12px 16px", fontSize: 13 }}>
+                      <div style={{ fontWeight: 600 }}>#{c.user_id ?? "-"}</div>
+                      <div style={{ fontSize: 11, color: "#9ca3af" }}>{c.owner_type || ""}</div>
+                    </td>
+                    <td style={{ padding: "12px 16px" }}>
+                      <span style={{ padding: "4px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600,
+                        background: c.type === "credit" ? "#d1fae5" : c.type === "debit" ? "#fee2e2" : "#f3f4f6",
+                        color: c.type === "credit" ? "#065f46" : c.type === "debit" ? "#991b1b" : "#374151" }}>
+                        {c.type === "credit" ? "Crédito" : c.type === "debit" ? "Débito" : (c.type || "-")}
+                      </span>
+                    </td>
+                    <td style={{ padding: "12px 16px", fontSize: 13, fontWeight: 600, color: c.type === "debit" ? "#dc2626" : "#059669" }}>
+                      {c.type === "debit" ? "-" : "+"}R$ {(c.amount || 0).toFixed(2)}
+                    </td>
+                    <td style={{ padding: "12px 16px", fontSize: 12, fontFamily: "monospace", color: "#6b7280" }}>{c.payment_id || "-"}</td>
+                    <td style={{ padding: "12px 16px", fontSize: 13 }}>R$ {(c.balance_after || 0).toFixed(2)}</td>
+                    <td style={{ padding: "12px 16px", fontSize: 13, color: "#374151" }}>{c.description || "-"}</td>
+                    <td style={{ padding: "12px 16px", fontSize: 12, color: "#6b7280" }}>{c.created_at ? new Date(c.created_at).toLocaleString("pt-BR") : "-"}</td>
+                  </tr>
+                ))}
+                {chargebacks.length === 0 && <tr><td colSpan={7} style={{ padding: 40, textAlign: "center", color: "#9ca3af" }}>Nenhum lançamento encontrado</td></tr>}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

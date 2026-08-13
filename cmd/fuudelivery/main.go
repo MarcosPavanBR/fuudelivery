@@ -869,6 +869,7 @@ func setupPaymentRoutes(app *fiber.App) {
 	app.Get("/payments/", adminRequired, paymentHandlers.ListAllPayments)
 	app.Get("/payments/stats", adminRequired, paymentHandlers.GetPaymentStats)
 	app.Get("/wallets", adminRequired, paymentHandlers.ListWallets)
+	app.Get("/chargebacks", adminRequired, paymentHandlers.ListChargebacks)
 	app.Post("/payments/:id/approve", adminRequired, rateLimitMiddleware(20), paymentHandlers.ApprovePayment)
 	app.Post("/payments/:id/reject", adminRequired, rateLimitMiddleware(20), paymentHandlers.RejectPayment)
 	// Rate limit 20/min nos endpoints de dinheiro (proteção contra abuso/custo)

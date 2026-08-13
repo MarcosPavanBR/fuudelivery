@@ -86,9 +86,74 @@ func establishmentShare(payment *models.Payment) float64 {
 	return share
 }
 
+// customerCashbackShare soma o valor destinado ao cliente nas split rules do
+// pagamento (receiver_type == "customer") — o cashback creditado na carteira
+// do cliente quando o pagamento é confirmado. Também precisa ser revertido no
+// estorno, além do crédito do estabelecimento.
+func customerCashbackShare(payment *models.Payment) float64 {
+	var share float64
+	for _, rule := range payment.SplitRules {
+		if rule.ReceiverType == "customer" {
+			share += rule.Amount
+		}
+	}
+	return share
+}
+
+// reverseWalletCredit debita um valor da carteira do usuário de forma
+// atômica (guarda de saldo suficiente — nunca deixa saldo negativo) e grava
+// o débito no wallet_ledger para auditoria. Retorna true se o débito foi
+// realmente aplicado. Usado pelo chargeback para reverter os créditos de
+// split (estabelecimento e cashback do cliente) e o top-up de carteira.
+func reverseWalletCredit(userID int64, amount float64, abacatepayID, description string, now time.Time) bool {
+	if amount <= 0 {
+		return false
+	}
+
+	wallets := models.MongoDabase.Collection("wallets")
+	res, wErr := wallets.UpdateOne(
+		mongoCtx(),
+		bson.M{
+			"user_id": userID,
+			"balance": bson.M{"$gte": amount},
+		},
+		bson.M{
+			"$inc": bson.M{"balance": -amount},
+			"$set": bson.M{"last_updated": now},
+		},
+	)
+	if wErr == nil && res.ModifiedCount > 0 {
+		var wallet models.Wallet
+		wallets.FindOne(mongoCtx(), bson.M{"user_id": userID}).Decode(&wallet)
+
+		ledgerEntry := bson.M{
+			"_id":           primitive.NewObjectID(),
+			"user_id":       userID,
+			"type":          "debit",
+			"amount":        amount,
+			"payment_id":    abacatepayID,
+			"balance_after": wallet.Balance,
+			"description":   description,
+			"created_at":    now,
+		}
+		if _, ledgerErr := models.MongoDabase.Collection("wallet_ledger").InsertOne(mongoCtx(), ledgerEntry); ledgerErr != nil {
+			log.Printf("[REFUND] WARNING: falha ao gravar ledger do estorno user=%d: %v", userID, ledgerErr)
+		}
+		log.Printf("[REFUND] Carteira do usuário %d debitada em %.2f (payment=%s)", userID, amount, abacatepayID)
+		return true
+	}
+
+	log.Printf("[REFUND] Carteira do usuário %d NAO debitada em %.2f (saldo insuficiente ou inexistente): %v", userID, amount, wErr)
+	return false
+}
+
 // processPaymentRefund trata o estorno/chargeback de um pagamento:
-//  1. Reverte o crédito da carteira do estabelecimento (somente se o
-//     pagamento estava CONFIRMED — só assim houve crédito a reverter);
+//  1. Reverte os créditos de carteira (somente se o pagamento estava
+//     CONFIRMED — só assim houve crédito a reverter):
+//     a. o crédito do estabelecimento (share do split);
+//     b. o crédito de cashback do cliente (receiver_type == "customer");
+//     c. o top-up de carteira, quando o pagamento foi usado pelo cliente
+//     (wallet_credited_at preenchido);
 //  2. Publica o evento PAYMENT_REFUNDED nas filas order_updates/payment_updates
 //     para o monolito notificar o cliente em tempo real;
 //  3. Marca o pagamento como REFUNDED + refunded_at.
@@ -108,45 +173,38 @@ func processPaymentRefund(abacatepayID string) {
 
 	now := time.Now()
 
-	// Reversão do crédito do estabelecimento — somente pagamentos CONFIRMED
-	// tiveram split/crédito de carteira. Pagamentos PENDING/EXPIRED não têm
+	// Reversões de carteira — somente pagamentos CONFIRMED tiveram
+	// split/crédito de carteira ou top-up. Pagamentos PENDING/EXPIRED não têm
 	// nada a reverter.
 	if payment.Status == "CONFIRMED" {
-		reversal := establishmentShare(&payment)
-		if reversal > 0 {
-			wallets := models.MongoDabase.Collection("wallets")
-			res, wErr := wallets.UpdateOne(
-				mongoCtx(),
-				bson.M{
-					"user_id": payment.EstablishmentID,
-					"balance": bson.M{"$gte": reversal},
-				},
-				bson.M{
-					"$inc": bson.M{"balance": -reversal},
-					"$set": bson.M{"last_updated": now},
-				},
-			)
-			if wErr == nil && res.ModifiedCount > 0 {
-				var wallet models.Wallet
-				wallets.FindOne(mongoCtx(), bson.M{"user_id": payment.EstablishmentID}).Decode(&wallet)
+		// 1. Crédito do estabelecimento (share do split)
+		reverseWalletCredit(
+			payment.EstablishmentID,
+			establishmentShare(&payment),
+			abacatepayID,
+			"Refund/chargeback: estorno do pagamento "+payment.OrderID,
+			now,
+		)
 
-				ledgerEntry := bson.M{
-					"_id":           primitive.NewObjectID(),
-					"user_id":       payment.EstablishmentID,
-					"type":          "debit",
-					"amount":        reversal,
-					"payment_id":    abacatepayID,
-					"balance_after": wallet.Balance,
-					"description":   "Refund/chargeback: estorno do pagamento " + payment.OrderID,
-					"created_at":    now,
-				}
-				if _, ledgerErr := models.MongoDabase.Collection("wallet_ledger").InsertOne(mongoCtx(), ledgerEntry); ledgerErr != nil {
-					log.Printf("[REFUND] WARNING: falha ao gravar ledger do estorno user=%d: %v", payment.EstablishmentID, ledgerErr)
-				}
-				log.Printf("[REFUND] Carteira do estabelecimento %d debitada em %.2f (payment=%s)", payment.EstablishmentID, reversal, abacatepayID)
-			} else {
-				log.Printf("[REFUND] Carteira do estabelecimento %d NAO debitada (saldo insuficiente ou inexistente): %v", payment.EstablishmentID, wErr)
-			}
+		// 2. Crédito de cashback do cliente (receiver_type == "customer")
+		reverseWalletCredit(
+			payment.CustomerID,
+			customerCashbackShare(&payment),
+			abacatepayID,
+			"Refund/chargeback: estorno do cashback do pagamento "+payment.OrderID,
+			now,
+		)
+
+		// 3. Top-up de carteira quando o pagamento foi usado pelo cliente
+		// (o crédito do top-up é o valor total do pagamento).
+		if payment.WalletCreditedAt != nil {
+			reverseWalletCredit(
+				payment.CustomerID,
+				payment.Amount,
+				abacatepayID,
+				"Refund/chargeback: reversão do top-up do pagamento "+payment.OrderID,
+				now,
+			)
 		}
 
 		// Notifica o cliente em tempo real (ponte WebSocket do monolito)

@@ -25,6 +25,12 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+// ptrTime retorna um ponteiro para o time.Time informado — usado para
+// preencher campos opcionais como WalletCreditedAt/RefundedAt.
+func ptrTime(t time.Time) *time.Time {
+	return &t
+}
+
 func setupCheckoutE2EEnv(t *testing.T) func() {
 	t.Helper()
 	ctx := context.Background()
@@ -396,6 +402,105 @@ func TestCheckoutE2E_AdminEndpoints(t *testing.T) {
 	require.Len(t, wallets, 1)
 	require.Equal(t, "establishment", wallets[0]["owner_type"])
 	require.Equal(t, float64(8500), wallets[0]["balance"])
+
+	// --- GET /chargebacks (wallet_ledger para o painel Financeiro) ---
+	// Seeds: 1 crédito (top-up do cliente) + 1 débito (chargeback do estab)
+	ledgerCollection := models.MongoDabase.Collection("wallet_ledger")
+	now := time.Now()
+	_, err = ledgerCollection.InsertOne(ctx, bson.M{
+		"user_id":       5001,
+		"type":          "credit",
+		"amount":        100.0,
+		"payment_id":    "charge-ledger-001",
+		"balance_after": 150.0,
+		"description":   "Wallet top-up via confirmed payment",
+		"created_at":    now.Add(-2 * time.Hour),
+	})
+	require.NoError(t, err)
+	_, err = ledgerCollection.InsertOne(ctx, bson.M{
+		"user_id":       42,
+		"type":          "debit",
+		"amount":        85.0,
+		"payment_id":    "charge-e2e-refund-001",
+		"balance_after": 115.0,
+		"description":   "Refund/chargeback: estorno do pagamento order-x",
+		"created_at":    now.Add(-1 * time.Hour),
+	})
+	require.NoError(t, err)
+
+	app.Get("/chargebacks", ListChargebacks)
+	req = httptest.NewRequest(http.MethodGet, "/chargebacks", nil)
+	resp, err = app.Test(req, -1)
+	require.NoError(t, err)
+	require.Equal(t, 200, resp.StatusCode)
+
+	var chargebacks map[string]interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&chargebacks))
+	entries, ok := chargebacks["chargebacks"].([]interface{})
+	require.True(t, ok, "resposta deve ter lista chargebacks")
+	require.Len(t, entries, 2, "ledger deve listar crédito + débito")
+
+	// Ordenado por created_at desc: débito (mais recente) primeiro
+	first := entries[0].(map[string]interface{})
+	require.Equal(t, "debit", first["type"])
+	require.Equal(t, "charge-e2e-refund-001", first["payment_id"])
+
+	// owner_type enriquecido da carteira do estabelecimento 42
+	require.Equal(t, "establishment", first["owner_type"])
+
+	// Resumo agregado (sem filtro): crédito 100.0 (top-up) − débito 85.0
+	// (chargeback) = saldo líquido 15.0
+	summary, hasSummary := chargebacks["summary"].(map[string]interface{})
+	require.True(t, hasSummary, "resposta deve incluir summary agregado")
+	require.InDelta(t, 100.0, summary["credit_total"], 0.01, "total de créditos do ledger")
+	require.InDelta(t, 85.0, summary["debit_total"], 0.01, "total de débitos do ledger")
+	require.InDelta(t, 15.0, summary["net"], 0.01, "saldo líquido = créditos − débitos")
+
+	// Resumo reflete os filtros: só débitos → credit_total 0 e net negativo
+	req = httptest.NewRequest(http.MethodGet, "/chargebacks?type=debit", nil)
+	resp, err = app.Test(req, -1)
+	require.NoError(t, err)
+	require.Equal(t, 200, resp.StatusCode)
+	var cbFiltered map[string]interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&cbFiltered))
+	summary, hasSummary = cbFiltered["summary"].(map[string]interface{})
+	require.True(t, hasSummary)
+	require.InDelta(t, 0.0, summary["credit_total"], 0.01, "filtro debit não deve ter créditos")
+	require.InDelta(t, 85.0, summary["debit_total"], 0.01)
+	require.InDelta(t, -85.0, summary["net"], 0.01)
+
+	// Filtro por tipo: só débitos
+	req = httptest.NewRequest(http.MethodGet, "/chargebacks?type=debit", nil)
+	resp, err = app.Test(req, -1)
+	require.NoError(t, err)
+	require.Equal(t, 200, resp.StatusCode)
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&chargebacks))
+	entries, ok = chargebacks["chargebacks"].([]interface{})
+	require.True(t, ok)
+	require.Len(t, entries, 1, "filtro type=debit deve retornar só o débito")
+
+	// Filtro por user_id do cliente (sem carteira → owner_type vazio)
+	req = httptest.NewRequest(http.MethodGet, "/chargebacks?user_id=5001", nil)
+	resp, err = app.Test(req, -1)
+	require.NoError(t, err)
+	require.Equal(t, 200, resp.StatusCode)
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&chargebacks))
+	entries, ok = chargebacks["chargebacks"].([]interface{})
+	require.True(t, ok)
+	require.Len(t, entries, 1, "filtro user_id=5001 deve retornar só o crédito do cliente")
+	creditEntry := entries[0].(map[string]interface{})
+	require.Equal(t, "credit", creditEntry["type"])
+	require.Equal(t, "", creditEntry["owner_type"], "cliente sem carteira → owner_type vazio")
+
+	// Sem resultados
+	req = httptest.NewRequest(http.MethodGet, "/chargebacks?payment_id=nao-existe", nil)
+	resp, err = app.Test(req, -1)
+	require.NoError(t, err)
+	require.Equal(t, 200, resp.StatusCode)
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&chargebacks))
+	entries, ok = chargebacks["chargebacks"].([]interface{})
+	require.True(t, ok)
+	require.Empty(t, entries, "sem lançamentos para payment_id inexistente")
 
 	// --- Validação: ID inválido ---
 	req = httptest.NewRequest(http.MethodPost, "/payments/abc/approve", nil)
@@ -819,6 +924,116 @@ func TestCheckoutE2E_WebhookRealFlow_Refund(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, int64(0), count)
+
+	// === Cenário 5: cashback do cliente (receiver_type customer) é revertido ===
+	// amount=100, delivery=10, split 5/85/10 → sobra 0; adicionamos uma regra
+	// customer (cashback 3) simulando zona com cashback → 4 receivers. O
+	// chargeback deve debitar a carteira do cliente pelo cashback, além do
+	// débito do estabelecimento.
+	cashback := models.Payment{
+		OrderID:         "order-e2e-refund-cashback",
+		CustomerID:      503,
+		EstablishmentID: 45,
+		Amount:          100.00,
+		DeliveryAmount:  10.00,
+		Method:          "pix",
+		Status:          "CONFIRMED",
+		AbacatePayID:    "charge-e2e-refund-cashback",
+		SplitRules: []models.SplitRule{
+			{ReceiverType: "platform", Amount: 5.00, Percentage: 5.0},
+			{ReceiverType: "establishment", Amount: 82.00, Percentage: 82.0},
+			{ReceiverType: "deliveryman", Amount: 10.00, Percentage: 0},
+			{ReceiverType: "customer", Amount: 3.00, Percentage: 0},
+		},
+		CreatedAt: time.Now(),
+	}
+	_, err = paymentCollection.InsertOne(ctx, cashback)
+	require.NoError(t, err)
+
+	// Carteira do estabelecimento (com crédito do share 82) e carteira do
+	// cliente (com crédito de cashback 3).
+	_, err = walletCollection.InsertOne(ctx, bson.M{
+		"user_id":      45,
+		"user_type":    "establishment",
+		"balance":      182.0,
+		"last_updated": time.Now(),
+	})
+	require.NoError(t, err)
+	_, err = walletCollection.InsertOne(ctx, bson.M{
+		"user_id":      503,
+		"user_type":    "customer",
+		"balance":      13.0, // 10 de saldo prévio + 3 de cashback
+		"last_updated": time.Now(),
+	})
+	require.NoError(t, err)
+
+	cashbackRefund := []byte(`{"event":"billing.refunded","charge":{"id":"charge-e2e-refund-cashback","status":"REFUNDED","amount":100.00}}`)
+	postWebhook(t, "charge-e2e-refund-cashback", cashbackRefund)
+
+	err = walletCollection.FindOne(ctx, bson.M{"user_id": 45}).Decode(&wallet)
+	require.NoError(t, err)
+	require.InDelta(t, 100.0, wallet.Balance, 0.01, "chargeback reverte o crédito do estabelecimento (182 - 82)")
+
+	err = walletCollection.FindOne(ctx, bson.M{"user_id": 503}).Decode(&wallet)
+	require.NoError(t, err)
+	require.InDelta(t, 10.0, wallet.Balance, 0.01, "chargeback reverte o cashback do cliente (13 - 3)")
+
+	// Ledger: débito do cashback do cliente gravado
+	count, err = ledgerCollection.CountDocuments(ctx, bson.M{
+		"user_id":    503,
+		"type":       "debit",
+		"payment_id": "charge-e2e-refund-cashback",
+	})
+	require.NoError(t, err)
+	require.Equal(t, int64(1), count, "deve existir 1 débito de cashback do cliente no ledger")
+
+	// === Cenário 6: top-up de carteira quando o pagamento foi usado ===
+	// Pagamento CONFIRMED com wallet_credited_at preenchido (cliente usou o
+	// pagamento para top-up da carteira). O chargeback deve reverter o valor
+	// total do top-up (payment.Amount) da carteira do cliente.
+	topup := models.Payment{
+		OrderID:         "order-e2e-refund-topup",
+		CustomerID:      504,
+		EstablishmentID: 46,
+		Amount:          100.00,
+		DeliveryAmount:  10.00,
+		Method:          "pix",
+		Status:          "CONFIRMED",
+		AbacatePayID:    "charge-e2e-refund-topup",
+		SplitRules: []models.SplitRule{
+			{ReceiverType: "platform", Amount: 5.00, Percentage: 5.0},
+			{ReceiverType: "establishment", Amount: 85.00, Percentage: 85.0},
+			{ReceiverType: "deliveryman", Amount: 10.00, Percentage: 0},
+		},
+		CreatedAt:        time.Now(),
+		WalletCreditedAt: ptrTime(time.Now().Add(-time.Hour)),
+	}
+	_, err = paymentCollection.InsertOne(ctx, topup)
+	require.NoError(t, err)
+
+	_, err = walletCollection.InsertOne(ctx, bson.M{
+		"user_id":      504,
+		"user_type":    "customer",
+		"balance":      250.0, // 150 prévio + 100 do top-up
+		"last_updated": time.Now(),
+	})
+	require.NoError(t, err)
+
+	topupRefund := []byte(`{"event":"billing.refunded","charge":{"id":"charge-e2e-refund-topup","status":"REFUNDED","amount":100.00}}`)
+	postWebhook(t, "charge-e2e-refund-topup", topupRefund)
+
+	err = walletCollection.FindOne(ctx, bson.M{"user_id": 504}).Decode(&wallet)
+	require.NoError(t, err)
+	require.InDelta(t, 150.0, wallet.Balance, 0.01, "chargeback reverte o top-up de carteira (250 - 100)")
+
+	// Ledger: débito do top-up do cliente gravado
+	count, err = ledgerCollection.CountDocuments(ctx, bson.M{
+		"user_id":    504,
+		"type":       "debit",
+		"payment_id": "charge-e2e-refund-topup",
+	})
+	require.NoError(t, err)
+	require.Equal(t, int64(1), count, "deve existir 1 débito do top-up no ledger")
 }
 
 // TestCheckoutE2E_WebhookRealFlow_ZoneSplitConfig valida que o split usa os

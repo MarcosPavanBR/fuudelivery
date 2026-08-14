@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { useAuth } from "../../context/AuthContext";
 import {
   getWallet,
   getExtract,
@@ -51,7 +50,6 @@ function getTransactionIcon(type) {
 }
 
 export default function MinhaCarteira() {
-  const { user } = useAuth();
   const [wallet, setWallet] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -65,22 +63,14 @@ export default function MinhaCarteira() {
   const [cursor, setCursor] = useState("");
   const [hasMore, setHasMore] = useState(false);
 
-  const establishmentId = user?.establishmentId || user?._id || user?.id || "";
-
   const fetchWallet = useCallback(async () => {
-    if (!establishmentId) {
-      setError("ID do estabelecimento não encontrado. Faça login novamente.");
-      setLoading(false);
-      return;
-    }
-
     try {
       setLoading(true);
       setError(null);
 
       const [walletData, extractData, health] = await Promise.all([
-        getWallet(establishmentId).catch(() => null),
-        getExtract(establishmentId, 20, "").catch(() => ({ data: [] })),
+        getWallet().catch(() => null),
+        getExtract(20, "").catch(() => ({ data: [] })),
         getPaymentHealth().catch(() => ({ status: "offline" })),
       ]);
 
@@ -91,7 +81,11 @@ export default function MinhaCarteira() {
       setTransactions(extractData?.data || []);
       setCursor(extractData?.next_cursor || "");
       setHasMore(!!extractData?.next_cursor);
-      setPaymentOnline(health?.status === "healthy");
+      // /health do monolito responde "up" ou "degraded" (Redis fora) —
+      // ambos significam que a API de pagamentos está acessível.
+      setPaymentOnline(
+        health?.status === "up" || health?.status === "degraded"
+      );
     } catch (err) {
       console.error("Erro ao carregar carteira:", err);
       setError(
@@ -102,7 +96,7 @@ export default function MinhaCarteira() {
     } finally {
       setLoading(false);
     }
-  }, [establishmentId]);
+  }, []);
 
   useEffect(() => {
     fetchWallet();
@@ -111,7 +105,7 @@ export default function MinhaCarteira() {
   const loadMore = async () => {
     if (!cursor) return;
     try {
-      const more = await getExtract(establishmentId, 20, cursor);
+      const more = await getExtract(20, cursor);
       setTransactions((prev) => [...prev, ...(more?.data || [])]);
       setCursor(more?.next_cursor || "");
       setHasMore(!!more?.next_cursor);
@@ -145,7 +139,7 @@ export default function MinhaCarteira() {
 
     try {
       setWithdrawing(true);
-      await requestWithdraw(establishmentId, {
+      await requestWithdraw({
         amount,
         destination: withdrawDest,
         method: withdrawMethod,
@@ -168,9 +162,39 @@ export default function MinhaCarteira() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px]">
-        <FaSpinner className="animate-spin text-4xl text-red-500 mb-4" />
-        <p className="text-gray-400">Carregando carteira...</p>
+      <div className="max-w-4xl mx-auto p-4 space-y-6">
+        <div className="flex items-center gap-2">
+          <div className="skeleton h-3 w-3 rounded-full" />
+          <div className="skeleton h-4 w-44" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="bg-gray-800 rounded-xl p-5 border border-gray-700">
+              <div className="skeleton h-4 w-28 mb-3" />
+              <div className="skeleton h-9 w-24" />
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700/50">
+            <div className="skeleton h-4 w-20 mb-2" />
+            <div className="skeleton h-6 w-28" />
+          </div>
+          <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700/50">
+            <div className="skeleton h-4 w-20 mb-2" />
+            <div className="skeleton h-6 w-28" />
+          </div>
+        </div>
+        <div className="bg-gray-800 rounded-xl border border-gray-700">
+          <div className="p-4 border-b border-gray-700">
+            <div className="skeleton h-5 w-32" />
+          </div>
+          <div className="p-6 space-y-3">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="skeleton h-10 w-full" />
+            ))}
+          </div>
+        </div>
       </div>
     );
   }

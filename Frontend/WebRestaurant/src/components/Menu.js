@@ -54,9 +54,9 @@ const TopMenu = ({ toggleMenu, isOpen }) => {
               <FiMenu className="h-5 w-5" />
             )}
           </button>
-          <div className="hidden lg:block">
+          <div className="hidden lg:block min-w-0">
             <h2
-              className="text-lg font-bold"
+              className="text-lg font-bold truncate max-w-[280px]"
               style={{ color: "var(--text-primary, #1A1A1A)" }}
             >
               {getUser()?.establishment_name}

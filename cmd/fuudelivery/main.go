@@ -889,6 +889,10 @@ func setupPaymentRoutes(app *fiber.App) {
 	app.Get("/wallet/balance/:user_id", protectedRoute, paymentHandlers.GetBalance)
 	app.Post("/wallet/topup", protectedRoute, rateLimitMiddleware(20), paymentHandlers.TopUp)
 	app.Post("/wallet/deduct", protectedRoute, rateLimitMiddleware(20), paymentHandlers.DeductFromWallet)
+	// Carteira do restaurante (WebRestaurant) — o estabelecimento vem do JWT
+	app.Get("/wallet/establishment/balance", protectedRoute, paymentHandlers.GetEstablishmentWallet)
+	app.Get("/wallet/establishment/transactions", protectedRoute, paymentHandlers.GetEstablishmentTransactions)
+	app.Post("/wallet/establishment/withdraw", protectedRoute, rateLimitMiddleware(20), paymentHandlers.EstablishmentWithdraw)
 	app.Post("/asaas/wallet/create", protectedRoute, rateLimitMiddleware(20), paymentHandlers.CreateAsaasWallet)
 	app.Get("/asaas/wallet/:walletId/status", protectedRoute, paymentHandlers.GetAsaasWalletStatus)
 	app.Post("/asaas/payment/split", protectedRoute, rateLimitMiddleware(20), paymentHandlers.CreateAsaasSplitPayment)

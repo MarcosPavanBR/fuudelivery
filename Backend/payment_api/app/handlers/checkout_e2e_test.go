@@ -17,6 +17,7 @@ import (
 
 	"github.com/carloshomar/fuudelivery/payment_api/app/models"
 	"github.com/gofiber/fiber/v2"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/mongodb"
 	"go.mongodb.org/mongo-driver/bson"
@@ -1173,4 +1174,222 @@ func TestCheckoutE2E_WebhookRealFlow_ZoneSplitConfig(t *testing.T) {
 	require.NoError(t, err, "webhook confirmado deve criar a carteira do estabelecimento")
 	require.Equal(t, "establishment", estWallet.UserType)
 	require.InDelta(t, 80.0, estWallet.Balance, 0.01, "carteira recebe o share da zona (80), não o default 85")
+}
+
+// TestCheckoutE2E_WalletEstablishmentEndpoints cobre os endpoints da carteira
+// do restaurante (WebRestaurant): GET /wallet/establishment/balance,
+// GET /wallet/establishment/transactions e POST /wallet/establishment/withdraw.
+// O estabelecimento é identificado pelo claim establishment_id do JWT (sem ID
+// na URL — sem IDOR).
+func TestCheckoutE2E_WalletEstablishmentEndpoints(t *testing.T) {
+	cleanup := setupCheckoutE2EEnv(t)
+	defer cleanup()
+
+	os.Setenv("JWT_SECRET", "e2e-wallet-secret")
+	defer os.Unsetenv("JWT_SECRET")
+
+	ctx := context.Background()
+	walletCollection := models.MongoDabase.Collection("wallets")
+	ledgerCollection := models.MongoDabase.Collection("wallet_ledger")
+
+	const estID int64 = 42
+
+	app := fiber.New()
+	app.Get("/wallet/establishment/balance", GetEstablishmentWallet)
+	app.Get("/wallet/establishment/transactions", GetEstablishmentTransactions)
+	app.Post("/wallet/establishment/withdraw", EstablishmentWithdraw)
+
+	// Token de restaurante com o claim establishment_id=42.
+	makeToken := func() string {
+		tok := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+			"id":               999,
+			"establishment_id": float64(estID),
+			"role":             "restaurant",
+			"exp":              time.Now().Add(time.Hour).Unix(),
+		})
+		s, err := tok.SignedString([]byte("e2e-wallet-secret"))
+		require.NoError(t, err)
+		return s
+	}
+
+	do := func(method, path string, body []byte, token string) *http.Response {
+		t.Helper()
+		req := httptest.NewRequest(method, path, bytes.NewReader(body))
+		if body != nil {
+			req.Header.Set("Content-Type", "application/json")
+		}
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		resp, err := app.Test(req, -1)
+		require.NoError(t, err)
+		return resp
+	}
+
+	// --- Seeds: carteira do estabelecimento + 3 lançamentos no ledger ---
+	_, err := walletCollection.InsertOne(ctx, bson.M{
+		"user_id":      estID,
+		"user_type":    "establishment",
+		"balance":      150.0,
+		"last_updated": time.Now(),
+	})
+	require.NoError(t, err)
+
+	now := time.Now()
+	// 1) crédito do split (mais antigo)
+	_, err = ledgerCollection.InsertOne(ctx, bson.M{
+		"user_id":       estID,
+		"type":          "credit",
+		"amount":        100.0,
+		"payment_id":    "charge-e2e-wallet-credit",
+		"balance_after": 100.0,
+		"description":   "Credito do split do pedido order-w-1",
+		"created_at":    now.Add(-2 * time.Hour),
+	})
+	require.NoError(t, err)
+	// 2) saque (kind=withdrawal — conta como "total sacado")
+	_, err = ledgerCollection.InsertOne(ctx, bson.M{
+		"user_id":       estID,
+		"type":          "debit",
+		"kind":          "withdrawal",
+		"amount":        50.0,
+		"balance_after": 150.0,
+		"description":   "Saque via PIX para pix@example.com",
+		"created_at":    now.Add(-1 * time.Hour),
+	})
+	require.NoError(t, err)
+	// 3) débito de chargeback (sem kind — NÃO conta como saque)
+	_, err = ledgerCollection.InsertOne(ctx, bson.M{
+		"user_id":       estID,
+		"type":          "debit",
+		"amount":        20.0,
+		"payment_id":    "charge-e2e-wallet-debit",
+		"balance_after": 130.0,
+		"description":   "Refund/chargeback: estorno do pagamento order-w-3",
+		"created_at":    now.Add(-30 * time.Minute),
+	})
+	require.NoError(t, err)
+
+	// --- GET balance (token válido) ---
+	resp := do(http.MethodGet, "/wallet/establishment/balance", nil, makeToken())
+	require.Equal(t, 200, resp.StatusCode)
+	var bal map[string]interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&bal))
+	require.Equal(t, float64(estID), bal["user_id"])
+	require.InDelta(t, 150.0, bal["available"], 0.01, "saldo disponível = balance da carteira")
+	require.InDelta(t, 0.0, bal["pending"], 0.01)
+	require.InDelta(t, 0.0, bal["blocked"], 0.01)
+	require.InDelta(t, 100.0, bal["total_earned"], 0.01, "total ganho = soma dos créditos do ledger")
+	require.InDelta(t, 50.0, bal["total_withdrawn"], 0.01, "total sacado = só débitos kind=withdrawal")
+
+	// --- GET balance sem token → 403 (o estabelecimento vem do JWT) ---
+	resp = do(http.MethodGet, "/wallet/establishment/balance", nil, "")
+	require.Equal(t, 403, resp.StatusCode)
+
+	// --- GET transactions: 3 lançamentos, tipos mapeados em MAIÚSCULAS ---
+	resp = do(http.MethodGet, "/wallet/establishment/transactions", nil, makeToken())
+	require.Equal(t, 200, resp.StatusCode)
+	var extract map[string]interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&extract))
+	require.Equal(t, false, extract["has_more"])
+	require.Equal(t, "", extract["next_cursor"])
+	data, ok := extract["data"].([]interface{})
+	require.True(t, ok, "resposta deve ter lista data")
+	require.Len(t, data, 3, "3 lançamentos no ledger do estabelecimento")
+
+	byType := map[string]map[string]interface{}{}
+	for _, it := range data {
+		entry, isMap := it.(map[string]interface{})
+		require.True(t, isMap)
+		typ, _ := entry["type"].(string)
+		byType[typ] = entry
+	}
+
+	credit := byType["CREDIT"]
+	require.NotNil(t, credit, "deve existir lançamento CREDIT")
+	require.Equal(t, "charge-e2e-wallet-credit", credit["payment_ref"])
+	require.InDelta(t, 100.0, credit["amount"], 0.01)
+	require.InDelta(t, 100.0, credit["balance"], 0.01)
+	require.NotEmpty(t, credit["id"])
+	require.NotEmpty(t, credit["created_at"])
+
+	withdrawal := byType["WITHDRAWAL"]
+	require.NotNil(t, withdrawal, "saque deve mapear para WITHDRAWAL")
+	require.Contains(t, withdrawal["description"], "Saque via PIX")
+	require.InDelta(t, 50.0, withdrawal["amount"], 0.01)
+
+	debit := byType["DEBIT"]
+	require.NotNil(t, debit, "chargeback deve mapear para DEBIT")
+	require.Equal(t, "charge-e2e-wallet-debit", debit["payment_ref"])
+
+	// --- Paginação: limit=2 + cursor ---
+	resp = do(http.MethodGet, "/wallet/establishment/transactions?limit=2", nil, makeToken())
+	require.Equal(t, 200, resp.StatusCode)
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&extract))
+	require.Equal(t, true, extract["has_more"])
+	nextCursor, _ := extract["next_cursor"].(string)
+	require.NotEmpty(t, nextCursor)
+	data, ok = extract["data"].([]interface{})
+	require.True(t, ok)
+	require.Len(t, data, 2)
+
+	resp = do(http.MethodGet, "/wallet/establishment/transactions?limit=2&cursor="+nextCursor, nil, makeToken())
+	require.Equal(t, 200, resp.StatusCode)
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&extract))
+	require.Equal(t, false, extract["has_more"])
+	data, ok = extract["data"].([]interface{})
+	require.True(t, ok)
+	require.Len(t, data, 1, "página 2 deve trazer apenas o lançamento mais antigo")
+
+	// Cursor inválido → 400
+	resp = do(http.MethodGet, "/wallet/establishment/transactions?cursor=abc", nil, makeToken())
+	require.Equal(t, 400, resp.StatusCode)
+
+	// --- POST withdraw: saque válido de 40 (150 → 110) ---
+	withdrawBody := []byte(`{"amount":40,"destination":"pix@example.com","method":"PIX"}`)
+	resp = do(http.MethodPost, "/wallet/establishment/withdraw", withdrawBody, makeToken())
+	require.Equal(t, 200, resp.StatusCode)
+	var wd map[string]interface{}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&wd))
+	require.InDelta(t, 110.0, wd["balance"], 0.01, "150 - 40")
+
+	var wallet models.Wallet
+	err = walletCollection.FindOne(ctx, bson.M{"user_id": estID}).Decode(&wallet)
+	require.NoError(t, err)
+	require.InDelta(t, 110.0, wallet.Balance, 0.01, "saque deve debitar a carteira")
+
+	// Novo lançamento de saque no ledger (type=debit, kind=withdrawal)
+	withdrawCount, err := ledgerCollection.CountDocuments(ctx, bson.M{
+		"user_id": estID, "type": "debit", "kind": "withdrawal",
+	})
+	require.NoError(t, err)
+	require.Equal(t, int64(2), withdrawCount, "1 saque seed + 1 novo saque")
+
+	// total_withdrawn e available refletem o novo saque
+	resp = do(http.MethodGet, "/wallet/establishment/balance", nil, makeToken())
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&bal))
+	require.InDelta(t, 90.0, bal["total_withdrawn"], 0.01, "50 + 40")
+	require.InDelta(t, 110.0, bal["available"], 0.01)
+
+	// --- Validações do saque ---
+	// Abaixo do mínimo (R$ 10)
+	resp = do(http.MethodPost, "/wallet/establishment/withdraw", []byte(`{"amount":5,"destination":"pix@example.com","method":"PIX"}`), makeToken())
+	require.Equal(t, 400, resp.StatusCode)
+
+	// Chave/destino inválido (curto demais)
+	resp = do(http.MethodPost, "/wallet/establishment/withdraw", []byte(`{"amount":20,"destination":"abc","method":"PIX"}`), makeToken())
+	require.Equal(t, 400, resp.StatusCode)
+
+	// Saldo insuficiente (111 > 110)
+	resp = do(http.MethodPost, "/wallet/establishment/withdraw", []byte(`{"amount":111,"destination":"pix@example.com","method":"PIX"}`), makeToken())
+	require.Equal(t, 400, resp.StatusCode)
+
+	// Sem token → 403
+	resp = do(http.MethodPost, "/wallet/establishment/withdraw", withdrawBody, "")
+	require.Equal(t, 403, resp.StatusCode)
+
+	// Nenhum saque inválido pode ter mexido no saldo
+	err = walletCollection.FindOne(ctx, bson.M{"user_id": estID}).Decode(&wallet)
+	require.NoError(t, err)
+	require.InDelta(t, 110.0, wallet.Balance, 0.01, "saques inválidos não podem alterar o saldo")
 }

@@ -3,10 +3,12 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"log"
 	"strconv"
 	"time"
 
 	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
+	authModels "github.com/carloshomar/fuudelivery/auth_api/app/models"
 	"github.com/carloshomar/fuudelivery/payment_api/app/models"
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson"
@@ -39,7 +41,86 @@ func ListAllPayments(c *fiber.Ctx) error {
 		payments = []map[string]interface{}{}
 	}
 
+	// Enriquece cada pagamento com o nome do cliente (user.nome) lido do
+	// Postgres (tabela users), via customer_id — o documento do Mongo nao
+	// guarda o nome do usuario. Consulta em lote para evitar N+1.
+	enrichPaymentsWithUsers(payments)
+
 	return c.JSON(payments)
+}
+
+// enrichPaymentsWithUsers anexa user: {id, nome, phone} a cada pagamento
+// consultando os usuarios em lote no Postgres. Se o DB nao estiver disponivel
+// ou o usuario nao for encontrado, o campo user e simplesmente omitido — a
+// tela faz fallback para customer_phone.
+func enrichPaymentsWithUsers(payments []map[string]interface{}) {
+	if len(payments) == 0 {
+		return
+	}
+	db := authModels.DB
+	if db == nil {
+		return
+	}
+
+	// Coleta customer_ids unicos (BSON decodifica como int64 ou float64)
+	seen := make(map[int64]bool)
+	var ids []int64
+	for _, p := range payments {
+		cid := paymentCustomerID(p)
+		if cid <= 0 || seen[cid] {
+			continue
+		}
+		seen[cid] = true
+		ids = append(ids, cid)
+	}
+	if len(ids) == 0 {
+		return
+	}
+
+	var users []struct {
+		ID    uint
+		Name  string
+		Phone string
+	}
+	if err := db.Table("users").Select("id, name, phone").Where("id IN ?", ids).Find(&users).Error; err != nil {
+		log.Printf("[PAYMENTS] Falha ao buscar nomes dos clientes: %v", err)
+		return
+	}
+
+	byID := make(map[int64]struct {
+		ID    uint
+		Name  string
+		Phone string
+	}, len(users))
+	for _, u := range users {
+		byID[int64(u.ID)] = u
+	}
+
+	for _, p := range payments {
+		cid := paymentCustomerID(p)
+		u, ok := byID[cid]
+		if !ok || u.Name == "" {
+			continue
+		}
+		p["user"] = map[string]interface{}{
+			"id":    u.ID,
+			"nome":  u.Name,
+			"phone": u.Phone,
+		}
+	}
+}
+
+// paymentCustomerID extrai o customer_id de um pagamento decodificado do Mongo.
+func paymentCustomerID(p map[string]interface{}) int64 {
+	switch v := p["customer_id"].(type) {
+	case int64:
+		return v
+	case int32:
+		return int64(v)
+	case float64:
+		return int64(v)
+	}
+	return 0
 }
 
 // GetPaymentStats retorna estatísticas agregadas dos pagamentos (admin).

@@ -34,10 +34,10 @@ const statusOptions = [
   { value: "CANCELLED", label: "Cancelado" },
 ];
 
-// Identificador do cliente: sem user aninhado no payload — usamos o
-// customer_phone (ou o customer_id como fallback).
+// Identificador do cliente: o monolito enriquece o payload com user.nome
+// (buscado no Postgres por customer_id). Fallbacks: customer_phone e #id.
 function customerLabel(p) {
-  return p.customer_phone || (p.customer_id != null ? `#${p.customer_id}` : "Cliente");
+  return p.user?.nome || p.customer_phone || (p.customer_id != null ? `#${p.customer_id}` : "Cliente");
 }
 
 function formatMoney(cents) {
@@ -75,11 +75,13 @@ export default function Payments() {
 
   const filtered = payments.filter(p => {
     const idStr = (p._id || p.id || "").toString();
+    const q = search.toLowerCase();
     const matchesSearch =
       !search ||
-      idStr.toLowerCase().includes(search.toLowerCase()) ||
-      (p.customer_phone || "").toLowerCase().includes(search.toLowerCase()) ||
-      (p.order_id || "").toLowerCase().includes(search.toLowerCase());
+      idStr.toLowerCase().includes(q) ||
+      (p.user?.nome || "").toLowerCase().includes(q) ||
+      (p.user?.phone || p.customer_phone || "").toLowerCase().includes(q) ||
+      (p.order_id || "").toLowerCase().includes(q);
     const matchesStatus = !statusFilter || p.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -197,7 +199,14 @@ export default function Payments() {
                     </td>
                     <td className="px-6 py-4">
                       <p className="text-sm text-gray-900">{customerLabel(p)}</p>
-                      {p.customer_id != null && <p className="text-xs text-gray-400">ID: {p.customer_id}</p>}
+                      {p.user?.phone || p.customer_phone ? (
+                        <p className="text-xs text-gray-400">
+                          {p.user?.phone || p.customer_phone}
+                          {p.customer_id != null ? ` · ID: ${p.customer_id}` : ""}
+                        </p>
+                      ) : (
+                        p.customer_id != null && <p className="text-xs text-gray-400">ID: {p.customer_id}</p>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600">{p.order_id || "-"}</td>
                     <td className="px-6 py-4 font-semibold text-gray-900">{formatMoney(p.amount)}</td>

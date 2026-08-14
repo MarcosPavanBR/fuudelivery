@@ -1,125 +1,50 @@
 import api, { getApiBaseUrl } from "./api";
 
-const PAYMENT_API =
-  import.meta.env.REACT_APP_PAYMENT_API_URL ||
-  import.meta.env.VITE_PAYMENT_API_URL ||
-  getApiBaseUrl() + "/api/v1";
+// O monolito expõe a carteira do restaurante em /wallet/establishment/*.
+// O estabelecimento autenticado vem do JWT — não é preciso passar o ID.
+const API_BASE = getApiBaseUrl();
 
-// === WALLET (para o restaurante) ===
+// === WALLET (papel restaurante — monolito) ===
 
-export const getWallet = async (establishmentId) => {
-  try {
-    const response = await api.get(
-      `${PAYMENT_API}/wallets/${establishmentId}`
-    );
-    return response.data;
-  } catch (error) {
-    console.error("Erro ao buscar carteira:", error);
-    throw error;
-  }
+// Saldo + totais do ledger: { available, pending, blocked, total_earned,
+// total_withdrawn, last_updated }
+export const getWallet = async () => {
+  const response = await api.get(`${API_BASE}/wallet/establishment/balance`);
+  return response.data;
 };
 
-export const getExtract = async (establishmentId, limit = 20, cursor = "") => {
-  try {
-    const params = new URLSearchParams();
-    if (limit) params.append("limit", limit);
-    if (cursor) params.append("cursor", cursor);
+// Extrato paginado por cursor: { data, next_cursor, has_more }
+// Cada item: { id, type (CREDIT|DEBIT|WITHDRAWAL), description, created_at,
+// amount, balance, payment_ref }
+export const getExtract = async (limit = 20, cursor = "") => {
+  const params = new URLSearchParams();
+  if (limit) params.append("limit", limit);
+  if (cursor) params.append("cursor", cursor);
 
-    const response = await api.get(
-      `${PAYMENT_API}/wallets/${establishmentId}/transactions?${params.toString()}`
-    );
-    return response.data;
-  } catch (error) {
-    console.error("Erro ao buscar extrato:", error);
-    throw error;
-  }
+  const response = await api.get(
+    `${API_BASE}/wallet/establishment/transactions?${params.toString()}`
+  );
+  return response.data;
 };
 
-export const requestWithdraw = async (establishmentId, data) => {
-  try {
-    const response = await api.post(
-      `${PAYMENT_API}/wallets/${establishmentId}/debit`,
-      {
-        amount: data.amount,
-        description: `Saque solicitado via ${data.method} - ${data.destination}`,
-        reference_id: `withdraw_${Date.now()}`,
-      }
-    );
-    return response.data;
-  } catch (error) {
-    console.error("Erro ao solicitar saque:", error);
-    throw error;
-  }
+// Saque: { amount, destination, method }
+export const requestWithdraw = async (data) => {
+  const response = await api.post(`${API_BASE}/wallet/establishment/withdraw`, {
+    amount: data.amount,
+    destination: data.destination,
+    method: data.method,
+  });
+  return response.data;
 };
 
-// === PAYMENTS (somente leitura para o restaurante) ===
-
-export const getMyPayments = async (establishmentId, limit = 20, cursor = "") => {
-  try {
-    const params = new URLSearchParams();
-    params.append("limit", limit);
-    if (cursor) params.append("cursor", cursor);
-
-    const response = await api.get(
-      `${PAYMENT_API}/payments?${params.toString()}`
-    );
-    return response.data;
-  } catch (error) {
-    console.error("Erro ao buscar pagamentos:", error);
-    throw error;
-  }
-};
-
-export const getPaymentDetail = async (paymentId) => {
-  try {
-    const response = await api.get(`${PAYMENT_API}/payments/${paymentId}`);
-    return response.data;
-  } catch (error) {
-    console.error("Erro ao buscar detalhe do pagamento:", error);
-    throw error;
-  }
-};
-
-// === CHARGEBACKS (restaurante vê e envia evidências) ===
-
-export const getMyChargebacks = async (limit = 20, cursor = "") => {
-  try {
-    const params = new URLSearchParams();
-    params.append("limit", limit);
-    if (cursor) params.append("cursor", cursor);
-
-    const response = await api.get(
-      `${PAYMENT_API}/chargebacks?${params.toString()}`
-    );
-    return response.data;
-  } catch (error) {
-    console.error("Erro ao buscar disputas:", error);
-    throw error;
-  }
-};
-
-export const addEvidence = async (disputeId, formData) => {
-  try {
-    const response = await api.post(
-      `${PAYMENT_API}/chargebacks/${disputeId}/evidence`,
-      formData,
-      { headers: { "Content-Type": "multipart/form-data" } }
-    );
-    return response.data;
-  } catch (error) {
-    console.error("Erro ao enviar evidência:", error);
-    throw error;
-  }
-};
-
-// === HEALTH ===
+// === HEALTH (monolito) ===
 
 export const getPaymentHealth = async () => {
   try {
-    const response = await api.get(`${PAYMENT_API}/health`);
+    const response = await api.get(`${API_BASE}/health`);
     return response.data;
   } catch (error) {
-    return { status: "offline", mongo: false };
+    return { status: "offline" };
   }
 };
 
@@ -127,9 +52,5 @@ export default {
   getWallet,
   getExtract,
   requestWithdraw,
-  getMyPayments,
-  getPaymentDetail,
-  getMyChargebacks,
-  addEvidence,
   getPaymentHealth,
 };

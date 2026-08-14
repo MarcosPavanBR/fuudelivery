@@ -59,6 +59,11 @@ func GenerateJWT(user *models.User, establishment *models.Establishment) (string
 	if establishment != nil {
 		claims["establishment_id"] = establishment.ID
 		claims["establishment_name"] = establishment.Name
+		// Claim aninhado para o WebRestaurant (user.establishment.id no frontend).
+		claims["establishment"] = map[string]interface{}{
+			"id":   establishment.ID,
+			"name": establishment.Name,
+		}
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

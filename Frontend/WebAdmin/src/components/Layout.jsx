@@ -142,14 +142,14 @@ export default function Layout() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </div>
-              <div className="relative flex-shrink-0">
-                <button className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-100 transition-colors">
-                  <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #EA1D2C, #C41420)" }}>
+              <div className="relative min-w-0">
+                <button className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-100 transition-colors min-w-0">
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, #EA1D2C, #C41420)" }}>
                     <span className="text-white font-bold text-sm">{user?.name?.charAt(0) || "A"}</span>
                   </div>
-                  <div className="hidden sm:block text-left">
-                    <p className="text-sm font-semibold text-gray-900">{user?.name || "Admin"}</p>
-                    <p className="text-xs text-gray-500">{user?.establishment_name || "Sistema"}</p>
+                  <div className="hidden sm:block text-left min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 truncate max-w-[160px]">{user?.name || "Admin"}</p>
+                    <p className="text-xs text-gray-500 truncate max-w-[160px]">{user?.establishment_name || "Sistema"}</p>
                   </div>
                 </button>
               </div>

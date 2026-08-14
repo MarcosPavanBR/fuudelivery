@@ -130,12 +130,13 @@ export const AuthProvider = ({ children }) => {
   };
 
   const refreshOpen = async () => {
-    const id = getUser()?.id;
+    // O establishment do dono vem do claim aninhado do JWT
+    const id = getUser()?.establishment?.id;
     if (!id) return;
 
     try {
       const { data } = await api.get(
-        "/establishments/" + getUser().id
+        "/establishments/" + id
       );
 
       setOpenEstablishment(data?.open_data ?? false);

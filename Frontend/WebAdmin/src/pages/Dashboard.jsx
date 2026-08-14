@@ -68,8 +68,29 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <FiActivity className="animate-spin h-8 w-8 text-fuu-red" />
+      <div className="animate-fade-in space-y-8 min-w-0">
+        <div className="space-y-2">
+          <div className="skeleton h-8 w-48" />
+          <div className="skeleton h-4 w-64" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="card p-5">
+              <div className="skeleton h-4 w-24 mb-3" />
+              <div className="skeleton h-8 w-16" />
+            </div>
+          ))}
+        </div>
+        <div className="card">
+          <div className="px-6 py-4 border-b border-gray-100">
+            <div className="skeleton h-5 w-40" />
+          </div>
+          <div className="p-6 space-y-3">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="skeleton h-10 w-full" />
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -96,7 +117,7 @@ export default function Dashboard() {
             { label: "Pedidos Hoje", value: stats.todayOrders, IconComp: FiShoppingBag, color: "#10B981", bg: "#ECFDF5", accent: "linear-gradient(135deg, #10B981, #34D399)" },
             { label: "Entregadores Online", value: stats.onlineDrivers, IconComp: FiTruck, color: "#3B82F6", bg: "#DBEAFE", accent: "linear-gradient(135deg, #3B82F6, #60A5FA)" },
           ].map((stat, i) => (
-            <div key={i} className="relative bg-white rounded-2xl p-5 transition-all duration-300 border border-gray-100 shadow-card hover:shadow-card-hover hover:-translate-y-0.5 overflow-hidden">
+            <div key={i} className="relative card p-5 transition-all duration-300 hover:shadow-card-hover hover:-translate-y-0.5 overflow-hidden">
               <div className="absolute left-0 top-0 bottom-0 w-1" style={{ background: stat.accent }} />
               <div className="flex items-start justify-between">
                 <div className="min-w-0">
@@ -112,7 +133,7 @@ export default function Dashboard() {
       </div>
 
       {/* Recent Orders */}
-      <div className="bg-white rounded-2xl shadow-card border border-gray-100 overflow-hidden">
+      <div className="card overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="text-lg font-bold text-gray-900">Pedidos Recentes</h2>
         </div>

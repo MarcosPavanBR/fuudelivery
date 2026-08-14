@@ -3,21 +3,31 @@ import { FiCreditCard, FiDollarSign, FiClock, FiCheck, FiAlertTriangle } from "r
 import { toast } from "react-toastify";
 import paymentApi from "../services/paymentApi";
 
-function StatCard({ icon: Icon, label, value, color }) {
+function StatCard({ icon: Icon, label, value, color, bg }) {
   return (
-    <div style={{ background: "white", borderRadius: 12, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <div style={{ width: 44, height: 44, borderRadius: 10, background: color + "15", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <Icon size={22} color={color} />
+    <div className="card p-5">
+      <div className="flex items-center gap-3">
+        <div
+          className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+          style={{ background: bg || color + "15", color }}
+        >
+          <Icon size={22} />
         </div>
-        <div>
-          <div style={{ fontSize: 12, color: "#6b7280" }}>{label}</div>
-          <div style={{ fontSize: 24, fontWeight: 700 }}>{value}</div>
+        <div className="min-w-0">
+          <div className="text-xs font-medium text-gray-500">{label}</div>
+          <div className="text-2xl font-bold text-gray-900">{value}</div>
         </div>
       </div>
     </div>
   );
 }
+
+const tabs = [
+  { id: "stats", label: "Resumo" },
+  { id: "payments", label: "Pagamentos" },
+  { id: "wallets", label: "Carteiras" },
+  { id: "chargebacks", label: "Chargebacks" },
+];
 
 export default function Financeiro() {
   const [stats, setStats] = useState(null);
@@ -98,7 +108,32 @@ export default function Financeiro() {
     setIsProcessing(false);
   }
 
-  if (loading) return <div style={{ padding: 40, textAlign: "center" }}>Carregando...</div>;
+  if (loading) {
+    return (
+      <div className="animate-fade-in space-y-6">
+        <div className="space-y-2">
+          <div className="skeleton h-8 w-40" />
+        </div>
+        <div className="flex gap-2">
+          {[...Array(4)].map((_, i) => <div key={i} className="skeleton h-10 w-28" />)}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="card p-5">
+              <div className="skeleton h-12 w-12 rounded-xl mb-3" />
+              <div className="skeleton h-4 w-20 mb-2" />
+              <div className="skeleton h-7 w-16" />
+            </div>
+          ))}
+        </div>
+        <div className="card">
+          <div className="p-6 space-y-3">
+            {[...Array(6)].map((_, i) => <div key={i} className="skeleton h-9 w-full" />)}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const totalAmount = payments.reduce((s, p) => s + (p.amount || 0), 0);
   const pending = payments.filter(p => p.status === "PENDING");
@@ -106,57 +141,65 @@ export default function Financeiro() {
   const rejected = payments.filter(p => p.status === "REJECTED");
 
   return (
-    <div style={{ padding: 24 }}>
-      <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 24 }}>Financeiro</h1>
-      <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
-        {["stats", "payments", "wallets", "chargebacks"].map(t => (
-          <button key={t} onClick={() => setTab(t)}
-            style={{ padding: "8px 20px", borderRadius: 8, border: "none", cursor: "pointer", fontWeight: 600,
-              background: tab === t ? "#6366f1" : "#f3f4f6", color: tab === t ? "white" : "#374151" }}>
-            {t === "stats" ? "Resumo" : t === "payments" ? "Pagamentos" : t === "wallets" ? "Carteiras" : "Chargebacks"}
+    <div className="animate-fade-in space-y-6 min-w-0">
+      <h1 className="text-2xl font-bold text-gray-900">Financeiro</h1>
+
+      {/* Tabs */}
+      <div className="flex flex-wrap gap-2">
+        {tabs.map(t => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={tab === t.id ? "btn btn-primary" : "btn btn-ghost"}
+          >
+            {t.label}
           </button>
         ))}
       </div>
 
       {tab === "stats" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
-          <StatCard icon={FiDollarSign} label="Total" value={"R$ " + (totalAmount / 100).toFixed(2)} color="#6366f1" />
-          <StatCard icon={FiClock} label="Pendentes" value={pending.length} color="#f59e0b" />
-          <StatCard icon={FiCheck} label="Aprovados" value={approved.length} color="#10b981" />
-          <StatCard icon={FiAlertTriangle} label="Rejeitados" value={rejected.length} color="#ef4444" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard icon={FiDollarSign} label="Total" value={"R$ " + (totalAmount / 100).toFixed(2)} color="#6366f1" bg="#EEF2FF" />
+          <StatCard icon={FiClock} label="Pendentes" value={pending.length} color="#D97706" bg="#FFFBEB" />
+          <StatCard icon={FiCheck} label="Aprovados" value={approved.length} color="#16A34A" bg="#F0FDF4" />
+          <StatCard icon={FiAlertTriangle} label="Rejeitados" value={rejected.length} color="#DC2626" bg="#FEF2F2" />
         </div>
       )}
 
       {tab === "payments" && (
-        <div style={{ background: "white", borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead><tr style={{ background: "#f9fafb" }}>
-              {["ID", "Pedido", "Valor", "Status", "Acoes"].map(h => (
-                <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 12, color: "#6b7280" }}>{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>
+        <div className="card overflow-hidden">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                {["ID", "Pedido", "Valor", "Status", "Ações"].map(h => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
               {payments.slice(0, 50).map(p => (
-                <tr key={p.id || p._id} style={{ borderTop: "1px solid #f3f4f6" }}>
-                  <td style={{ padding: "12px 16px", fontSize: 13, fontFamily: "monospace" }}>{(p.id || p._id || "").slice(0, 8)}</td>
-                  <td style={{ padding: "12px 16px", fontSize: 13 }}>{p.orderId || p.order_id || "-"}</td>
-                  <td style={{ padding: "12px 16px", fontSize: 13, fontWeight: 600 }}>R$ {((p.amount || 0) / 100).toFixed(2)}</td>
-                  <td style={{ padding: "12px 16px" }}>
-                    <span style={{ padding: "4px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600,
-                      background: p.status === "CONFIRMED" ? "#d1fae5" : p.status === "PENDING" ? "#fef3c7" : "#fee2e2",
-                      color: p.status === "CONFIRMED" ? "#065f46" : p.status === "PENDING" ? "#92400e" : "#991b1b" }}>
+                <tr key={p.id || p._id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-3 text-sm font-mono">{(p.id || p._id || "").slice(0, 8)}</td>
+                  <td className="px-4 py-3 text-sm">{p.orderId || p.order_id || "-"}</td>
+                  <td className="px-4 py-3 text-sm font-semibold">R$ {((p.amount || 0) / 100).toFixed(2)}</td>
+                  <td className="px-4 py-3">
+                    <span
+                      className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold"
+                      style={{
+                        background: p.status === "CONFIRMED" ? "#D1FAE5" : p.status === "PENDING" ? "#FEF3C7" : "#FEE2E2",
+                        color: p.status === "CONFIRMED" ? "#065F46" : p.status === "PENDING" ? "#92400E" : "#991B1B",
+                      }}
+                    >
                       {p.status}
                     </span>
                   </td>
-                  <td style={{ padding: "12px 16px" }}>
+                  <td className="px-4 py-3">
                     {p.status === "PENDING" && (
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <button disabled={isProcessing} onClick={() => approvePayment(p.id || p._id)}
-                          style={{ padding: "4px 12px", borderRadius: 6, border: "none", background: "#10b981", color: "white", fontSize: 12, cursor: isProcessing ? "wait" : "pointer", opacity: isProcessing ? 0.5 : 1 }}>
+                      <div className="flex gap-2">
+                        <button disabled={isProcessing} onClick={() => approvePayment(p.id || p._id)} className="btn btn-success px-3 py-1.5 text-xs">
                           {isProcessing ? "..." : "Aprovar"}
                         </button>
-                        <button disabled={isProcessing} onClick={() => rejectPayment(p.id || p._id)}
-                          style={{ padding: "4px 12px", borderRadius: 6, border: "none", background: "#ef4444", color: "white", fontSize: 12, cursor: isProcessing ? "wait" : "pointer", opacity: isProcessing ? 0.5 : 1 }}>
+                        <button disabled={isProcessing} onClick={() => rejectPayment(p.id || p._id)} className="btn btn-danger px-3 py-1.5 text-xs">
                           {isProcessing ? "..." : "Rejeitar"}
                         </button>
                       </div>
@@ -164,112 +207,136 @@ export default function Financeiro() {
                   </td>
                 </tr>
               ))}
-              {payments.length === 0 && <tr><td colSpan={5} style={{ padding: 40, textAlign: "center", color: "#9ca3af" }}>Nenhum pagamento encontrado</td></tr>}
+              {payments.length === 0 && (
+                <tr><td colSpan={5} className="px-4 py-16 text-center text-gray-400">Nenhum pagamento encontrado</td></tr>
+              )}
             </tbody>
           </table>
         </div>
       )}
 
       {tab === "wallets" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {wallets.map((w, i) => (
-            <div key={w.id || w._id || i} style={{ background: "white", borderRadius: 12, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-                <FiCreditCard size={20} color="#6366f1" />
-                <span style={{ fontWeight: 600 }}>{w.ownerName || w.owner_type || "Carteira"}</span>
+            <div key={w.id || w._id || i} className="card p-5">
+              <div className="flex items-center gap-2.5 mb-3">
+                <FiCreditCard className="h-5 w-5 text-fuu-red" />
+                <span className="font-semibold text-gray-900">{w.ownerName || w.owner_type || "Carteira"}</span>
               </div>
-              <div style={{ fontSize: 28, fontWeight: 700, color: "#059669" }}>R$ {((w.balance || 0) / 100).toFixed(2)}</div>
-              <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>ID: {(w.id || w._id || "").slice(0, 8)}</div>
+              <div className="text-3xl font-bold text-green-600">R$ {((w.balance || 0) / 100).toFixed(2)}</div>
+              <div className="text-xs text-gray-500 mt-1">ID: {(w.id || w._id || "").slice(0, 8)}</div>
             </div>
           ))}
-          {wallets.length === 0 && <div style={{ gridColumn: "1 / -1", padding: 40, textAlign: "center", color: "#9ca3af" }}>Nenhuma carteira encontrada</div>}
+          {wallets.length === 0 && (
+            <div className="card p-16 text-center text-gray-400 sm:col-span-2 lg:col-span-3">Nenhuma carteira encontrada</div>
+          )}
         </div>
       )}
 
       {tab === "chargebacks" && (
-        <div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, marginBottom: 16 }}>
-            <StatCard icon={FiCheck} label="Total de créditos" value={"R$ " + (cbSummary?.credit_total || 0).toFixed(2)} color="#10b981" />
-            <StatCard icon={FiAlertTriangle} label="Total de débitos" value={"R$ " + (cbSummary?.debit_total || 0).toFixed(2)} color="#ef4444" />
-            <StatCard icon={FiDollarSign} label="Saldo líquido" value={"R$ " + (cbSummary?.net || 0).toFixed(2)} color="#6366f1" />
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <StatCard icon={FiCheck} label="Total de créditos" value={"R$ " + (cbSummary?.credit_total || 0).toFixed(2)} color="#16A34A" bg="#F0FDF4" />
+            <StatCard icon={FiAlertTriangle} label="Total de débitos" value={"R$ " + (cbSummary?.debit_total || 0).toFixed(2)} color="#DC2626" bg="#FEF2F2" />
+            <StatCard icon={FiDollarSign} label="Saldo líquido" value={"R$ " + (cbSummary?.net || 0).toFixed(2)} color="#6366f1" bg="#EEF2FF" />
           </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
-            <select value={cbFilters.type} onChange={e => setCbFilters({ ...cbFilters, type: e.target.value })}
-              style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #d1d5db", background: "white", fontSize: 13 }}>
+
+          <div className="flex flex-wrap gap-2 items-center">
+            <select
+              value={cbFilters.type}
+              onChange={e => setCbFilters({ ...cbFilters, type: e.target.value })}
+              className="input w-auto"
+            >
               <option value="">Todos os tipos</option>
               <option value="credit">Crédito</option>
               <option value="debit">Débito</option>
             </select>
-            <input value={cbFilters.user_id} onChange={e => setCbFilters({ ...cbFilters, user_id: e.target.value })}
-              placeholder="user_id" style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #d1d5db", background: "white", fontSize: 13 }} />
-            <input value={cbFilters.payment_id} onChange={e => setCbFilters({ ...cbFilters, payment_id: e.target.value })}
-              placeholder="payment_id" style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #d1d5db", background: "white", fontSize: 13 }} />
-            <button onClick={applyCbFilters}
-              style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#6366f1", color: "white", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-              Filtrar
-            </button>
-            <button onClick={resetCbFilters}
-              style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid #d1d5db", background: "white", color: "#374151", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-              Limpar
-            </button>
+            <input
+              value={cbFilters.user_id}
+              onChange={e => setCbFilters({ ...cbFilters, user_id: e.target.value })}
+              placeholder="user_id"
+              className="input w-32"
+            />
+            <input
+              value={cbFilters.payment_id}
+              onChange={e => setCbFilters({ ...cbFilters, payment_id: e.target.value })}
+              placeholder="payment_id"
+              className="input w-48"
+            />
+            <button onClick={applyCbFilters} className="btn btn-primary">Filtrar</button>
+            <button onClick={resetCbFilters} className="btn btn-ghost">Limpar</button>
           </div>
-          <div style={{ background: "white", borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead><tr style={{ background: "#f9fafb" }}>
-                {["Usuário", "Tipo", "Valor", "Payment", "Saldo após", "Descrição", "Data"].map(h => (
-                  <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 12, color: "#6b7280" }}>{h}</th>
-                ))}
-              </tr></thead>
-              <tbody>
-                {chargebacks.map((c, i) => (
-                  <tr key={c._id || i} style={{ borderTop: "1px solid #f3f4f6" }}>
-                    <td style={{ padding: "12px 16px", fontSize: 13 }}>
-                      <div style={{ fontWeight: 600 }}>#{c.user_id ?? "-"}</div>
-                      <div style={{ fontSize: 11, color: "#9ca3af" }}>{c.owner_type || ""}</div>
-                    </td>
-                    <td style={{ padding: "12px 16px" }}>
-                      <span style={{ padding: "4px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600,
-                        background: c.type === "credit" ? "#d1fae5" : c.type === "debit" ? "#fee2e2" : "#f3f4f6",
-                        color: c.type === "credit" ? "#065f46" : c.type === "debit" ? "#991b1b" : "#374151" }}>
-                        {c.type === "credit" ? "Crédito" : c.type === "debit" ? "Débito" : (c.type || "-")}
-                      </span>
-                    </td>
-                    <td style={{ padding: "12px 16px", fontSize: 13, fontWeight: 600, color: c.type === "debit" ? "#dc2626" : "#059669" }}>
-                      {c.type === "debit" ? "-" : "+"}R$ {(c.amount || 0).toFixed(2)}
-                    </td>
-                    <td style={{ padding: "12px 16px", fontSize: 12, fontFamily: "monospace", color: "#6b7280" }}>{c.payment_id || "-"}</td>
-                    <td style={{ padding: "12px 16px", fontSize: 13 }}>R$ {(c.balance_after || 0).toFixed(2)}</td>
-                    <td style={{ padding: "12px 16px", fontSize: 13, color: "#374151" }}>{c.description || "-"}</td>
-                    <td style={{ padding: "12px 16px", fontSize: 12, color: "#6b7280" }}>{c.created_at ? new Date(c.created_at).toLocaleString("pt-BR") : "-"}</td>
+
+          <div className="card overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    {["Usuário", "Tipo", "Valor", "Payment", "Saldo após", "Descrição", "Data"].map(h => (
+                      <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
+                    ))}
                   </tr>
-                ))}
-                {chargebacks.length === 0 && <tr><td colSpan={7} style={{ padding: 40, textAlign: "center", color: "#9ca3af" }}>Nenhum lançamento encontrado</td></tr>}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {chargebacks.map((c, i) => (
+                    <tr key={c._id || i} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-3 text-sm">
+                        <div className="font-semibold text-gray-900">#{c.user_id ?? "-"}</div>
+                        <div className="text-xs text-gray-400">{c.owner_type || ""}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold"
+                          style={{
+                            background: c.type === "credit" ? "#D1FAE5" : c.type === "debit" ? "#FEE2E2" : "#F3F4F6",
+                            color: c.type === "credit" ? "#065F46" : c.type === "debit" ? "#991B1B" : "#374151",
+                          }}
+                        >
+                          {c.type === "credit" ? "Crédito" : c.type === "debit" ? "Débito" : (c.type || "-")}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm font-semibold" style={{ color: c.type === "debit" ? "#DC2626" : "#059669" }}>
+                        {c.type === "debit" ? "-" : "+"}R$ {(c.amount || 0).toFixed(2)}
+                      </td>
+                      <td className="px-4 py-3 text-xs font-mono text-gray-500">{c.payment_id || "-"}</td>
+                      <td className="px-4 py-3 text-sm">R$ {(c.balance_after || 0).toFixed(2)}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{c.description || "-"}</td>
+                      <td className="px-4 py-3 text-xs text-gray-500">{c.created_at ? new Date(c.created_at).toLocaleString("pt-BR") : "-"}</td>
+                    </tr>
+                  ))}
+                  {chargebacks.length === 0 && (
+                    <tr><td colSpan={7} className="px-4 py-16 text-center text-gray-400">Nenhum lançamento encontrado</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
 
       {rejectModal.open && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
-          onClick={() => !isProcessing && setRejectModal({ ...rejectModal, open: false })}>
-          <div style={{ background: "white", borderRadius: 12, padding: 24, width: 400, maxWidth: "90vw" }}
-            onClick={e => e.stopPropagation()}>
-            <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 12 }}>Motivo da Rejeicao</h3>
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-[1000] p-4"
+          onClick={() => !isProcessing && setRejectModal({ ...rejectModal, open: false })}
+        >
+          <div className="card p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-900 mb-3">Motivo da Rejeição</h3>
             <textarea
               value={rejectModal.motivo}
               onChange={e => setRejectModal({ ...rejectModal, motivo: e.target.value })}
               placeholder="Descreva o motivo..."
               rows={4}
-              style={{ width: "100%", padding: 10, border: "1px solid #d1d5db", borderRadius: 8, fontSize: 14, resize: "vertical", boxSizing: "border-box" }}
+              className="input resize-y"
             />
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
-              <button onClick={() => setRejectModal({ ...rejectModal, open: false })}
-                style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid #d1d5db", background: "white", cursor: "pointer", fontWeight: 600 }}>
+            <div className="flex gap-2 justify-end mt-4">
+              <button onClick={() => setRejectModal({ ...rejectModal, open: false })} className="btn btn-ghost">
                 Cancelar
               </button>
-              <button onClick={confirmReject} disabled={!rejectModal.motivo?.trim() || isProcessing}
-                style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: rejectModal.motivo?.trim() && !isProcessing ? "#ef4444" : "#fca5a5", color: "white", cursor: rejectModal.motivo?.trim() && !isProcessing ? "pointer" : "not-allowed", fontWeight: 600 }}>
+              <button
+                onClick={confirmReject}
+                disabled={!rejectModal.motivo?.trim() || isProcessing}
+                className="btn btn-danger"
+              >
                 {isProcessing ? "Enviando..." : "Rejeitar"}
               </button>
             </div>

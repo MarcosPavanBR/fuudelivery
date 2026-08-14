@@ -1,5 +1,19 @@
-import React, { useState, useEffect } from "react";
-import { FiSettings, FiUser, FiBell, FiShield, FiSave, FiLoader, FiEye, FiEyeOff, FiGlobe, FiKey, FiCreditCard, FiTrash2, FiPlus, FiLogOut } from "react-icons/fi";
+import React, { useState, useEffect, useRef } from "react";
+import {
+  FiSettings,
+  FiUser,
+  FiBell,
+  FiShield,
+  FiSave,
+  FiLoader,
+  FiGlobe,
+  FiKey,
+  FiCreditCard,
+  FiTrash2,
+  FiPlus,
+  FiLogOut,
+  FiCamera,
+} from "react-icons/fi";
 import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
 import { toast } from "react-toastify";
@@ -12,11 +26,30 @@ const tabs = [
   { id: "integrations", label: "Integrações", icon: FiCreditCard },
 ];
 
+// Máscara de telefone brasileiro: (XX) XXXXX-XXXX
+function formatPhone(value) {
+  const digits = (value || "").replace(/\D/g, "").slice(0, 11);
+  if (digits.length === 0) return "";
+  if (digits.length <= 2) return `(${digits}`;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10)
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
+
+const inputClass = "input";
+const inputErrorClass = "input is-invalid";
+
 export default function Settings() {
   const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState("profile");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [avatar, setAvatar] = useState(
+    () => localStorage.getItem("fuu_admin_avatar") || user?.avatar_url || ""
+  );
+  const [errors, setErrors] = useState({});
+  const fileInputRef = useRef(null);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -38,19 +71,92 @@ export default function Settings() {
 
   useEffect(() => {
     if (user) {
-      setFormData(prev => ({ ...prev, name: user.name || "", email: user.email || "" }));
+      setFormData((prev) => ({
+        ...prev,
+        name: user.name || "",
+        email: user.email || "",
+      }));
     }
   }, [user]);
+
+  // Carrega o avatar persistido no backend (fonte da verdade) e cacheia
+  // localmente para exibição instantânea nas próximas visitas.
+  useEffect(() => {
+    if (!user?.id) return;
+    api
+      .get(`/users/${user.id}`)
+      .then(({ data }) => {
+        if (data?.avatar_url) {
+          setAvatar(data.avatar_url);
+          localStorage.setItem("fuu_admin_avatar", data.avatar_url);
+        }
+      })
+      .catch(() => {});
+  }, [user?.id]);
+
+  const resetProfile = () => {
+    setFormData((prev) => ({
+      ...prev,
+      name: user?.name || "",
+      email: user?.email || "",
+      phone: "",
+    }));
+    setErrors({});
+  };
+
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Selecione um arquivo de imagem");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Imagem muito grande (máx. 2MB)");
+      return;
+    }
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const { data } = await api.post("/upload/avatars", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      if (!data?.url) throw new Error("Upload sem URL");
+      await api.put(`/users/${user?.id}`, { avatar_url: data.url });
+      setAvatar(data.url);
+      localStorage.setItem("fuu_admin_avatar", data.url);
+      toast.success("Foto atualizada!");
+    } catch (err) {
+      toast.error(err?.response?.data?.error || "Erro ao enviar foto");
+    }
+  };
+
+  const validateProfile = () => {
+    const next = {};
+    if (!formData.name.trim()) next.name = "O nome é obrigatório";
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!formData.email.trim()) {
+      next.email = "O e-mail é obrigatório";
+    } else if (!emailRegex.test(formData.email)) {
+      next.email = "E-mail inválido";
+    }
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  };
 
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
     try {
       if (activeTab === "profile") {
+        if (!validateProfile()) {
+          setSaving(false);
+          return;
+        }
         await api.put(`/users/${user?.id}`, {
           name: formData.name,
           email: formData.email,
-          phone: formData.phone,
+          phone: formData.phone.replace(/\D/g, ""),
         });
         toast.success("Perfil atualizado com sucesso!");
       } else if (activeTab === "security") {
@@ -69,7 +175,7 @@ export default function Settings() {
         toast.success("Senha atualizada com sucesso!");
       } else {
         // Preferências locais (notificações/aparência) — sem backend
-        await new Promise(r => setTimeout(r, 600));
+        await new Promise((r) => setTimeout(r, 600));
         toast.success("Configurações salvas com sucesso!");
       }
     } catch (err) {
@@ -82,11 +188,12 @@ export default function Settings() {
 
   return (
     <div className="animate-fade-in">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Configurações</h1>
-          <p className="text-gray-500 mt-1">Gerencie suas preferências e configurações da conta</p>
-        </div>
+      <div className="mb-8 px-1">
+        <p className="text-sm text-gray-500">Configurações da conta</p>
+        <h1 className="text-2xl font-bold text-gray-900 mt-1">Configurações</h1>
+        <p className="text-gray-500 mt-1">
+          Gerencie suas preferências e configurações da conta
+        </p>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-8">
@@ -97,12 +204,15 @@ export default function Settings() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center gap-3 px-6 py-4 transition-all duration-200 border-b border-gray-100 last:border-0 ${
+                className={`relative w-full flex items-center gap-3 px-6 py-4 transition-all duration-200 border-b border-gray-100 last:border-0 ${
                   activeTab === tab.id
                     ? "bg-fuu-red-light text-fuu-red font-semibold"
                     : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                 }`}
               >
+                {activeTab === tab.id && (
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-7 bg-fuu-red rounded-r-full" />
+                )}
                 <tab.icon className="h-5 w-5 flex-shrink-0" />
                 {tab.label}
               </button>
@@ -120,96 +230,289 @@ export default function Settings() {
         </aside>
 
         {/* Content */}
-        <main className="flex-1">
+        <main className="flex-1 min-w-0">
           {activeTab === "profile" && (
-            <div className="bg-white rounded-2xl shadow-card border border-gray-100 p-6 animate-fade-in">
+            <div className="card p-6 animate-fade-in">
               <h2 className="text-xl font-bold text-gray-900 mb-6">Perfil</h2>
-              <form onSubmit={handleSave} className="space-y-6 max-w-2xl">
+              <form
+                onSubmit={handleSave}
+                noValidate
+                className="space-y-6 max-w-2xl"
+              >
+                {/* Avatar / foto de perfil */}
+                <div className="flex items-center gap-5">
+                  <div className="relative flex-shrink-0">
+                    <div
+                      className="w-20 h-20 rounded-full flex items-center justify-center overflow-hidden border-4 border-gray-100 shadow-sm"
+                      style={{ background: "linear-gradient(135deg, #EA1D2C, #F7A11E)" }}
+                    >
+                      {avatar ? (
+                        <img
+                          src={avatar}
+                          alt="Foto de perfil"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-white font-bold text-3xl">
+                          {user?.name?.charAt(0) || "A"}
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-gray-900 text-white flex items-center justify-center hover:bg-gray-700 transition-colors shadow"
+                      title="Alterar foto"
+                    >
+                      <FiCamera className="h-4 w-4" />
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAvatarUpload}
+                      className="hidden"
+                    />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-900">
+                      {formData.name || "Seu nome"}
+                    </p>
+                    <p className="text-sm text-gray-500">Foto de perfil</p>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="mt-1 text-sm font-medium text-gray-600 underline underline-offset-2 hover:text-gray-900"
+                    >
+                      Alterar foto
+                    </button>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Nome completo</label>
-                    <input name="name" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white" />
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+                      Nome completo <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      name="name"
+                      value={formData.name}
+                      onChange={(e) => {
+                        setFormData({ ...formData, name: e.target.value });
+                        if (errors.name)
+                          setErrors({ ...errors, name: undefined });
+                      }}
+                      className={errors.name ? inputErrorClass : inputClass}
+                    />
+                    {errors.name && (
+                      <p className="text-red-500 text-xs mt-1">{errors.name}</p>
+                    )}
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">E-mail</label>
-                    <input name="email" type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white" />
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+                      E-mail <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      name="email"
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => {
+                        setFormData({ ...formData, email: e.target.value });
+                        if (errors.email)
+                          setErrors({ ...errors, email: undefined });
+                      }}
+                      className={errors.email ? inputErrorClass : inputClass}
+                    />
+                    {errors.email && (
+                      <p className="text-red-500 text-xs mt-1">{errors.email}</p>
+                    )}
                   </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Telefone</label>
-                    <input name="phone" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white" />
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+                      Telefone
+                    </label>
+                    <input
+                      name="phone"
+                      inputMode="tel"
+                      placeholder="(00) 00000-0000"
+                      value={formData.phone}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          phone: formatPhone(e.target.value),
+                        })
+                      }
+                      className={inputClass}
+                    />
                   </div>
                 </div>
                 <div className="pt-4 border-t border-gray-100 flex justify-end gap-3">
-                  <button type="button" className="px-5 py-2.5 rounded-xl text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50">Cancelar</button>
-                  <button type="submit" disabled={saving} className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-white transition-all" style={{ background: "linear-gradient(135deg, #EA1D2C, #C41420)" }}><FiSave className="h-4 w-4" />{saving ? " Salvando..." : " Salvar alterações"}</button>
+                  <button type="button" onClick={resetProfile} className="btn btn-ghost">
+                    Cancelar
+                  </button>
+                  <button type="submit" disabled={saving} className="btn btn-success">
+                    {saving ? (
+                      <FiLoader className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <FiSave className="h-4 w-4" />
+                    )}
+                    {saving ? " Salvando..." : " Salvar alterações"}
+                  </button>
                 </div>
               </form>
             </div>
           )}
 
           {activeTab === "security" && (
-            <div className="bg-white rounded-2xl shadow-card border border-gray-100 p-6 animate-fade-in">
+            <div className="card p-6 animate-fade-in">
               <h2 className="text-xl font-bold text-gray-900 mb-6">Segurança</h2>
               <form onSubmit={handleSave} className="space-y-6 max-w-2xl">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Senha atual</label>
-                  <input type="password" name="currentPassword" value={formData.currentPassword} onChange={e => setFormData({...formData, currentPassword: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white" />
+                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+                    Senha atual <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="password"
+                    name="currentPassword"
+                    value={formData.currentPassword}
+                    onChange={(e) =>
+                      setFormData({ ...formData, currentPassword: e.target.value })
+                    }
+                    className={inputClass}
+                  />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Nova senha</label>
-                    <input type="password" name="newPassword" value={formData.newPassword} onChange={e => setFormData({...formData, newPassword: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white" placeholder="Mínimo 8 caracteres" />
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+                      Nova senha <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="password"
+                      name="newPassword"
+                      value={formData.newPassword}
+                      onChange={(e) =>
+                        setFormData({ ...formData, newPassword: e.target.value })
+                      }
+                      className={inputClass}
+                      placeholder="Mínimo 6 caracteres"
+                    />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Confirmar senha</label>
-                    <input type="password" name="confirmPassword" value={formData.confirmPassword} onChange={e => setFormData({...formData, confirmPassword: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white" />
+                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+                      Confirmar senha <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="password"
+                      name="confirmPassword"
+                      value={formData.confirmPassword}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          confirmPassword: e.target.value,
+                        })
+                      }
+                      className={inputClass}
+                    />
                   </div>
                 </div>
                 <div className="pt-4 border-t border-gray-100 flex justify-end">
-                  <button type="submit" disabled={saving} className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-white" style={{ background: "linear-gradient(135deg, #EA1D2C, #C41420)" }}><FiSave className="h-4 w-4" />{saving ? " Salvando..." : " Atualizar senha"}</button>
+                  <button type="submit" disabled={saving} className="btn btn-success">
+                    {saving ? (
+                      <FiLoader className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <FiKey className="h-4 w-4" />
+                    )}
+                    {saving ? " Atualizando..." : " Atualizar senha"}
+                  </button>
                 </div>
               </form>
             </div>
           )}
 
           {activeTab === "notifications" && (
-            <div className="bg-white rounded-2xl shadow-card border border-gray-100 p-6 animate-fade-in">
-              <h2 className="text-xl font-bold text-gray-900 mb-6">Notificações</h2>
+            <div className="card p-6 animate-fade-in">
+              <h2 className="text-xl font-bold text-gray-900 mb-6">
+                Notificações
+              </h2>
               <form onSubmit={handleSave} className="space-y-4 max-w-xl">
                 {[
                   { id: "emailNotifications", label: "Notificações por e-mail", desc: "Receba atualizações por e-mail" },
                   { id: "pushNotifications", label: "Notificações push", desc: "Receba notificações no navegador" },
                   { id: "orderUpdates", label: "Atualizações de pedidos", desc: "Novos pedidos e mudanças de status" },
                   { id: "marketingEmails", label: "E-mails de marketing", desc: "Promoções e novidades" },
-                ].map(n => (
-                  <label key={n.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+                ].map((n) => (
+                  <label
+                    key={n.id}
+                    className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
+                  >
                     <div>
                       <p className="font-medium text-gray-900">{n.label}</p>
                       <p className="text-sm text-gray-500">{n.desc}</p>
                     </div>
-                    <input type="checkbox" name={n.id} checked={formData[n.id]} onChange={e => setFormData({...formData, [n.id]: e.target.checked})} className="w-5 h-5 rounded border-gray-300 text-fuu-red focus:ring-fuu-red" />
+                    <input
+                      type="checkbox"
+                      name={n.id}
+                      checked={formData[n.id]}
+                      onChange={(e) =>
+                        setFormData({ ...formData, [n.id]: e.target.checked })
+                      }
+                      className="w-5 h-5 rounded border-gray-300 text-fuu-red focus:ring-fuu-red"
+                    />
                   </label>
                 ))}
                 <div className="pt-4 border-t border-gray-100 flex justify-end">
-                  <button type="submit" disabled={saving} className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-white" style={{ background: "linear-gradient(135deg, #EA1D2C, #C41420)" }}><FiSave className="h-4 w-4" />{saving ? " Salvando..." : " Salvar preferências"}</button>
+                  <button type="submit" disabled={saving} className="btn btn-success">
+                    {saving ? (
+                      <FiLoader className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <FiSave className="h-4 w-4" />
+                    )}
+                    {saving ? " Salvando..." : " Salvar preferências"}
+                  </button>
                 </div>
               </form>
             </div>
           )}
 
           {activeTab === "appearance" && (
-            <div className="bg-white rounded-2xl shadow-card border border-gray-100 p-6 animate-fade-in">
+            <div className="card p-6 animate-fade-in">
               <h2 className="text-xl font-bold text-gray-900 mb-6">Aparência</h2>
               <form onSubmit={handleSave} className="space-y-6 max-w-xl">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-3">Tema</label>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-3">
+                    Tema
+                  </label>
                   <div className="grid grid-cols-3 gap-3">
-                    {["light", "dark", "system"].map(t => (
-                      <label key={t} className={`relative cursor-pointer p-4 rounded-xl border-2 transition-all ${formData.theme === t ? "border-fuu-red bg-fuu-red-light" : "border-gray-200 hover:border-gray-300"}`}>
-                        <input type="radio" name="theme" value={t} checked={formData.theme === t} onChange={e => setFormData({...formData, theme: e.target.value})} className="sr-only" />
+                    {["light", "dark", "system"].map((t) => (
+                      <label
+                        key={t}
+                        className={`relative cursor-pointer p-4 rounded-xl border-2 transition-all ${
+                          formData.theme === t
+                            ? "border-fuu-red bg-fuu-red-light"
+                            : "border-gray-200 hover:border-gray-300"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="theme"
+                          value={t}
+                          checked={formData.theme === t}
+                          onChange={(e) =>
+                            setFormData({ ...formData, theme: e.target.value })
+                          }
+                          className="sr-only"
+                        />
                         <div className="text-center">
-                          <p className="font-medium text-gray-900 capitalize">{t}</p>
-                          <p className="text-xs text-gray-500 mt-1">{t === "light" ? "Claro" : t === "dark" ? "Escuro" : "Padrão do sistema"}</p>
+                          <p className="font-medium text-gray-900 capitalize">
+                            {t}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {t === "light"
+                              ? "Claro"
+                              : t === "dark"
+                              ? "Escuro"
+                              : "Padrão do sistema"}
+                          </p>
                         </div>
                       </label>
                     ))}
@@ -219,16 +522,42 @@ export default function Settings() {
                   {[
                     { id: "compactMode", label: "Modo compacto", desc: "Reduz espaçamento para ver mais conteúdo" },
                     { id: "autoRefresh", label: "Atualização automática", desc: "Atualiza dados automaticamente" },
-                  ].map(o => (
-                    <label key={o.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
-                      <div><p className="font-medium text-gray-900">{o.label}</p><p className="text-sm text-gray-500">{o.desc}</p></div>
-                      <input type="checkbox" name={o.id} checked={formData[o.id]} onChange={e => setFormData({...formData, [o.id]: e.target.checked})} className="w-5 h-5 rounded border-gray-300 text-fuu-red focus:ring-fuu-red" />
+                  ].map((o) => (
+                    <label
+                      key={o.id}
+                      className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
+                    >
+                      <div>
+                        <p className="font-medium text-gray-900">{o.label}</p>
+                        <p className="text-sm text-gray-500">{o.desc}</p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        name={o.id}
+                        checked={formData[o.id]}
+                        onChange={(e) =>
+                          setFormData({ ...formData, [o.id]: e.target.checked })
+                        }
+                        className="w-5 h-5 rounded border-gray-300 text-fuu-red focus:ring-fuu-red"
+                      />
                     </label>
                   ))}
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Intervalo de atualização (segundos)</label>
-                  <select name="refreshInterval" value={formData.refreshInterval} onChange={e => setFormData({...formData, refreshInterval: parseInt(e.target.value)})} className="w-40 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white">
+                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
+                    Intervalo de atualização (segundos)
+                  </label>
+                  <select
+                    name="refreshInterval"
+                    value={formData.refreshInterval}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        refreshInterval: parseInt(e.target.value),
+                      })
+                    }
+                    className={inputClass + " w-40"}
+                  >
                     <option value={15}>15s</option>
                     <option value={30}>30s</option>
                     <option value={60}>60s</option>
@@ -236,17 +565,26 @@ export default function Settings() {
                   </select>
                 </div>
                 <div className="pt-4 border-t border-gray-100 flex justify-end">
-                  <button type="submit" disabled={saving} className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-white" style={{ background: "linear-gradient(135deg, #EA1D2C, #C41420)" }}><FiSave className="h-4 w-4" />{saving ? " Salvando..." : " Salvar aparência"}</button>
+                  <button type="submit" disabled={saving} className="btn btn-success">
+                    {saving ? (
+                      <FiLoader className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <FiSave className="h-4 w-4" />
+                    )}
+                    {saving ? " Salvando..." : " Salvar aparência"}
+                  </button>
                 </div>
               </form>
             </div>
           )}
 
           {activeTab === "integrations" && (
-            <div className="bg-white rounded-2xl shadow-card border border-gray-100 p-6 animate-fade-in">
+            <div className="card p-6 animate-fade-in">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold text-gray-900">Integrações</h2>
-                <button className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-semibold" style={{ background: "linear-gradient(135deg, #EA1D2C, #C41420)" }}><FiPlus className="h-4 w-4" /> Nova integração</button>
+                <button className="btn btn-primary">
+                  <FiPlus className="h-4 w-4" /> Nova integração
+                </button>
               </div>
               <div className="space-y-4">
                 {[
@@ -254,18 +592,40 @@ export default function Settings() {
                   { name: "AbacatePay", desc: "Pagamentos via PIX instantâneo", status: "connected", icon: FiCreditCard },
                   { name: "WhatsApp Business API", desc: "Notificações e chat automático", status: "disconnected", icon: FiGlobe },
                   { name: "Google Maps API", desc: "Cálculo de rotas e distâncias", status: "connected", icon: FiGlobe },
-                ].map(int => (
-                  <div key={int.name} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                ].map((int) => (
+                  <div
+                    key={int.name}
+                    className="flex items-center justify-between p-4 bg-gray-50 rounded-xl"
+                  >
                     <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-fuu-red-light flex items-center justify-center"><int.icon className="h-6 w-6 text-fuu-red" /></div>
-                      <div><p className="font-medium text-gray-900">{int.name}</p><p className="text-sm text-gray-500">{int.desc}</p></div>
+                      <div className="w-12 h-12 rounded-xl bg-fuu-red-light flex items-center justify-center">
+                        <int.icon className="h-6 w-6 text-fuu-red" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">{int.name}</p>
+                        <p className="text-sm text-gray-500">{int.desc}</p>
+                      </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${int.status === "connected" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"}`}>
-                        {int.status === "connected" ? "Conectado" : "Desconectado"}
+                      <span
+                        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                          int.status === "connected"
+                            ? "bg-green-100 text-green-800"
+                            : "bg-gray-100 text-gray-600"
+                        }`}
+                      >
+                        {int.status === "connected"
+                          ? "Conectado"
+                          : "Desconectado"}
                       </span>
-                      <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-lg"><FiSettings className="h-4 w-4" /></button>
-                      {int.status === "connected" && <button className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><FiTrash2 className="h-4 w-4" /></button>}
+                      <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-lg cursor-pointer">
+                        <FiSettings className="h-4 w-4" />
+                      </button>
+                      {int.status === "connected" && (
+                        <button className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg cursor-pointer">
+                          <FiTrash2 className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}

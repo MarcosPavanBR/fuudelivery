@@ -46,11 +46,34 @@ export default function Settings() {
     e.preventDefault();
     setSaving(true);
     try {
-      // Simulate API call
-      await new Promise(r => setTimeout(r, 1000));
-      toast.success("Configurações salvas com sucesso!");
+      if (activeTab === "profile") {
+        await api.put(`/users/${user?.id}`, {
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+        });
+        toast.success("Perfil atualizado com sucesso!");
+      } else if (activeTab === "security") {
+        if (formData.newPassword !== formData.confirmPassword) {
+          toast.error("As senhas não conferem");
+          return;
+        }
+        if (formData.newPassword && formData.newPassword.length < 6) {
+          toast.error("A nova senha deve ter pelo menos 6 caracteres");
+          return;
+        }
+        await api.put(`/users/${user?.id}/password`, {
+          current_password: formData.currentPassword,
+          new_password: formData.newPassword,
+        });
+        toast.success("Senha atualizada com sucesso!");
+      } else {
+        // Preferências locais (notificações/aparência) — sem backend
+        await new Promise(r => setTimeout(r, 600));
+        toast.success("Configurações salvas com sucesso!");
+      }
     } catch (err) {
-      toast.error("Erro ao salvar");
+      toast.error(err?.response?.data?.error || "Erro ao salvar");
     }
     setSaving(false);
   };

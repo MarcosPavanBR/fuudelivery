@@ -130,3 +130,134 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #9CA3AF;
 }
+
+/* ============================================================
+   Acessibilidade — foco visível em qualquer elemento interativo
+   ============================================================ */
+:focus-visible {
+  outline: 2px solid var(--color-primary, #EA1D2C);
+  outline-offset: 2px;
+}
+
+/* ============================================================
+   Componentes base (Design System) — theme-aware (dark mode)
+   Grid de 8px, transições 150ms, inputs 8px, cards 12px.
+   ============================================================ */
+@layer components {
+  .card {
+    background: var(--bg-card, #fff);
+    border: 1px solid var(--border-color, #E5E7EB);
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.10);
+  }
+
+  .input {
+    width: 100%;
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color, #E5E7EB);
+    background: var(--bg-secondary, #F9FAFB);
+    font-size: 14px;
+    color: var(--text-primary, #1A1A1A);
+    transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+  }
+
+  .input::placeholder {
+    color: #9CA3AF;
+  }
+
+  .input:focus {
+    outline: none;
+    border-color: var(--color-primary, #EA1D2C);
+    background: var(--bg-card, #fff);
+    box-shadow: 0 0 0 3px rgba(234, 29, 44, 0.10);
+  }
+
+  .input.is-invalid {
+    border-color: var(--color-danger, #DC2626);
+  }
+
+  .input:disabled {
+    background: var(--bg-secondary, #F9FAFB);
+    color: var(--text-secondary, #666);
+    cursor: not-allowed;
+    opacity: 0.85;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.4;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease, opacity 150ms ease;
+  }
+
+  .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .btn:focus-visible {
+    outline: 2px solid var(--color-primary, #EA1D2C);
+    outline-offset: 2px;
+  }
+
+  .btn-primary {
+    background: var(--color-primary, #EA1D2C);
+    color: #fff;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: #C41420;
+  }
+
+  .btn-success {
+    background: #16A34A;
+    color: #fff;
+  }
+
+  .btn-success:hover:not(:disabled) {
+    background: #15803D;
+  }
+
+  .btn-ghost {
+    background: transparent;
+    border-color: var(--border-color, #D1D5DB);
+    color: var(--text-secondary, #4B5563);
+  }
+
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--bg-secondary, #F9FAFB);
+    border-color: #9CA3AF;
+    color: var(--text-primary, #1F2937);
+  }
+
+  .btn-danger {
+    background: #DC2626;
+    color: #fff;
+  }
+
+  .btn-danger:hover:not(:disabled) {
+    background: #B91C1C;
+  }
+
+  /* Skeleton loader (estados de carregamento) */
+  .skeleton {
+    border-radius: 8px;
+    background: linear-gradient(90deg, #F3F4F6 25%, #E5E7EB 50%, #F3F4F6 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+}
+
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}

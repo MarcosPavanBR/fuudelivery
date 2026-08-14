@@ -49,11 +49,13 @@ func GenerateJWT(user *models.User, establishment *models.Establishment) (string
 	expirationTime := time.Now().UTC().Add(time.Hour * 24 * 7).Unix()
 
 	claims := jwt.MapClaims{
-		"id":    user.ID,
-		"name":  user.Name,
-		"email": user.Email,
-		"role":  user.Role,
-		"exp":   expirationTime,
+		"id":         user.ID,
+		"name":       user.Name,
+		"email":      user.Email,
+		"role":       user.Role,
+		"phone":      user.Phone,
+		"avatar_url": user.AvatarURL,
+		"exp":        expirationTime,
 	}
 
 	if establishment != nil {

@@ -62,6 +62,7 @@ func HandleImageUpload(c *fiber.Ctx) error {
 		"restaurants": "restaurants",
 		"additionals": "additionals",
 		"reviews":     "reviews",
+		"avatars":     "avatars",
 	}
 	folder, ok := validEntities[entity]
 	if !ok {

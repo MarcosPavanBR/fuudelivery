@@ -2,10 +2,12 @@ package services
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 )
 
 // TestNewAbacatePayClient_BaseURLOverride verifica que ABACATE_PAY_BASE_URL
@@ -44,8 +46,12 @@ func TestCreatePIXCharge_V2Envelope(t *testing.T) {
 		if _, hasCustomer := data["customer"]; hasCustomer {
 			t.Error("customer presente no JSON com valor vazio — gateway rejeita com 422")
 		}
+		// Expiração relativa ao momento do teste — data fixa "envelhece" e o
+		// assert de ExpiresInSeconds > 0 falhava dias depois.
+		expiresAt := time.Now().Add(2 * time.Hour).UTC().Format(time.RFC3339)
+
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{
+		_, _ = w.Write([]byte(fmt.Sprintf(`{
 			"success": true,
 			"data": {
 				"id": "pix_char_test123",
@@ -53,12 +59,12 @@ func TestCreatePIXCharge_V2Envelope(t *testing.T) {
 				"status": "PENDING",
 				"brCode": "0002012658BR.GOV.BCB.PIXabc",
 				"brCodeBase64": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ",
-				"expiresAt": "2026-08-13T15:00:00Z",
+				"expiresAt": %q,
 				"platformFee": 5,
 				"devMode": false
 			},
 			"error": null
-		}`))
+		}`, expiresAt)))
 	}))
 	defer mock.Close()
 
@@ -122,12 +128,14 @@ func TestGetCharge_V2Envelope(t *testing.T) {
 		if got := r.URL.Query().Get("id"); got != "pix_char_x" {
 			t.Errorf("query id = %q, esperava pix_char_x", got)
 		}
+		expiresAt := time.Now().Add(2 * time.Hour).UTC().Format(time.RFC3339)
+
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{
+		_, _ = w.Write([]byte(fmt.Sprintf(`{
 			"success": true,
-			"data": {"id": "pix_char_x", "status": "PAID", "expiresAt": "2026-08-13T15:00:00Z"},
+			"data": {"id": "pix_char_x", "status": "PAID", "expiresAt": %q},
 			"error": null
-		}`))
+		}`, expiresAt)))
 	}))
 	defer mock.Close()
 

@@ -195,6 +195,7 @@ func UpdateUser(c *fiber.Ctx) error {
 		Name            string `json:"name"`
 		Email           string `json:"email"`
 		Phone           string `json:"phone"`
+		AvatarURL       string `json:"avatar_url"`
 		Role            string `json:"role"`
 		EstablishmentID uint   `json:"establishment_id"`
 		Password        string `json:"password"`
@@ -220,6 +221,12 @@ func UpdateUser(c *fiber.Ctx) error {
 	}
 	if request.Email != "" {
 		updates["email"] = request.Email
+	}
+	if request.Phone != "" {
+		updates["phone"] = request.Phone
+	}
+	if request.AvatarURL != "" {
+		updates["avatar_url"] = request.AvatarURL
 	}
 	// Somente admin altera role e vinculo de estabelecimento.
 	if isAdmin {

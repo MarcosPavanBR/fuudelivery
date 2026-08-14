@@ -1,7 +1,9 @@
 import React from "react";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { Link, Tabs } from "expo-router";
-import { Platform, Pressable, Text } from "react-native";
+import { LogBox, Platform, Pressable, Text } from "react-native";
+
+LogBox.ignoreLogs(["Warning: Each"]);
 
 import Colors from "@/constants/Colors";
 import { useColorScheme } from "@/components/useColorScheme";
@@ -21,7 +23,6 @@ export default function TabLayout() {
   const colorScheme = useColorScheme();
   const insets = useSafeAreaInsets();
 
-  console.ignoredYellowBox = ["Warning: Each"];
   return (
     <Tabs
       screenOptions={{

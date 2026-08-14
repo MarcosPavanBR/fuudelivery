@@ -37,7 +37,7 @@ const ConfirmScreen = () => {
       await isActiveOrder();
 
       nav.navigate("(tabs)");
-    } catch (error) {
+    } catch (error: any) {
       await isActiveOrder();
 
       if (error.response) {

@@ -12,7 +12,7 @@ interface User {
   email: string;
   name: string;
   id: number;
-  phone: string;
+  phone?: string;
 }
 
 interface AuthContextType {

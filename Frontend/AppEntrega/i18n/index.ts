@@ -131,7 +131,7 @@ const translations = {
 };
 
 const i18n = new I18n(translations);
-i18n.locale = Localization.locale.split("-")[0];
+i18n.locale = Localization.getLocales()[0]?.languageCode ?? "pt";
 i18n.enableFallback = true;
 
 export default i18n;

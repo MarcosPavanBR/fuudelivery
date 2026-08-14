@@ -23,7 +23,7 @@ const styles = StyleSheet.create({
     alignContent: "center",
     alignItems: "center",
     justifyContent: "center",
-    zIndex: "1",
+    zIndex: 1,
   },
   image: {
     width: 250,

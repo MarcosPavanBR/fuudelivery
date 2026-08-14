@@ -1,4 +1,10 @@
-import { Image, ScrollView, StyleSheet, TouchableOpacity } from "react-native";
+import {
+  Image,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  type ViewStyle,
+} from "react-native";
 import { Text, View } from "@/components/Themed";
 import Colors from "@/constants/Colors";
 import OrderSummary from "@/components/OrderSummary";
@@ -97,10 +103,10 @@ export default function TabTwoScreen() {
                   </View>
                 ) : null}
 
-                <View style={styles.context1(e.status)}>
-                  <View style={styles.context2(e.status)}>
+                <View style={context1(e.status)}>
+                  <View style={context2(e.status)}>
                     <Text style={styles.codtext2}>
-                      {Texts[e.status] ?? e.status}
+                      {(Texts as Record<string, string>)[e.status] ?? e.status}
                     </Text>
                     <Text
                       style={{
@@ -185,6 +191,30 @@ export default function TabTwoScreen() {
   );
 }
 
+const context1 = (status: string): ViewStyle => {
+  return {
+    padding: 5,
+    paddingLeft: 10,
+    paddingRight: 10,
+    backgroundColor:
+      status !== "FINISHED" ? Colors.light.secondaryText : Colors.light.green,
+    justifyContent: "center",
+    borderRadius: 3,
+    height: 35,
+    marginTop: 10,
+    marginBottom: 10,
+  };
+};
+
+const context2 = (status: string): ViewStyle => {
+  return {
+    backgroundColor:
+      status !== "FINISHED" ? Colors.light.secondaryText : Colors.light.green,
+    flexDirection: "row",
+    justifyContent: "space-between",
+  };
+};
+
 const styles = StyleSheet.create({
   container: {
     backgroundColor: Colors.light.background,
@@ -197,28 +227,6 @@ const styles = StyleSheet.create({
     color: Colors.light.white,
     fontWeight: "600",
     fontSize: 13,
-  },
-  context1: (status: string) => {
-    return {
-      padding: 5,
-      paddingLeft: 10,
-      paddingRight: 10,
-      backgroundColor:
-        status !== "FINISHED" ? Colors.light.secondaryText : Colors.light.green,
-      justifyContent: "center",
-      borderRadius: 3,
-      height: 35,
-      marginTop: 10,
-      marginBottom: 10,
-    };
-  },
-  context2: (status: string) => {
-    return {
-      backgroundColor:
-        status !== "FINISHED" ? Colors.light.secondaryText : Colors.light.green,
-      flexDirection: "row",
-      justifyContent: "space-between",
-    };
   },
   codtexts: {
     fontSize: 20,

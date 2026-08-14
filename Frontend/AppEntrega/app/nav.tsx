@@ -28,7 +28,7 @@ export default function StackNav() {
           name="modal"
           options={{
             headerTitle: Texts.coleta,
-            headerBackTitleVisible: false,
+            headerBackButtonDisplayMode: "minimal",
             headerTintColor: Colors.light.tint,
           }}
         />
@@ -45,7 +45,7 @@ export default function StackNav() {
           name="delivery_mode"
           options={{
             title: "",
-            headerBackTitleVisible: false,
+            headerBackButtonDisplayMode: "minimal",
             headerTintColor: Colors.light.tint,
           }}
         />
@@ -54,7 +54,7 @@ export default function StackNav() {
           name="extract_view"
           options={{
             title: Texts.extract,
-            headerBackTitleVisible: false,
+            headerBackButtonDisplayMode: "minimal",
             headerTintColor: Colors.light.text,
           }}
         />
@@ -63,7 +63,7 @@ export default function StackNav() {
           name="confirm_generical"
           options={{
             title: "",
-            headerBackTitleVisible: false,
+            headerBackButtonDisplayMode: "minimal",
             headerShown: false,
             presentation: "modal",
           }}

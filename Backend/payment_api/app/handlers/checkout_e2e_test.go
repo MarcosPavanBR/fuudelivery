@@ -31,19 +31,42 @@ func ptrTime(t time.Time) *time.Time {
 	return &t
 }
 
+// setupCheckoutE2EEnv prepara o MongoDB dos testes E2E:
+//   - Padrão (sem MONGODB_TEST_URI): Docker + testcontainers com a imagem
+//     mongo:7 — cada teste ganha um container isolado e descartável.
+//   - Com MONGODB_TEST_URI definida: conecta direto no MongoDB informado
+//     (ex.: mongod local ou Atlas de dev), sem precisar de Docker. O banco
+//     payment_api_e2e_test é dropado a cada setup para garantir isolamento
+//     entre os testes mesmo reutilizando a mesma instância.
 func setupCheckoutE2EEnv(t *testing.T) func() {
 	t.Helper()
 	ctx := context.Background()
 
-	mongoContainer, err := mongodb.Run(ctx, "mongo:7")
-	require.NoError(t, err, "subir container MongoDB")
+	var client *mongo.Client
+	var container *mongodb.MongoDBContainer
 
-	uri, err := mongoContainer.ConnectionString(ctx)
-	require.NoError(t, err)
+	if uri := os.Getenv("MONGODB_TEST_URI"); uri != "" {
+		cli, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+		require.NoError(t, err, "conectar no MongoDB de teste via MONGODB_TEST_URI")
+		require.NoError(t, cli.Ping(ctx, nil), "ping no MongoDB de teste")
+		client = cli
+	} else {
+		c, err := mongodb.Run(ctx, "mongo:7")
+		require.NoError(t, err, "subir container MongoDB")
+		container = c
 
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
-	require.NoError(t, err)
-	require.NoError(t, client.Ping(ctx, nil))
+		uri, err := container.ConnectionString(ctx)
+		require.NoError(t, err)
+
+		cli, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+		require.NoError(t, err)
+		require.NoError(t, cli.Ping(ctx, nil))
+		client = cli
+	}
+
+	// Garante isolamento: começa do zero mesmo reutilizando uma instância
+	// externa (drop + recriação dos índices abaixo).
+	_ = client.Database("payment_api_e2e_test").Drop(ctx)
 
 	db := client.Database("payment_api_e2e_test")
 	models.MongoClient = client
@@ -56,7 +79,9 @@ func setupCheckoutE2EEnv(t *testing.T) func() {
 
 	return func() {
 		_ = client.Disconnect(ctx)
-		_ = mongoContainer.Terminate(ctx)
+		if container != nil {
+			_ = container.Terminate(ctx)
+		}
 	}
 }
 

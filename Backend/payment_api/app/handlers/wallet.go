@@ -368,8 +368,12 @@ func GetEstablishmentTransactions(c *fiber.Ctx) error {
 		if bal, ok := e["balance_after"].(float64); ok {
 			item["balance"] = bal
 		}
+		// bson.M decodifica datetime como primitive.DateTime (não time.Time)
+		// — cobre os dois tipos para nunca omitir a data do extrato.
 		if ts, ok := e["created_at"].(time.Time); ok {
 			item["created_at"] = ts.Format(time.RFC3339)
+		} else if dts, ok := e["created_at"].(primitive.DateTime); ok {
+			item["created_at"] = dts.Time().Format(time.RFC3339)
 		}
 
 		ref := ""

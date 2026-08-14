@@ -19,7 +19,7 @@ export default function ModalScreen() {
   const nav = useNavigation();
   const route = useRoute();
   const { establishment }: any = route.params;
-  const mapViewRef = useRef(null);
+  const mapViewRef = useRef<MapView>(null);
   const { user } = useAuthApi();
 
   const centerMapOnUser = async () => {
@@ -47,9 +47,11 @@ export default function ModalScreen() {
       android: `geo:${latitude},${longitude}?q=`,
     });
 
-    Linking.openURL(url).catch((err) =>
-      console.error("An error occurred", err)
-    );
+    if (url) {
+      Linking.openURL(url).catch((err) =>
+        console.error("An error occurred", err)
+      );
+    }
   };
 
   useEffect(() => {
@@ -183,7 +185,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     padding: 15,
     flexDirection: "row",
-    justifyContent: "space-arround",
+    justifyContent: "space-around",
     alignContent: "center",
     alignItems: "center",
   },

@@ -11,7 +11,7 @@ import { useNavigation } from "@react-navigation/native";
 export default function Perfil() {
   const { logout, getUserData } = useApi();
   const { cleanCart, location } = useCartApi();
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState<any>(null);
   const nav = useNavigation();
 
   async function init() {

@@ -14,7 +14,7 @@ function Payments() {
       {PAYMENT_TYPE.map((e) => (
         <PaymentComponent
           hiddenTitle={false}
-          title={Texts[e.type]}
+          title={(Texts as Record<string, string>)[e.type]}
           icon={e.icon}
           onPress={() => {
             setPaymentMethod(e);

@@ -10,6 +10,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  type ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -25,7 +26,7 @@ function HeaderDelivery({
   const nav = useNavigation();
 
   return (
-    <View style={styles.container(headerView, insets)}>
+    <View style={containerStyle(headerView, insets)}>
       <View style={styles.container2}>
         <TouchableOpacity
           onPress={() => nav.navigate("perfil")}
@@ -85,28 +86,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: Colors.light.white,
   },
-  container: (headerView: any, insets: any) => {
-    return {
-      width: headerView ? Dimensions.get("window").width / 1.08 : "100%",
-      position: "absolute",
-      padding: 20,
-      backgroundColor: Colors.light.background,
-      borderWidth: 1,
-      borderColor: Colors.light.tabIconDefault,
-      zIndex: 1,
-      alignContent: "center",
-      alignItems: "center",
-      justifyContent: "center",
-      shadowOffset: { width: 1, height: 1 },
-      shadowOpacity: 0.3,
-      paddingTop: headerView ? 20 : insets.top + 10,
-      top: headerView ? insets.top + 10 : 0,
-      height: headerView ? undefined : 150,
-      borderRadius: headerView ? 35 : 0,
-      shadowColor: headerView ? "#000" : Colors.light.secondaryText,
-      shadowRadius: headerView ? 5 : 0,
-    };
-  },
   container2: {
     flexDirection: "row",
     alignContent: "center",
@@ -114,4 +93,27 @@ const styles = StyleSheet.create({
     gap: 20,
   },
 });
+
+const containerStyle = (headerView: any, insets: any): ViewStyle => {
+  return {
+    width: headerView ? Dimensions.get("window").width / 1.08 : "100%",
+    position: "absolute",
+    padding: 20,
+    backgroundColor: Colors.light.background,
+    borderWidth: 1,
+    borderColor: Colors.light.tabIconDefault,
+    zIndex: 1,
+    alignContent: "center",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowOffset: { width: 1, height: 1 },
+    shadowOpacity: 0.3,
+    paddingTop: headerView ? 20 : insets.top + 10,
+    top: headerView ? insets.top + 10 : 0,
+    height: headerView ? undefined : 150,
+    borderRadius: headerView ? 35 : 0,
+    shadowColor: headerView ? "#000" : Colors.light.secondaryText,
+    shadowRadius: headerView ? 5 : 0,
+  };
+};
 export default HeaderDelivery;

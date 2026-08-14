@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  type TextInputProps,
 } from "react-native";
 import Colors from "@/constants/Colors";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -30,7 +31,7 @@ const Location = () => {
     nav.goBack();
   };
 
-  const consultarCEP = async (cep) => {
+  const consultarCEP = async (cep: string) => {
     if (cep.length === 8) {
       try {
         const response = await axios.get(
@@ -50,7 +51,7 @@ const Location = () => {
     }
   };
 
-  const handlerInput = (key, text) => {
+  const handlerInput = (key: string, text: string) => {
     setEndereco({
       ...endereco,
       [key]: text,
@@ -60,7 +61,7 @@ const Location = () => {
   const renderAddressInput = (
     label: string,
     value: string,
-    keyboardType: string | null = null,
+    keyboardType: TextInputProps["keyboardType"] | null = null,
     keyString: string | null = null
   ) => {
     return (
@@ -95,7 +96,7 @@ const Location = () => {
         />
 
         <View style={styles.addressContainer}>
-          {renderAddressInput("UF", endereco?.uf, "uf")}
+          {renderAddressInput("UF", endereco?.uf, null, "uf")}
           {renderAddressInput("Localidade", endereco?.localidade)}
           {renderAddressInput("Bairro", endereco?.bairro)}
           {renderAddressInput("Logradouro", endereco?.logradouro)}

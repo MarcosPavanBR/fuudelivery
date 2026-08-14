@@ -44,7 +44,7 @@ RETRY_INTERVAL=10
 echo "── API (fuudelivery-api) ──"
 API_HEALTH=$(retry $RETRIES $RETRY_INTERVAL curl -s --max-time $TIMEOUT "https://fuudelivery-api-8y6l.onrender.com/health" || echo '{"status":"error"}')
 API_STATUS=$(echo "$API_HEALTH" | grep -o '"status":"[^"]*"' | tail -1 | cut -d'"' -f4)
-if [ "$API_STATUS" = "ok" ]; then
+if [ "$API_STATUS" = "ok" ] || [ "$API_STATUS" = "up" ]; then
     ok "API is healthy"
     # Check individual components
     for component in mongodb postgres redis redis_geo batches; do

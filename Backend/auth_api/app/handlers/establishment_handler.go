@@ -1,12 +1,140 @@
 package handlers
 
 import (
+	"log"
 	"strconv"
 	"time"
 
+	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/auth_api/app/models"
 	"github.com/gofiber/fiber/v2"
+	"golang.org/x/crypto/bcrypt"
 )
+
+// RegisterEstablishment cadastra um restaurante e a conta do dono em uma
+// única transação (POST /establishments/register — público, usado pelo
+// WebRestaurant). Cria: usuário (role 'restaurant'), estabelecimento
+// vinculado e horários de funcionamento (business_hours, 7 dias).
+// Retorna token JWT para login imediato.
+func RegisterEstablishment(c *fiber.Ctx) error {
+	var req struct {
+		Name        string `json:"name"`
+		OwnerName   string `json:"owner_name"`
+		Email       string `json:"email"`
+		Password    string `json:"password"`
+		Phone       string `json:"phone"`
+		Address     string `json:"address"`
+		City        string `json:"city"`
+		OpeningTime string `json:"opening_time"`
+		ClosingTime string `json:"closing_time"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to parse request body"})
+	}
+
+	if req.Name == "" || req.OwnerName == "" || req.Email == "" || req.Password == "" || req.Phone == "" || req.Address == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "name, owner_name, email, password, phone e address sao obrigatorios"})
+	}
+	if len(req.Password) < 6 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Password must be at least 6 characters"})
+	}
+
+	var existing models.User
+	if err := models.DB.Where("email = ?", req.Email).First(&existing).Error; err == nil {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Email already registered"})
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to hash password"})
+	}
+
+	sqlDB, err := models.DB.DB()
+	if err != nil || sqlDB == nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Database not available"})
+	}
+	tx, err := sqlDB.Begin()
+	if err != nil || tx == nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to start transaction"})
+	}
+
+	var userID, estID uint
+
+	// Role: prefere 'restaurant' no enum; senão o primeiro label (compat).
+	var roleVal string
+	tx.QueryRow("SELECT enumlabel FROM pg_enum WHERE enumtypid = '\"Role\"'::regtype AND enumlabel = 'restaurant'").Scan(&roleVal)
+	if roleVal == "" {
+		tx.QueryRow("SELECT enumlabel FROM pg_enum WHERE enumtypid = '\"Role\"'::regtype LIMIT 1").Scan(&roleVal)
+	}
+	if roleVal == "" {
+		roleVal = "user"
+	}
+
+	tx.Exec("CREATE SEQUENCE IF NOT EXISTS users_id_seq OWNED BY users.id")
+	if err := tx.QueryRow("SELECT nextval('users_id_seq')").Scan(&userID); err != nil {
+		tx.Rollback()
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+	if _, err := tx.Exec("INSERT INTO users (id, name, email, password, role, \"createdAt\", \"updatedAt\") VALUES ($1, $2, $3, $4, $5, NOW(), NOW())",
+		userID, req.OwnerName, req.Email, string(hashedPassword), roleVal); err != nil {
+		tx.Rollback()
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	locationString := req.Address
+	if req.City != "" {
+		locationString += ", " + req.City
+	}
+
+	horario := ""
+	if req.OpeningTime != "" || req.ClosingTime != "" {
+		horario = req.OpeningTime + " - " + req.ClosingTime
+	}
+
+	tx.Exec("CREATE SEQUENCE IF NOT EXISTS establishments_id_seq OWNED BY establishments.id")
+	if err := tx.QueryRow("SELECT nextval('establishments_id_seq')").Scan(&estID); err != nil {
+		tx.Rollback()
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+	if _, err := tx.Exec("INSERT INTO establishments (id, name, description, owner_id, lat, long, location_string, max_distance_delivery, horario_funcionamento) VALUES ($1, $2, '', $3, 0, 0, $4, 15, $5)",
+		estID, req.Name, userID, locationString, horario); err != nil {
+		tx.Rollback()
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+	if _, err := tx.Exec("UPDATE users SET establishment_id = $1 WHERE id = $2", estID, userID); err != nil {
+		tx.Rollback()
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	// Horários de funcionamento (7 dias) a partir de abertura/fechamento.
+	if req.OpeningTime != "" && req.ClosingTime != "" {
+		for day := 0; day < 7; day++ {
+			if _, err := tx.Exec("INSERT INTO business_hours (establishment_id, day_of_week, is_open, open_time, close_time, break_start_time, break_end_time) VALUES ($1, $2, true, $3, $4, '', '')",
+				estID, day, req.OpeningTime, req.ClosingTime); err != nil {
+				log.Printf("[REGISTER] business_hours day=%d: %v", day, err)
+			}
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	user := models.User{ID: userID, Name: req.OwnerName, Email: req.Email, EstablishmentID: estID, Role: roleVal}
+	establishment := models.Establishment{ID: estID, Name: req.Name, OwnerID: userID, LocationString: locationString, HorarioFuncionamento: horario}
+
+	tokenString, jwtError := middlewares.GenerateJWT(&user, &establishment)
+	if jwtError != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to generate JWT token"})
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"message":       "Establishment registered successfully",
+		"user":          fiber.Map{"id": userID, "name": req.OwnerName, "email": req.Email},
+		"establishment": fiber.Map{"id": estID, "name": req.Name},
+		"token":         tokenString,
+	})
+}
 
 func CreateEstablishment(c *fiber.Ctx) error {
 	var req struct {

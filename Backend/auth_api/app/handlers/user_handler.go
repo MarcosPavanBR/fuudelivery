@@ -174,6 +174,84 @@ func GetUser(c *fiber.Ctx) error {
 	return c.JSON(user)
 }
 
+// UpdateUser atualiza os dados de um usuario (PUT /users/:id).
+// Admin pode editar qualquer usuario (nome, email, role, establishment_id e
+// senha opcional); o proprio usuario pode editar apenas o proprio perfil
+// (nome/email — a senha passa por ChangePassword).
+func UpdateUser(c *fiber.Ctx) error {
+	userID := c.Params("id")
+
+	tokenUserID, err := middlewares.GetUserIDFromToken(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+	}
+
+	var reqUserID uint
+	if _, scanErr := fmt.Sscanf(userID, "%d", &reqUserID); scanErr != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid user ID"})
+	}
+
+	var request struct {
+		Name            string `json:"name"`
+		Email           string `json:"email"`
+		Phone           string `json:"phone"`
+		Role            string `json:"role"`
+		EstablishmentID uint   `json:"establishment_id"`
+		Password        string `json:"password"`
+	}
+	if err := c.BodyParser(&request); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to parse request body"})
+	}
+
+	var user models.User
+	if err := models.DB.First(&user, reqUserID).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
+	}
+
+	role, _ := middlewares.GetUserRoleFromToken(c)
+	isAdmin := role == "admin"
+	if tokenUserID != int64(reqUserID) && !isAdmin {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot update another user's account"})
+	}
+
+	updates := map[string]interface{}{}
+	if request.Name != "" {
+		updates["name"] = request.Name
+	}
+	if request.Email != "" {
+		updates["email"] = request.Email
+	}
+	// Somente admin altera role e vinculo de estabelecimento.
+	if isAdmin {
+		if request.Role != "" {
+			updates["role"] = request.Role
+		}
+		if request.EstablishmentID != 0 {
+			updates["establishment_id"] = request.EstablishmentID
+		}
+	}
+	if request.Password != "" {
+		if len(request.Password) < 6 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Password must be at least 6 characters"})
+		}
+		hashedPassword, hashErr := bcrypt.GenerateFromPassword([]byte(request.Password), bcrypt.DefaultCost)
+		if hashErr != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to hash password"})
+		}
+		updates["password"] = string(hashedPassword)
+	}
+
+	if len(updates) == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "No fields to update"})
+	}
+
+	if err := models.DB.Model(&user).Updates(updates).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update user"})
+	}
+
+	return c.JSON(fiber.Map{"message": "User updated successfully", "id": user.ID})
+}
+
 // ChangePassword altera a senha de um usuario.
 // Verifica que o usuario autenticado e o mesmo da requisicao.
 // Requer a senha atual (para confirmar identidade) e a nova senha (minimo 6 caracteres).

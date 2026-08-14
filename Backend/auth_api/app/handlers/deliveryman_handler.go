@@ -90,6 +90,93 @@ func CreateDeliveryMan(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"user": request, "token": tokenString})
 }
 
+// UpdateDeliveryMan atualiza os dados de um entregador (PUT /delivery-man/:id).
+// Admin. Suporta nome, email, telefone, status, max_orders, zona e senha
+// opcional. Campos nao enviados permanecem inalterados.
+func UpdateDeliveryMan(c *fiber.Ctx) error {
+	deliveryManID := c.Params("id")
+	if deliveryManID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid delivery man ID"})
+	}
+
+	var request struct {
+		Name      string `json:"name"`
+		Email     string `json:"email"`
+		Phone     string `json:"phone"`
+		Status    string `json:"status"`
+		ZoneID    *uint  `json:"zone_id"`
+		MaxOrders int    `json:"max_orders"`
+		Password  string `json:"password"`
+	}
+	if err := c.BodyParser(&request); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to parse request body"})
+	}
+
+	var deliveryMan models.DeliveryMan
+	if err := models.DB.First(&deliveryMan, deliveryManID).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Delivery man not found"})
+	}
+
+	updates := map[string]interface{}{}
+	if request.Name != "" {
+		updates["name"] = request.Name
+	}
+	if request.Email != "" {
+		updates["email"] = request.Email
+	}
+	if request.Phone != "" {
+		updates["phone"] = request.Phone
+	}
+	if request.Status != "" {
+		updates["status"] = request.Status
+	}
+	if request.MaxOrders > 0 {
+		updates["max_orders"] = request.MaxOrders
+	}
+	if request.ZoneID != nil {
+		updates["zone_id"] = *request.ZoneID
+	}
+	if request.Password != "" {
+		if len(request.Password) < 6 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Password must be at least 6 characters"})
+		}
+		hashedPassword, hashErr := bcrypt.GenerateFromPassword([]byte(request.Password), bcrypt.DefaultCost)
+		if hashErr != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to hash password"})
+		}
+		updates["password"] = string(hashedPassword)
+	}
+
+	if len(updates) == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "No fields to update"})
+	}
+
+	if err := models.DB.Model(&deliveryMan).Updates(updates).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update delivery man"})
+	}
+
+	return c.JSON(fiber.Map{"message": "Delivery man updated successfully", "id": deliveryMan.ID})
+}
+
+// DeleteDeliveryMan remove um entregador (DELETE /delivery-man/:id). Admin.
+func DeleteDeliveryMan(c *fiber.Ctx) error {
+	deliveryManID := c.Params("id")
+	if deliveryManID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid delivery man ID"})
+	}
+
+	var deliveryMan models.DeliveryMan
+	if err := models.DB.First(&deliveryMan, deliveryManID).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Delivery man not found"})
+	}
+
+	if err := models.DB.Delete(&deliveryMan).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete delivery man"})
+	}
+
+	return c.JSON(fiber.Map{"message": "Delivery man deleted successfully", "id": deliveryMan.ID})
+}
+
 func UpdateDeliveryManWallet(c *fiber.Ctx) error {
 	deliveryManID := c.Params("id")
 	if deliveryManID == "" {

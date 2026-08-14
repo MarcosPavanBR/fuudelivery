@@ -728,6 +728,7 @@ func setupAuthRoutes(app *fiber.App) {
 	app.Post("/admin/bootstrap", rateLimitMiddleware(3), authHandlers.BootstrapAdmin)
 	app.Get("/users", adminRequired, authHandlers.ListAllUsers)
 	app.Get("/users/:id", protectedRoute, authHandlers.GetUser)
+	app.Put("/users/:id", protectedRoute, authHandlers.UpdateUser)
 	app.Delete("/users/:id", protectedRoute, authHandlers.DeleteUser)
 	app.Put("/users/:id/password", protectedRoute, authHandlers.ChangePassword)
 
@@ -749,11 +750,16 @@ func setupAuthRoutes(app *fiber.App) {
 	app.Post("/delivery-man/login", authHandlers.LoginDeliveryMan)
 	app.Post("/delivery-man/register", authHandlers.CreateDeliveryMan)
 	app.Get("/delivery-man", adminRequired, authHandlers.ListAllDeliveryMen)
+	app.Put("/delivery-man/:id", adminRequired, authHandlers.UpdateDeliveryMan)
+	app.Delete("/delivery-man/:id", adminRequired, authHandlers.DeleteDeliveryMan)
 	app.Put("/delivery-man/:id/wallet", protectedRoute, authHandlers.UpdateDeliveryManWallet)
 
 	// === Rotas de Cliente (AppComida) ===
 	app.Post("/clients/register", rateLimitMiddleware(5), authHandlers.RegisterClient)
 	app.Post("/clients/login", rateLimitMiddleware(10), authHandlers.LoginClient)
+
+	// Cadastro público de restaurante (WebRestaurant)
+	app.Post("/establishments/register", rateLimitMiddleware(3), authHandlers.RegisterEstablishment)
 }
 
 func setupOrdersRoutes(app *fiber.App) {
@@ -879,6 +885,7 @@ func setupPaymentRoutes(app *fiber.App) {
 	app.Post("/payments/process", protectedRoute, rateLimitMiddleware(20), paymentHandlers.ProcessPayment)
 	app.Post("/payments/split", protectedRoute, rateLimitMiddleware(20), paymentHandlers.ProcessSplit)
 	app.Post("/payments/webhook", rateLimitMiddleware(100), paymentHandlers.HandlePaymentWebhook)
+	app.Get("/reports/establishment/:id", protectedRoute, paymentHandlers.GetEstablishmentReport)
 	app.Get("/wallet/balance/:user_id", protectedRoute, paymentHandlers.GetBalance)
 	app.Post("/wallet/topup", protectedRoute, rateLimitMiddleware(20), paymentHandlers.TopUp)
 	app.Post("/wallet/deduct", protectedRoute, rateLimitMiddleware(20), paymentHandlers.DeductFromWallet)

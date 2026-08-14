@@ -53,7 +53,7 @@ const Home = () => {
 
   return (
     <MenuLayout>
-      <DashboardCharts establishmentId={user?.id} />
+      <DashboardCharts establishmentId={user?.establishment?.id || user?.id} />
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-bold text-gray-900">{Texts.meus_pedidos}</h2>
       </div>

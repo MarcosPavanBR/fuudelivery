@@ -78,17 +78,18 @@ export default function LiveTracking({
               order_id: orderId,
             }).catch(() => {});
 
-            const distance = helper.calcularDistancia(
+            const distance = await helper.calcularDistancia(
               loc.coords.latitude,
               loc.coords.longitude,
               destinationLat,
               destinationLng
             );
-            const speed = loc.speed || 20;
-            const etaMinutes = speed > 0 ? (distance / speed) * 60 : 0;
+            const speed = loc.coords.speed || 20;
+            const etaMinutes =
+              speed > 0 && distance ? (distance / speed) * 60 : 0;
             setEta(
               etaMinutes > 0
-                ? `${Math.round(etaMinutes)} ${helper.minutos || "min"}`
+                ? `${Math.round(etaMinutes)} min`
                 : "Calculando..."
             );
           } catch (e) {

@@ -45,7 +45,7 @@ export default function Home() {
   const isFocused = useIsFocused();
   const [hasStart, setHasStart] = useState(false);
 
-  const mapViewRef = React.useRef(null);
+  const mapViewRef = React.useRef<MapView>(null);
 
   const centerMapOnUser = () => {
     if (mylocation) {

@@ -24,6 +24,9 @@ export default {
     warning: "#F59E0B",
     error: "#DC2626",
     info: "#3B82F6",
+    secondary: "#6B7280",
+    gray: "#6B7280",
+    lightGray: "#F3F4F6",
   },
   dark: {
     text: "#F3F4F6",

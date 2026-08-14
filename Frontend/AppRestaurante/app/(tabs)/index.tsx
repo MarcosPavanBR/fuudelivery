@@ -15,7 +15,7 @@ import {
   Alert,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
-import { FiClock, FiCheck, FiX, FiRefreshCw } from "@expo/vector-icons";
+import { Feather } from "@expo/vector-icons";
 import api from "@/services/api";
 import { useApi } from "@/contexts/ApiContext";
 
@@ -130,18 +130,18 @@ export default function OrdersScreen() {
           {item.status === "pending" && (
             <>
               <TouchableOpacity style={styles.rejectBtn} onPress={() => handleReject(item)}>
-                <FiX size={16} color="#B91C1C" />
+                <Feather name="x" size={16} color="#B91C1C" />
                 <Text style={styles.rejectText}>Rejeitar</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.acceptBtn} onPress={() => handleAccept(item)}>
-                <FiCheck size={16} color="#FFF" />
+                <Feather name="check" size={16} color="#FFF" />
                 <Text style={styles.acceptText}>Aceitar</Text>
               </TouchableOpacity>
             </>
           )}
           {item.status === "preparing" && (
             <TouchableOpacity style={styles.readyBtn} onPress={() => handleReady(item)}>
-              <FiCheck size={16} color="#FFF" />
+              <Feather name="check" size={16} color="#FFF" />
               <Text style={styles.readyText}>Pronto</Text>
             </TouchableOpacity>
           )}
@@ -154,7 +154,7 @@ export default function OrdersScreen() {
     <View style={styles.container}>
       {loading ? (
         <View style={styles.center}>
-          <FiRefreshCw size={32} color="#EA1D2C" />
+          <Feather name="refresh-cw" size={32} color="#EA1D2C" />
           <Text style={styles.loadingText}>Carregando pedidos...</Text>
         </View>
       ) : orders.length === 0 ? (

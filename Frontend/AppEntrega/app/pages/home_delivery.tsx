@@ -20,7 +20,7 @@ import { useIsFocused } from "@react-navigation/native";
 import Config from "@/constants/Config";
 
 function HomeDelivery() {
-  const mapViewRef = useRef(null);
+  const mapViewRef = useRef<MapView>(null);
 
   const {
     inWork,

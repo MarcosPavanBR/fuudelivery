@@ -74,7 +74,7 @@ const cart = () => {
 
         <OrderSummaryWithTotal data={cart} />
         <PaymentComponent
-          title={Texts[paymentMethod.type]}
+          title={(Texts as Record<string, string>)[paymentMethod.type]}
           icon={paymentMethod.icon}
         />
       </ScrollView>

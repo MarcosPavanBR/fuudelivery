@@ -4,8 +4,14 @@ import Colors from "@/constants/Colors";
 import helpers from "@/helpers/helpers";
 import Texts from "@/constants/Texts";
 
-const EstablishmentView = ({ item, onPress }) => {
-  const [distance, setDistance] = useState(null);
+const EstablishmentView = ({
+  item,
+  onPress,
+}: {
+  item: any;
+  onPress: () => void;
+}) => {
+  const [distance, setDistance] = useState<number | null>(null);
   async function init() {
     try {
       const result = await helpers.calcularDistancia(item.lat, item.long);

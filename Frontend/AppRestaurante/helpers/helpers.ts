@@ -80,8 +80,11 @@ const getLocationDistance = async () => {
 
 const calcularDistancia = async (lat: number, long: number) => {
   try {
-    const { latitude: origemLatitude, longitude: origemLongitude } =
-      await getLocationDistance();
+    const coords = await getLocationDistance();
+    if (!coords) {
+      return null;
+    }
+    const { latitude: origemLatitude, longitude: origemLongitude } = coords;
 
     // Calcular a distância usando a fórmula de Haversine
     const distancia = haversineDistancia(

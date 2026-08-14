@@ -25,7 +25,7 @@ const OrderList = ({ orders }: any) => {
   };
 
   // Renderizar os itens de pedido para cada dia
-  const renderOrderItemsForDay = (date, orderItems) => {
+  const renderOrderItemsForDay = (date: string, orderItems: any[]) => {
     const totalDeliveryValue = orderItems.reduce(
       (total: number, item: any) => total + item.deliveryValue,
       0
@@ -50,7 +50,7 @@ const OrderList = ({ orders }: any) => {
   };
 
   // Renderizar um item de pedido
-  const renderOrderItem = (item) => (
+  const renderOrderItem = (item: any) => (
     <TouchableOpacity
       style={styles.orderItemContainer}
       onPress={() => nav.navigate("extract_view", item)}
@@ -68,11 +68,11 @@ const OrderList = ({ orders }: any) => {
   );
 
   // Agrupar os pedidos por data
-  const groupedOrders = groupOrdersByDate(orders);
+  const groupedOrders = groupOrdersByDate();
 
   return (
     <FlatList
-      data={Object.entries(groupedOrders)}
+      data={Object.entries(groupedOrders) as [string, any][]}
       renderItem={({ item }) => renderOrderItemsForDay(item[0], item[1])}
       keyExtractor={(item, index) => index.toString()}
       style={styles.flatList}

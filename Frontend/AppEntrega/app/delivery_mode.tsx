@@ -83,7 +83,7 @@ export default function DeliveryMode({ showIcon }: any) {
         break;
 
       case "IN_ROUTE_DELIVERY":
-        code = helper.genCode(order.order_id);
+        code = helper.genCode(order.order_id, order.establishmentId);
         break;
       default:
         code = false;
@@ -97,21 +97,26 @@ export default function DeliveryMode({ showIcon }: any) {
   };
 
   const openMap = () => {
-    const { lat, long } = establishment;
-    const label = establishment.name;
+    const { latitude, longitude } = establishment;
 
     const url = Platform.select({
-      ios: `maps://${lat},${long}?q=`,
-      android: "geo:${latitude},${longitude}?q=",
+      ios: `maps://${latitude},${longitude}?q=`,
+      android: `geo:${latitude},${longitude}?q=`,
     });
 
-    Linking.openURL(url).catch((err) =>
-      console.error("An error occurred", err)
-    );
+    if (url) {
+      Linking.openURL(url).catch((err) =>
+        console.error("An error occurred", err)
+      );
+    }
   };
 
   useEffect(() => {
-    nav.setOptions({ title: Strings.status_title?.[deliveryman.status] });
+    nav.setOptions({
+      title: (Strings.status_title as Record<string, string>)?.[
+        deliveryman.status
+      ],
+    });
   }, [deliveryman.status]);
 
   useEffect(() => {
@@ -205,7 +210,7 @@ export default function DeliveryMode({ showIcon }: any) {
           order.status == "AWAIT_APPROVE"
         }
         loading={loading}
-        title={Texts[deliveryman.status] ?? deliveryman.status}
+        title={(Texts as Record<string, string>)[deliveryman.status] ?? deliveryman.status}
         onComplete={() => {
           onConfirm();
         }}
@@ -296,7 +301,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     padding: 15,
     flexDirection: "row",
-    justifyContent: "space-arround",
+    justifyContent: "space-around",
     alignContent: "center",
     alignItems: "center",
   },

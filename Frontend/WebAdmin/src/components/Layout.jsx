@@ -16,12 +16,12 @@ const iconMap = {
 const menuItems = [
   { path: "/", label: "Dashboard", iconKey: "dashboard" },
   { path: "/establishments", label: "Estabelecimentos", iconKey: "establishments" },
-  { path: "/users", label: "Usuarios", iconKey: "users" },
+  { path: "/users", label: "Usuários", iconKey: "users" },
   { path: "/orders", label: "Pedidos", iconKey: "orders" },
   { path: "/delivery-men", label: "Entregadores", iconKey: "delivery-men" },
   { path: "/payments", label: "Pagamentos", iconKey: "payments" },
   { path: "/financeiro", label: "Financeiro", iconKey: "payments" },
-  { path: "/settings", label: "Configuracoes", iconKey: "settings" },
+  { path: "/settings", label: "Configurações", iconKey: "settings" },
 ];
 
 function SidebarIcon({ iconKey, className }) {
@@ -94,16 +94,25 @@ export default function Layout() {
                   to={item.path}
                   end={item.path === "/"}
                   className={({ isActive }) =>
-                    "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group " +
-                    (isActive ? "text-white font-semibold" : "text-gray-400 hover:text-white hover:bg-white/10") +
+                    "relative flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group " +
+                    (isActive
+                      ? "text-white font-semibold bg-white/10"
+                      : "text-gray-400 hover:text-white hover:bg-white/10") +
                     (!sidebarOpen ? " justify-center px-0" : "")
                   }
                   title={!sidebarOpen ? item.label : undefined}
                 >
-                  <span className="flex-shrink-0">
-                    <SidebarIcon iconKey={item.iconKey} className="h-5 w-5" />
-                  </span>
-                  {sidebarOpen && <span className="text-sm font-medium">{item.label}</span>}
+                  {({ isActive }) => (
+                    <>
+                      {isActive && (
+                        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full" style={{ background: "linear-gradient(180deg, #EA1D2C, #F7A11E)" }} />
+                      )}
+                      <span className="flex-shrink-0">
+                        <SidebarIcon iconKey={item.iconKey} className="h-5 w-5" />
+                      </span>
+                      {sidebarOpen && <span className="text-sm font-medium">{item.label}</span>}
+                    </>
+                  )}
                 </NavLink>
               </li>
             ))}
@@ -148,8 +157,8 @@ export default function Layout() {
                     <span className="text-white font-bold text-sm">{user?.name?.charAt(0) || "A"}</span>
                   </div>
                   <div className="hidden sm:block text-left min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 truncate max-w-[160px]">{user?.name || "Admin"}</p>
-                    <p className="text-xs text-gray-500 truncate max-w-[160px]">{user?.establishment_name || "Sistema"}</p>
+                    <p className="text-sm font-semibold text-gray-900 truncate max-w-[220px]">{user?.name || "Admin"}</p>
+                    <p className="text-xs text-gray-500 truncate max-w-[220px]">{user?.establishment_name || "Sistema"}</p>
                   </div>
                 </button>
               </div>

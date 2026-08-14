@@ -15,14 +15,39 @@
   --color-fuu-yellow: #F7A11E;
   --color-fuu-yellow-light: #FFFBEB;
 
-  /* Sombras customizadas */
-  --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.06);
-  --shadow-card-hover: 0 8px 24px rgba(234, 29, 44, 0.12);
+  /* ===== Tokens semânticos (Design System) =====
+     - primary: cor da marca Fuu (vermelho). Se quiser seguir a skill
+       "azul como primário", troque --color-primary/* por azul (ex.: #2563EB)
+       — é troca de token, nada mais precisa mudar.
+     - success: confirmações/salvar | warning: alertas | danger: erros/destrutivas
+     - info: informativo (azul) */
+  --color-primary: #EA1D2C;
+  --color-primary-dark: #C41420;
+  --color-primary-light: #FEF2F2;
+  --color-success: #16A34A;
+  --color-success-light: #F0FDF4;
+  --color-warning: #D97706;
+  --color-warning-light: #FFFBEB;
+  --color-danger: #DC2626;
+  --color-danger-light: #FEF2F2;
+  --color-info: #2563EB;
+  --color-info-light: #EFF6FF;
+
+  /* Raio de componentes premium */
+  --radius-card: 12px;
+  --radius-input: 8px;
+
+  /* Sombras sutis */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.10);
+  --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.12);
 
   /* Fontes */
   --font-display: Inter, system-ui, sans-serif;
   --font-body: Inter, system-ui, sans-serif;
 }
+
+/* Dark mode ready: ativa utilitários dark:* quando .dark estiver no <html> */
+@custom-variant dark (&:where(.dark, .dark *));
 
 * {
   margin: 0;
@@ -36,6 +61,135 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background: #F5F5F5;
   color: #1A1A1A;
+}
+
+/* ============================================================
+   Acessibilidade — foco visível em qualquer elemento interativo
+   ============================================================ */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ============================================================
+   Componentes base (Design System)
+   Grid de 8px: paddings/margins em múltiplos de 8 (8/16/24/32).
+   Transições: 150ms ease. Inputs 8px, cards 12px.
+   ============================================================ */
+@layer components {
+  .card {
+    background: #fff;
+    border: 1px solid #E5E7EB;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.10);
+  }
+
+  .input {
+    width: 100%;
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: 1px solid #E5E7EB;
+    background: #F9FAFB;
+    font-size: 14px;
+    color: #1A1A1A;
+    transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+  }
+
+  .input::placeholder {
+    color: #9CA3AF;
+  }
+
+  .input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(234, 29, 44, 0.10);
+  }
+
+  .input.is-invalid {
+    border-color: var(--color-danger);
+  }
+
+  .input.is-invalid:focus {
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.4;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease, opacity 150ms ease;
+  }
+
+  .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .btn:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+
+  .btn-primary {
+    background: var(--color-primary);
+    color: #fff;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: var(--color-primary-dark);
+  }
+
+  .btn-success {
+    background: var(--color-success);
+    color: #fff;
+  }
+
+  .btn-success:hover:not(:disabled) {
+    background: #15803D;
+  }
+
+  .btn-ghost {
+    background: transparent;
+    border-color: #D1D5DB;
+    color: #4B5563;
+  }
+
+  .btn-ghost:hover:not(:disabled) {
+    background: #F9FAFB;
+    border-color: #9CA3AF;
+    color: #1F2937;
+  }
+
+  .btn-danger {
+    background: var(--color-danger);
+    color: #fff;
+  }
+
+  .btn-danger:hover:not(:disabled) {
+    background: #B91C1C;
+  }
+
+  /* Skeleton loader (estados de carregamento) */
+  .skeleton {
+    border-radius: 8px;
+    background: linear-gradient(90deg, #F3F4F6 25%, #E5E7EB 50%, #F3F4F6 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+}
+
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
 }
 
 input, textarea, select {
@@ -98,7 +252,7 @@ input:focus, textarea:focus, select:focus {
    Sombras customizadas para cards
    ============================================================ */
 .shadow-card {
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.10);
 }
 
 .shadow-card-hover {

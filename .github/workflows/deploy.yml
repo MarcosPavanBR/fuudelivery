@@ -86,11 +86,19 @@ jobs:
             echo "::error::DEPLOY_ID vazio - deploy nao iniciado"
             exit 1
           fi
-          for i in $(seq 1 40); do
+          # Estaticos (web/admin) buildam em minutos; a API (Go) demora mais.
+          # Timeout menor para os estaticos acelera o feedback do pipeline
+          # sem cortar a API no meio do build.
+          if [ "${{ matrix.service.name }}" = "api" ]; then
+            MAX_ATTEMPTS=40
+          else
+            MAX_ATTEMPTS=16
+          fi
+          for i in $(seq 1 ${MAX_ATTEMPTS}); do
             STATUS=$(curl -sS "https://api.render.com/v1/services/${SERVICE_ID}/deploys/${DEPLOY_ID}" \
               -H "Authorization: Bearer ${RENDER_API_KEY}" \
               | python3 -c "import sys,json;print(json.load(sys.stdin).get('status',''))" 2>/dev/null || echo "erro_ao_consultar")
-            echo "[$i/40] deploy $DEPLOY_ID (${{ matrix.service.name }}) status: $STATUS"
+            echo "[$i/${MAX_ATTEMPTS}] deploy $DEPLOY_ID (${{ matrix.service.name }}) status: $STATUS"
             case "$STATUS" in
               live)
                 echo "::notice::Deploy $DEPLOY_ID (${{ matrix.service.name }}) concluido com sucesso"

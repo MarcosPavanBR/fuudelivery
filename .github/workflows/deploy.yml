@@ -6,6 +6,11 @@ on:
     types: [completed]
     branches: [master, main]
   workflow_dispatch:
+    inputs:
+      commit_id:
+        description: "Commit SHA para deploy manual (padrao: HEAD da branch)"
+        required: false
+        type: string
 
 jobs:
   # Gate: só permite deploy se o CI Gate passou (ou em disparo manual).
@@ -51,9 +56,16 @@ jobs:
 
       - name: Deploy ${{ matrix.service.name }} to Render
         run: |
+          DEPLOY_BODY="{}"
+          COMMIT_ID="${{ github.event.inputs.commit_id }}"
+          if [ -n "$COMMIT_ID" ]; then
+            DEPLOY_BODY="{\"commitId\":\"${COMMIT_ID}\"}"
+            echo "Deployando commit especifico: $COMMIT_ID"
+          fi
           RESP=$(curl -sS -X POST \
             -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
             -H "Content-Type: application/json" \
+            -d "$DEPLOY_BODY" \
             "https://api.render.com/v1/services/${{ secrets[matrix.service.service_id_secret] }}/deploys")
           echo "POST /deploys -> $RESP"
           DEPLOY_ID=$(echo "$RESP" | python3 -c "import sys,json;print(json.load(sys.stdin).get('id',''))" 2>/dev/null || echo "")

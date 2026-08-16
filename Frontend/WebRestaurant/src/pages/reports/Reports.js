@@ -9,10 +9,9 @@ import {
   FiLoader,
   FiDownload,
   FiTrendingUp,
-  FiArrowUp,
-  FiArrowDown,
 } from "react-icons/fi";
 import api from "../../services/api";
+import MenuLayout from "../../components/Menu";
 
 const Reports = () => {
   const { user } = useAuth();
@@ -68,26 +67,12 @@ const Reports = () => {
     year: "Este Ano",
   };
 
-  const StatCard = ({ icon: Icon, label, value, color, trend }) => (
+  const StatCard = ({ icon: Icon, label, value, color }) => (
     <div className="bg-white rounded-xl border border-gray-100 shadow-card p-6">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs font-semibold text-gray-500 uppercase">{label}</p>
           <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
-          {trend !== undefined && (
-            <div
-              className={`flex items-center gap-1 mt-1 text-xs font-medium ${
-                trend >= 0 ? "text-green-600" : "text-red-600"
-              }`}
-            >
-              {trend >= 0 ? (
-                <FiArrowUp className="h-3 w-3" />
-              ) : (
-                <FiArrowDown className="h-3 w-3" />
-              )}
-              {Math.abs(trend)}% vs mês anterior
-            </div>
-          )}
         </div>
         <div className={`p-2 rounded-lg ${color}`}>
           <Icon className="h-6 w-6 text-white" />
@@ -96,15 +81,47 @@ const Reports = () => {
     </div>
   );
 
+  const exportCSV = () => {
+    const rows = [
+      ["FuuDelivery - Relatorio", periodLabels[period]],
+      [],
+      ["Indicador", "Valor"],
+      ["Receita Total (R$)", Number(stats.totalRevenue || 0).toFixed(2)],
+      ["Total de Pedidos", stats.totalOrders],
+      ["Ticket Medio (R$)", Number(stats.avgTicket || 0).toFixed(2)],
+      ["Receita Entrega (R$)", Number(stats.deliveryRevenue || 0).toFixed(2)],
+      [],
+      ["Data", "Receita (R$)"],
+      ...(stats.revenueByDay || []).map((d) => [
+        d.date,
+        Number(d.revenue || 0).toFixed(2),
+      ]),
+    ];
+    const csv = rows.map((r) => r.join(";")).join("\n");
+    // BOM UTF-8: evita acentos quebrados ao abrir no Excel/Sheets.
+    const blob = new Blob(["\uFEFF" + csv], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `relatorio-${period}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <FiLoader className="animate-spin h-8 w-8" style={{ color: "#EA1D2C" }} />
-      </div>
+      <MenuLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <FiLoader className="animate-spin h-8 w-8" style={{ color: "#EA1D2C" }} />
+        </div>
+      </MenuLayout>
     );
   }
 
   return (
+    <MenuLayout>
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -137,7 +154,11 @@ const Reports = () => {
           </div>
 
           {/* Exportar */}
-          <button className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+          <button
+            onClick={exportCSV}
+            title="Exportar CSV"
+            className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+          >
             <FiDownload className="h-5 w-5 text-gray-600" />
           </button>
         </div>
@@ -150,28 +171,24 @@ const Reports = () => {
           label="Receita Total"
           value={formatCurrency(stats.totalRevenue)}
           color="bg-green-500"
-          trend={12.5}
         />
         <StatCard
           icon={FiShoppingBag}
           label="Total de Pedidos"
           value={stats.totalOrders}
           color="bg-blue-500"
-          trend={8.3}
         />
         <StatCard
           icon={FiTrendingUp}
           label="Ticket Médio"
           value={formatCurrency(stats.avgTicket)}
           color="bg-purple-500"
-          trend={3.2}
         />
         <StatCard
           icon={FiTruck}
           label="Receita Entrega"
           value={formatCurrency(stats.deliveryRevenue)}
           color="bg-orange-500"
-          trend={-2.1}
         />
       </div>
 
@@ -237,6 +254,7 @@ const Reports = () => {
         </div>
       </div>
     </div>
+    </MenuLayout>
   );
 };
 

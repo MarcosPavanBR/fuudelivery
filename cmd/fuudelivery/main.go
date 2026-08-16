@@ -725,6 +725,7 @@ func setupWebSocketRoutes(app *fiber.App) {
 func setupAuthRoutes(app *fiber.App) {
 	app.Post("/users/register", rateLimitMiddleware(5), authHandlers.CreateUser)
 	app.Post("/users/login", rateLimitMiddleware(10), authHandlers.Login)
+	app.Post("/users", adminRequired, authHandlers.CreateUserAdmin)
 	app.Post("/admin/bootstrap", rateLimitMiddleware(3), authHandlers.BootstrapAdmin)
 	app.Get("/users", adminRequired, authHandlers.ListAllUsers)
 	app.Get("/users/:id", protectedRoute, authHandlers.GetUser)
@@ -747,8 +748,8 @@ func setupAuthRoutes(app *fiber.App) {
 	app.Get("/establishments/:id/is-open", authHandlers.CheckEstablishmentOpen)
 	app.Put("/establishments/:id/wallet", protectedRoute, authHandlers.UpdateEstablishmentWallet)
 
-	app.Post("/delivery-man/login", authHandlers.LoginDeliveryMan)
-	app.Post("/delivery-man/register", authHandlers.CreateDeliveryMan)
+	app.Post("/delivery-man/login", rateLimitMiddleware(10), authHandlers.LoginDeliveryMan)
+	app.Post("/delivery-man/register", rateLimitMiddleware(5), authHandlers.CreateDeliveryMan)
 	app.Get("/delivery-man", adminRequired, authHandlers.ListAllDeliveryMen)
 	app.Put("/delivery-man/:id", adminRequired, authHandlers.UpdateDeliveryMan)
 	app.Delete("/delivery-man/:id", adminRequired, authHandlers.DeleteDeliveryMan)

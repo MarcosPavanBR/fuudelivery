@@ -55,7 +55,10 @@ const Home = () => {
     <MenuLayout>
       <DashboardCharts establishmentId={user?.establishment?.id || user?.id} />
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-bold text-gray-900">{Texts.meus_pedidos}</h2>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Pedidos</p>
+          <h2 className="text-xl font-bold text-gray-900">{Texts.meus_pedidos}</h2>
+        </div>
       </div>
       <Board tasks={tasks} columns={columns} onDragEnd={onDragEnd} />
     </MenuLayout>

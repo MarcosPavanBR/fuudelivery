@@ -93,3 +93,55 @@ jobs:
           done
           echo "::error::Timeout aguardando o deploy $DEPLOY_ID (${{ matrix.service.name }}) concluir"
           exit 1
+
+  # --------------------------------------------------------------
+  # Health check pos-deploy: confirma que os servicos realmente
+  # respondem apos ficarem live (o polling do deploy-all so confirma
+  # o status "live" no Render, nao o HTTP de cada servico).
+  # --------------------------------------------------------------
+  health-check:
+    name: Health check pos-deploy (API + paineis)
+    needs: [deploy-all]
+    runs-on: ubuntu-latest
+    steps:
+      - name: API /health (HTTP 200)
+        run: |
+          ok=0
+          for i in $(seq 1 12); do
+            code=$(curl -s -m 20 -o /dev/null -w "%{http_code}" "https://fuudelivery-api-8y6l.onrender.com/health")
+            echo "[$i/12] API /health -> HTTP $code"
+            if [ "$code" = "200" ]; then ok=1; break; fi
+            sleep 15
+          done
+          if [ "$ok" != "1" ]; then
+            echo "::error::API /health nao respondeu 200 apos o deploy"
+            exit 1
+          fi
+
+      - name: WebAdmin (HTTP 200)
+        run: |
+          ok=0
+          for i in $(seq 1 12); do
+            code=$(curl -s -m 20 -o /dev/null -w "%{http_code}" "https://fuudelivery-admin-lv7f.onrender.com/")
+            echo "[$i/12] WebAdmin / -> HTTP $code"
+            if [ "$code" = "200" ]; then ok=1; break; fi
+            sleep 15
+          done
+          if [ "$ok" != "1" ]; then
+            echo "::error::WebAdmin nao respondeu 200 apos o deploy"
+            exit 1
+          fi
+
+      - name: WebRestaurant (HTTP 200)
+        run: |
+          ok=0
+          for i in $(seq 1 12); do
+            code=$(curl -s -m 20 -o /dev/null -w "%{http_code}" "https://fuudelivery-web.onrender.com/")
+            echo "[$i/12] WebRestaurant / -> HTTP $code"
+            if [ "$code" = "200" ]; then ok=1; break; fi
+            sleep 15
+          done
+          if [ "$ok" != "1" ]; then
+            echo "::error::WebRestaurant nao respondeu 200 apos o deploy"
+            exit 1
+          fi

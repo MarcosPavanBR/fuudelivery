@@ -6,29 +6,34 @@ import Colors from "@/constants/Colors";
 import { AntDesign, FontAwesome } from "@expo/vector-icons";
 import Texts from "@/constants/Texts";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import MapView, { Marker } from "react-native-maps";
+import {
+  Map as MapLibreMap,
+  Camera,
+  ViewAnnotation,
+  type CameraRef,
+} from "@maplibre/maplibre-react-native";
 import { useRoute } from "@react-navigation/native";
 import { useEffect, useRef } from "react";
 import helper from "@/helpers/helper";
 import SwipeButtonDelivery from "@/componentes/SwipButton";
 import { useAuthApi } from "@/contexts/AuthContext";
 import { useNavigation } from "expo-router";
+import { MAP_STYLE_URL } from "@/constants/Config";
 
 export default function ModalScreen() {
   const insets = useSafeAreaInsets();
   const nav = useNavigation();
   const route = useRoute();
   const { establishment }: any = route.params;
-  const mapViewRef = useRef<MapView>(null);
+  const mapViewRef = useRef<CameraRef>(null);
   const { user } = useAuthApi();
 
   const centerMapOnUser = async () => {
     const { latitude, longitude } = establishment.coordinates;
-    mapViewRef.current?.animateToRegion({
-      latitude,
-      longitude,
-      latitudeDelta: 0.05,
-      longitudeDelta: 0.003,
+    mapViewRef.current?.flyTo({
+      center: [longitude, latitude],
+      zoom: 14,
+      duration: 500,
     });
   };
 
@@ -80,22 +85,25 @@ export default function ModalScreen() {
           style={{ ...styles.boxOne, marginTop: 10, flexDirection: "column" }}
         >
           <Text style={styles.textMap}>{Texts.maps}</Text>
-          <MapView
-            style={styles.mapView}
-            googleMapId="6cba0e311b251b4c"
-            ref={mapViewRef}
-            initialRegion={{
-              latitude: establishment.coordinates.latitude | 0,
-              longitude: establishment.coordinates.longitude | 0,
-              latitudeDelta: 0.0922,
-              longitudeDelta: 0.0421,
-            }}
-          >
-            <Marker
-              key={establishment.id}
-              coordinate={establishment.coordinates}
-            ></Marker>
-          </MapView>
+          <MapLibreMap style={styles.mapView} mapStyle={MAP_STYLE_URL}>
+            <Camera
+              ref={mapViewRef}
+              center={[
+                establishment.coordinates.longitude,
+                establishment.coordinates.latitude,
+              ]}
+              zoom={14}
+            />
+            <ViewAnnotation
+              id={String(establishment.id)}
+              lngLat={[
+                establishment.coordinates.longitude,
+                establishment.coordinates.latitude,
+              ]}
+            >
+              <View style={styles.pinDot} />
+            </ViewAnnotation>
+          </MapLibreMap>
         </View>
 
         <View
@@ -147,6 +155,14 @@ const styles = StyleSheet.create({
     height: 200,
     borderColor: Colors.light.background,
     borderWidth: 1,
+  },
+  pinDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: Colors.light.tint,
+    borderWidth: 2,
+    borderColor: "#fff",
   },
   valueText: { fontWeight: "500", fontSize: 15 },
   locationText: {

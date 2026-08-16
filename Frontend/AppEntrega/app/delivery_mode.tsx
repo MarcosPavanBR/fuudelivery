@@ -5,7 +5,12 @@ import Colors from "@/constants/Colors";
 import { FontAwesome } from "@expo/vector-icons";
 import Texts from "@/constants/Texts";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import MapView, { Marker } from "react-native-maps";
+import {
+  Map as MapLibreMap,
+  Camera,
+  ViewAnnotation,
+  type CameraRef,
+} from "@maplibre/maplibre-react-native";
 
 import { useEffect, useRef, useState } from "react";
 
@@ -15,11 +20,12 @@ import Strings from "@/constants/Strings";
 import api from "@/services/api";
 import SwipeButtonDelivery from "@/componentes/SwipButton";
 import helper from "@/helpers/helper";
+import { MAP_STYLE_URL } from "@/constants/Config";
 
 export default function DeliveryMode({ showIcon }: any) {
   const insets = useSafeAreaInsets();
   const nav = useNavigation();
-  const mapViewRef = useRef(null);
+  const mapViewRef = useRef<CameraRef>(null);
   const { inWork, isActiveOrder } = useAuthApi();
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -175,32 +181,26 @@ export default function DeliveryMode({ showIcon }: any) {
           style={{ ...styles.boxOne, marginTop: 10, flexDirection: "column" }}
         >
           <Text style={styles.textMap}>{Texts.maps}</Text>
-          <MapView
-            style={styles.mapView}
+          <MapLibreMap style={styles.mapView} mapStyle={MAP_STYLE_URL}>
+          <Camera
             ref={mapViewRef}
-            googleMapId="6cba0e311b251b4c"
-            initialRegion={{
-              latitude:
-                (deliveryman.status === "IN_ROUTE_DELIVERY"
-                  ? establishment.lat
-                  : order.location.coords.latitude) || 0,
-
-              longitude:
-                (deliveryman.status === "IN_ROUTE_DELIVERY"
-                  ? establishment.long
-                  : order.location.coords.longitude) || 0,
-              latitudeDelta: 0.001,
-              longitudeDelta: 0.01,
-            }}
-          >
-            <Marker
-              key={establishment.id}
-              coordinate={{
-                latitude: establishment.lat | 0,
-                longitude: establishment.long | 0,
-              }}
-            ></Marker>
-          </MapView>
+            center={[
+              (deliveryman.status === "IN_ROUTE_DELIVERY"
+                ? establishment.long
+                : order.location.coords.longitude) || 0,
+              (deliveryman.status === "IN_ROUTE_DELIVERY"
+                ? establishment.lat
+                : order.location.coords.latitude) || 0,
+            ]}
+            zoom={14}
+          />
+            <ViewAnnotation
+              id={String(establishment.id)}
+              lngLat={[establishment.long | 0, establishment.lat | 0]}
+            >
+              <View style={styles.pinDot} />
+            </ViewAnnotation>
+          </MapLibreMap>
         </View>
       </View>
 
@@ -262,6 +262,14 @@ const styles = StyleSheet.create({
     height: 200,
     borderColor: Colors.light.background,
     borderWidth: 1,
+  },
+  pinDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: Colors.light.tint,
+    borderWidth: 2,
+    borderColor: "#fff",
   },
   valueText: { fontWeight: "500", fontSize: 15 },
   locationText: {

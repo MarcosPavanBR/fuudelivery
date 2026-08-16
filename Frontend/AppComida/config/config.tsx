@@ -5,6 +5,9 @@ const APP_MODE_OPTIONS = {
 
 const APP_MODE = APP_MODE_OPTIONS.multi;
 
+// Estilo de mapa gratuito (OpenFreeMap — tiles do OpenStreetMap, sem API key).
+export const MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
+
 const ESTABLISHMENT_ID = 1;
 const ESTABLISHMENT = {
   id: ESTABLISHMENT_ID,

@@ -1,10 +1,18 @@
 import React, { useEffect, useState, useRef } from "react";
 import { View, Text, StyleSheet, Dimensions } from "react-native";
-import MapView, { Marker, Polyline } from "react-native-maps";
+import {
+  Map as MapLibreMap,
+  Camera,
+  ViewAnnotation,
+  GeoJSONSource,
+  Layer,
+  type CameraRef,
+} from "@maplibre/maplibre-react-native";
 import * as Location from "expo-location";
 import Colors from "@/constants/Colors";
 import helper from "@/helpers/helper";
 import api from "@/services/api";
+import { MAP_STYLE_URL } from "@/constants/Config";
 
 interface LiveTrackingProps {
   destinationLat: number;
@@ -31,7 +39,7 @@ export default function LiveTracking({
   const [routeCoords, setRouteCoords] = useState<RoutePoint[]>([]);
   const [eta, setEta] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<CameraRef>(null);
   const intervalRef = useRef<any>(null);
 
   useEffect(() => {
@@ -116,19 +124,11 @@ export default function LiveTracking({
 
   const fitMapToMarkers = () => {
     if (mapRef.current && currentLocation) {
-      mapRef.current.fitToCoordinates(
-        [
-          { latitude: originLat, longitude: originLng },
-          { latitude: destinationLat, longitude: destinationLng },
-          {
-            latitude: currentLocation.latitude,
-            longitude: currentLocation.longitude,
-          },
-        ],
-        {
-          edgePadding: { top: 60, right: 60, bottom: 60, left: 60 },
-          animated: true,
-        }
+      const lats = [originLat, destinationLat, currentLocation.latitude];
+      const lngs = [originLng, destinationLng, currentLocation.longitude];
+      mapRef.current.fitBounds(
+        [Math.min(...lngs), Math.min(...lats), Math.max(...lngs), Math.max(...lats)],
+        { padding: { top: 60, right: 60, bottom: 60, left: 60 }, duration: 300 }
       );
     }
   };
@@ -149,48 +149,59 @@ export default function LiveTracking({
 
   return (
     <View style={styles.container}>
-      <MapView
-        ref={mapRef}
-        style={styles.map}
-        googleMapId="6cba0e311b251b4c"
-        initialRegion={{
-          latitude: originLat || destinationLat,
-          longitude: originLng || destinationLng,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
-        }}
-      >
-        <Marker
-          coordinate={{ latitude: originLat, longitude: originLng }}
-          title="Restaurante"
-          pinColor={Colors.light.tint}
+      <MapLibreMap style={styles.map} mapStyle={MAP_STYLE_URL}>
+        <Camera
+          ref={mapRef}
+          center={[originLng || destinationLng, originLat || destinationLat]}
+          zoom={13}
         />
 
-        <Marker
-          coordinate={{ latitude: destinationLat, longitude: destinationLng }}
-          title="Destino"
-          pinColor="green"
-        />
+        <ViewAnnotation id="origin" lngLat={[originLng, originLat]}>
+          <View style={[styles.markerDot, { backgroundColor: Colors.light.tint }]} />
+        </ViewAnnotation>
+
+        <ViewAnnotation id="destination" lngLat={[destinationLng, destinationLat]}>
+          <View style={[styles.markerDot, { backgroundColor: "green" }]} />
+        </ViewAnnotation>
 
         {currentLocation && (
-          <Marker
-            coordinate={{
-              latitude: currentLocation.latitude,
-              longitude: currentLocation.longitude,
-            }}
-            title="Entregador"
-            pinColor="blue"
-          />
+          <ViewAnnotation
+            id="courier"
+            lngLat={[currentLocation.longitude, currentLocation.latitude]}
+          >
+            <View style={[styles.markerDot, { backgroundColor: "blue" }]} />
+          </ViewAnnotation>
         )}
 
         {routeCoords.length > 1 && (
-          <Polyline
-            coordinates={routeCoords}
-            strokeColor={Colors.light.tint}
-            strokeWidth={3}
-          />
+          <GeoJSONSource
+            id="routeSource"
+            data={{
+              type: "FeatureCollection",
+              features: [
+                {
+                  type: "Feature",
+                  properties: {},
+                  geometry: {
+                    type: "LineString",
+                    coordinates: routeCoords.map((p) => [
+                      p.longitude,
+                      p.latitude,
+                    ]),
+                  },
+                },
+              ],
+            }}
+          >
+            <Layer
+              id="routeLine"
+              type="line"
+              source="routeSource"
+              paint={{ "line-color": Colors.light.tint, "line-width": 3 }}
+            />
+          </GeoJSONSource>
         )}
-      </MapView>
+      </MapLibreMap>
 
       {eta ? (
         <View style={styles.etaContainer}>
@@ -211,6 +222,13 @@ const styles = StyleSheet.create({
   map: {
     width: "100%",
     height: 300,
+  },
+  markerDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: "#fff",
   },
   errorContainer: {
     padding: 20,

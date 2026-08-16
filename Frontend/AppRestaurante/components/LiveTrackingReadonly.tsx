@@ -1,8 +1,14 @@
 import React, { useEffect, useState, useRef } from "react";
 import { View, Text, StyleSheet } from "react-native";
-import MapView, { Marker } from "react-native-maps";
+import {
+  Map as MapLibreMap,
+  Camera,
+  ViewAnnotation,
+  type CameraRef,
+} from "@maplibre/maplibre-react-native";
 import Colors from "@/constants/Colors";
 import { getWsUrl } from "@/config/api";
+import { MAP_STYLE_URL } from "@/config/config";
 import { useApi } from "@/contexts/ApiContext";
 
 interface LiveTrackingReadonlyProps {
@@ -35,7 +41,7 @@ export default function LiveTrackingReadonly({
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<CameraRef>(null);
 
   useEffect(() => {
     if (!orderId) return;
@@ -94,15 +100,11 @@ export default function LiveTrackingReadonly({
 
   useEffect(() => {
     if (mapRef.current && deliveryLocation) {
-      mapRef.current.animateToRegion(
-        {
-          latitude: deliveryLocation.lat,
-          longitude: deliveryLocation.lng,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        },
-        300
-      );
+      mapRef.current.flyTo({
+        center: [deliveryLocation.lng, deliveryLocation.lat],
+        zoom: 15,
+        duration: 300,
+      });
     }
   }, [deliveryLocation]);
 
@@ -119,46 +121,36 @@ export default function LiveTrackingReadonly({
 
   return (
     <View style={styles.container}>
-      <MapView
-        ref={mapRef}
-        style={styles.map}
-        initialRegion={{
-          latitude: centerLat,
-          longitude: centerLng,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
-        }}
-      >
+      <MapLibreMap style={styles.map} mapStyle={MAP_STYLE_URL}>
+        <Camera
+          ref={mapRef}
+          center={[centerLng, centerLat]}
+          zoom={12}
+        />
+
         {originLat && originLng && (
-          <Marker
-            coordinate={{ latitude: originLat, longitude: originLng }}
-            title="Restaurante"
-            pinColor={Colors.light.tint}
-          />
+          <ViewAnnotation id="origin" lngLat={[originLng, originLat]}>
+            <View
+              style={[styles.markerDot, { backgroundColor: Colors.light.tint }]}
+            />
+          </ViewAnnotation>
         )}
 
         {destinationLat && destinationLng && (
-          <Marker
-            coordinate={{
-              latitude: destinationLat,
-              longitude: destinationLng,
-            }}
-            title="Destino"
-            pinColor="green"
-          />
+          <ViewAnnotation id="destination" lngLat={[destinationLng, destinationLat]}>
+            <View style={[styles.markerDot, { backgroundColor: "green" }]} />
+          </ViewAnnotation>
         )}
 
         {deliveryLocation && (
-          <Marker
-            coordinate={{
-              latitude: deliveryLocation.lat,
-              longitude: deliveryLocation.lng,
-            }}
-            title="Entregador"
-            pinColor="blue"
-          />
+          <ViewAnnotation
+            id="courier"
+            lngLat={[deliveryLocation.lng, deliveryLocation.lat]}
+          >
+            <View style={[styles.markerDot, { backgroundColor: "blue" }]} />
+          </ViewAnnotation>
         )}
-      </MapView>
+      </MapLibreMap>
 
       <View style={styles.statusBar}>
         <View
@@ -188,6 +180,13 @@ const styles = StyleSheet.create({
   map: {
     width: "100%",
     height: 300,
+  },
+  markerDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: "#fff",
   },
   statusBar: {
     flexDirection: "row",

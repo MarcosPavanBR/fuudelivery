@@ -1,3 +1,5 @@
+export const MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
+
 const APP_MODE_OPTIONS = {
   unique: 1,
   multi: 2,

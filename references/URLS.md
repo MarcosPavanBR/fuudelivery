@@ -47,13 +47,21 @@
 ## 🌐 CORS (ALLOWED_ORIGINS)
 
 O monolito (`cmd/fuudelivery/main.go`) e o Payment Service (`Backend/Payment/main.go`)
-aceitam as seguintes origens:
+aceitam as seguintes origens (a env var `ALLOWED_ORIGINS` **soma** com esses defaults,
+nunca os substitui):
 
 ```
 https://fuudelivery-web.onrender.com
 https://fuudelivery-admin-lv7f.onrender.com
 https://fuudelivery-payment-panel.onrender.com
 ```
+
+Além disso, o middleware aceita programaticamente (sem precisar de env):
+
+- **Previews do Freebuff Cloud** — qualquer subdomínio de `https://*.daytonaproxy01.net`
+  (formato `<porta>-<workspace-uuid>.daytonaproxy01.net`), para o preview do
+  WebRestaurant conseguir chamar a API de produção.
+- **Desenvolvimento local** — `localhost` / `127.0.0.1` / `::1` em qualquer porta.
 
 ---
 

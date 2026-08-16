@@ -10,7 +10,14 @@ import React, {
 import { Alert } from "react-native";
 import LoadingPage from "@/components/LoadingPage";
 import { jwtDecode } from "jwt-decode";
-import { setToken, getToken, clearToken } from "@/config/tokenStorage";
+import {
+  setToken,
+  getToken,
+  clearToken,
+  setPhoneOverride,
+  getPhoneOverride,
+  clearPhoneOverride,
+} from "@/config/tokenStorage";
 import { setOnUnauthorized } from "@/services/api";
 
 interface UserData {
@@ -24,6 +31,7 @@ interface UserData {
 
 interface ApiContextProps {
   login(token: string, userData?: UserData): Promise<void>;
+  updateUser(partial: Partial<UserData>): void;
   isLogged: boolean;
   getUserData(): UserData | null;
   isLoading: boolean;
@@ -68,8 +76,9 @@ export const ApiProvider: React.FC<ApiProviderProps> = ({ children }) => {
         if (storedToken) {
           const decoded = decodeJWT(storedToken);
           if (decoded) {
+            const override = await getPhoneOverride();
             setToken(storedToken);
-            setUserData(decoded);
+            setUserData(override ? { ...decoded, phone: override } : decoded);
             setIsLogged(true);
           } else {
             await clearToken();
@@ -86,9 +95,22 @@ export const ApiProvider: React.FC<ApiProviderProps> = ({ children }) => {
 
   const logout = async () => {
     await clearToken();
+    await clearPhoneOverride();
     setToken(null);
     setUserData(null);
     setIsLogged(false);
+  };
+
+  // Atualiza dados do usuário em memória e persiste o telefone editado
+  // (o JWT em si só é reemitido num novo login).
+  const updateUser = (partial: Partial<UserData>) => {
+    setUserData((prev) => {
+      const next = { ...prev, ...partial };
+      if (partial.phone !== undefined) {
+        setPhoneOverride(partial.phone).catch(() => {});
+      }
+      return next;
+    });
   };
 
   // Registra o logout como callback de sessão expirada (401) —
@@ -117,7 +139,12 @@ export const ApiProvider: React.FC<ApiProviderProps> = ({ children }) => {
           return;
         }
 
-        const mergedData = { ...decoded, ...extraData };
+        const override = await getPhoneOverride();
+        const mergedData = {
+          ...decoded,
+          ...extraData,
+          ...(override ? { phone: override } : {}),
+        };
         await setToken(tokenValue);
         setToken(tokenValue);
         setUserData(mergedData);
@@ -138,7 +165,7 @@ export const ApiProvider: React.FC<ApiProviderProps> = ({ children }) => {
 
   return (
     <ApiContext.Provider
-      value={{ logout, login, isLogged, isLoading, setIsLoading, getUserData, token }}
+      value={{ logout, login, updateUser, isLogged, isLoading, setIsLoading, getUserData, token }}
     >
       {!isLoading ? children : <LoadingPage />}
     </ApiContext.Provider>

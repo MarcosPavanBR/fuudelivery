@@ -31,6 +31,7 @@ func CreateUser(c *fiber.Ctx) error {
 	user := models.User{
 		Name:     request.Name,
 		Email:    request.Email,
+		Phone:    request.Phone,
 		Password: string(hashedPassword),
 	}
 
@@ -68,7 +69,7 @@ func CreateUser(c *fiber.Ctx) error {
 		if roleVal == "" {
 			roleVal = "user"
 		}
-		_, err = tx.Exec("INSERT INTO users (id, name, email, password, role, \"createdAt\", \"updatedAt\") VALUES ($1, $2, $3, $4, $5, NOW(), NOW())", userID, user.Name, user.Email, user.Password, roleVal)
+		_, err = tx.Exec("INSERT INTO users (id, name, email, password, phone, role, \"createdAt\", \"updatedAt\") VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())", userID, user.Name, user.Email, user.Password, user.Phone, roleVal)
 		if err != nil {
 			tx.Rollback()
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})

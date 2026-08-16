@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	authMiddleware "github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	authModels "github.com/carloshomar/fuudelivery/auth_api/app/models"
 	paymentModels "github.com/carloshomar/fuudelivery/payment_api/app/models"
 	"github.com/gofiber/fiber/v2"
@@ -265,31 +266,18 @@ func TestAdminBootstrapPaymentsAll(t *testing.T) {
 
 	// ---- 8. /payments/all com token de usuario COMUM -> 403 ----
 	t.Run("PaymentsAllNonAdmin", func(t *testing.T) {
-		// Cria um segundo usuario comum (sem bootstrap) e loga.
-		commonEmail := "comum.staging@fuudelivery.com"
-		hash, err := bcrypt.GenerateFromPassword([]byte("senha456"), bcrypt.DefaultCost)
-		require.NoError(t, err)
-		u := authModels.User{
-			Name:     "Usuario Comum",
-			Email:    commonEmail,
-			Password: string(hash),
-			Role:     "user",
+		// Gera o token direto com GenerateJWT (mesmo JWT_SECRET do teste).
+		// Nao passa pelo /users/login: o rate limiter global de login (10/min
+		// por IP, map compartilhado entre todos os testes do pacote) pode
+		// rejeitar com 429 no meio do run — o cenario sob teste aqui e o
+		// adminRequired (403 para role != admin).
+		commonUser := authModels.User{
+			Name:  "Usuario Comum",
+			Email: "comum.staging@fuudelivery.com",
+			Role:  "user",
 		}
-		require.NoError(t, authModels.DB.Create(&u).Error, "criar usuario comum")
-
-		loginBody, _ := json.Marshal(map[string]string{
-			"email":    commonEmail,
-			"password": "senha456",
-		})
-		loginReq := httptest.NewRequest(http.MethodPost, "/users/login", bytes.NewReader(loginBody))
-		loginReq.Header.Set("Content-Type", "application/json")
-		loginResp, err := app.Test(loginReq, -1)
+		commonToken, err := authMiddleware.GenerateJWT(&commonUser, nil)
 		require.NoError(t, err)
-		require.Equal(t, 200, loginResp.StatusCode)
-
-		var result map[string]interface{}
-		json.NewDecoder(loginResp.Body).Decode(&result)
-		commonToken, _ := result["token"].(string)
 		require.NotEmpty(t, commonToken)
 
 		allReq := httptest.NewRequest(http.MethodGet, "/payments/all", nil)

@@ -8,7 +8,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import MapView, { Marker } from "react-native-maps";
+import {
+  Map as MapLibreMap,
+  Camera,
+  ViewAnnotation,
+  type CameraRef,
+} from "@maplibre/maplibre-react-native";
 import * as Location from "expo-location";
 import { MaterialIcons } from "@expo/vector-icons";
 import Colors from "@/constants/Colors";
@@ -17,10 +22,10 @@ import { useAuthApi } from "@/contexts/AuthContext";
 import helper from "@/helpers/helper";
 import MinimizableModal from "@/componentes/ModalMinimize";
 import { useIsFocused } from "@react-navigation/native";
-import Config from "@/constants/Config";
+import Config, { MAP_STYLE_URL } from "@/constants/Config";
 
 function HomeDelivery() {
-  const mapViewRef = useRef<MapView>(null);
+  const mapViewRef = useRef<CameraRef>(null);
 
   const {
     inWork,
@@ -43,11 +48,10 @@ function HomeDelivery() {
         latitude: 0,
         longitude: 0,
       };
-      mapViewRef.current?.animateToRegion({
-        latitude,
-        longitude,
-        latitudeDelta: 0.05,
-        longitudeDelta: 0.003,
+      mapViewRef.current?.flyTo({
+        center: [longitude, latitude],
+        zoom: 14,
+        duration: 500,
       });
     }
     const firstOrder = inWork.order[0];
@@ -142,29 +146,32 @@ function HomeDelivery() {
         onDisponivel={(disp: boolean) => {}}
       />
 
-      <MapView
-        ref={mapViewRef}
-        style={styles.map}
-        googleMapId="6cba0e311b251b4c"
-        initialRegion={{
-          latitude: mylocation?.coords.latitude || 0,
-          longitude: mylocation?.coords.longitude || 0,
-          latitudeDelta: 0.0922,
-          longitudeDelta: 0.0421,
-        }}
-      >
+      <MapLibreMap style={styles.map} mapStyle={MAP_STYLE_URL}>
+        <Camera
+          ref={mapViewRef}
+          center={[
+            mylocation?.coords.longitude || 0,
+            mylocation?.coords.latitude || 0,
+          ]}
+          zoom={12}
+        />
         {markers.map((marker: any) => (
-          <Marker
+          <ViewAnnotation
             key={marker.id}
-            coordinate={marker.coordinates}
-            onPress={() => {}}
+            id={String(marker.id)}
+            lngLat={[
+              marker.coordinates.longitude,
+              marker.coordinates.latitude,
+            ]}
           >
-            {marker?.icon ? (
-              <Image source={marker?.icon} style={styles.markerImage} />
-            ) : null}
-          </Marker>
+            <View>
+              {marker?.icon ? (
+                <Image source={marker?.icon} style={styles.markerImage} />
+              ) : null}
+            </View>
+          </ViewAnnotation>
         ))}
-      </MapView>
+      </MapLibreMap>
       <MinimizableModal />
 
       <TouchableOpacity

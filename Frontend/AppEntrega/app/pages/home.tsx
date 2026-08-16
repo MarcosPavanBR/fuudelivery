@@ -8,7 +8,12 @@ import {
   TouchableOpacity,
   FlatList,
 } from "react-native";
-import MapView, { Marker } from "react-native-maps";
+import {
+  Map as MapLibreMap,
+  Camera,
+  ViewAnnotation,
+  type CameraRef,
+} from "@maplibre/maplibre-react-native";
 import * as Location from "expo-location";
 import {
   FontAwesome6,
@@ -24,7 +29,7 @@ import api from "@/services/api";
 import Strings from "@/constants/Strings";
 import { useIsFocused } from "@react-navigation/native";
 import { useAuthApi } from "@/contexts/AuthContext";
-import Config from "@/constants/Config";
+import Config, { MAP_STYLE_URL } from "@/constants/Config";
 
 export default function Home() {
   const {
@@ -45,7 +50,7 @@ export default function Home() {
   const isFocused = useIsFocused();
   const [hasStart, setHasStart] = useState(false);
 
-  const mapViewRef = React.useRef<MapView>(null);
+  const mapViewRef = React.useRef<CameraRef>(null);
 
   const centerMapOnUser = () => {
     if (mylocation) {
@@ -53,11 +58,10 @@ export default function Home() {
         latitude: 0,
         longitude: 0,
       };
-      mapViewRef.current?.animateToRegion({
-        latitude,
-        longitude,
-        latitudeDelta: 0.05,
-        longitudeDelta: 0.003,
+      mapViewRef.current?.flyTo({
+        center: [longitude, latitude],
+        zoom: 14,
+        duration: 500,
       });
     }
   };
@@ -192,59 +196,63 @@ export default function Home() {
         }}
       />
       {formatView === "map" ? (
-        <MapView
-          ref={mapViewRef}
-          style={styles.map}
-          googleMapId="6cba0e311b251b4c"
-          initialRegion={{
-            latitude: mylocation?.coords.latitude || 0,
-            longitude: mylocation?.coords.longitude || 0,
-            latitudeDelta: 0.0922,
-            longitudeDelta: 0.0421,
-          }}
-        >
+        <MapLibreMap style={styles.map} mapStyle={MAP_STYLE_URL}>
+          <Camera
+            ref={mapViewRef}
+            center={[
+              mylocation?.coords.longitude || 0,
+              mylocation?.coords.latitude || 0,
+            ]}
+            zoom={12}
+          />
           {markers.map((marker: any) => (
-            <Marker
+            <ViewAnnotation
               key={marker.id}
-              coordinate={marker.coordinates}
+              id={String(marker.id)}
+              lngLat={[
+                marker.coordinates.longitude,
+                marker.coordinates.latitude,
+              ]}
               onPress={() =>
                 marker.isEstablishment
                   ? nav.navigate("modal", { establishment: marker })
                   : null
               }
             >
-              {marker?.icon ? (
-                <Image source={marker?.icon} style={styles.markerImage} />
-              ) : null}
+              <View>
+                {marker?.icon ? (
+                  <Image source={marker?.icon} style={styles.markerImage} />
+                ) : null}
 
-              {marker.isEstablishment ? (
-                <TouchableOpacity style={styles.calloutContainer}>
-                  <View style={styles.calloutRow}>
-                    <FontAwesome6
-                      name="money-bill"
-                      size={17}
-                      color={Colors.light.secondaryText}
-                    />
-                    <Text style={styles.calloutText}>
-                      {helper.formatCurrency(marker.valueDelivery)}
-                    </Text>
+                {marker.isEstablishment ? (
+                  <View style={styles.calloutContainer} pointerEvents="none">
+                    <View style={styles.calloutRow}>
+                      <FontAwesome6
+                        name="money-bill"
+                        size={17}
+                        color={Colors.light.secondaryText}
+                      />
+                      <Text style={styles.calloutText}>
+                        {helper.formatCurrency(marker.valueDelivery)}
+                      </Text>
+                    </View>
+                    <View style={styles.calloutRow}>
+                      <MaterialCommunityIcons
+                        name="bike-fast"
+                        size={17}
+                        color={Colors.light.secondaryText}
+                      />
+                      <Text style={styles.calloutText}>
+                        {marker.distance.toFixed(1)}
+                        {Texts.km}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={styles.calloutRow}>
-                    <MaterialCommunityIcons
-                      name="bike-fast"
-                      size={17}
-                      color={Colors.light.secondaryText}
-                    />
-                    <Text style={styles.calloutText}>
-                      {marker.distance.toFixed(1)}
-                      {Texts.km}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              ) : null}
-            </Marker>
+                ) : null}
+              </View>
+            </ViewAnnotation>
           ))}
-        </MapView>
+        </MapLibreMap>
       ) : null}
 
       {formatView === "list" ? (

@@ -22,6 +22,7 @@ const LoginScreen = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isRegister, setIsRegister] = useState(false);
   const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
   const { login } = useApi();
 
   const handleLogin = async () => {
@@ -34,7 +35,7 @@ const LoginScreen = () => {
     try {
       const endpoint = isRegister ? "/users/register" : "/users/login";
       const body = isRegister
-        ? { email: email.trim(), password, name: name.trim() }
+        ? { email: email.trim(), password, name: name.trim(), phone: phone.trim() }
         : { email: email.trim(), password };
 
       const response = await api.post(endpoint, body);
@@ -75,6 +76,17 @@ const LoginScreen = () => {
               onChangeText={setName}
               value={name}
               autoCapitalize="words"
+            />
+          )}
+
+          {isRegister && (
+            <TextInput
+              style={styles.input}
+              placeholder="Telefone (ex.: 11 99999-9999)"
+              placeholderTextColor={Colors.light.tabIconDefault}
+              onChangeText={setPhone}
+              value={phone}
+              keyboardType="phone-pad"
             />
           )}
 

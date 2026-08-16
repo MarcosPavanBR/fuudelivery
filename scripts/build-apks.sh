@@ -2,7 +2,7 @@
 # build-apks.sh — Gera APKs do AppComida (cliente), AppEntrega (entregador) e AppRestaurante (restaurante)
 #
 # Opcoes:
-#   ./scripts/build-apks.sh              # EAS Build (nuvem, recomendado)
+#   ./scripts/build-apks.sh              # EAS Build (nuvem, recomendado) — aguarda e imprime o link do APK
 #   ./scripts/build-apks.sh --local      # Build local (requer Android SDK + Java)
 #   ./scripts/build-apks.sh --login      # Login no EAS primeiro
 
@@ -21,12 +21,23 @@ build_eas() {
     if ! npx eas whoami > /dev/null 2>&1; then
         err "Nao logado no EAS. Execute: eas login"; cd "$ROOT_DIR"; return 1
     fi
-    log "Gerando APK para $name via EAS Build (cloud)..."
-    npx eas build --platform android --profile preview --non-interactive 2>&1
+    log "Gerando APK para $name via EAS Build (cloud)... aguardando conclusao (~15-20 min)"
+    local OUT
+    OUT=$(npx eas build --platform android --profile preview --non-interactive 2>&1)
     local rc=$?
     cd "$ROOT_DIR"
-    if [ $rc -eq 0 ]; then ok "Build de $name concluido! Verifique o link acima."
-    else err "Build de $name falhou (exit $rc)"; return 1; fi
+    if [ $rc -ne 0 ]; then
+        err "Build de $name falhou (exit $rc)"
+        echo "$OUT" | tail -30
+        return 1
+    fi
+    local url
+    url=$(echo "$OUT" | grep -oE 'https://expo\.dev/artifacts/eas/[A-Za-z0-9._-]+\.apk' | tail -1)
+    if [ -n "$url" ]; then
+        ok "APK de $name pronto: $url"
+    else
+        ok "Build de $name concluido! Nao achei URL no log — veja o dashboard do Expo."
+    fi
 }
 
 build_local() {

@@ -5,7 +5,8 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "channel": "development"
     },
     "preview": {
       "distribution": "internal",
@@ -13,14 +14,16 @@
         "buildType": "apk",
         "withoutCredentials": true
       },
-      "prebuildCommand": "npx expo prebuild --clean --platform android"
+      "prebuildCommand": "npx expo prebuild --clean --platform android",
+      "channel": "preview"
     },
     "production": {
       "android": {
         "buildType": "app-bundle",
         "withoutCredentials": true
       },
-      "prebuildCommand": "npx expo prebuild --clean --platform android"
+      "prebuildCommand": "npx expo prebuild --clean --platform android",
+      "channel": "production"
     }
   },
   "submit": {

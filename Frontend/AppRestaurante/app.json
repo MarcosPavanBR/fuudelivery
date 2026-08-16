@@ -49,6 +49,9 @@
     "runtimeVersion": {
       "policy": "appVersion"
     },
-    "owner": "pavanbr"
+    "owner": "pavanbr",
+    "updates": {
+      "url": "https://u.expo.dev/0ac16b6c-4a47-48ca-89f7-76ff97b2555d"
+    }
   }
 }

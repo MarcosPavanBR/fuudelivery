@@ -37,8 +37,15 @@ export default function Perfil() {
 
         <View style={styles.infoBox}>
           <Text style={styles.label}>{Texts.telefone}</Text>
-          <Text style={styles.userInfo}>{user?.email}</Text>
+          <Text style={styles.userInfo}>{user?.phone || "Não informado"}</Text>
         </View>
+
+        {user?.email ? (
+          <View style={styles.infoBox}>
+            <Text style={styles.label}>E-mail</Text>
+            <Text style={styles.userInfo}>{user?.email}</Text>
+          </View>
+        ) : null}
 
         <TouchableOpacity
           style={styles.addressBox}

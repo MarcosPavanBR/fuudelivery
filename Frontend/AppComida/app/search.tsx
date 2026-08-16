@@ -27,7 +27,7 @@ export default function Search() {
     // Mesma chave do cardápio (establishment.tsx) → compartilha o cache.
     const data = await fetchWithCache(
       CACHE_KEYS.menuProducts(establishment.id),
-      async () => (await api.get("/api/order/products/" + establishment.id)).data,
+      async () => (await api.get("/products/" + establishment.id)).data,
       CACHE_TTL.MENU,
       []
     );

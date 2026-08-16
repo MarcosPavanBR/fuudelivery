@@ -27,4 +27,24 @@ export async function clearToken(): Promise<void> {
   await SecureStore.deleteItemAsync(Strings.token_jwt);
 }
 
-export default { setToken, getToken, clearToken };
+/**
+ * Telefone editado pelo usuário no perfil (override persistido).
+ * O JWT carrega o phone na hora do login; como o token só é
+ * reemitido num novo login, guardamos a edição aqui para o app
+ * continuar usando o número certo mesmo após reiniciar.
+ */
+export async function setPhoneOverride(phone: string): Promise<void> {
+  await SecureStore.setItemAsync(Strings.user_phone, phone);
+}
+
+/** Lê o telefone editado pelo usuário. Retorna null se ausente. */
+export async function getPhoneOverride(): Promise<string | null> {
+  return SecureStore.getItemAsync(Strings.user_phone);
+}
+
+/** Remove o override (logout). */
+export async function clearPhoneOverride(): Promise<void> {
+  await SecureStore.deleteItemAsync(Strings.user_phone);
+}
+
+export default { setToken, getToken, clearToken, setPhoneOverride, getPhoneOverride, clearPhoneOverride };

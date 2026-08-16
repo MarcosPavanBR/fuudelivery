@@ -108,9 +108,67 @@ func CreateUser(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"user": request, "token": tokenString})
 }
 
+// CreateUserAdmin cria um usuario diretamente pelo painel admin (POST /users).
+// Diferente do registro publico (/users/register), nao cria estabelecimento:
+// aceita name, email, password, role, status e establishment_id opcional.
+func CreateUserAdmin(c *fiber.Ctx) error {
+	var request struct {
+		Name            string `json:"name"`
+		Email           string `json:"email"`
+		Password        string `json:"password"`
+		Role            string `json:"role"`
+		Status          string `json:"status"`
+		EstablishmentID uint   `json:"establishment_id"`
+	}
+	if err := c.BodyParser(&request); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to parse request body"})
+	}
+	if request.Name == "" || request.Email == "" || request.Password == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "name, email e password sao obrigatorios"})
+	}
+	if len(request.Password) < 6 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Password must be at least 6 characters"})
+	}
+	if request.Role == "" {
+		request.Role = "client"
+	}
+	if request.Status == "" {
+		request.Status = "active"
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(request.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to hash password"})
+	}
+
+	var userID uint
+	if err := models.DB.Exec("CREATE SEQUENCE IF NOT EXISTS users_id_seq OWNED BY users.id").Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+	if err := models.DB.Raw("SELECT nextval('users_id_seq')").Scan(&userID).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	user := models.User{
+		ID:              userID,
+		Name:            request.Name,
+		Email:           request.Email,
+		Password:        string(hashedPassword),
+		Role:            request.Role,
+		Status:          request.Status,
+		EstablishmentID: request.EstablishmentID,
+	}
+	if err := models.DB.Create(&user).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	request.Password = ""
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"user": request, "id": user.ID})
+}
+
 func ListAllUsers(c *fiber.Ctx) error {
 	var results []map[string]interface{}
-	result := models.DB.Raw("SELECT id, name, email, establishment_id, COALESCE(role, 'user') as role FROM users").Scan(&results)
+	result := models.DB.Raw("SELECT id, name, email, establishment_id, COALESCE(role, 'user') as role, COALESCE(status, 'active') as status, \"createdAt\" FROM users").Scan(&results)
 	if result.Error != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to query users: " + result.Error.Error()})
 	}
@@ -197,6 +255,7 @@ func UpdateUser(c *fiber.Ctx) error {
 		Phone           string `json:"phone"`
 		AvatarURL       string `json:"avatar_url"`
 		Role            string `json:"role"`
+		Status          string `json:"status"`
 		EstablishmentID uint   `json:"establishment_id"`
 		Password        string `json:"password"`
 	}
@@ -228,10 +287,13 @@ func UpdateUser(c *fiber.Ctx) error {
 	if request.AvatarURL != "" {
 		updates["avatar_url"] = request.AvatarURL
 	}
-	// Somente admin altera role e vinculo de estabelecimento.
+	// Somente admin altera role, status e vinculo de estabelecimento.
 	if isAdmin {
 		if request.Role != "" {
 			updates["role"] = request.Role
+		}
+		if request.Status != "" {
+			updates["status"] = request.Status
 		}
 		if request.EstablishmentID != 0 {
 			updates["establishment_id"] = request.EstablishmentID

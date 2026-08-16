@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	authModels "github.com/carloshomar/fuudelivery/auth_api/app/models"
 	"github.com/carloshomar/fuudelivery/orders_api/app/dto"
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
@@ -363,7 +364,75 @@ func ListAllOrders(c *fiber.Ctx) error {
 		orders = []map[string]interface{}{}
 	}
 
+	// Backfill de user.nome: o pedido só carrega o nome se o app o enviou.
+	// Completa nomes faltantes consultando a tabela users do Postgres pelo
+	// phone (os pedidos nao guardam user_id). Batch, sem N+1, fallback silencioso.
+	enrichOrdersWithUsers(orders)
+
 	return c.JSON(orders)
+}
+
+// enrichOrdersWithUsers preenche user.nome dos pedidos que vieram sem nome,
+// consultando a tabela users do Postgres por telefone. Nao sobrescreve nomes
+// ja presentes e ignora silenciosamente quando o DB esta indisponivel ou o
+// telefone nao casa com nenhum usuario.
+func enrichOrdersWithUsers(orders []map[string]interface{}) {
+	if len(orders) == 0 {
+		return
+	}
+	db := authModels.DB
+	if db == nil {
+		return
+	}
+
+	// Coleta phones unicos dos pedidos que tem user.phone
+	seen := make(map[string]bool)
+	var phones []string
+	for _, o := range orders {
+		userMap, ok := o["user"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		phone, _ := userMap["phone"].(string)
+		if phone == "" || seen[phone] {
+			continue
+		}
+		seen[phone] = true
+		phones = append(phones, phone)
+	}
+	if len(phones) == 0 {
+		return
+	}
+
+	var users []struct {
+		Phone string
+		Name  string
+	}
+	if err := db.Table("users").Select("phone, name").Where("phone IN ?", phones).Find(&users).Error; err != nil {
+		log.Printf("[ORDERS] Falha ao buscar nomes dos clientes: %v", err)
+		return
+	}
+
+	byPhone := make(map[string]string, len(users))
+	for _, u := range users {
+		if u.Name != "" {
+			byPhone[u.Phone] = u.Name
+		}
+	}
+
+	for _, o := range orders {
+		userMap, ok := o["user"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if nome, _ := userMap["nome"].(string); nome != "" {
+			continue // ja tem nome — nao sobrescreve
+		}
+		phone, _ := userMap["phone"].(string)
+		if name, ok := byPhone[phone]; ok {
+			userMap["nome"] = name
+		}
+	}
 }
 
 func ListOrdersByPhone(c *fiber.Ctx) error {

@@ -66,83 +66,83 @@
   }
 }
 
-body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background: #F5F5F5;
-}
+@layer base {
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: #F5F5F5;
+  }
 
-input, textarea, select {
-  border-radius: 8px !important;
-  font-family: 'Inter', sans-serif;
-}
+  input, textarea, select {
+    border-radius: 8px !important;
+    font-family: 'Inter', sans-serif;
+  }
 
-input:focus, textarea:focus, select:focus {
-  outline: none;
-  border-color: #EA1D2C !important;
-  box-shadow: 0 0 0 3px rgba(234, 29, 44, 0.1) !important;
-}
+  input:focus, textarea:focus, select:focus {
+    outline: none;
+    border-color: #EA1D2C !important;
+    box-shadow: 0 0 0 3px rgba(234, 29, 44, 0.1) !important;
+  }
 
-:root {
-  --fuu-red: #EA1D2C;
-  --fuu-red-dark: #C41420;
-  --fuu-yellow: #F7A11E;
-  --fuu-orange: #FF6B35;
-  --menu1: #EA1D2C;
-  --menu2: #C41420;
-}
+  :root {
+    --fuu-red: #EA1D2C;
+    --fuu-red-dark: #C41420;
+    --fuu-yellow: #F7A11E;
+    --fuu-orange: #FF6B35;
+    --menu1: #EA1D2C;
+    --menu2: #C41420;
+  }
 
-[data-theme="light"] {
-  --bg-primary: #FFFFFF;
-  --bg-secondary: #F5F5F5;
-  --bg-card: #FFFFFF;
-  --text-primary: #1A1A1A;
-  --text-secondary: #666666;
-  --border-color: #E5E7EB;
-  --accent: #EA1D2C;
-}
+  [data-theme="light"] {
+    --bg-primary: #FFFFFF;
+    --bg-secondary: #F5F5F5;
+    --bg-card: #FFFFFF;
+    --text-primary: #1A1A1A;
+    --text-secondary: #666666;
+    --border-color: #E5E7EB;
+    --accent: #EA1D2C;
+  }
 
-[data-theme="dark"] {
-  --bg-primary: #0F0F0F;
-  --bg-secondary: #1A1A1A;
-  --bg-card: #1C1C1E;
-  --text-primary: #F0F0F0;
-  --text-secondary: #AAAAAA;
-  --border-color: #2C2C2E;
-  --accent: #FF4444;
-}
+  [data-theme="dark"] {
+    --bg-primary: #0F0F0F;
+    --bg-secondary: #1A1A1A;
+    --bg-card: #1C1C1E;
+    --text-primary: #F0F0F0;
+    --text-secondary: #AAAAAA;
+    --border-color: #2C2C2E;
+    --accent: #FF4444;
+  }
 
-body {
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  transition: background 0.3s ease, color 0.3s ease;
-}
+  body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    transition: background 0.3s ease, color 0.3s ease;
+  }
 
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
 
-::-webkit-scrollbar-track {
-  background: transparent;
-}
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
 
-::-webkit-scrollbar-thumb {
-  background: #D1D5DB;
-  border-radius: 3px;
-}
+  ::-webkit-scrollbar-thumb {
+    background: #D1D5DB;
+    border-radius: 3px;
+  }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #9CA3AF;
-}
+  ::-webkit-scrollbar-thumb:hover {
+    background: #9CA3AF;
+  }
 
-/* ============================================================
-   Acessibilidade — foco visível em qualquer elemento interativo
-   ============================================================ */
-:focus-visible {
-  outline: 2px solid var(--color-primary, #EA1D2C);
-  outline-offset: 2px;
+  /* Acessibilidade — foco visível em qualquer elemento interativo */
+  :focus-visible {
+    outline: 2px solid var(--color-primary, #EA1D2C);
+    outline-offset: 2px;
+  }
 }
 
 /* ============================================================

@@ -26,7 +26,7 @@
   --color-primary-light: #FEF2F2;
   --color-success: #16A34A;
   --color-success-light: #F0FDF4;
-  --color-warning: #D97706;
+  --color-warning: #F7A11E;
   --color-warning-light: #FFFBEB;
   --color-danger: #DC2626;
   --color-danger-light: #FEF2F2;
@@ -39,7 +39,7 @@
 
   /* Sombras sutis */
   --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.10);
-  --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --shadow-card-hover: 0 8px 24px rgba(234, 29, 44, 0.12);
 
   /* Fontes */
   --font-display: Inter, system-ui, sans-serif;
@@ -140,12 +140,19 @@ body {
   }
 
   .btn-primary {
-    background: var(--color-primary);
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
     color: #fff;
+    box-shadow: 0 4px 14px rgba(234, 29, 44, 0.3);
   }
 
   .btn-primary:hover:not(:disabled) {
-    background: var(--color-primary-dark);
+    background: linear-gradient(135deg, var(--color-primary-dark), #A0101C);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(234, 29, 44, 0.4);
+  }
+
+  .btn-primary:active:not(:disabled) {
+    transform: translateY(0);
   }
 
   .btn-success {

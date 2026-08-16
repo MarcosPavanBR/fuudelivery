@@ -99,22 +99,22 @@ export default function Users() {
         </button>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-card border border-gray-100 p-4">
+      <div className="bg-white rounded-xl shadow-card border border-gray-100 p-4">
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1 relative">
             <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <input type="text" placeholder="Buscar por nome, email..." value={search} onChange={e => setSearch(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white" />
+            <input type="text" placeholder="Buscar por nome, email..." value={search} onChange={e => setSearch(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:bg-white" />
           </div>
           <div className="relative">
             <FiFilter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)} className="w-44 pl-10 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white appearance-none">
+            <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)} className="w-44 pl-10 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:bg-white appearance-none">
               <option value="">Todas as roles</option>
               {roleOptions.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select>
           </div>
           <div className="relative">
             <FiFilter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="w-40 pl-10 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white appearance-none">
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="w-40 pl-10 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:bg-white appearance-none">
               <option value="">Todos status</option>
               {statusOptions.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
@@ -122,17 +122,17 @@ export default function Users() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-card border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-card border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Usuario</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Role</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Estabelecimento</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Criado em</th>
-                <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Acoes</th>
+                <th className="px-6 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Usuario</th>
+                <th className="px-6 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Role</th>
+                <th className="px-6 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Estabelecimento</th>
+                <th className="px-6 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Criado em</th>
+                <th className="px-6 py-2 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Acoes</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -160,44 +160,44 @@ export default function Users() {
 
       {modalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-hidden shadow-modal animate-slide-up">
+          <div className="bg-white rounded-xl w-full max-w-md max-h-[90vh] overflow-hidden shadow-modal animate-slide-up">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <h2 className="text-lg font-bold text-gray-900">{editing ? "Editar" : "Novo"} Usuario</h2>
               <button onClick={() => { setModalOpen(false); setEditing(null); }} className="p-2 rounded-xl hover:bg-gray-100"><FiX className="h-5 w-5 text-gray-500" /></button>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Nome *</label>
-                <input required name="name" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white" />
+                <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Nome *</label>
+                <input required name="name" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:bg-white" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Email *</label>
-                <input required type="email" name="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white" />
+                <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Email *</label>
+                <input required type="email" name="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:bg-white" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Senha {editing ? "(deixe em branco para nao alterar)" : "*"}</label>
-                <input type="password" name="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white" placeholder={editing ? "******" : "Minimo 6 caracteres"} />
+                <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Senha {editing ? "(deixe em branco para nao alterar)" : "*"}</label>
+                <input type="password" name="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:bg-white" placeholder={editing ? "******" : "Minimo 6 caracteres"} />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Role *</label>
-                <select name="role" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white">
+                <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Role *</label>
+                <select name="role" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:bg-white">
                   {roleOptions.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Status</label>
-                <select name="status" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white">
+                <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Status</label>
+                <select name="status" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:bg-white">
                   {statusOptions.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Estabelecimento</label>
-                <select name="establishment_id" value={formData.establishment_id} onChange={e => setFormData({...formData, establishment_id: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white">
+                <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Estabelecimento</label>
+                <select name="establishment_id" value={formData.establishment_id} onChange={e => setFormData({...formData, establishment_id: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:bg-white">
                   <option value="">Nenhum</option>
                   {establishments.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
                 </select>
               </div>
-              <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+              <div className="flex justify-end gap-2 pt-4 border-t border-gray-100">
                 <button type="button" onClick={() => { setModalOpen(false); setEditing(null); }} className="px-5 py-2.5 rounded-xl text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50">Cancelar</button>
                 <button type="submit" className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-white transition-all" style={{ background: "linear-gradient(135deg, #EA1D2C, #C41420)" }}>
                   <FiPlus className="h-4 w-4" />{editing ? " Atualizar" : " Criar"}

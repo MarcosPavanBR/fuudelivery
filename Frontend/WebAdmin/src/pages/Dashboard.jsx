@@ -75,8 +75,8 @@ export default function Dashboard() {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="card p-5">
-              <div className="skeleton h-4 w-24 mb-3" />
+            <div key={i} className="card p-6">
+              <div className="skeleton h-4 w-24 mb-2" />
               <div className="skeleton h-8 w-16" />
             </div>
           ))}
@@ -117,14 +117,14 @@ export default function Dashboard() {
             { label: "Pedidos Hoje", value: stats.todayOrders, IconComp: FiShoppingBag, color: "#10B981", bg: "#ECFDF5", accent: "linear-gradient(135deg, #10B981, #34D399)" },
             { label: "Entregadores Online", value: stats.onlineDrivers, IconComp: FiTruck, color: "#3B82F6", bg: "#DBEAFE", accent: "linear-gradient(135deg, #3B82F6, #60A5FA)" },
           ].map((stat, i) => (
-            <div key={i} className="relative card p-5 transition-all duration-300 hover:shadow-card-hover hover:-translate-y-0.5 overflow-hidden">
+            <div key={i} className="relative card p-6 transition-all duration-300 hover:shadow-card-hover hover:-translate-y-0.5 overflow-hidden">
               <div className="absolute left-0 top-0 bottom-0 w-1" style={{ background: stat.accent }} />
               <div className="flex items-start justify-between">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-500">{stat.label}</p>
                   <p className="text-3xl font-bold mt-2 text-gray-900">{stat.value}</p>
                 </div>
-                <div className="p-3 rounded-xl flex-shrink-0" style={{ background: stat.bg, color: stat.color }}>
+                <div className="p-2 rounded-xl flex-shrink-0" style={{ background: stat.bg, color: stat.color }}>
                   {stat.IconComp && <stat.IconComp className="h-6 w-6" />}
                 </div>
               </div>
@@ -141,19 +141,19 @@ export default function Dashboard() {
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Pedido</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Cliente</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Restaurante</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Total</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Hora</th>
+                <th className="px-6 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Pedido</th>
+                <th className="px-6 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Cliente</th>
+                <th className="px-6 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Restaurante</th>
+                <th className="px-6 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Total</th>
+                <th className="px-6 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Hora</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {recentOrders.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-16 text-center">
-                    <div className="mx-auto w-14 h-14 rounded-2xl bg-gray-50 flex items-center justify-center mb-3">
+                    <div className="mx-auto w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center mb-2">
                       <FiShoppingBag className="h-7 w-7 text-gray-300" />
                     </div>
                     <p className="font-medium text-gray-700">Nenhum pedido recente</p>

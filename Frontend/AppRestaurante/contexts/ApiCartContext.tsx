@@ -108,7 +108,7 @@ export const ApiCartProvider: React.FC<ApiCartProviderProps> = ({
   const getValueDelivery = async (ns: number, id: string | number) => {
     try {
       const { data } = await api.post(
-        "/api/order/delivery/calculate-delivery-value",
+        "/delivery/calculate-delivery-value",
         {
           distance: ns,
           establishmentId: id,
@@ -178,7 +178,7 @@ export const ApiCartProvider: React.FC<ApiCartProviderProps> = ({
     };
 
     try {
-      const { data } = await api.post(`/api/order/orders`, body);
+      const { data } = await api.post(`/orders`, body);
       setCart([]);
       return true;
     } catch (e) {

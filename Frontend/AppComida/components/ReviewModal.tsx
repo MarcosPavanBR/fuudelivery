@@ -24,7 +24,7 @@ const ReviewModal: React.FC<ReviewModalProps> = ({
     if (rating === 0) { Alert.alert("", "Selecione uma avaliação"); return; }
     setSubmitting(true);
     try {
-      await api.post("/api/order/reviews", {
+      await api.post("/reviews", {
         order_id: orderId,
         user_phone: userPhone,
         user_name: userName,

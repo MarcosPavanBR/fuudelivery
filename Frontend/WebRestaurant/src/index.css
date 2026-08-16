@@ -54,10 +54,16 @@
   }
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* Reset dentro de @layer base: no Tailwind v4 (CSS Cascade Layers), regra
+   SEM layer sempre vence qualquer layer, independente de especificidade.
+   Fora do layer, este * { margin/padding } anulava TODAS as utilities
+   (p-6, lg:ml-64, px-4...) e o padding de .card/.btn/.input. */
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
 }
 
 body {

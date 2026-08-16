@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # build-apk.sh — FuuDelivery APK Builder
 # Validates prerequisites then builds APK(s) via EAS cloud build.
-# Usage: ./scripts/build-apk.sh [comida|entrega] [--clean] [--install] [--validate]
+# Usage: ./scripts/build-apk.sh [comida|entrega|restaurante] [--clean] [--install] [--validate]
 
 set -euo pipefail
 
@@ -18,6 +18,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 APPCOMIDA_DIR="$PROJECT_ROOT/Frontend/AppComida"
 APPENTREGA_DIR="$PROJECT_ROOT/Frontend/AppEntrega"
+APPRESTAURANTE_DIR="$PROJECT_ROOT/Frontend/AppRestaurante"
 REQUIRED_PLUGINS=("expo-router")
 BANNED_PLUGINS=("withGradleWorkaround" "expo-modules-core" "withGradleWorkaround.js")
 REQUIRED_PKGS=("expo-router" "expo" "react" "react-native" "expo-updates")
@@ -28,9 +29,10 @@ for arg in "$@"; do
     --install)  MODE="install" ;;
     --validate) MODE="validate" ;;
     --clean)    CLEAN=true ;;
-    --help|-h) echo "Usage: $0 [comida|entrega] [--clean] [--install] [--validate]"; exit 0 ;;
+    --help|-h) echo "Usage: $0 [comida|entrega|restaurante] [--clean] [--install] [--validate]"; exit 0 ;;
     comida)     TARGET="comida" ;;
     entrega)    TARGET="entrega" ;;
+    restaurante) TARGET="restaurante" ;;
     *)          die "Unknown: $arg" ;;
   esac
 done
@@ -164,7 +166,7 @@ info "Mode: $MODE | Target: $TARGET | Clean: $CLEAN"
 
 validate_node; validate_npm; validate_jq; validate_eas; validate_login
 
-BC=false; BE=false
+BC=false; BE=false; BR=false
 if [ "$TARGET" = "both" ] || [ "$TARGET" = "comida" ]; then
   validate_app_json "$APPCOMIDA_DIR" AppComida || true
   validate_eas_json "$APPCOMIDA_DIR" AppComida || true
@@ -177,11 +179,18 @@ if [ "$TARGET" = "both" ] || [ "$TARGET" = "entrega" ]; then
   validate_versions "$APPENTREGA_DIR" AppEntrega || true
   BE=true
 fi
+if [ "$TARGET" = "both" ] || [ "$TARGET" = "restaurante" ]; then
+  validate_app_json "$APPRESTAURANTE_DIR" AppRestaurante || true
+  validate_eas_json "$APPRESTAURANTE_DIR" AppRestaurante || true
+  validate_versions "$APPRESTAURANTE_DIR" AppRestaurante || true
+  BR=true
+fi
 
 [ "$MODE" = "validate" ] && echo && success "All OK!" && exit 0
 
 [ "$BC" = true ] && install_deps "$APPCOMIDA_DIR" AppComida
 [ "$BE" = true ] && install_deps "$APPENTREGA_DIR" AppEntrega
+[ "$BR" = true ] && install_deps "$APPRESTAURANTE_DIR" AppRestaurante
 [ "$MODE" = "install" ] && echo && success "Done!" && exit 0
 
 echo ""
@@ -189,6 +198,7 @@ echo -e "${BOLD}── Builds ──${NC}"
 F=0
 [ "$BC" = true ] && ! build_app "$APPCOMIDA_DIR" AppComida "FuuDelivery (Client)" && F=$((F+1))
 [ "$BE" = true ] && ! build_app "$APPENTREGA_DIR" AppEntrega "FuuEntrega (Driver)" && F=$((F+1))
+[ "$BR" = true ] && ! build_app "$APPRESTAURANTE_DIR" AppRestaurante "FuuRestaurante (Restaurant)" && F=$((F+1))
 echo ""
 [ "$F" -eq 0 ] && echo -e "${GREEN}${BOLD}✔ All submitted!${NC}" || echo -e "${YELLOW}${BOLD}⚠ $F failed${NC}"
 info "Monitor: https://expo.dev/accounts/pavanbr/projects/my-app/builds"

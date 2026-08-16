@@ -210,12 +210,15 @@ body {
   }
 
   .btn-primary {
-    background: var(--color-primary, #EA1D2C);
+    background: linear-gradient(135deg, #EA1D2C, #C41420);
     color: #fff;
+    box-shadow: 0 4px 14px rgba(234, 29, 44, 0.3);
   }
 
   .btn-primary:hover:not(:disabled) {
     background: #C41420;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(234, 29, 44, 0.4);
   }
 
   .btn-success {

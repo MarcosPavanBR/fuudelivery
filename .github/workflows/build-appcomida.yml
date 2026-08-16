@@ -33,38 +33,24 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Expo
-        uses: expo/expo-github-action@v9
-        with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
+      - name: Setup Android SDK
+        uses: react-native-community/setup-android@v3
 
-      - name: Build APK
-        run: |
-          OUTPUT=$(eas build --platform android --profile preview --non-interactive --json)
-          echo "$OUTPUT" > build-output.json
-          BUILD_ID=$(echo "$OUTPUT" | jq -r '.id')
-          if [ -z "$BUILD_ID" ] || [ "$BUILD_ID" = "null" ]; then
-            echo "ERROR: Failed to extract build ID from EAS output"
-            echo "$OUTPUT"
-            exit 1
-          fi
-          echo "BUILD_ID=$BUILD_ID" >> $GITHUB_ENV
-          echo "Build ID: $BUILD_ID"
+      - name: Prebuild (gera projeto nativo)
+        run: npx expo prebuild --platform android --no-install --clean
         env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EX_UPDATES_CHANNEL: preview
 
-      - name: Download APK artifact
+      - name: Build APK (Gradle)
         run: |
-          echo "Downloading build $BUILD_ID"
-          mkdir -p artifacts
-          eas build:download --id "$BUILD_ID" --platform android --path ./artifacts
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1g" >> android/gradle.properties
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v6
         with:
           name: AppComida-APK
-          path: Frontend/AppComida/artifacts/*.apk
+          path: Frontend/AppComida/android/app/build/outputs/apk/release/app-release.apk
           retention-days: 30

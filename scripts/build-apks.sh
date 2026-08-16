@@ -1,5 +1,5 @@
 #!/bin/bash
-# build-apks.sh — Gera APKs do AppComida (cliente) e AppEntrega (entregador)
+# build-apks.sh — Gera APKs do AppComida (cliente), AppEntrega (entregador) e AppRestaurante (restaurante)
 #
 # Opcoes:
 #   ./scripts/build-apks.sh              # EAS Build (nuvem, recomendado)
@@ -66,7 +66,7 @@ if [ "$MODE" = "login" ]; then
 fi
 
 rm -rf "$DIST_DIR"; mkdir -p "$DIST_DIR"
-APPS=("Frontend/AppComida:appcomida" "Frontend/AppEntrega:appentrega")
+APPS=("Frontend/AppComida:appcomida" "Frontend/AppEntrega:appentrega" "Frontend/AppRestaurante:apprestaurante")
 FAILED=0
 for entry in "${APPS[@]}"; do
     IFS=':' read -r dir name <<< "$entry"

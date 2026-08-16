@@ -9,4 +9,5 @@ type User struct {
 	AvatarURL       string `gorm:"column:avatar_url" json:"avatar_url"`
 	EstablishmentID uint   `json:"establishment_id"`
 	Role            string `gorm:"column:role;default:user" json:"role"`
+	Status          string `gorm:"size:20;default:active" json:"status"`
 }

@@ -69,7 +69,7 @@ const Reports = () => {
   };
 
   const StatCard = ({ icon: Icon, label, value, color, trend }) => (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-card p-5">
+    <div className="bg-white rounded-xl border border-gray-100 shadow-card p-6">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs font-semibold text-gray-500 uppercase">{label}</p>
@@ -89,7 +89,7 @@ const Reports = () => {
             </div>
           )}
         </div>
-        <div className={`p-3 rounded-xl ${color}`}>
+        <div className={`p-2 rounded-lg ${color}`}>
           <Icon className="h-6 w-6 text-white" />
         </div>
       </div>
@@ -109,7 +109,7 @@ const Reports = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-2">
-          <div className="p-2.5 rounded-xl bg-red-50">
+          <div className="p-2 rounded-lg bg-red-50">
             <FiBarChart2 className="h-5 w-5" style={{ color: "#EA1D2C" }} />
           </div>
           <div>
@@ -120,7 +120,7 @@ const Reports = () => {
 
         <div className="flex items-center gap-2">
           {/* Seletor de período */}
-          <div className="flex bg-gray-100 rounded-xl p-1">
+          <div className="flex bg-gray-100 rounded-lg p-1">
             {Object.entries(periodLabels).map(([key, label]) => (
               <button
                 key={key}
@@ -137,7 +137,7 @@ const Reports = () => {
           </div>
 
           {/* Exportar */}
-          <button className="p-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors">
+          <button className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
             <FiDownload className="h-5 w-5 text-gray-600" />
           </button>
         </div>
@@ -176,7 +176,7 @@ const Reports = () => {
       </div>
 
       {/* Gráfico de receita por dia */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-card p-6">
+      <div className="bg-white rounded-xl border border-gray-100 shadow-card p-6">
         <div className="flex items-center gap-2 mb-6">
           <FiCalendar className="h-5 w-5 text-gray-400" />
           <h2 className="text-sm font-semibold text-gray-900">Receita Diária</h2>
@@ -213,7 +213,7 @@ const Reports = () => {
       </div>
 
       {/* Status dos pedidos */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-card p-6">
+      <div className="bg-white rounded-xl border border-gray-100 shadow-card p-6">
         <h2 className="text-sm font-semibold text-gray-900 mb-4">Pedidos por Status</h2>
         <div className="grid grid-cols-3 gap-4">
           <div className="text-center p-4 bg-green-50 rounded-xl">

@@ -44,9 +44,9 @@ function Taxes() {
           <p className="text-sm text-gray-500 mt-1">{Texts.taxes_desc}</p>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-card p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-2.5 rounded-xl bg-red-50">
+        <div className="bg-white rounded-xl border border-gray-100 shadow-card p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="p-2 rounded-lg bg-red-50">
               <FiTruck className="h-5 w-5" style={{ color: "#EA1D2C" }} />
             </div>
             <h4 className="font-bold text-gray-900">Configurações de Entrega</h4>
@@ -54,8 +54,7 @@ function Taxes() {
 
           <form onSubmit={save} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+              <div>                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
                   Taxa de Serviço - R$ <span className="text-gray-400 normal-case">(Fixo)</span>
                 </label>
                 <input
@@ -63,12 +62,11 @@ function Taxes() {
                   required
                   value={body.fixedTaxa}
                   onChange={({ target }) => setBody({ ...body, fixedTaxa: target.value })}
-                  className="block w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white"
+                  className="input"
                   placeholder="0.00"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+              <div>                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
                   Valor por Quilômetro - R$
                 </label>
                 <input
@@ -76,7 +74,7 @@ function Taxes() {
                   required
                   value={body.perKm}
                   onChange={({ target }) => setBody({ ...body, perKm: target.value })}
-                  className="block w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white"
+                  className="input"
                   placeholder="0.00"
                 />
               </div>
@@ -85,8 +83,7 @@ function Taxes() {
             <div className="flex justify-end pt-4">
               <button
                 type="submit"
-                className="flex items-center gap-2 px-6 py-3 rounded-xl text-white font-semibold text-sm transition-all duration-200 hover:shadow-lg"
-                style={{ background: "linear-gradient(135deg, #EA1D2C, #C41420)" }}
+                className="btn btn-primary"
               >
                 <FiSave className="h-5 w-5" />
                 Salvar

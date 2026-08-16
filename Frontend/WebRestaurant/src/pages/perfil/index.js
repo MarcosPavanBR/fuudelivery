@@ -112,15 +112,15 @@ function Perfil() {
       <form className="space-y-6 animate-fade-in" onSubmit={submit}>
         {/* User Section */}
         <div className="card p-6">
-          <div className="flex items-center gap-3 mb-5">
-            <div className="p-2.5 rounded-xl bg-red-50">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="p-2 rounded-lg bg-red-50">
               <FiUser className="h-5 w-5" style={{ color: "#EA1D2C" }} />
             </div>
             <h3 className="text-lg font-bold text-gray-900 dark:text-white">Usuário</h3>
           </div>
 
           {/* Avatar / foto de perfil */}
-          <div className="flex items-center gap-5 mb-5">
+          <div className="flex items-center gap-4 mb-4">
             <div className="relative flex-shrink-0">
               <div
                 className="w-16 h-16 rounded-full flex items-center justify-center overflow-hidden border-4 border-gray-100 shadow-sm"
@@ -171,11 +171,11 @@ function Perfil() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Nome</label>
+              <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Nome</label>
               <input disabled value={user.name} className={inputClass} />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">E-mail</label>
+              <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">E-mail</label>
               <input disabled value={user.email} className={inputClass} />
             </div>
           </div>
@@ -192,47 +192,47 @@ function Perfil() {
 
         {/* Establishment Section */}
         <div className="card p-6">
-          <div className="flex items-center gap-3 mb-5">
-            <div className="p-2.5 rounded-xl bg-red-50">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="p-2 rounded-lg bg-red-50">
               <FiGrid className="h-5 w-5" style={{ color: "#EA1D2C" }} />
             </div>
             <h3 className="text-lg font-bold text-gray-900 dark:text-white">Estabelecimento</h3>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+              <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
                 Nome <RequiredMark />
               </label>
               <input name="name" maxLength={80} required onChange={({ target }) => handlerEstablishment(target)} value={establishment.name} className={inputClass} />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+              <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
                 Descrição <RequiredMark />
               </label>
               <input name="description" maxLength={150} required onChange={({ target }) => handlerEstablishment(target)} value={establishment.description} className={inputClass} />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+              <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
                 Cor Primária <RequiredMark />
               </label>
               <input type="color" name="primary_color" required onChange={({ target }) => handlerEstablishment(target)} value={establishment.primary_color}
-                className="w-full h-12 rounded-xl border border-gray-200 cursor-pointer dark:border-gray-700" />
+                className="w-full h-12 rounded-lg border border-gray-200 cursor-pointer dark:border-gray-700" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+              <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
                 Cor Secundária <RequiredMark />
               </label>
               <input type="color" name="secondary_color" required onChange={({ target }) => handlerEstablishment(target)} value={establishment.secondary_color}
-                className="w-full h-12 rounded-xl border border-gray-200 cursor-pointer dark:border-gray-700" />
+                className="w-full h-12 rounded-lg border border-gray-200 cursor-pointer dark:border-gray-700" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+              <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
                 Dist. Máxima (km) <RequiredMark />
               </label>
               <input type="number" min={1} max={100} name="max_distance_delivery" required onChange={({ target }) => handlerEstablishment(target)} value={establishment.max_distance_delivery} className={inputClass} />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
+              <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
                 Horário Funcionamento <RequiredMark />
               </label>
               <input name="horarioFuncionamento" maxLength={50} required onChange={({ target }) => handlerEstablishment(target)} value={establishment.horarioFuncionamento} className={inputClass} />
@@ -250,8 +250,8 @@ function Perfil() {
 
         {/* Address Section */}
         <div className="card p-6">
-          <div className="flex items-center gap-3 mb-5">
-            <div className="p-2.5 rounded-xl bg-red-50">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="p-2 rounded-lg bg-red-50">
               <FiMapPin className="h-5 w-5" style={{ color: "#EA1D2C" }} />
             </div>
             <h3 className="text-lg font-bold text-gray-900 dark:text-white">Endereço</h3>
@@ -264,11 +264,11 @@ function Perfil() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Latitude</label>
+              <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Latitude</label>
               <input type="number" name="lat" required disabled onChange={({ target }) => handlerEstablishment(target)} value={establishment.lat} className={inputClass} />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Longitude</label>
+              <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Longitude</label>
               <input type="number" name="long" required disabled onChange={({ target }) => handlerEstablishment(target)} value={establishment.long} className={inputClass} />
             </div>
           </div>
@@ -282,7 +282,7 @@ function Perfil() {
           <button
             type="submit"
             disabled={loading}
-            className="btn btn-success px-6 py-3"
+            className="btn btn-primary"
           >
             {loading ? (
               <FiLoader className="h-5 w-5 animate-spin" />

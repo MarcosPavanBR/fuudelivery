@@ -13,7 +13,7 @@
   "scripts": {
     "dev": "vite",
     "start": "vite",
-    "build": "vite build",
+    "build": "vite build && node ../../scripts/copy-404.cjs build",
     "preview": "vite preview",
     "test": "vitest run"
   },

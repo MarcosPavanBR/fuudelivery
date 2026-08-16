@@ -33,6 +33,22 @@ jobs:
           - name: admin
             service_id_secret: RENDER_SERVICE_ID_ADMIN
     steps:
+      - name: Garante rotas SPA (web/admin) antes do deploy
+        if: matrix.service.name != 'api'
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ secrets[matrix.service.service_id_secret] }}
+        run: |
+          # O deploy via API (POST /deploys) nao sincroniza config de servico.
+          # Garante o rewrite SPA (/* -> /index.html) antes de rebuildar,
+          # para as rotas nunca ficarem dessincronizadas do render.yaml.
+          curl -sS -X PUT \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '[{"type":"rewrite","source":"/*","destination":"/index.html"}]' \
+            -w "\nHTTP %{http_code}\n" \
+            "https://api.render.com/v1/services/${SERVICE_ID}/routes"
+
       - name: Deploy ${{ matrix.service.name }} to Render
         run: |
           curl -X POST \

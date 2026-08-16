@@ -76,7 +76,7 @@ jobs:
             HTTP_CODE=$(echo "$OUT" | tail -1)
             RESP=$(echo "$OUT" | sed '$d')
             echo "[$attempt/3] POST /deploys (${{ matrix.service.name }}) -> HTTP $HTTP_CODE"
-            if [ "${HTTP_CODE:0:1}" = "2" ]; then
+            if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
               break
             fi
             sleep 5

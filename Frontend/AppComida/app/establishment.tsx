@@ -38,14 +38,14 @@ export default function Establishment() {
       // a cada visita ao restaurante. Rede falhou → serve o último cache.
       const categories = await fetchWithCache(
         CACHE_KEYS.menuCategories(establishment.id),
-        async () => (await api.get("/api/order/categories/product/" + establishment.id)).data,
+        async () => (await api.get("/categories/product/" + establishment.id)).data,
         CACHE_TTL.MENU,
         []
       );
 
       const produtos = await fetchWithCache(
         CACHE_KEYS.menuProducts(establishment.id),
-        async () => (await api.get("/api/order/products/" + establishment.id)).data,
+        async () => (await api.get("/products/" + establishment.id)).data,
         CACHE_TTL.MENU,
         []
       );

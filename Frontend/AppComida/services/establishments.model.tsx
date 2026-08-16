@@ -10,7 +10,7 @@ async function getEstablishment() {
   return fetchWithCache(
     CACHE_KEYS.ESTABLISHMENTS,
     async () => {
-      const { data } = await api.get("/api/auth/establishments");
+      const { data } = await api.get("/establishments");
       return data;
     },
     CACHE_TTL.ESTABLISHMENTS,

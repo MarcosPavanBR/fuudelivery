@@ -62,15 +62,29 @@ jobs:
             DEPLOY_BODY="{\"commitId\":\"${COMMIT_ID}\"}"
             echo "Deployando commit especifico: $COMMIT_ID"
           fi
-          RESP=$(curl -sS -X POST \
-            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
-            -H "Content-Type: application/json" \
-            -d "$DEPLOY_BODY" \
-            "https://api.render.com/v1/services/${{ secrets[matrix.service.service_id_secret] }}/deploys")
+          # POST /deploys pode falhar transitoriamente (rate limit/flake da API
+          # do Render). Tenta ate 3x com o codigo HTTP visivel; so falha de
+          # verdade se nenhuma tentativa retornar 200/201.
+          RESP=""
+          HTTP_CODE=""
+          for attempt in 1 2 3; do
+            OUT=$(curl -sS -w "\n%{http_code}" -X POST \
+              -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+              -H "Content-Type: application/json" \
+              -d "$DEPLOY_BODY" \
+              "https://api.render.com/v1/services/${{ secrets[matrix.service.service_id_secret] }}/deploys" 2>&1 || true)
+            HTTP_CODE=$(echo "$OUT" | tail -1)
+            RESP=$(echo "$OUT" | sed '$d')
+            echo "[$attempt/3] POST /deploys (${{ matrix.service.name }}) -> HTTP $HTTP_CODE"
+            if [ "${HTTP_CODE:0:1}" = "2" ]; then
+              break
+            fi
+            sleep 5
+          done
           echo "POST /deploys -> $RESP"
           DEPLOY_ID=$(echo "$RESP" | python3 -c "import sys,json;print(json.load(sys.stdin).get('id',''))" 2>/dev/null || echo "")
           if [ -z "$DEPLOY_ID" ]; then
-            echo "::error::Falha ao obter o ID do deploy: $RESP"
+            echo "::error::Falha ao obter o ID do deploy (${{ matrix.service.name }}, HTTP $HTTP_CODE): $RESP"
             exit 1
           fi
           echo "DEPLOY_ID=$DEPLOY_ID" >> "$GITHUB_ENV"

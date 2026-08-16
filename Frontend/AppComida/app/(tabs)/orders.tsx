@@ -28,6 +28,7 @@ export default function TabTwoScreen() {
   const isFocused = useIsFocused();
   const [intervalId, setIntervalId] = useState<any>(null);
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
+  const [userHasPhone, setUserHasPhone] = useState<boolean | null>(null);
 
   function sortObjectsByLastModified(arr: any) {
     arr.sort((a: any, b: any) => {
@@ -41,9 +42,12 @@ export default function TabTwoScreen() {
   async function getMyOrders() {
     const userData = await getUserData();
     if (!userData?.phone) {
+      setUserHasPhone(false);
+      setMyOrders([]);
       return;
     }
 
+    setUserHasPhone(true);
     const data = await orderModel.getOrders(userData?.phone);
     setMyOrders(sortObjectsByLastModified(data));
   }
@@ -78,6 +82,30 @@ export default function TabTwoScreen() {
   return (
     <ScrollView style={styles.container}>
       <View style={{ alignItems: "center", paddingTop: 10 }}>
+        {userHasPhone === false && (
+          <View style={styles.noPhoneBox}>
+            <Text style={styles.noPhoneTitle}>
+              Seus pedidos aparecem pelo telefone cadastrado
+            </Text>
+            <Text style={styles.noPhoneText}>
+              Adicione seu telefone em Configurações para ver o histórico de
+              pedidos aqui.
+            </Text>
+            <TouchableOpacity
+              style={styles.noPhoneButton}
+              onPress={() => navigation.navigate("config" as never)}
+            >
+              <Text style={styles.noPhoneButtonText}>Adicionar telefone</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {userHasPhone === true && myOrders.length === 0 && (
+          <Text style={styles.emptyText}>
+            Você ainda não fez nenhum pedido.
+          </Text>
+        )}
+
         {myOrders?.map((e: any) => {
           const orderId = e._id?.$oid || e._id?.toString() || "";
           const isExpanded = expandedOrder === orderId;
@@ -318,5 +346,43 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
     color: Colors.light.tint,
+  },
+  noPhoneBox: {
+    width: "90%",
+    alignItems: "center",
+    padding: 20,
+    marginTop: 30,
+    borderWidth: 1,
+    borderColor: Colors.light.tabIconDefault,
+    borderRadius: 3,
+  },
+  noPhoneTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: Colors.light.text,
+    textAlign: "center",
+  },
+  noPhoneText: {
+    fontSize: 13,
+    color: Colors.light.secondaryText,
+    textAlign: "center",
+    marginTop: 8,
+  },
+  noPhoneButton: {
+    backgroundColor: Colors.light.tint,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 3,
+    marginTop: 16,
+  },
+  noPhoneButtonText: {
+    color: Colors.light.white,
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+  emptyText: {
+    marginTop: 40,
+    fontSize: 14,
+    color: Colors.light.secondaryText,
   },
 });

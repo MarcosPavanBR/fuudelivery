@@ -14,8 +14,10 @@ package main
 
 import (
 	"log"
+	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/gofiber/fiber/v2"
@@ -79,16 +81,44 @@ func main() {
 	app.Use(logger.New())
 
 	// CORS: origens permitidas. Lista canônica em references/URLS.md.
-	// Origens: WebRestaurant, WebAdmin, PaymentPanel (produção).
-	// Pode ser sobrescrita pela env var ALLOWED_ORIGINS (render.yaml).
-	allowedOrigins := os.Getenv("ALLOWED_ORIGINS")
-	if allowedOrigins == "" {
-		allowedOrigins = "https://fuudelivery-web.onrender.com,https://fuudelivery-admin-lv7f.onrender.com,https://fuudelivery-payment-panel.onrender.com"
+	// Comportamento:
+	//   - ALLOWED_ORIGINS (env, render.yaml) SOMA com os defaults — nunca
+	//     remove os domínios de produção ao adicionar uma origem nova.
+	//   - "https://*.daytonaproxy01.net" libera qualquer preview do Freebuff
+	//     Cloud (formato <porta>-<workspace-uuid>.daytonaproxy01.net).
+	//   - AllowOriginsFunc libera localhost/127.0.0.1 (qualquer porta) para
+	//     desenvolvimento local.
+	defaultOrigins := []string{
+		"https://fuudelivery-web.onrender.com",
+		"https://fuudelivery-admin-lv7f.onrender.com",
+		"https://fuudelivery-payment-panel.onrender.com",
+		"https://*.daytonaproxy01.net",
 	}
+	allowedOrigins := append([]string{}, defaultOrigins...)
+	if extra := os.Getenv("ALLOWED_ORIGINS"); extra != "" {
+		for _, o := range strings.Split(extra, ",") {
+			if o = strings.TrimSpace(o); o != "" {
+				allowedOrigins = append(allowedOrigins, o)
+			}
+		}
+	}
+	// Remove duplicatas preservando a ordem.
+	seen := make(map[string]struct{}, len(allowedOrigins))
+	unique := allowedOrigins[:0]
+	for _, o := range allowedOrigins {
+		if _, dup := seen[o]; dup {
+			continue
+		}
+		seen[o] = struct{}{}
+		unique = append(unique, o)
+	}
+	allowedOrigins = unique
+
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: allowedOrigins,
-		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
-		AllowHeaders: "Origin,Content-Type,Accept,Authorization",
+		AllowOrigins:     strings.Join(allowedOrigins, ","),
+		AllowOriginsFunc: isLocalDevOrigin,
+		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
+		AllowHeaders:     "Origin,Content-Type,Accept,Authorization",
 	}))
 
 	// 5. Rotas públicas: health check + índice da API na raiz
@@ -196,4 +226,23 @@ func main() {
 	if err := app.Listen(":" + port); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// isLocalDevOrigin libera origens de desenvolvimento local
+// (localhost / 127.0.0.1 / ::1 em qualquer porta). O Fiber não suporta
+// wildcard de porta no AllowOrigins, então o check é programático;
+// quando retorna true o middleware ecoa o origin na resposta.
+func isLocalDevOrigin(origin string) bool {
+	if origin == "" {
+		return false
+	}
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	switch strings.ToLower(u.Hostname()) {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	}
+	return false
 }

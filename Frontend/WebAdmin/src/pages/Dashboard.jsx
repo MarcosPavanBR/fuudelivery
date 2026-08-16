@@ -100,8 +100,8 @@ export default function Dashboard() {
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-500 mt-1">Visão geral do sistema</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Dashboard</p>
+          <h1 className="text-2xl sm:text-[28px] font-bold text-gray-900 tracking-tight">Visão Geral</h1>
         </div>
         <div className="flex items-center gap-2 text-sm text-gray-500">
           <FiActivity className="h-4 w-4 text-green-500 animate-pulse" />
@@ -118,13 +118,11 @@ export default function Dashboard() {
             { label: "Entregadores Online", value: stats.onlineDrivers, IconComp: FiTruck, color: "#3B82F6", bg: "#DBEAFE", accent: "linear-gradient(135deg, #3B82F6, #60A5FA)" },
           ].map((stat, i) => (
             <div key={i} className="relative card p-6 transition-all duration-300 hover:shadow-card-hover hover:-translate-y-0.5 overflow-hidden">
-              <div className="absolute left-0 top-0 bottom-0 w-1" style={{ background: stat.accent }} />
+              <div className="absolute left-0 top-0 bottom-0 w-1 rounded-full" style={{ background: stat.accent }} />
               <div className="flex items-start justify-between">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-500">{stat.label}</p>
+                <div className="min-w-0">                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{stat.label}</p>
                   <p className="text-3xl font-bold mt-2 text-gray-900">{stat.value}</p>
-                </div>
-                <div className="p-2 rounded-xl flex-shrink-0" style={{ background: stat.bg, color: stat.color }}>
+                </div>                    <div className="p-2 rounded-lg flex-shrink-0" style={{ background: stat.bg, color: stat.color }}>
                   {stat.IconComp && <stat.IconComp className="h-6 w-6" />}
                 </div>
               </div>

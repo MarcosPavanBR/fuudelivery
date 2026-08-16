@@ -51,7 +51,45 @@ jobs:
 
       - name: Deploy ${{ matrix.service.name }} to Render
         run: |
-          curl -X POST \
+          RESP=$(curl -sS -X POST \
             -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
             -H "Content-Type: application/json" \
-            "https://api.render.com/v1/services/${{ secrets[matrix.service.service_id_secret] }}/deploys"
+            "https://api.render.com/v1/services/${{ secrets[matrix.service.service_id_secret] }}/deploys")
+          echo "POST /deploys -> $RESP"
+          DEPLOY_ID=$(echo "$RESP" | python3 -c "import sys,json;print(json.load(sys.stdin).get('id',''))" 2>/dev/null || echo "")
+          if [ -z "$DEPLOY_ID" ]; then
+            echo "::error::Falha ao obter o ID do deploy: $RESP"
+            exit 1
+          fi
+          echo "DEPLOY_ID=$DEPLOY_ID" >> "$GITHUB_ENV"
+          echo "Deploy iniciado: $DEPLOY_ID"
+
+      - name: Aguarda e valida deploy ${{ matrix.service.name }} (GET /deploys)
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ secrets[matrix.service.service_id_secret] }}
+          DEPLOY_ID: ${{ env.DEPLOY_ID }}
+        run: |
+          if [ -z "$DEPLOY_ID" ]; then
+            echo "::error::DEPLOY_ID vazio - deploy nao iniciado"
+            exit 1
+          fi
+          for i in $(seq 1 40); do
+            STATUS=$(curl -sS "https://api.render.com/v1/services/${SERVICE_ID}/deploys/${DEPLOY_ID}" \
+              -H "Authorization: Bearer ${RENDER_API_KEY}" \
+              | python3 -c "import sys,json;print(json.load(sys.stdin).get('status',''))" 2>/dev/null || echo "erro_ao_consultar")
+            echo "[$i/40] deploy $DEPLOY_ID (${{ matrix.service.name }}) status: $STATUS"
+            case "$STATUS" in
+              live)
+                echo "::notice::Deploy $DEPLOY_ID (${{ matrix.service.name }}) concluido com sucesso"
+                exit 0
+                ;;
+              build_failed|update_failed|pre_deploy_failed|canceled|deactivated)
+                echo "::error::Deploy $DEPLOY_ID (${{ matrix.service.name }}) FALHOU (status: $STATUS)"
+                exit 1
+                ;;
+            esac
+            sleep 15
+          done
+          echo "::error::Timeout aguardando o deploy $DEPLOY_ID (${{ matrix.service.name }}) concluir"
+          exit 1

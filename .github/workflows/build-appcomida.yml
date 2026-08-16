@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - 'Frontend/AppComida/**'
+      - '.github/workflows/build-appcomida.yml'
 
 jobs:
   build:
@@ -34,7 +35,7 @@ jobs:
           java-version: '17'
 
       - name: Setup Android SDK
-        uses: react-native-community/setup-android@v3
+        uses: android-actions/setup-android@v3
 
       - name: Prebuild (gera projeto nativo)
         run: npx expo prebuild --platform android --no-install --clean

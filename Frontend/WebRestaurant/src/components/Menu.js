@@ -148,7 +148,7 @@ const SideMenu = ({ isOpen, isMobile, onClose }) => {
           }`}
           style={{
             width: "260px",
-            background: "linear-gradient(180deg, #1A1A1A 0%, #111111 100%)",
+            background: "#1A1A1A",
             boxShadow: "4px 0 24px rgba(0,0,0,0.15)",
           }}
         >
@@ -169,18 +169,11 @@ const SideMenu = ({ isOpen, isMobile, onClose }) => {
                   <Link
                     to={item.href}
                     onClick={handleNavClick}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
+                    className={`flex items-center gap-2 px-4 py-2 rounded-r-lg transition-all duration-150 ${
                       location.pathname === item.href
-                        ? "text-white"
-                        : "text-gray-400 hover:text-white"
+                        ? "text-[#EA1D2C] font-semibold border-l-[3px] border-[#EA1D2C] bg-[rgba(234,29,44,0.10)]"
+                        : "text-[#9CA3AF] hover:bg-[rgba(255,255,255,0.03)]"
                     }`}
-                    style={
-                      location.pathname === item.href
-                        ? {
-                            background: "linear-gradient(135deg, #EA1D2C, #C41420)",
-                          }
-                        : {}
-                    }
                   >
                     <span className="flex-shrink-0">{item.icon}</span>
                     <span className="text-sm font-medium">{item.title}</span>
@@ -192,8 +185,8 @@ const SideMenu = ({ isOpen, isMobile, onClose }) => {
 
           <div className="px-3 pb-4">
             <button
-              onClick={logout}
-              className="flex items-center gap-3 w-full rounded-xl px-4 py-3 text-gray-400 hover:text-white hover:bg-white/10 transition-all duration-200"
+          onClick={logout}
+          className="flex items-center gap-2 w-full rounded-r-lg px-4 py-2 text-[#9CA3AF] hover:text-white hover:bg-[rgba(255,255,255,0.03)] transition-all duration-150"
             >
               <FiPower className="h-5 w-5 flex-shrink-0" />
               <span className="text-sm font-medium">Sair</span>
@@ -210,7 +203,7 @@ const SideMenu = ({ isOpen, isMobile, onClose }) => {
         isOpen ? "w-64" : "w-[72px]"
       }`}
       style={{
-        background: "linear-gradient(180deg, #1A1A1A 0%, #111111 100%)",
+        background: "#1A1A1A",
         boxShadow: "4px 0 24px rgba(0,0,0,0.15)",
       }}
     >
@@ -232,20 +225,13 @@ const SideMenu = ({ isOpen, isMobile, onClose }) => {
             <li key={idx}>
               <Link
                 to={item.href}
-                className={`flex items-center gap-3 rounded-xl transition-all duration-200 group ${
-                  isOpen ? "px-4 py-3" : "px-0 py-3 justify-center"
+                className={`flex items-center gap-2 rounded-r-lg transition-all duration-150 group ${
+                  isOpen ? "px-4 py-2" : "px-0 py-2 justify-center"
                 } ${
                   location.pathname === item.href
-                    ? "text-white"
-                    : "text-gray-400 hover:text-white"
+                    ? "text-[#EA1D2C] font-semibold border-l-[3px] border-[#EA1D2C] bg-[rgba(234,29,44,0.10)]"
+                    : "text-[#9CA3AF] hover:bg-[rgba(255,255,255,0.03)]"
                 }`}
-                style={
-                  location.pathname === item.href
-                    ? {
-                        background: "linear-gradient(135deg, #EA1D2C, #C41420)",
-                      }
-                    : {}
-                }
                 title={!isOpen ? item.title : undefined}
               >
                 <span className="flex-shrink-0">{item.icon}</span>
@@ -261,7 +247,7 @@ const SideMenu = ({ isOpen, isMobile, onClose }) => {
       <div className="px-3 pb-4">
         <button
           onClick={logout}
-          className={`flex items-center gap-3 w-full rounded-xl px-4 py-3 text-gray-400 hover:text-white hover:bg-white/10 transition-all duration-200 ${
+          className={`flex items-center gap-2 w-full rounded-r-lg px-4 py-2 text-[#9CA3AF] hover:text-white hover:bg-[rgba(255,255,255,0.03)] transition-all duration-150 ${
             !isOpen ? "justify-center px-0" : ""
           }`}
           title={!isOpen ? "Sair" : undefined}

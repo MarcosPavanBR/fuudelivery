@@ -109,7 +109,7 @@ const LoginPage = () => {
             <div>
               <label
                 htmlFor="email-address"
-                className="block text-sm font-medium text-gray-700 mb-1.5"
+                className="block text-sm font-medium text-gray-700 mb-2"
               >
                 {Texts.email_end}
               </label>
@@ -123,7 +123,7 @@ const LoginPage = () => {
                   type="email"
                   autoComplete="email"
                   required
-                  className="appearance-none block w-full pl-10 pr-10 py-3 border border-gray-200 rounded-xl placeholder-gray-500 text-gray-900 bg-gray-50 focus:bg-white transition-colors"
+                  className="appearance-none block w-full pl-10 pr-10 py-3 border border-gray-200 rounded-lg placeholder-gray-500 text-gray-900 bg-gray-50 focus:bg-white transition-colors"
                   placeholder="seu@email.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -134,7 +134,7 @@ const LoginPage = () => {
             <div>
               <label
                 htmlFor="password"
-                className="block text-sm font-medium text-gray-700 mb-1.5"
+                className="block text-sm font-medium text-gray-700 mb-2"
               >
                 {Texts.password}
               </label>
@@ -148,7 +148,7 @@ const LoginPage = () => {
                   type="password"
                   autoComplete="current-password"
                   required
-                  className="appearance-none block w-full pl-10 pr-10 py-3 border border-gray-200 rounded-xl placeholder-gray-500 text-gray-900 bg-gray-50 focus:bg-white transition-colors"
+                  className="appearance-none block w-full pl-10 pr-10 py-3 border border-gray-200 rounded-lg placeholder-gray-500 text-gray-900 bg-gray-50 focus:bg-white transition-colors"
                   placeholder="Sua senha"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -175,7 +175,7 @@ const LoginPage = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-white font-semibold text-sm transition-all duration-200 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg text-white font-semibold text-sm transition-all duration-200 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               style={{
                 background: "linear-gradient(135deg, #EA1D2C, #C41420)",
               }}

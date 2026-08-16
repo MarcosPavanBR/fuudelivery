@@ -48,15 +48,15 @@ export default function Orders() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-card border border-gray-100 p-4">
+      <div className="bg-white rounded-xl shadow-card border border-gray-100 p-4">
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1 relative">
             <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <input type="text" placeholder="Buscar por ID, cliente..." value={search} onChange={e => setSearch(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white" />
+            <input type="text" placeholder="Buscar por ID, cliente..." value={search} onChange={e => setSearch(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:bg-white" />
           </div>
           <div className="relative">
             <FiFilter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="w-44 pl-10 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white appearance-none">
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="w-44 pl-10 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:bg-white appearance-none">
               <option value="">Todos status</option>
               {Object.entries(statusColors).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
@@ -64,19 +64,19 @@ export default function Orders() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-card border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-card border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Pedido</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Cliente</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Restaurante</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Total</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Entregador</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Criado</th>
-                <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Acoes</th>
+                <th className="px-6 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Pedido</th>
+                <th className="px-6 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Cliente</th>
+                <th className="px-6 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Restaurante</th>
+                <th className="px-6 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Total</th>
+                <th className="px-6 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Entregador</th>
+                <th className="px-6 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Criado</th>
+                <th className="px-6 py-2 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Acoes</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -117,22 +117,22 @@ export default function Orders() {
 
       {modalOpen && selectedOrder && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-modal animate-slide-up">
+          <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-modal animate-slide-up">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <h2 className="text-lg font-bold text-gray-900">Detalhes do Pedido #{selectedOrder.id?.toString().slice(-8)}</h2>
               <button onClick={() => { setModalOpen(false); setSelectedOrder(null); }} className="p-2 rounded-xl hover:bg-gray-100"><FiX className="h-5 w-5 text-gray-500" /></button>
             </div>
             <div className="p-6 overflow-y-auto max-h-[70vh]">
-              <div className="grid grid-cols-2 gap-4 mb-6">
+              <div className="grid grid-cols-2 gap-4 mb-8">
                 <div><p className="text-xs font-semibold text-gray-500 uppercase">ID</p><p className="font-medium text-gray-900">#{selectedOrder.id}</p></div>
                 <div><p className="text-xs font-semibold text-gray-500 uppercase">Status</p><span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium" style={{ background: (statusColors[selectedOrder.status] || { bg: "#F3F4F6" }).bg, color: (statusColors[selectedOrder.status] || { text: "#4B5563" }).text }}>{(statusColors[selectedOrder.status] || { label: selectedOrder.status }).label}</span></div>
                 <div><p className="text-xs font-semibold text-gray-500 uppercase">Total</p><p className="font-bold text-2xl text-gray-900">R$ {selectedOrder.total?.toFixed(2)}</p></div>
                 <div><p className="text-xs font-semibold text-gray-500 uppercase">Criado em</p><p className="font-medium text-gray-900">{selectedOrder.createdAt ? new Date(selectedOrder.createdAt).toLocaleString("pt-BR") : "-"}</p></div>
               </div>
-              <h3 className="font-semibold text-gray-900 mb-3">Itens</h3>
+              <h3 className="font-semibold text-gray-900 mb-2">Itens</h3>
               <div className="space-y-2">
                 {selectedOrder.items?.map((item, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                  <div key={i} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
                     <div><p className="font-medium text-gray-900">{item.name || item.product?.name || "Item"}</p><p className="text-xs text-gray-500">Qtd: {item.quantity || 1}</p></div>
                     <p className="font-semibold text-gray-900">R$ {(item.price || item.subtotal || 0).toFixed(2)}</p>
                   </div>

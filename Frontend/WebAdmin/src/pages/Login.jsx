@@ -60,7 +60,7 @@ export default function Login() {
               Acesse pedidos em tempo real, gerencie seu cardápio e acompanhe suas vendas
             </p>
           </div>
-          <div className="mt-12 flex gap-6 justify-center">
+          <div className="mt-12 flex gap-8 justify-center">
             {[
               { num: "100+", label: "Restaurantes" },
               { num: "50k+", label: "Pedidos/mês" },
@@ -109,7 +109,7 @@ export default function Login() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">E-mail</label>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">E-mail</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <FiMail className="h-5 w-5 text-gray-400" />
@@ -120,7 +120,7 @@ export default function Login() {
                   type="email"
                   autoComplete="email"
                   required
-                  className="block w-full pl-10 pr-10 py-3 border border-gray-200 rounded-xl text-sm bg-gray-50 placeholder-gray-500 text-gray-900 focus:bg-white transition-colors"
+                  className="block w-full pl-10 pr-10 py-3 border border-gray-200 rounded-lg text-sm bg-gray-50 placeholder-gray-500 text-gray-900 focus:bg-white transition-colors"
                   placeholder="seu@email.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -129,7 +129,7 @@ export default function Login() {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1.5">Senha</label>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">Senha</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <FiLock className="h-5 w-5 text-gray-400" />
@@ -140,7 +140,7 @@ export default function Login() {
                   type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
                   required
-                  className="block w-full pl-10 pr-12 py-3 border border-gray-200 rounded-xl text-sm bg-gray-50 placeholder-gray-500 text-gray-900 focus:bg-white transition-colors"
+                  className="block w-full pl-10 pr-12 py-3 border border-gray-200 rounded-lg text-sm bg-gray-50 placeholder-gray-500 text-gray-900 focus:bg-white transition-colors"
                   placeholder="Sua senha"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}

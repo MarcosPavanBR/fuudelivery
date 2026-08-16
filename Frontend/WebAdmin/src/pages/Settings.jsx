@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import {
   FiSettings,
   FiUser,
@@ -12,11 +12,11 @@ import {
   FiTrash2,
   FiPlus,
   FiLogOut,
-  FiCamera,
 } from "react-icons/fi";
 import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
 import { toast } from "react-toastify";
+import ProfileSettings from "./ProfileSettings";
 
 const tabs = [
   { id: "profile", label: "Perfil", icon: FiUser },
@@ -26,17 +26,6 @@ const tabs = [
   { id: "integrations", label: "Integrações", icon: FiCreditCard },
 ];
 
-// Máscara de telefone brasileiro: (XX) XXXXX-XXXX
-function formatPhone(value) {
-  const digits = (value || "").replace(/\D/g, "").slice(0, 11);
-  if (digits.length === 0) return "";
-  if (digits.length <= 2) return `(${digits}`;
-  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
-  if (digits.length <= 10)
-    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
-  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
-}
-
 const inputClass = "input";
 const inputErrorClass = "input is-invalid";
 
@@ -45,11 +34,7 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState("profile");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [avatar, setAvatar] = useState(
-    () => localStorage.getItem("fuu_admin_avatar") || user?.avatar_url || ""
-  );
   const [errors, setErrors] = useState({});
-  const fileInputRef = useRef(null);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -78,58 +63,6 @@ export default function Settings() {
       }));
     }
   }, [user]);
-
-  // Carrega o avatar persistido no backend (fonte da verdade) e cacheia
-  // localmente para exibição instantânea nas próximas visitas.
-  useEffect(() => {
-    if (!user?.id) return;
-    api
-      .get(`/users/${user.id}`)
-      .then(({ data }) => {
-        if (data?.avatar_url) {
-          setAvatar(data.avatar_url);
-          localStorage.setItem("fuu_admin_avatar", data.avatar_url);
-        }
-      })
-      .catch(() => {});
-  }, [user?.id]);
-
-  const resetProfile = () => {
-    setFormData((prev) => ({
-      ...prev,
-      name: user?.name || "",
-      email: user?.email || "",
-      phone: "",
-    }));
-    setErrors({});
-  };
-
-  const handleAvatarUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      toast.error("Selecione um arquivo de imagem");
-      return;
-    }
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error("Imagem muito grande (máx. 2MB)");
-      return;
-    }
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const { data } = await api.post("/upload/avatars", fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      if (!data?.url) throw new Error("Upload sem URL");
-      await api.put(`/users/${user?.id}`, { avatar_url: data.url });
-      setAvatar(data.url);
-      localStorage.setItem("fuu_admin_avatar", data.url);
-      toast.success("Foto atualizada!");
-    } catch (err) {
-      toast.error(err?.response?.data?.error || "Erro ao enviar foto");
-    }
-  };
 
   const validateProfile = () => {
     const next = {};
@@ -188,13 +121,15 @@ export default function Settings() {
 
   return (
     <div className="animate-fade-in">
-      <div className="mb-8 px-1">
-        <p className="text-sm text-gray-500">Configurações da conta</p>
-        <h1 className="text-2xl font-bold text-gray-900 mt-1">Configurações</h1>
-        <p className="text-gray-500 mt-1">
-          Gerencie suas preferências e configurações da conta
-        </p>
-      </div>
+      {activeTab !== "profile" && (
+        <div className="mb-8 px-1">
+          <p className="text-sm text-gray-500">Configurações da conta</p>
+          <h1 className="text-2xl font-bold text-gray-900 mt-1">Configurações</h1>
+          <p className="text-gray-500 mt-1">
+            Gerencie suas preferências e configurações da conta
+          </p>
+        </div>
+      )}
 
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Sidebar */}
@@ -204,7 +139,7 @@ export default function Settings() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`relative w-full flex items-center gap-3 px-6 py-4 transition-all duration-200 border-b border-gray-100 last:border-0 ${
+                className={`relative w-full flex items-center gap-2 px-6 py-4 transition-all duration-200 border-b border-gray-100 last:border-0 ${
                   activeTab === tab.id
                     ? "bg-fuu-red-light text-fuu-red font-semibold"
                     : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
@@ -220,7 +155,7 @@ export default function Settings() {
             <div className="border-t border-gray-100 p-4">
               <button
                 onClick={handleLogout}
-                className="w-full flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-xl transition-colors font-medium"
+                className="w-full flex items-center gap-2 px-4 py-4 text-red-600 hover:bg-red-50 rounded-xl transition-colors font-medium"
               >
                 <FiLogOut className="h-5 w-5" />
                 Sair da conta
@@ -231,137 +166,7 @@ export default function Settings() {
 
         {/* Content */}
         <main className="flex-1 min-w-0">
-          {activeTab === "profile" && (
-            <div className="card p-6 animate-fade-in">
-              <h2 className="text-xl font-bold text-gray-900 mb-6">Perfil</h2>
-              <form
-                onSubmit={handleSave}
-                noValidate
-                className="space-y-6 max-w-2xl"
-              >
-                {/* Avatar / foto de perfil */}
-                <div className="flex items-center gap-5">
-                  <div className="relative flex-shrink-0">
-                    <div
-                      className="w-20 h-20 rounded-full flex items-center justify-center overflow-hidden border-4 border-gray-100 shadow-sm"
-                      style={{ background: "linear-gradient(135deg, #EA1D2C, #F7A11E)" }}
-                    >
-                      {avatar ? (
-                        <img
-                          src={avatar}
-                          alt="Foto de perfil"
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-white font-bold text-3xl">
-                          {user?.name?.charAt(0) || "A"}
-                        </span>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-gray-900 text-white flex items-center justify-center hover:bg-gray-700 transition-colors shadow"
-                      title="Alterar foto"
-                    >
-                      <FiCamera className="h-4 w-4" />
-                    </button>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      onChange={handleAvatarUpload}
-                      className="hidden"
-                    />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-gray-900">
-                      {formData.name || "Seu nome"}
-                    </p>
-                    <p className="text-sm text-gray-500">Foto de perfil</p>
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="mt-1 text-sm font-medium text-gray-600 underline underline-offset-2 hover:text-gray-900"
-                    >
-                      Alterar foto
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
-                      Nome completo <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      name="name"
-                      value={formData.name}
-                      onChange={(e) => {
-                        setFormData({ ...formData, name: e.target.value });
-                        if (errors.name)
-                          setErrors({ ...errors, name: undefined });
-                      }}
-                      className={errors.name ? inputErrorClass : inputClass}
-                    />
-                    {errors.name && (
-                      <p className="text-red-500 text-xs mt-1">{errors.name}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
-                      E-mail <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      name="email"
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => {
-                        setFormData({ ...formData, email: e.target.value });
-                        if (errors.email)
-                          setErrors({ ...errors, email: undefined });
-                      }}
-                      className={errors.email ? inputErrorClass : inputClass}
-                    />
-                    {errors.email && (
-                      <p className="text-red-500 text-xs mt-1">{errors.email}</p>
-                    )}
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
-                      Telefone
-                    </label>
-                    <input
-                      name="phone"
-                      inputMode="tel"
-                      placeholder="(00) 00000-0000"
-                      value={formData.phone}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          phone: formatPhone(e.target.value),
-                        })
-                      }
-                      className={inputClass}
-                    />
-                  </div>
-                </div>
-                <div className="pt-4 border-t border-gray-100 flex justify-end gap-3">
-                  <button type="button" onClick={resetProfile} className="btn btn-ghost">
-                    Cancelar
-                  </button>
-                  <button type="submit" disabled={saving} className="btn btn-success">
-                    {saving ? (
-                      <FiLoader className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <FiSave className="h-4 w-4" />
-                    )}
-                    {saving ? " Salvando..." : " Salvar alterações"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
+          {activeTab === "profile" && <ProfileSettings />}
 
           {activeTab === "security" && (
             <div className="card p-6 animate-fade-in">
@@ -416,7 +221,7 @@ export default function Settings() {
                   </div>
                 </div>
                 <div className="pt-4 border-t border-gray-100 flex justify-end">
-                  <button type="submit" disabled={saving} className="btn btn-success">
+                  <button type="submit" disabled={saving} className="btn btn-primary">
                     {saving ? (
                       <FiLoader className="h-4 w-4 animate-spin" />
                     ) : (
@@ -461,7 +266,7 @@ export default function Settings() {
                   </label>
                 ))}
                 <div className="pt-4 border-t border-gray-100 flex justify-end">
-                  <button type="submit" disabled={saving} className="btn btn-success">
+                  <button type="submit" disabled={saving} className="btn btn-primary">
                     {saving ? (
                       <FiLoader className="h-4 w-4 animate-spin" />
                     ) : (
@@ -479,10 +284,10 @@ export default function Settings() {
               <h2 className="text-xl font-bold text-gray-900 mb-6">Aparência</h2>
               <form onSubmit={handleSave} className="space-y-6 max-w-xl">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-3">
+                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
                     Tema
                   </label>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-3 gap-2">
                     {["light", "dark", "system"].map((t) => (
                       <label
                         key={t}
@@ -565,7 +370,7 @@ export default function Settings() {
                   </select>
                 </div>
                 <div className="pt-4 border-t border-gray-100 flex justify-end">
-                  <button type="submit" disabled={saving} className="btn btn-success">
+                  <button type="submit" disabled={saving} className="btn btn-primary">
                     {saving ? (
                       <FiLoader className="h-4 w-4 animate-spin" />
                     ) : (
@@ -605,10 +410,9 @@ export default function Settings() {
                         <p className="font-medium text-gray-900">{int.name}</p>
                         <p className="text-sm text-gray-500">{int.desc}</p>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-3">
+                    </div>                      <div className="flex items-center gap-2">
                       <span
-                        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                        className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                           int.status === "connected"
                             ? "bg-green-100 text-green-800"
                             : "bg-gray-100 text-gray-600"

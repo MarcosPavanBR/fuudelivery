@@ -5,7 +5,7 @@ import paymentApi from "../services/paymentApi";
 
 function StatCard({ icon: Icon, label, value, color, bg }) {
   return (
-    <div className="card p-5">
+    <div className="card p-6">
       <div className="flex items-center gap-3">
         <div
           className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
@@ -119,8 +119,8 @@ export default function Financeiro() {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="card p-5">
-              <div className="skeleton h-12 w-12 rounded-xl mb-3" />
+            <div key={i} className="card p-6">
+              <div className="skeleton h-12 w-12 rounded-xl mb-2" />
               <div className="skeleton h-4 w-20 mb-2" />
               <div className="skeleton h-7 w-16" />
             </div>
@@ -172,17 +172,17 @@ export default function Financeiro() {
             <thead className="bg-gray-50">
               <tr>
                 {["ID", "Pedido", "Valor", "Status", "Ações"].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
+                  <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {payments.slice(0, 50).map(p => (
                 <tr key={p.id || p._id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 text-sm font-mono">{(p.id || p._id || "").slice(0, 8)}</td>
-                  <td className="px-4 py-3 text-sm">{p.orderId || p.order_id || "-"}</td>
-                  <td className="px-4 py-3 text-sm font-semibold">R$ {((p.amount || 0) / 100).toFixed(2)}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-2 text-sm font-mono">{(p.id || p._id || "").slice(0, 8)}</td>
+                  <td className="px-4 py-2 text-sm">{p.orderId || p.order_id || "-"}</td>
+                  <td className="px-4 py-2 text-sm font-semibold">R$ {((p.amount || 0) / 100).toFixed(2)}</td>
+                  <td className="px-4 py-2">
                     <span
                       className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold"
                       style={{
@@ -193,13 +193,13 @@ export default function Financeiro() {
                       {p.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-2">
                     {p.status === "PENDING" && (
                       <div className="flex gap-2">
-                        <button disabled={isProcessing} onClick={() => approvePayment(p.id || p._id)} className="btn btn-success px-3 py-1.5 text-xs">
+                        <button disabled={isProcessing} onClick={() => approvePayment(p.id || p._id)} className="btn btn-primary text-xs">
                           {isProcessing ? "..." : "Aprovar"}
                         </button>
-                        <button disabled={isProcessing} onClick={() => rejectPayment(p.id || p._id)} className="btn btn-danger px-3 py-1.5 text-xs">
+                        <button disabled={isProcessing} onClick={() => rejectPayment(p.id || p._id)} className="btn btn-danger text-xs">
                           {isProcessing ? "..." : "Rejeitar"}
                         </button>
                       </div>
@@ -218,8 +218,7 @@ export default function Financeiro() {
       {tab === "wallets" && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {wallets.map((w, i) => (
-            <div key={w.id || w._id || i} className="card p-5">
-              <div className="flex items-center gap-2.5 mb-3">
+            <div key={w.id || w._id || i} className="card p-6">                      <div className="flex items-center gap-2 mb-2">
                 <FiCreditCard className="h-5 w-5 text-fuu-red" />
                 <span className="font-semibold text-gray-900">{w.ownerName || w.owner_type || "Carteira"}</span>
               </div>
@@ -273,18 +272,18 @@ export default function Financeiro() {
                 <thead className="bg-gray-50">
                   <tr>
                     {["Usuário", "Tipo", "Valor", "Payment", "Saldo após", "Descrição", "Data"].map(h => (
-                      <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
+                      <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {chargebacks.map((c, i) => (
                     <tr key={c._id || i} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3 text-sm">
+                      <td className="px-4 py-2 text-sm">
                         <div className="font-semibold text-gray-900">#{c.user_id ?? "-"}</div>
                         <div className="text-xs text-gray-400">{c.owner_type || ""}</div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-2">
                         <span
                           className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold"
                           style={{
@@ -295,13 +294,13 @@ export default function Financeiro() {
                           {c.type === "credit" ? "Crédito" : c.type === "debit" ? "Débito" : (c.type || "-")}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm font-semibold" style={{ color: c.type === "debit" ? "#DC2626" : "#059669" }}>
+                      <td className="px-4 py-2 text-sm font-semibold" style={{ color: c.type === "debit" ? "#DC2626" : "#059669" }}>
                         {c.type === "debit" ? "-" : "+"}R$ {(c.amount || 0).toFixed(2)}
                       </td>
-                      <td className="px-4 py-3 text-xs font-mono text-gray-500">{c.payment_id || "-"}</td>
-                      <td className="px-4 py-3 text-sm">R$ {(c.balance_after || 0).toFixed(2)}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{c.description || "-"}</td>
-                      <td className="px-4 py-3 text-xs text-gray-500">{c.created_at ? new Date(c.created_at).toLocaleString("pt-BR") : "-"}</td>
+                      <td className="px-4 py-2 text-xs font-mono text-gray-500">{c.payment_id || "-"}</td>
+                      <td className="px-4 py-2 text-sm">R$ {(c.balance_after || 0).toFixed(2)}</td>
+                      <td className="px-4 py-2 text-sm text-gray-600">{c.description || "-"}</td>
+                      <td className="px-4 py-2 text-xs text-gray-500">{c.created_at ? new Date(c.created_at).toLocaleString("pt-BR") : "-"}</td>
                     </tr>
                   ))}
                   {chargebacks.length === 0 && (
@@ -320,7 +319,7 @@ export default function Financeiro() {
           onClick={() => !isProcessing && setRejectModal({ ...rejectModal, open: false })}
         >
           <div className="card p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-gray-900 mb-3">Motivo da Rejeição</h3>
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Motivo da Rejeição</h3>
             <textarea
               value={rejectModal.motivo}
               onChange={e => setRejectModal({ ...rejectModal, motivo: e.target.value })}

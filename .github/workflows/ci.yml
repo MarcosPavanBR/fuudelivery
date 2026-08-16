@@ -156,6 +156,20 @@ jobs:
       - name: Run URL consistency check
         run: bash scripts/check-mobile-urls.sh
 
+  # --------------------------------------------------------------
+  # Regressao - regras CSS fora de @layer (bug do Tailwind v4)
+  # No Tailwind v4, regra sem layer sempre vence qualquer layer,
+  # anulando utilities (p-6, lg:ml-64...). Este job impede a volta.
+  # --------------------------------------------------------------
+  check-css-layers:
+    name: Check CSS @layer (no unlayered rules)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Run unlayered CSS check
+        run: node scripts/check-unlayered-css.cjs Frontend/WebAdmin/src/index.css Frontend/WebRestaurant/src/index.css
+
   # ──────────────────────────────────────────────
   # Frontend — install, test, lint, build
   # ──────────────────────────────────────────────

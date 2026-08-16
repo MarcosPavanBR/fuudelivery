@@ -95,8 +95,8 @@ export default function Payments() {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="card p-5">
-              <div className="skeleton h-12 w-12 rounded-xl mb-3" />
+            <div key={i} className="card p-6">
+              <div className="skeleton h-12 w-12 rounded-xl mb-2" />
               <div className="skeleton h-4 w-20 mb-2" />
               <div className="skeleton h-7 w-16" />
             </div>
@@ -133,7 +133,7 @@ export default function Payments() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((s, i) => (
-          <div key={i} className="card p-5 transition-all duration-150 hover:shadow-card-hover">
+          <div key={i} className="card p-6 transition-all duration-150 hover:shadow-card-hover">
             <div className="flex items-start justify-between">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-gray-500">{s.label}</p>
@@ -177,14 +177,14 @@ export default function Payments() {
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">ID</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Cliente</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Pedido</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Valor</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Método</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Data</th>
-                <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Ações</th>
+                <th className="px-6 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">ID</th>
+                <th className="px-6 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Cliente</th>
+                <th className="px-6 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Pedido</th>
+                <th className="px-6 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Valor</th>
+                <th className="px-6 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Método</th>
+                <th className="px-6 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Data</th>
+                <th className="px-6 py-2 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">

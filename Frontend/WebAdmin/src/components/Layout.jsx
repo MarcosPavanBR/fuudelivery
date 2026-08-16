@@ -57,13 +57,13 @@ export default function Layout() {
           sidebarOpen ? "w-64" : "w-20"
         } ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
         style={{
-          background: "linear-gradient(180deg, #1A1A1A 0%, #111111 100%)",
+          background: "#1A1A1A",
           boxShadow: "4px 0 24px rgba(0,0,0,0.15)",
         }}
       >
         <div
           className={`flex items-center border-b border-white/10 transition-all duration-300 ${
-            sidebarOpen ? "px-5 py-5" : "px-4 py-5 justify-center"
+            sidebarOpen ? "px-4 py-4" : "px-4 py-5 justify-center"
           }`}
         >
           <svg width={sidebarOpen ? 36 : 32} height={sidebarOpen ? 36 : 32} viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -94,10 +94,10 @@ export default function Layout() {
                   to={item.path}
                   end={item.path === "/"}
                   className={({ isActive }) =>
-                    "relative flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group " +
+                    "relative flex items-center gap-2 px-4 py-2 rounded-r-xl transition-all duration-200 group " +
                     (isActive
-                      ? "text-white font-semibold bg-white/10"
-                      : "text-gray-400 hover:text-white hover:bg-white/10") +
+                      ? "text-[#EA1D2C] font-semibold bg-[rgba(234,29,44,0.10)]"
+                      : "text-[#9CA3AF] hover:text-white hover:bg-[rgba(255,255,255,0.03)]") +
                     (!sidebarOpen ? " justify-center px-0" : "")
                   }
                   title={!sidebarOpen ? item.label : undefined}
@@ -105,7 +105,7 @@ export default function Layout() {
                   {({ isActive }) => (
                     <>
                       {isActive && (
-                        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full" style={{ background: "linear-gradient(180deg, #EA1D2C, #F7A11E)" }} />
+                        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full" style={{ background: "#EA1D2C" }} />
                       )}
                       <span className="flex-shrink-0">
                         <SidebarIcon iconKey={item.iconKey} className="h-5 w-5" />
@@ -152,7 +152,7 @@ export default function Layout() {
                 </svg>
               </div>
               <div className="relative min-w-0">
-                <button className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-100 transition-colors min-w-0">
+                <button className="flex items-center gap-2 p-2 rounded-xl hover:bg-gray-100 transition-colors min-w-0">
                   <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, #EA1D2C, #C41420)" }}>
                     <span className="text-white font-bold text-sm">{user?.name?.charAt(0) || "A"}</span>
                   </div>

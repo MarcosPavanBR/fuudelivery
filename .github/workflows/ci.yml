@@ -157,7 +157,8 @@ jobs:
   # --------------------------------------------------------------
   # Regressao - regras CSS fora de @layer (bug do Tailwind v4)
   # No Tailwind v4, regra sem layer sempre vence qualquer layer,
-  # anulando utilities (p-6, lg:ml-64...). Este job impede a volta.
+  # anulando utilities (p-6, lg:ml-64...). Este job impede a volta
+  # em TODOS os CSS customizados do repo (scan automático).
   # --------------------------------------------------------------
   check-css-layers:
     name: Check CSS @layer (no unlayered rules)
@@ -165,8 +166,26 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Run checker unit test
+        run: node scripts/check-unlayered-css.test.cjs
+
       - name: Run unlayered CSS check
-        run: node scripts/check-unlayered-css.cjs Frontend/WebAdmin/src/index.css Frontend/WebRestaurant/src/index.css
+        run: node scripts/check-unlayered-css.cjs
+
+  # ──────────────────────────────────────────────
+  # Workflows — YAML válido + sintaxe bash dos run blocks
+  # ──────────────────────────────────────────────
+  check-workflows:
+    name: Check workflow YAML + bash syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Run checker self-test
+        run: python3 scripts/check-workflows.py --self-test
+
+      - name: Validate all workflow files
+        run: python3 scripts/check-workflows.py
 
   # ──────────────────────────────────────────────
   # Frontend — install, test, lint, build
@@ -227,3 +246,65 @@ jobs:
         # --omit=dev ignora devDependencies; --audit-level=critical so falha
         # em vulnerabilidades criticas (moderate/high sao reportadas mas nao bloqueiam)
         run: npm audit --omit=dev --audit-level=critical
+
+  # ──────────────────────────────────────────────
+  # Shell scripts — portabilidade + bugs comuns
+  # ──────────────────────────────────────────────
+  check-shellcheck:
+    name: ShellCheck — scripts .sh
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Run ShellCheck on all .sh scripts
+        # -S warning: bloqueia warnings e errors, ignora style/info.
+        # --exclude=SC1091: sourcing de arquivos externos (e.g. .env)
+        #   nao e verificavel no CI sem o target real.
+        run: |
+          scripts=$(find scripts sql -name '*.sh' -type f 2>/dev/null || true)
+          if [ -z "$scripts" ]; then
+            echo "No .sh files found, skipping."
+            exit 0
+          fi
+          echo "Checking: $scripts"
+          shellcheck -S warning --exclude=SC1091 $scripts
+
+  # ──────────────────────────────────────────────
+  # Delivery E2E — dual-write PG+Mongo via testcontainers
+  # ──────────────────────────────────────────────
+  e2e-delivery:
+    name: E2E — Delivery (dual-write)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: cmd/fuudelivery/go.sum
+
+      - name: Start Docker services (Mongo + Postgres)
+        run: |
+          docker run -d --name mongo-e2e -p 27017:27017 mongo:7
+          docker run -d --name pg-e2e -p 5432:5432 -e POSTGRES_USER=test -e POSTGRES_PASSWORD=test -e POSTGRES_DB=fuudelivery_delivery postgres:16-alpine
+          # Wait for both to be ready
+          for i in $(seq 1 30); do
+            docker exec mongo-e2e mongosh --eval 'db.runCommand("ping")' --quiet 2>/dev/null && break
+            sleep 1
+          done
+          for i in $(seq 1 30); do
+            docker exec pg-e2e pg_isready -U test 2>/dev/null && break
+            sleep 1
+          done
+          echo "Services ready."
+
+      - name: Run Delivery E2E tests
+        working-directory: cmd/fuudelivery
+        run: |
+          go test -tags=integration -v -count=1 -timeout=5m \
+            -run 'TestDeliveryLifecycle|TestDeliverySolicitationsDualWrite' \
+            ./cmd/fuudelivery/
+
+      - name: Cleanup Docker services
+        if: always()
+        run: docker rm -f mongo-e2e pg-e2e 2>/dev/null || true

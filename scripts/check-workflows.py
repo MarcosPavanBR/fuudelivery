@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
 """
-check-workflows.py — Valida YAML + sintaxe bash dos run blocks.
+check-workflows.py — Valida YAML + bash (workflows e .sh) + existencia de scripts.
 
-Pega erros ANTES do push: YAML malformado ou um run block com bash invalido
-(ex.: o `-w` quebrado no health-check) falha aqui, sem depender do GitHub
-parsing os workflows no push nem de um job rodar o script de verdade.
+Pega erros ANTES do push:
+  1. YAML malformado
+  2. Run block com bash invalido (ex.: -w quebrado)
+  3. Scripts referenciados nos run blocks que nao existem no repo
+  4. Sintaxe bash dos .sh do repo (scripts/*.sh, sql/*.sh)
 
 Uso:
-    python3 scripts/check-workflows.py                  # varre .github/workflows/*.yml
-    python3 scripts/check-workflows.py --root DIR       # escopa outro diretorio
+    python3 scripts/check-workflows.py                  # varre workflows
+    python3 scripts/check-workflows.py --root DIR       # escopo outro diretorio
+    python3 scripts/check-workflows.py --repo-root DIR  # raiz do repo (checa .sh + refs)
+    python3 scripts/check-workflows.py --skip-sh        # pula validacao dos .sh
     python3 scripts/check-workflows.py --self-test      # roda fixtures de regressao
 """
 
@@ -170,6 +174,51 @@ def check_file(path, repo_root=None):
     errors.extend(check_script_refs(path, data, repo_root))
 
     return errors
+
+
+SKIP_DIRS = {
+    "node_modules", ".git", "dist", "build", ".next", ".expo",
+    ".cache", "coverage", "vendor", ".venv", "venv", "tmp",
+    ".pg-embed", ".freebuff",
+}
+
+
+def discover_sh_files(root):
+    """Encontra todos os .sh do repo, pulando diretorios gerados."""
+    out = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        # Pula diretorios ignorados (modifica in-place para o os.walk)
+        dirnames[:] = [
+            d for d in dirnames
+            if d not in SKIP_DIRS and not d.startswith(".")
+        ]
+        for f in filenames:
+            if f.endswith(".sh"):
+                out.append(os.path.join(dirpath, f))
+    return sorted(out)
+
+
+def check_sh_files(repo_root):
+    """Roda bash -n em todos os .sh do repo. Retorna (errors, total_files)."""
+    if not repo_root:
+        return [], 0
+
+    sh_files = discover_sh_files(repo_root)
+    errors = []
+    for fpath in sh_files:
+        rel = os.path.relpath(fpath, repo_root).replace("\\", "/")
+        try:
+            with open(fpath, "r", encoding="utf-8", errors="replace") as f:
+                content = f.read()
+        except OSError as e:
+            errors.append(f"{rel}: nao foi possivel ler: {e}")
+            continue
+        ok, err = bash_syntax_ok(content)
+        if not ok:
+            # Remove path do temp file da mensagem do bash -n
+            clean_err = re.sub(r"[\w/\\:-]+\.sh:\s*", "", err, count=1)
+            errors.append(f"{rel}: {clean_err}")
+    return errors, len(sh_files)
 
 
 def scan(root, repo_root=None):
@@ -348,6 +397,7 @@ def main():
         return self_test()
     root = ".github/workflows"
     repo_root = None
+    skip_sh = "--skip-sh" in args
     if "--root" in args:
         i = args.index("--root")
         if i + 1 < len(args):
@@ -356,7 +406,21 @@ def main():
         i = args.index("--repo-root")
         if i + 1 < len(args):
             repo_root = args[i + 1]
-    return scan(root, repo_root=repo_root)
+
+    rc = scan(root, repo_root=repo_root)
+
+    # Valida sintaxe bash dos .sh do repo
+    if not skip_sh and repo_root:
+        sh_errors, n_sh = check_sh_files(repo_root)
+        if sh_errors:
+            print(f"\n::error::{len(sh_errors)} erro(s) de sintaxe bash em {n_sh} arquivo(s) .sh:")
+            for e in sh_errors:
+                print(f"  - {e}")
+            rc = 1
+        else:
+            print(f"OK: {n_sh} arquivo(s) .sh validados (bash -n)")
+
+    return rc
 
 
 if __name__ == "__main__":

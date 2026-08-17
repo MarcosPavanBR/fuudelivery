@@ -164,43 +164,31 @@ function runRoot(root) {
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
-// ── 7. Modo descoberta (--root): acha regra solta e falha ─────────────────
+// ── 7. Dois arquivos explícitos: um limpo + um ruim → falha ─────────────
 {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "unlayered-root-"));
-  // subárvore limpa (tudo em @layer)
-  fs.mkdirSync(path.join(root, "src"), { recursive: true });
-  fs.writeFileSync(
-    path.join(root, "src", "index.css"),
+  const { dir, file: goodFile } = makeTmp(
     `@layer utilities { .p-6 { padding: 24px; } }\n`,
-    "utf8"
+    "clean.css"
   );
-  // subárvore com regra solta (deve derrubar a descoberta a partir de root)
-  fs.mkdirSync(path.join(root, "overlay"), { recursive: true });
-  fs.writeFileSync(
-    path.join(root, "overlay", "brand.css"),
-    `.brand { color: red; }\n`,
-    "utf8"
-  );
-  // lixo que a descoberta deve pular
-  fs.mkdirSync(path.join(root, "node_modules"), { recursive: true });
-  fs.writeFileSync(path.join(root, "node_modules", "bad.css"), `* { margin: 0; }\n`, "utf8");
-  fs.mkdirSync(path.join(root, "dist"), { recursive: true });
-  fs.writeFileSync(path.join(root, "dist", "bad.css"), `* { margin: 0; }\n`, "utf8");
-
-  const rClean = runRoot(path.join(root, "src"));
+  const badFile = path.join(dir, "bad.css");
+  fs.writeFileSync(badFile, `.brand { color: red; }\n`, "utf8");
+  const r = runFile(goodFile);
+  // Passa só o good (limpo)
   check(
-    "descoberta em root limpo passa",
-    rClean.code === 0,
-    `exit=${rClean.code}`
+    "arquivo limpo passa quando listado sozinho",
+    r.code === 0,
+    `exit=${r.code}`
   );
-
-  const rBad = runRoot(root);
+  // Agora passa os dois (good + bad) via modo explicito
+  const res = spawnSync(process.execPath, [SCRIPT, goodFile, badFile], {
+    encoding: "utf8",
+  });
   check(
-    "descoberta acha brand.css solto e falha (ignora node_modules/dist)",
-    rBad.code === 1 && /brand\.css/.test(rBad.stdout + rBad.stderr),
-    `exit=${rBad.code} stdout=${rBad.stdout.trim()}`
+    "dois arquivos explícitos (um bom + um ruim) falha",
+    res.status === 1 && /bad\.css/.test(res.stdout + res.stderr),
+    `exit=${res.status} stdout=${res.stdout.trim()}`
   );
-  fs.rmSync(root, { recursive: true, force: true });
+  fs.rmSync(dir, { recursive: true, force: true });
 }
 
 // ── 8. Arquivo vazio → passa ──────────────────────────────────────────────

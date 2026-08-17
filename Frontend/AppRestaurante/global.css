@@ -2,7 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-.bg-primary {
-  /* color: red;
-  background-color: red; */
+@layer components {
+  .bg-primary {
+    /* color: red;
+    background-color: red; */
+  }
 }

@@ -40,6 +40,16 @@ def find_bash():
 # rodar; precisam ser mascaradas para o bash -n nao reclamar.
 GH_EXPR = re.compile(r"\$\{\{[^}]*\}\}")
 
+# Padrões de caminhos de scripts nos run blocks.
+# Captura referências como: bash scripts/foo.sh, node scripts/bar.cjs,
+# python3 scripts/baz.py, sql/run_all.sh, etc.
+# Ignora https:// e ${{ }} (mascarados antes).
+SCRIPT_REF = re.compile(
+    r"((?:scripts|sql)/[\w./-]+"  # caminho tipo scripts/foo.sh ou sql/run_all.sh
+    r"\.(?:sh|py|cjs|js))"       # extensao de script
+    r"(?!\w)"                    # nao seguido por word (evita false positives)
+)
+
 # YAML 1.1 (PyYAML) trata "on:" como bool True; nao e um erro de sintaxe.
 # Nao bloqueamos, mas reportamos se aparecer com aspas estranhas.
 
@@ -90,8 +100,46 @@ def bash_syntax_ok(text):
         return True, "bash não disponível — pulando sintaxe bash"
 
 
-def check_file(path):
-    """Valida YAML + bash de um workflow. Retorna lista de erros (vazia = OK)."""
+def extract_script_refs(run_text):
+    """Extrai caminhos de scripts referenciados em um run block.
+
+    Remove expressoes ${{ ... }} antes de buscar para evitar falsos
+    positivos com variaveis que terminam em .sh/.py.
+    """
+    clean = GH_EXPR.sub("", run_text)
+    return SCRIPT_REF.findall(clean)
+
+
+def check_script_refs(workflow_path, data, repo_root):
+    """Verifica se scripts referenciados nos run blocks existem no repo.
+
+    Retorna lista de erros (vazia = OK).
+    """
+    if not repo_root:
+        return []
+
+    errors = []
+    seen = set()  # evita duplicar erro para mesmo script
+    for label, run_text in walk_run_blocks(data):
+        for script_path in extract_script_refs(run_text):
+            if script_path in seen:
+                continue
+            seen.add(script_path)
+            full = os.path.join(repo_root, script_path)
+            if not os.path.isfile(full):
+                errors.append(
+                    f"script nao encontrado: {script_path}"
+                    f" (referenciado em {label})"
+                )
+    return errors
+
+
+def check_file(path, repo_root=None):
+    """Valida YAML + bash + existencia de scripts referenciados.
+
+    Retorna lista de erros (vazia = OK). Se repo_root e fornecido,
+    tambem checa se scripts referenciados nos run blocks existem.
+    """
     errors = []
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -115,12 +163,16 @@ def check_file(path):
         ok, err = bash_syntax_ok(run_text)
         if not ok:
             errors.append(
-                f"bash inválido em {label} (run block #{n_blocks}): {err}"
+                f"bash invalido em {label} (run block #{n_blocks}): {err}"
             )
+
+    # Checa existencia de scripts referenciados
+    errors.extend(check_script_refs(path, data, repo_root))
+
     return errors
 
 
-def scan(root):
+def scan(root, repo_root=None):
     files = sorted(
         f
         for f in os.listdir(root)
@@ -133,7 +185,7 @@ def scan(root):
     total_errors = 0
     for fname in files:
         fpath = os.path.join(root, fname)
-        errors = check_file(fpath)
+        errors = check_file(fpath, repo_root=repo_root)
         if errors:
             total_errors += len(errors)
             print(f"::error::FAIL {fname}")
@@ -214,6 +266,37 @@ jobs:
         ),
     }
 
+    # Fixtures de existencia de scripts (precisam de repo_root)
+    script_fixtures = {
+        # (conteudo YAML, script que deve existir, deve falhar?)
+        "script_exists.yml": (
+            """
+name: ok script
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: bash scripts/existing.sh
+""",
+            "scripts/existing.sh",
+            False,
+        ),
+        "script_missing.yml": (
+            """
+name: bad script
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: bash scripts/nope.sh
+""",
+            None,  # nao cria arquivo
+            True,
+        ),
+    }
+
     failures = 0
     with tempfile.TemporaryDirectory() as tmp:
         for name, (content, should_fail) in fixtures.items():
@@ -230,10 +313,32 @@ jobs:
                 failures += 1
                 for e in errors:
                     print(f"    {e}")
+    # Testes de existencia de scripts
+    with tempfile.TemporaryDirectory() as tmp:
+        # Cria scripts/ subdiretorio com um arquivo existente
+        scripts_dir = os.path.join(tmp, "scripts")
+        os.makedirs(scripts_dir)
+        with open(os.path.join(scripts_dir, "existing.sh"), "w") as f:
+            f.write("#!/bin/bash\necho ok\n")
+
+        for name, (content, script_to_create, should_fail) in script_fixtures.items():
+            p = os.path.join(tmp, name)
+            with open(p, "w", encoding="utf-8") as f:
+                f.write(content.lstrip("\n"))
+            errors = check_file(p, repo_root=tmp)
+            got_fail = bool(errors)
+            marker = "PASS" if got_fail == should_fail else "FAIL"
+            expected = "falha" if should_fail else "passa"
+            print(f"{marker} {name}: checker {'detectou' if got_fail else 'aprovou'} (esperado: {expected})")
+            if got_fail != should_fail:
+                failures += 1
+                for e in errors:
+                    print(f"    {e}")
+
     if failures:
         print(f"::error::self-test: {failures} fixture(s) com comportamento errado")
         return 1
-    print(f"OK: self-test ({len(fixtures)} fixtures)")
+    print(f"OK: self-test ({len(fixtures) + len(script_fixtures)} fixtures)")
     return 0
 
 
@@ -242,11 +347,16 @@ def main():
     if "--self-test" in args:
         return self_test()
     root = ".github/workflows"
+    repo_root = None
     if "--root" in args:
         i = args.index("--root")
         if i + 1 < len(args):
             root = args[i + 1]
-    return scan(root)
+    if "--repo-root" in args:
+        i = args.index("--repo-root")
+        if i + 1 < len(args):
+            repo_root = args[i + 1]
+    return scan(root, repo_root=repo_root)
 
 
 if __name__ == "__main__":

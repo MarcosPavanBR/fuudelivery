@@ -184,8 +184,8 @@ jobs:
       - name: Run checker self-test
         run: python3 scripts/check-workflows.py --self-test
 
-      - name: Validate all workflow files
-        run: python3 scripts/check-workflows.py
+      - name: Validate all workflow files + script refs
+        run: python3 scripts/check-workflows.py --repo-root .
 
   # ──────────────────────────────────────────────
   # Frontend — install, test, lint, build

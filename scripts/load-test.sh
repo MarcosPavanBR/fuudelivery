@@ -28,7 +28,6 @@ fi
 echo "── Testing /health endpoint ──"
 
 # Run load test with curl
-total_time=0
 success=0
 failed=0
 start_ts=$(date +%s%N)

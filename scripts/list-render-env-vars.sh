@@ -90,7 +90,7 @@ for SERVICE_NAME in "${!SERVICES[@]}"; do
         echo -e "${RED}  ❌ Erro ao buscar env vars: $(echo $RESPONSE | grep -o '"message":"[^"]*"' | head -1)${NC}"
         echo
         continue
-    end
+    fi
     
     # Contar env vars
     ENV_COUNT=$(echo "$RESPONSE" | grep -o '"key":' | wc -l)

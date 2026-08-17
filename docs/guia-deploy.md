@@ -40,11 +40,6 @@ SUPABASE_KEY=...
 - **Port**: 10000
 - **Plan**: Starter (para produção)
 
-#### 2. FuuDelivery Payment
-- **Build Command**: `cd Backend/Payment && go build -o ../../server-payment .`
-- **Start Command**: `./server-payment`
-- **Port**: 10001
-
 #### 3. Frontend (WebAdmin + WebRestaurant)
 - **Build Command**: `cd Frontend/WebAdmin && npm install && npm run build`
 - **Publish Directory**: `Frontend/WebAdmin/dist`
@@ -92,10 +87,6 @@ cp .env.example .env
 ```bash
 # Backend (monolito)
 cd cmd/fuudelivery
-go run main.go
-
-# Payment Service (em outro terminal)
-cd Backend/Payment
 go run main.go
 
 # Frontend (em outro terminal)

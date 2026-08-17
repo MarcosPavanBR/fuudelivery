@@ -1,5 +1,10 @@
 # Dicionário de dados — FuuDelivery (banco único Postgres/Supabase)
 
+
+> ⚠️ **`Backend/Payment` foi arquivado e removido do repositório.** Todo o código
+> de pagamento ativo vive em `payment_api` (embutido no monolito `cmd/fuudelivery`).
+> As menções a `Backend/Payment` neste documento são **históricas** — não edite,
+> não busque e não rode comandos apontando para esse diretório.
 > Gerado a partir do código-fonte real (structs Go com `gorm:"primaryKey"` ou
 > `bson:"..."`) + dos scripts de consolidação em `sql/`. Sempre que uma
 > tabela ou coluna mudar, atualize este arquivo no mesmo commit — é a regra

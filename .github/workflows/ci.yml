@@ -18,7 +18,6 @@ jobs:
       matrix:
         module:
           - cmd/fuudelivery
-          - Backend/Payment
           - Backend/auth_api
           - Backend/payment_api
           - Backend/orders_api
@@ -121,7 +120,6 @@ jobs:
       matrix:
         module:
           - cmd/fuudelivery
-          - Backend/Payment
           - Backend/auth_api
           - Backend/payment_api
           - Backend/orders_api

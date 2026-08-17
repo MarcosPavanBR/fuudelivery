@@ -1,7 +1,6 @@
 go 1.25.0
 
 use (
-	./Backend/Payment
 	./Backend/auth_api
 	./Backend/chat_api
 	./Backend/delivery_api

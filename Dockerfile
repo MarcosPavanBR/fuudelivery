@@ -30,8 +30,6 @@ COPY Backend/payment_api/go.mod ./Backend/payment_api/
 COPY Backend/payment_api/go.sum ./Backend/payment_api/
 COPY Backend/chat_api/go.mod ./Backend/chat_api/
 COPY Backend/chat_api/go.sum ./Backend/chat_api/
-COPY Backend/Payment/go.mod ./Backend/Payment/
-COPY Backend/Payment/go.sum ./Backend/Payment/
 
 # Copy shared package go.mod files
 COPY pkg/health/go.mod ./pkg/health/

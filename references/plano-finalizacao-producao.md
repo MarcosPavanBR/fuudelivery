@@ -1,5 +1,10 @@
 # FuuDelivery — Análise Completa e Plano de Finalização para Produção
 
+
+> ⚠️ **`Backend/Payment` foi arquivado e removido do repositório.** Todo o código
+> de pagamento ativo vive em `payment_api` (embutido no monolito `cmd/fuudelivery`).
+> As menções a `Backend/Payment` neste documento são **históricas** — não edite,
+> não busque e não rode comandos apontando para esse diretório.
 > Auditoria feita em 10/08/2026 sobre o estado real do repositório (`master` local em `cc2132c`,
 > 213 commits). Nada aqui é suposição — cada item foi verificado no código, no git ou no CI.
 

@@ -1,5 +1,16 @@
 # Deploy do FuuDelivery em VPS Ubuntu — Guia Passo a Passo
 
+> ## ⚠️ Payment Service removido (arquivado)
+>
+> O módulo `Backend/Payment` (payment-service) e o `Frontend/PaymentPanel`
+> (payment-panel) foram **arquivados e removidos do repositório** — as seções
+> deste guia que os citam estão **obsoletas e não devem ser seguidas**.
+> Todos os endpoints de pagamento (PIX, carteiras, chargebacks, aprovações)
+> agora vivem no **monolito `fuudelivery-api`** (`cmd/fuudelivery` + `payment_api`).
+> Deploy ativo: Render (`render.yaml`), não VPS.
+
+
+
 > **Documento vivo** — mantenha este guia em sincronia com o código. Sempre que uma
 > versão de stack mudar (Go, Node, Redis, etc.), atualize a [Tabela de Versões](#tabela-de-versoes)
 > e **regere o PDF** com um único comando (veja [Atualizar o PDF](#atualizar-o-pdf)).

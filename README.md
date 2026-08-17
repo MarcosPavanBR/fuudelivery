@@ -44,15 +44,15 @@ Fork do [vercardapio/appdelivery](https://github.com/carloshomar/appdelivery) es
                     │                   │
                     ▼                   ▼
 ┌───────────────────────┐  ┌───────────────────────────────────────────┐
-│   PAYMENT SERVICE     │  │           INFRAESTRUTURA                   │
-│   (Backend/Payment)   │  │                                           │
-│   Go 1.23 + Fiber     │  │  PostgreSQL (Supabase) — auth, pedidos    │
-│                       │  │  MongoDB (Atlas) — pagamentos, chat,      │
-│   • Aprovação         │  │               entregas, pedidos          │
-│   • Score de risco    │  │  Redis (Render) — fila + cache            │
+│   PAGAMENTOS          │  │           INFRAESTRUTURA                   │
+│   (payment_api —      │  │                                           │
+│   embutido no         │  │  PostgreSQL (Supabase) — auth, pedidos    │
+│   monolito)           │  │  MongoDB (Atlas) — pagamentos, chat,      │
+│                       │  │               entregas, pedidos          │
+│   • PIX/Cartão        │  │  Redis (Render) — fila + cache            │
 │   • Carteiras         │  │  AbacatePay — gateway PIX/Cartão          │
 │   • Chargebacks       │  │  OSRM — rotas e cálculo de entrega        │
-│   • Relatórios        │  │  Supabase Storage — upload de imagens     │
+│   • Aprovações        │  │  Supabase Storage — upload de imagens     │
 └───────────────────────┘  └───────────────────────────────────────────┘
 ```
 
@@ -218,14 +218,6 @@ docker compose up --build
 
 ```bash
 cd cmd/fuudelivery
-go mod tidy
-go run main.go
-```
-
-### Backend (serviço individual — Payment Service)
-
-```bash
-cd Backend/Payment
 go mod tidy
 go run main.go
 ```
@@ -450,7 +442,6 @@ bash scripts/build-apks.sh
 go test ./...
 
 # Módulos individuais
-cd Backend/Payment && go test ./...
 cd Backend/payment_api && go test ./...
 cd Backend/orders_api && go test ./...
 cd Backend/auth_api && go test ./...
@@ -459,8 +450,8 @@ cd Backend/chat_api && go test ./...
 cd cmd/fuudelivery && go test ./...
 
 # Testes de integração (requer Docker — sobe MongoDB em container)
-cd Backend/Payment
-go test -tags=integration ./services/... -v
+cd cmd/fuudelivery && go test -tags=integration -v -run 'TestFullFlow|TestErrorScenarios|TestAdminBootstrap' ./
+cd Backend/payment_api && go test -tags=integration -v -run 'TestCheckoutE2E' ./app/handlers/
 
 # Frontend
 cd Frontend/WebRestaurant && npm test

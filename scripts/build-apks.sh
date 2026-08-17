@@ -17,15 +17,15 @@ err()  { echo "[ERRO] $1"; }
 
 build_eas() {
     local dir="$1" name="$2"
-    cd "$ROOT_DIR/$dir"
+    cd "$ROOT_DIR/$dir" || return 1
     if ! npx eas whoami > /dev/null 2>&1; then
-        err "Nao logado no EAS. Execute: eas login"; cd "$ROOT_DIR"; return 1
+        err "Nao logado no EAS. Execute: eas login"; cd "$ROOT_DIR" || true; return 1
     fi
     log "Gerando APK para $name via EAS Build (cloud)... aguardando conclusao (~15-20 min)"
     local OUT
     OUT=$(npx eas build --platform android --profile preview --non-interactive 2>&1)
     local rc=$?
-    cd "$ROOT_DIR"
+    cd "$ROOT_DIR" || true
     if [ $rc -ne 0 ]; then
         err "Build de $name falhou (exit $rc)"
         echo "$OUT" | tail -30
@@ -44,12 +44,12 @@ build_local() {
     local dir="$1" name="$2"
     command -v java > /dev/null 2>&1 || { err "Java nao encontrado"; return 1; }
     [ -d "$ANDROID_HOME" ] || { err "Android SDK nao encontrado em $ANDROID_HOME"; return 1; }
-    cd "$ROOT_DIR/$dir"
+    cd "$ROOT_DIR/$dir" || return 1
     log "Prebuild + Build local para $name..."
     npx expo prebuild --platform android --no-install
     cd android && export ANDROID_HOME && ./gradlew assembleRelease --no-daemon
     local rc=$?
-    cd "$ROOT_DIR"
+    cd "$ROOT_DIR" || true
     if [ $rc -ne 0 ]; then err "Gradle build falhou para $name"; return 1; fi
     local apk="$ROOT_DIR/$dir/android/app/build/outputs/apk/release/app-release.apk"
     if [ -f "$apk" ]; then

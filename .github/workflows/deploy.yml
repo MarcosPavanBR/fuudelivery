@@ -88,7 +88,7 @@ jobs:
             echo "POST sem corpo (HTTP $HTTP_CODE) - buscando deploy mais recente..."
             DEPLOY_ID=$(curl -sS "https://api.render.com/v1/services/${{ secrets[matrix.service.service_id_secret] }}/deploys?limit=1" \
               -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
-              | python3 -c "import sys,json;print(json.load(sys.stdin)[0].get('id',''))" 2>/dev/null || echo "")
+              | python3 -c "import sys,json;print(json.load(sys.stdin)[0].get('deploy',{}).get('id',''))" 2>/dev/null || echo "")
           fi
           if [ -z "$DEPLOY_ID" ]; then
             echo "::error::Falha ao obter o ID do deploy (${{ matrix.service.name }}, HTTP $HTTP_CODE): $RESP"

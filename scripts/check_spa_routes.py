@@ -14,6 +14,11 @@ def main() -> int:
         print(f"::error::Resposta inesperada do GET /routes ({service}): {routes!r}")
         return 1
     for r in routes:
+        # O Render pode devolver o item direto ou aninhado:
+        #   [{"type":"rewrite","source":"/*","destination":"/index.html"}]
+        #   [{"route":{...},"cursor":"..."}]   <- formato real do GET /routes
+        if isinstance(r, dict) and "route" in r and isinstance(r["route"], dict):
+            r = r["route"]
         if (
             r.get("type") in ("rewrite", "redirect")
             and r.get("source") == "/*"

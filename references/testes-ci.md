@@ -42,15 +42,11 @@ steps:
 
 ### Arquivos de teste existentes
 
-#### Go (Payment Service — `Backend/Payment/`)
+#### Go (Payment Service — arquivado)
 
-| Arquivo | Tipo | Testes | O que testa |
-|---|---|---|---|
-| `services/risk_scorer_test.go` | Unit | 11 | calculateLevel, NormalizeScore, checkAmount, checkTimeOfDay |
-| `services/wallet_service_test.go` | Unit | 14 | Validação de input, ProcessPaymentApproval lógica, WalletBalance |
-| `services/chargeback_service_test.go` | Unit | 8 | Status, Reasons, valid transitions, amount boundaries |
-| `services/responsibility_chain_test.go` | Unit | 12 | ValidationHandler, ApprovalHandler, NotificationHandler, encadeamento |
-| `services/integration_test.go` | Integration | 7 | Happy path, idempotência, saldo insuficiente, concorrência, múltiplos pagamentos |
+> ⚠️ `Backend/Payment` foi **arquivado e removido** do repositório. Os testes
+> daquele serviço (risk scoring, carteiras, chargebacks) não rodam mais no CI;
+> os fluxos equivalentes vivem em `payment_api` (embutido no monolito).
 
 #### Go (outros módulos)
 
@@ -115,18 +111,11 @@ cd C:\Users\acastro\Downloads\fuudelivery
 go test ./...
 ```
 
-### Módulo individual
-
-```bash
-cd Backend/Payment
-go test ./...
-```
-
 ### Testes de integração (requer Docker)
 
 ```bash
-cd Backend/Payment
-go test -tags=integration ./services/... -v
+cd cmd/fuudelivery && go test -tags=integration -v -run 'TestFullFlow|TestErrorScenarios|TestAdminBootstrap' ./
+cd Backend/payment_api && go test -tags=integration -v -run 'TestCheckoutE2E' ./app/handlers/
 ```
 
 ### Frontend

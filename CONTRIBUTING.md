@@ -269,7 +269,8 @@ cd cmd/fuudelivery && go test ./...
 go test -v ./...
 
 # Integration tests (requires Docker)
-cd Backend/Payment && go test -tags=integration ./... -v
+cd cmd/fuudelivery && go test -tags=integration -v -run 'TestFullFlow|TestErrorScenarios|TestAdminBootstrap' ./
+cd Backend/payment_api && go test -tags=integration -v -run 'TestCheckoutE2E' ./app/handlers/
 
 # Frontend tests
 cd Frontend/WebRestaurant && npm test
@@ -333,7 +334,6 @@ Every push to `master` and every pull request triggers the **CI Gate** workflow 
 The CI runs the same 4 checks (build, vet, test, govulncheck) against each module in a matrix:
 
 - `cmd/fuudelivery` — Main monolith
-- `Backend/Payment` — Payment service
 - `Backend/auth_api` — Authentication
 - `Backend/payment_api` — Payment gateway
 - `Backend/orders_api` — Orders
@@ -347,8 +347,6 @@ Before pushing, run the same checks CI will run:
 ```bash
 # Go checks (run from project root)
 cd cmd/fuudelivery && go mod tidy && go build ./... && go vet ./... && go test ./... -count=1 -timeout 60s && cd ../..
-
-cd Backend/Payment && go mod tidy && go build ./... && go vet ./... && go test ./... -count=1 -timeout 60s && cd ../..
 
 # Format check
 gofmt -l -s Backend/ cmd/
@@ -380,99 +378,12 @@ cd Frontend/PaymentPanel && npm audit --audit-level=moderate && cd ../..
 | `npm audit` moderate+ | Vulnerable npm package | Run `npm audit fix` or update the package |
 | `npm test` fails | React component or logic error | Run `npm test` locally and fix the failing test |
 
-## Payment System (FuuPayment)
+## Payment System (arquivado)
 
-The payment system is a standalone Go service (`Backend/Payment`) that handles payment processing, digital wallets, chargebacks, and risk scoring. It communicates with the monolith (`cmd/fuudelivery`) via Redis queues.
-
-### Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    MONOLITH (cmd/fuudelivery)                       │
-│                    Go 1.23 + Fiber v2                               │
-│                                                                     │
-│  payment_api/webhook.go ──XAdd───▶ queue:payments                   │
-│                                    │                                │
-│                                    │  Redis Streams + consumer group │
-│                                    ▼                                │
-│  cmd/fuudelivery/main.go ◀──Subscribe── queue:payment_updates       │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-                    ┌─────────┴─────────┐
-                    ▼                   ▼
-┌───────────────────────┐  ┌───────────────────────────────────────────┐
-│   PAYMENT SERVICE     │  │           INFRAESTRUTURA                   │
-│   (Backend/Payment)   │  │                                           │
-│                       │  │  MongoDB — pagamentos, carteiras,         │
-│   consumers/          │  │               estornos                    │
-│     └─ XReadGroup ──┼──│  Redis — fila + cache                     │
-│                       │  │  AbacatePay — gateway PIX/Cartão          │
-│   services/           │  │                                           │
-│     └─ approval_engine│  └───────────────────────────────────────────┘
-│     └─ wallet_service │
-│     └─ risk_scorer    │
-└───────────────────────┘
-```
-
-### Communication Flow
-
-1. **Payment API** (`payment_api/webhook.go`) receives webhook from AbacatePay
-2. Publishes payment confirmation to `queue:payments` via Redis Streams (XAdd)
-3. **Payment Service** (`consumers/payment_consumer.go`) consumes from `queue:payments` via Redis Streams (XReadGroup)
-4. Processes payment: updates MongoDB, credits wallet, checks risk score
-5. Publishes status update to `queue:payment_updates` via Redis Streams (XAdd)
-6. **Monolith** (`cmd/fuudelivery/main.go`) subscribes to `queue:payment_updates` and updates order status
-
-### Running Locally
-
-```bash
-# Start MongoDB
-docker run -d --name mongodb -p 27017:27017 mongo:6
-
-# Start Redis (optional — uses Go channels fallback if not available)
-docker run -d --name redis -p 6379:6379 redis:7
-
-# Start Payment Service
-cd Backend/Payment
-go mod tidy
-go run main.go
-
-# Start Monolith (in separate terminal)
-cmd/fuudelivery
-go run main.go
-```
-
-### Environment Variables
-
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `MONGO_URI` | MongoDB connection string | Yes |
-| `JWT_SECRET` | JWT signing secret (must match monolith) | Yes |
-| `REDIS_URL` | Redis URL for queue communication | Recommended |
-| `ABACATE_PAY_API_KEY` | AbacatePay API key | Yes (production) |
-| `ABACATE_PAY_WEBHOOK_SECRET` | Webhook secret for signature verification | Yes (production) |
-
-### Testing Payment Flows
-
-```bash
-# Run unit tests
-cd Backend/Payment
-go test ./...
-
-# Run integration tests (requires Docker)
-go test -tags=integration ./... -v
-
-# Run specific test suite
-go test ./services/... -v           # Wallet, chargeback, approval tests
-go test ./consumers/... -v         # Redis consumer tests
-```
-
-### Key Concepts
-
-- **Risk Scoring**: 4 factors (amount, frequency, establishment history, chargeback history)
-- **Wallet Operations**: Atomic `$inc` operations on MongoDB to prevent race conditions
-- **Split Payment**: 5% platform, 85% restaurant, delivery fee to driver
-- **Idempotency**: Transaction deduplication via `TransactionExistsByReference`
+> ⚠️ O serviço separado `Backend/Payment` (FuuPayment) foi **arquivado e removido**
+> do repositório. Todos os fluxos de pagamento — PIX/cartão (AbacatePay), carteiras,
+> chargebacks, aprovações, split — vivem hoje em `Backend/payment_api`, **embutido
+> no monolito** (`cmd/fuudelivery`). Não edite nem procure código em `Backend/Payment`.
 
 ## Pull Request Process
 

@@ -1,5 +1,10 @@
 # Segurança — FuuDelivery
 
+
+> ⚠️ **`Backend/Payment` foi arquivado e removido do repositório.** Todo o código
+> de pagamento ativo vive em `payment_api` (embutido no monolito `cmd/fuudelivery`).
+> As menções a `Backend/Payment` neste documento são **históricas** — não edite,
+> não busque e não rode comandos apontando para esse diretório.
 > **Última atualização:** 2026-07-31
 
 ## 🔴 Prioridade 0 — Exposição de Credenciais

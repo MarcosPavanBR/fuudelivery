@@ -1,5 +1,10 @@
 # Roadmap de Modernização — Status (FuuDelivery 2.0)
 
+
+> ⚠️ **`Backend/Payment` foi arquivado e removido do repositório.** Todo o código
+> de pagamento ativo vive em `payment_api` (embutido no monolito `cmd/fuudelivery`).
+> As menções a `Backend/Payment` neste documento são **históricas** — não edite,
+> não busque e não rode comandos apontando para esse diretório.
 Status verificado contra o código em **03/08/2026**. Este documento registra o
 que foi concluído em cada fase do roadmap de modernização (`fuudelivery-modernization`).
 

@@ -1,5 +1,10 @@
 # Arquitetura do FuuDelivery
 
+
+> ⚠️ **`Backend/Payment` foi arquivado e removido do repositório.** Todo o código
+> de pagamento ativo vive em `payment_api` (embutido no monolito `cmd/fuudelivery`).
+> As menções a `Backend/Payment` neste documento são **históricas** — não edite,
+> não busque e não rode comandos apontando para esse diretório.
 ## Visão Geral
 
 O FuuDelivery é uma plataforma de delivery colaborativa (cooperativa) que conecta restaurantes, clientes e entregadores com taxas significativamente menores que o modelo tradicional (5-12% vs 27-33% do iFood).

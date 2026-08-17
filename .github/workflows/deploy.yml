@@ -179,3 +179,32 @@ jobs:
             echo "::error::WebRestaurant nao respondeu 200 apos o deploy"
             exit 1
           fi
+  # --------------------------------------------------------------
+  # Verificacao das rotas SPA (fecha o ciclo de auto-correcao):
+  # o deploy-all ja GARANTE o rewrite via PUT antes de rebuildar;
+  # este job confere (GET) que a regra /* -> /index.html esta de
+  # fato aplicada apos o deploy, e quebra o pipeline se nao.
+  # --------------------------------------------------------------
+  verify-spa-routes:
+    name: Verifica rotas SPA (web/admin)
+    needs: [health-check]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - name: web
+            service_id_secret: RENDER_SERVICE_ID_WEB
+          - name: admin
+            service_id_secret: RENDER_SERVICE_ID_ADMIN
+    steps:
+      - name: Checkout (para o script check_spa_routes.py)
+        uses: actions/checkout@v5
+      - name: GET /routes e confere rewrite SPA
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ secrets[matrix.service.service_id_secret] }}
+        run: |
+          ROUTES=$(curl -sS "https://api.render.com/v1/services/${SERVICE_ID}/routes" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" 2>&1 || true)
+          echo "GET /routes (${{ matrix.service.name }}) -> $ROUTES"
+          echo "$ROUTES" | python3 scripts/check_spa_routes.py "${{ matrix.service.name }}"

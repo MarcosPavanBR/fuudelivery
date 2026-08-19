@@ -96,6 +96,26 @@ func startRateLimitCleanup() {
 	}()
 }
 
+// parseWSToken valida e decodifica um JWT para uso em WebSocket.
+// Valida SigningMethod HMAC (HS256) para evitar ataques de algorithm confusion,
+// consistente com o middleware HTTP (auth_api/app/middlewares/jwt.go).
+func parseWSToken(tokenStr string) (jwt.MapClaims, error) {
+	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+		}
+		return []byte(os.Getenv("JWT_SECRET")), nil
+	})
+	if err != nil || !token.Valid {
+		return nil, fmt.Errorf("invalid token")
+	}
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return nil, fmt.Errorf("invalid token claims")
+	}
+	return claims, nil
+}
+
 // WebSocket client management (shared across services)
 var wsClients = make(map[int64]*websocket.Conn)
 var wsClientsMu sync.Mutex
@@ -504,16 +524,9 @@ func setupWebSocketRoutes(app *fiber.App) {
 			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Authentication required"}}`))
 			return
 		}
-		parsedToken, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
-			return []byte(os.Getenv("JWT_SECRET")), nil
-		})
-		if err != nil || !parsedToken.Valid {
+		claims, err := parseWSToken(token)
+		if err != nil {
 			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Invalid token"}}`))
-			return
-		}
-		claims, ok := parsedToken.Claims.(jwt.MapClaims)
-		if !ok {
-			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Invalid token claims"}}`))
 			return
 		}
 		tokenUserID, _ := claims["id"].(float64)
@@ -567,16 +580,9 @@ func setupWebSocketRoutes(app *fiber.App) {
 			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Authentication required"}}`))
 			return
 		}
-		parsedToken, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
-			return []byte(os.Getenv("JWT_SECRET")), nil
-		})
-		if err != nil || !parsedToken.Valid {
+		claims, err := parseWSToken(token)
+		if err != nil {
 			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Invalid token"}}`))
-			return
-		}
-		claims, ok := parsedToken.Claims.(jwt.MapClaims)
-		if !ok {
-			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Invalid token claims"}}`))
 			return
 		}
 		tokenUserID, _ := claims["id"].(float64)
@@ -607,10 +613,8 @@ func setupWebSocketRoutes(app *fiber.App) {
 			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Authentication required"}}`))
 			return
 		}
-		parsedToken, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
-			return []byte(os.Getenv("JWT_SECRET")), nil
-		})
-		if err != nil || !parsedToken.Valid {
+		_, err := parseWSToken(token)
+		if err != nil {
 			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Invalid token"}}`))
 			return
 		}
@@ -1048,11 +1052,13 @@ func main() {
 		Prefork:       false,
 		CaseSensitive: true,
 		StrictRouting: false,
-		// Configura proxy confiavel (Render usa range interno).
+		// Configura proxy confiavel (Render usa range interno 10.0.0.0/8).
 		// ProxyHeader define de qual header ler o IP real do cliente.
 		// EnableTrustedProxyCheck: garante que so confia em proxies configurados.
+		// NOTA: NAO usar 0.0.0.0/0 — aceitaria X-Forwarded-For spoofed de
+		// qualquer origem, anulando o rate limiting por IP.
 		EnableTrustedProxyCheck: true,
-		TrustedProxies:          []string{"0.0.0.0/0", "::/0"},
+		TrustedProxies:          []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"},
 		ProxyHeader:             "X-Forwarded-For",
 	})
 

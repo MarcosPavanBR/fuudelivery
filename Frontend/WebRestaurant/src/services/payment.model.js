@@ -1,15 +1,18 @@
-import api, { getApiBaseUrl } from "./api";
+import api from "./api";
 
 // O monolito expõe a carteira do restaurante em /wallet/establishment/*.
 // O estabelecimento autenticado vem do JWT — não é preciso passar o ID.
-const API_BASE = getApiBaseUrl();
+// NOTA: usar paths relativos (ex: /wallet/establishment/balance) pois o
+// axios instance já tem o baseURL configurado — NÃO concatenar com
+// getApiBaseUrl() (causava URLs duplicadas como
+// https://api...https://api.../wallet/...).
 
 // === WALLET (papel restaurante — monolito) ===
 
 // Saldo + totais do ledger: { available, pending, blocked, total_earned,
 // total_withdrawn, last_updated }
 export const getWallet = async () => {
-  const response = await api.get(`${API_BASE}/wallet/establishment/balance`);
+  const response = await api.get("/wallet/establishment/balance");
   return response.data;
 };
 
@@ -22,14 +25,14 @@ export const getExtract = async (limit = 20, cursor = "") => {
   if (cursor) params.append("cursor", cursor);
 
   const response = await api.get(
-    `${API_BASE}/wallet/establishment/transactions?${params.toString()}`
+    `/wallet/establishment/transactions?${params.toString()}`
   );
   return response.data;
 };
 
 // Saque: { amount, destination, method }
 export const requestWithdraw = async (data) => {
-  const response = await api.post(`${API_BASE}/wallet/establishment/withdraw`, {
+  const response = await api.post("/wallet/establishment/withdraw", {
     amount: data.amount,
     destination: data.destination,
     method: data.method,
@@ -41,7 +44,7 @@ export const requestWithdraw = async (data) => {
 
 export const getPaymentHealth = async () => {
   try {
-    const response = await api.get(`${API_BASE}/health`);
+    const response = await api.get("/health");
     return response.data;
   } catch (error) {
     return { status: "offline" };

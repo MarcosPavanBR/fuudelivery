@@ -55,6 +55,7 @@ func ConnectDatabase() {
 		&Subscription{},
 		&SponsoredListing{},
 		&Client{},
+		&RefreshToken{},
 	); err != nil {
 		log.Printf("[CRITICAL] Falha no AutoMigrate do auth_api: %v", err)
 	}

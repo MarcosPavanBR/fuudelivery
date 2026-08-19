@@ -121,22 +121,90 @@ export const AuthProvider = ({ children }) => {
         email,
         password,
       });
-      const token = response.data.token;
+      const { token, refresh_token } = response.data;
       const decoded = jwtDecode(token);
       setUser(decoded);
 
       localStorage.setItem(Strings.token_jwt, token);
+      if (refresh_token) {
+        localStorage.setItem(Strings.refresh_token, refresh_token);
+      }
     } catch (error) {
       console.error("Erro ao fazer login:", error);
       throw error;
     }
   };
 
+  // Renova o access token usando o refresh token.
+  // Chamado automaticamente quando o token está perto de expirar.
+  const refreshAccessToken = useCallback(async () => {
+    const storedRefreshToken = localStorage.getItem(Strings.refresh_token);
+    if (!storedRefreshToken) return false;
+
+    try {
+      const response = await api.post("auth/refresh", {
+        refresh_token: storedRefreshToken,
+      });
+      const { token, refresh_token } = response.data;
+      const decoded = jwtDecode(token);
+      setUser(decoded);
+      localStorage.setItem(Strings.token_jwt, token);
+      if (refresh_token) {
+        localStorage.setItem(Strings.refresh_token, refresh_token);
+      }
+      return true;
+    } catch (error) {
+      console.error("Failed to refresh token:", error);
+      // Refresh token inválido — fazer logout
+      localStorage.removeItem(Strings.token_jwt);
+      localStorage.removeItem(Strings.refresh_token);
+      setUser(null);
+      return false;
+    }
+  }, []);
+
+  // Agenda o refresh automático do token antes de expirar.
+  // Roda sempre que o user muda (login) ou o token é renovado.
+  useEffect(() => {
+    if (!user) return;
+
+    const token = localStorage.getItem(Strings.token_jwt);
+    if (!token) return;
+
+    try {
+      const decoded = jwtDecode(token);
+      if (!decoded.exp) return;
+
+      const nowSec = Date.now() / 1000;
+      const expiresInMs = (decoded.exp - nowSec) * 1000;
+
+      // Renova 2 minutos antes de expirar
+      const refreshMs = Math.max(expiresInMs - 2 * 60 * 1000, 10 * 1000);
+
+      const timer = setTimeout(() => {
+        refreshAccessToken();
+      }, refreshMs);
+
+      return () => clearTimeout(timer);
+    } catch (e) {
+      // token inválido — ignora
+    }
+  }, [user, refreshAccessToken]);
+
   // Função para fazer logout
-  const logout = () => {
+  const logout = useCallback(async () => {
+    const storedRefreshToken = localStorage.getItem(Strings.refresh_token);
+    if (storedRefreshToken) {
+      try {
+        await api.post("auth/logout", { refresh_token: storedRefreshToken });
+      } catch (e) {
+        // ignora erro de logout no servidor
+      }
+    }
     localStorage.removeItem(Strings.token_jwt);
+    localStorage.removeItem(Strings.refresh_token);
     setUser(null);
-  };
+  }, []);
 
   const refreshOpen = async () => {
     // O establishment do dono vem do claim aninhado do JWT

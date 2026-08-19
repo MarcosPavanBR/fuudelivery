@@ -1,4 +1,5 @@
 const token_jwt = "JWT_TOKEN";
+const refresh_token = "REFRESH_TOKEN";
 const initial_order = (item) => {
   return {
     ID: item?.ID || "",
@@ -14,6 +15,7 @@ const initial_order = (item) => {
 const id_default = -9999999999;
 export default {
   token_jwt,
+  refresh_token,
   initial_order,
   id_default,
 };

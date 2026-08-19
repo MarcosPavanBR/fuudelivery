@@ -12,7 +12,7 @@ services:
       - key: PORT
         value: "3000"
       - key: GO_VERSION
-        value: "1.23"
+        value: stable
       - key: GO_ENV
         value: production
       - key: JWT_SECRET

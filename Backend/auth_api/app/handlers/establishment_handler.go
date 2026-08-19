@@ -269,6 +269,23 @@ func UpdateEstablishment(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Establishment not found"})
 	}
 
+	// IDOR protection: verify the authenticated user owns this establishment.
+	// Only admins can edit establishments they don't own.
+	tokenUserID, err := middlewares.GetUserIDFromToken(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+	}
+	role, _ := middlewares.GetUserRoleFromToken(c)
+	if role != "admin" {
+		var authUser models.User
+		if uErr := models.DB.First(&authUser, tokenUserID).Error; uErr != nil {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot update another user's establishment"})
+		}
+		if authUser.EstablishmentID != existingEstablishment.ID {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot update another user's establishment"})
+		}
+	}
+
 	request := struct {
 		Establishment *models.Establishment `json:"establishment"`
 	}{}

@@ -2,7 +2,7 @@ import React, { createContext, useState, useContext, useEffect, useCallback } fr
 import api from "../services/api";
 
 import Strings from "../constants/Strings";
-import { decodeToken } from "react-jwt";
+import { jwtDecode } from "jwt-decode";
 
 import useWebSocket from "react-use-websocket";
 
@@ -72,7 +72,7 @@ export const AuthProvider = ({ children }) => {
     const storedToken = localStorage.getItem(Strings.token_jwt);
 
     if (storedToken) {
-      const decodedToken = decodeToken(storedToken);
+      const decodedToken = jwtDecode(storedToken);
 
       return decodedToken;
     }
@@ -122,7 +122,7 @@ export const AuthProvider = ({ children }) => {
         password,
       });
       const token = response.data.token;
-      const decoded = decodeToken(token);
+      const decoded = jwtDecode(token);
       setUser(decoded);
 
       localStorage.setItem(Strings.token_jwt, token);

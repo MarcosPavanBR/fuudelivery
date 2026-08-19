@@ -5,8 +5,6 @@
 // Migrado de webpack 5. Plugins:
 //   - @vitejs/plugin-react  → JSX + Fast Refresh (substitui babel-loader)
 //   - @tailwindcss/vite     → Tailwind CSS v4 (CSS-first, sem postcss.config.js)
-//   - vite-plugin-static-copy → copia o service worker do Firebase
-//                               (que vive em node_modules) para dist/
 //
 // public/ é copiado automaticamente pelo Vite (manifest, favicons,
 // _redirects, brand/) — substitui o CopyPlugin do webpack.
@@ -14,21 +12,11 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { viteStaticCopy } from "vite-plugin-static-copy";
 
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    viteStaticCopy({
-      targets: [
-        {
-          // SW de push notifications do Firebase (copiado de node_modules)
-          src: "node_modules/firebase/firebase-messaging-sw.js",
-          dest: ".",
-        },
-      ],
-    }),
   ],
 
   // JSX em arquivos .js (herança do babel-loader do webpack): o esbuild

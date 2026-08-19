@@ -2,7 +2,7 @@ import Routes from "./Routes";
 import { AuthProvider } from "./context/AuthContext";
 import "./index.css";
 import React from "react";
-import { HashRouter } from "react-router-dom";
+import { BrowserRouter } from "react-router-dom";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -35,12 +35,12 @@ class ErrorBoundary extends React.Component {
 const App = () => {
   return (
     <ErrorBoundary>
-      <HashRouter>
+      <BrowserRouter>
         <AuthProvider>
           <Routes />
           <ToastContainer />
         </AuthProvider>
-      </HashRouter>
+      </BrowserRouter>
     </ErrorBoundary>
   );
 };

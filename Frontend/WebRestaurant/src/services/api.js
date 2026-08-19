@@ -36,8 +36,8 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem(Strings.token_jwt);
-      // HashRouter: redirect to base URL so HashRouter shows login
-      window.location.href = window.location.pathname;
+      // BrowserRouter: redirect to root so React Router shows login
+      window.location.href = "/";
     }
     return Promise.reject(error);
   }

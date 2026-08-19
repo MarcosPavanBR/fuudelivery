@@ -6,13 +6,13 @@ services:
   - type: web
     name: fuudelivery-api
     env: go
-    buildCommand: cd cmd/fuudelivery && go build -o ../../server .
+    buildCommand: cd cmd/fuudelivery && go build -o server .
     startCommand: ./server
     envVars:
       - key: PORT
         value: "3000"
       - key: GO_VERSION
-        value: "1.23"
+        value: "1.25"
       - key: GO_ENV
         value: production
       - key: JWT_SECRET
@@ -35,7 +35,7 @@ services:
       - key: APP_URL
         value: "https://fuudelivery-web.onrender.com"
       - key: API_BASE_URL
-        value: "https://fuudelivery-api-8y6l.onrender.com"
+        value: "https://api.fuudelivery.com"
       - key: ABACATE_PAY_API_KEY
         sync: false
       - key: ALLOWED_ORIGINS
@@ -55,8 +55,8 @@ services:
         source: /*
         destination: /index.html
     envVars:
-      - key: REACT_APP_API_URL
-        value: https://fuudelivery-api-8y6l.onrender.com
+      - key: VITE_API_URL
+        value: https://api.fuudelivery.com
 
   # ============================================================
   # ADMIN — Painel Administrativo (React)
@@ -71,8 +71,8 @@ services:
         source: /*
         destination: /index.html
     envVars:
-      - key: REACT_APP_API_URL
-        value: https://fuudelivery-api-8y6l.onrender.com
+      - key: VITE_API_URL
+        value: https://api.fuudelivery.com
 
   # ============================================================
   # REDIS — Cache + Fila de pagamentos (BRPop)

@@ -35,7 +35,7 @@ const Location = () => {
     if (cep.length === 8) {
       try {
         const response = await axios.get(
-          `http://viacep.com.br/ws/${cep}/json/`
+          `https://viacep.com.br/ws/${cep}/json/`
         );
 
         if (response.status === 200 && response.data.logradouro) {

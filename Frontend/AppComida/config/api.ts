@@ -18,7 +18,7 @@
 // =============================================================
 
 /** URL base da API do monolito (produção). */
-export const API_URL = "https://fuudelivery-api-8y6l.onrender.com";
+export const API_URL = process.env.EXPO_PUBLIC_API_URL || "https://api.fuudelivery.com";
 
 /**
  * Retorna a URL base da API.

@@ -94,7 +94,9 @@ func CreateUser(c *fiber.Ctx) error {
 			tx.Rollback()
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
-		tx.Commit()
+		if err = tx.Commit(); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to commit transaction: " + err.Error()})
+		}
 	}
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})

@@ -3,9 +3,8 @@ import axios from "axios";
 // API principal (monolito). Sobrescrita por REACT_APP_API_URL ou VITE_API_URL
 // no build (Vite expõe via import.meta.env). Lista canônica em references/URLS.md.
 const API_BASE_URL =
-  import.meta.env.REACT_APP_API_URL ||
   import.meta.env.VITE_API_URL ||
-  "https://fuudelivery-api-8y6l.onrender.com";
+  "https://api.fuudelivery.com";
 
 const api = axios.create({
   baseURL: API_BASE_URL,

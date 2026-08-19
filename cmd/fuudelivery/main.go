@@ -505,6 +505,9 @@ func setupWebSocketRoutes(app *fiber.App) {
 			return
 		}
 		parsedToken, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
+			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+			}
 			return []byte(os.Getenv("JWT_SECRET")), nil
 		})
 		if err != nil || !parsedToken.Valid {
@@ -552,7 +555,7 @@ func setupWebSocketRoutes(app *fiber.App) {
 				log.Println("read:", err2)
 				break
 			}
-			log.Printf("recv: %s", msg)
+			log.Printf("recv: message_type=%d len=%d", mt, len(msg))
 			if err2 = c.WriteMessage(mt, msg); err2 != nil {
 				log.Println("write:", err2)
 				break
@@ -568,6 +571,9 @@ func setupWebSocketRoutes(app *fiber.App) {
 			return
 		}
 		parsedToken, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
+			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+			}
 			return []byte(os.Getenv("JWT_SECRET")), nil
 		})
 		if err != nil || !parsedToken.Valid {
@@ -608,6 +614,9 @@ func setupWebSocketRoutes(app *fiber.App) {
 			return
 		}
 		parsedToken, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
+			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+			}
 			return []byte(os.Getenv("JWT_SECRET")), nil
 		})
 		if err != nil || !parsedToken.Valid {
@@ -858,7 +867,6 @@ func setupDispatchRoutes(app *fiber.App) {
 func setupPaymentRoutes(app *fiber.App) {
 	// Admin — painel Financeiro do WebAdmin
 	app.Get("/payments/all", adminRequired, paymentHandlers.ListAllPayments)
-	app.Get("/payments/", adminRequired, paymentHandlers.ListAllPayments)
 	app.Get("/payments/stats", adminRequired, paymentHandlers.GetPaymentStats)
 	app.Get("/wallets", adminRequired, paymentHandlers.ListWallets)
 	app.Get("/chargebacks", adminRequired, paymentHandlers.ListChargebacks)
@@ -980,15 +988,21 @@ func setupChatRoutes(app *fiber.App) {
 }
 
 // validateRequiredEnv verifica se as variaveis de ambiente essenciais estao presentes.
-// Em producao, falha rapidamente se algo estiver faltando.
+// Falha rapidamente em producao ou se JWT_SECRET estiver vazio (seguranca).
 func validateRequiredEnv() {
 	required := []string{"JWT_SECRET", "DB_CONNECTION_STRING", "MONGO_URI"}
-	missing := false
+	var missing []string
 	for _, key := range required {
 		if os.Getenv(key) == "" {
-			log.Printf("[ENV] CRITICAL: %s nao configurado", key)
-			missing = true
+			missing = append(missing, key)
 		}
+	}
+
+	if len(missing) > 0 {
+		for _, key := range missing {
+			log.Printf("[ENV] CRITICAL: %s nao configurado", key)
+		}
+		log.Fatalln("[ENV] Configuracao incompleta. Defina as variaveis obrigatorias antes de iniciar o servidor.")
 	}
 
 	// Em producao, valida tambem as de pagamento
@@ -999,11 +1013,6 @@ func validateRequiredEnv() {
 				log.Printf("[ENV] WARNING: %s nao configurado — funcionalidade limitada", key)
 			}
 		}
-	}
-
-	if missing {
-		log.Println("[ENV] Configuracao incompleta. Defina as variaveis no painel do Render (Environment > Secret Files).")
-		log.Println("[ENV] Variaveis necessarias para o monolith: DB_CONNECTION_STRING, MONGO_URI, JWT_SECRET")
 	}
 }
 
@@ -1052,7 +1061,7 @@ func main() {
 		// ProxyHeader define de qual header ler o IP real do cliente.
 		// EnableTrustedProxyCheck: garante que so confia em proxies configurados.
 		EnableTrustedProxyCheck: true,
-		TrustedProxies:          []string{"0.0.0.0/0", "::/0"},
+		TrustedProxies:          []string{},
 		ProxyHeader:             "X-Forwarded-For",
 	})
 

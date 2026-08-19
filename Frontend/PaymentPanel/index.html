@@ -147,7 +147,14 @@
     // Lista canônica de URLs em references/URLS.md.
     const API_URL = window.location.hostname === 'localhost'
       ? 'http://localhost:8084'
-      : 'https://fuudelivery-payment.onrender.com';
+      : 'https://api.fuudelivery.com';
+
+    function escapeHtml(text) {
+      if (text == null) return '';
+      const div = document.createElement('div');
+      div.textContent = String(text);
+      return div.innerHTML;
+    }
 
     let token = '';
     let currentUser = null;
@@ -218,7 +225,7 @@
         else if (tab === 'chargebacks') await renderChargebacks(content);
         else if (tab === 'wallets') await renderWallets(content);
       } catch (err) {
-        content.innerHTML = `<div class="empty-state"><p>Erro ao carregar dados: ${err.message}</p></div>`;
+        content.innerHTML = `<div class="empty-state"><p>Erro ao carregar dados: ${escapeHtml(err.message)}</p></div>`;
       }
     }
 
@@ -235,11 +242,11 @@
 
       content.innerHTML = `
         <div class="stats">
-          <div class="stat-card"><h3>Total</h3><div class="value">${stats.total || payments.length || 0}</div></div>
-          <div class="stat-card"><h3>Pendentes</h3><div class="value yellow">${stats.pending || 0}</div></div>
-          <div class="stat-card"><h3>Aprovados</h3><div class="value green">${stats.approved || 0}</div></div>
-          <div class="stat-card"><h3>Rejeitados</h3><div class="value red">${stats.rejected || 0}</div></div>
-          <div class="stat-card"><h3>Alto Risco</h3><div class="value red">${stats.high_risk || 0}</div></div>
+          <div class="stat-card"><h3>Total</h3><div class="value">${escapeHtml(String(stats.total || payments.length || 0))}</div></div>
+          <div class="stat-card"><h3>Pendentes</h3><div class="value yellow">${escapeHtml(String(stats.pending || 0))}</div></div>
+          <div class="stat-card"><h3>Aprovados</h3><div class="value green">${escapeHtml(String(stats.approved || 0))}</div></div>
+          <div class="stat-card"><h3>Rejeitados</h3><div class="value red">${escapeHtml(String(stats.rejected || 0))}</div></div>
+          <div class="stat-card"><h3>Alto Risco</h3><div class="value red">${escapeHtml(String(stats.high_risk || 0))}</div></div>
         </div>
         <div class="table-container">
           <table>
@@ -262,16 +269,16 @@
         const status = p.status || 'pending';
         const date = p.created_at ? new Date(p.created_at).toLocaleDateString('pt-BR') : '-';
         tr.innerHTML = `
-          <td style="font-family:monospace">${p.order_id || p.id || '-'}</td>
-          <td>${p.customer_name || p.customer_id || '-'}</td>
+          <td style="font-family:monospace">${escapeHtml(p.order_id || p.id || '-')}</td>
+          <td>${escapeHtml(p.customer_name || p.customer_id || '-')}</td>
           <td style="font-weight:600">R$ ${amount}</td>
           <td><span class="badge ${riskLevel}">${riskLevel}</span></td>
           <td><span class="badge ${status}">${status}</span></td>
           <td style="color:#888">${date}</td>
           <td>
             ${status === 'pending' ? `
-              <button class="btn btn-approve" onclick="approvePayment('${p.id}')">Aprovar</button>
-              <button class="btn btn-reject" onclick="showRejectModal('${p.id}')">Rejeitar</button>
+              <button class="btn btn-approve" onclick="approvePayment('${escapeHtml(p.id)}')">Aprovar</button>
+              <button class="btn btn-reject" onclick="showRejectModal('${escapeHtml(p.id)}')">Rejeitar</button>
             ` : '<span style="color:#666">-</span>'}
           </td>
         `;
@@ -362,16 +369,16 @@
         const status = cb.status || 'pending';
         const date = cb.created_at ? new Date(cb.created_at).toLocaleDateString('pt-BR') : '-';
         tr.innerHTML = `
-          <td style="font-family:monospace;font-size:12px">${(cb.id || '').substring(0, 8)}</td>
-          <td style="font-family:monospace">${cb.order_id || '-'}</td>
-          <td>${cb.customer_name || cb.customer_id || '-'}</td>
+          <td style="font-family:monospace;font-size:12px">${escapeHtml((cb.id || '').substring(0, 8))}</td>
+          <td style="font-family:monospace">${escapeHtml(cb.order_id || '-')}</td>
+          <td>${escapeHtml(cb.customer_name || cb.customer_id || '-')}</td>
           <td style="font-weight:600">R$ ${amount}</td>
-          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${cb.reason || '-'}</td>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(cb.reason || '-')}</td>
           <td><span class="badge ${status}">${status}</span></td>
           <td style="color:#888">${date}</td>
           <td>
             ${status === 'pending' ? `
-              <button class="btn btn-details" onclick="showChargebackDetail('${cb.id}')">Detalhes</button>
+              <button class="btn btn-details" onclick="showChargebackDetail('${escapeHtml(cb.id)}')">Detalhes</button>
             ` : '<span style="color:#666">-</span>'}
           </td>
         `;
@@ -392,19 +399,19 @@
       }).then(r => r.json()).then(cb => {
         detailsEl.innerHTML = `
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
-            <div><label style="color:#888;font-size:12px">Pedido</label><p style="font-family:monospace">${cb.order_id || '-'}</p></div>
-            <div><label style="color:#888;font-size:12px">Cliente</label><p>${cb.customer_name || cb.customer_id || '-'}</p></div>
+            <div><label style="color:#888;font-size:12px">Pedido</label><p style="font-family:monospace">${escapeHtml(cb.order_id || '-')}</p></div>
+            <div><label style="color:#888;font-size:12px">Cliente</label><p>${escapeHtml(cb.customer_name || cb.customer_id || '-')}</p></div>
             <div><label style="color:#888;font-size:12px">Valor</label><p style="font-weight:600">R$ ${(cb.amount || 0).toFixed(2)}</p></div>
             <div><label style="color:#888;font-size:12px">Status</label><p><span class="badge ${cb.status}">${cb.status || 'pending'}</span></p></div>
           </div>
           <div style="margin-bottom:12px">
             <label style="color:#888;font-size:12px">Motivo do Chargeback</label>
-            <p style="background:#16213e;padding:12px;border-radius:6px;margin-top:4px">${cb.reason || 'Nao informado'}</p>
+            <p style="background:#16213e;padding:12px;border-radius:6px;margin-top:4px">${escapeHtml(cb.reason || 'Nao informado')}</p>
           </div>
           ${cb.evidence ? `
             <div>
               <label style="color:#888;font-size:12px">Evidencias</label>
-              <p style="background:#16213e;padding:12px;border-radius:6px;margin-top:4px">${cb.evidence}</p>
+              <p style="background:#16213e;padding:12px;border-radius:6px;margin-top:4px">${escapeHtml(cb.evidence)}</p>
             </div>
           ` : ''}
         `;
@@ -487,9 +494,9 @@
         const typeName = w.user_type === 'customer' ? 'Cliente' : w.user_type === 'establishment' ? 'Restaurante' : w.user_type === 'courier' ? 'Entregador' : (w.user_type || '-');
         const date = w.created_at ? new Date(w.created_at).toLocaleDateString('pt-BR') : '-';
         tr.innerHTML = `
-          <td style="font-family:monospace;font-size:12px">${(w.id || '').substring(0, 8)}</td>
-          <td>${w.user_name || w.user_id || '-'}</td>
-          <td><span class="badge ${w.user_type === 'customer' ? 'approved' : w.user_type === 'courier' ? 'pending' : 'completed'}">${typeName}</span></td>
+          <td style="font-family:monospace;font-size:12px">${escapeHtml((w.id || '').substring(0, 8))}</td>
+          <td>${escapeHtml(w.user_name || w.user_id || '-')}</td>
+          <td><span class="badge ${w.user_type === 'customer' ? 'approved' : w.user_type === 'courier' ? 'pending' : 'completed'}">${escapeHtml(typeName)}</span></td>
           <td style="font-weight:600" class="${balanceColor}">R$ ${balance}</td>
           <td style="color:#888">${date}</td>
         `;

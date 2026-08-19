@@ -6,12 +6,11 @@ async function getOrders(id) {
 
     return data
       .filter((e) => {
-        if (!e.deliveryman) {
-          return e;
+        // Exclui pedidos finalizados pelo entregador (já saiu do Kanban)
+        if (e.deliveryman && e.deliveryman.status === "FINISHED") {
+          return false;
         }
-        if (e.deliveryman?.status !== "FINISHED") {
-          return e;
-        }
+        return true;
       })
       .map((e) => {
         return {

@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect } from "react";
+import React, { createContext, useState, useContext, useEffect, useCallback } from "react";
 import api from "../services/api";
 
 import Strings from "../constants/Strings";
@@ -17,6 +17,9 @@ export const AuthProvider = ({ children }) => {
     return localStorage.getItem("theme") || "light";
   });
 
+  // Máximo de mensagens WebSocket em memória para evitar memory leak.
+  // Acima disso, as mais antigas são descartadas.
+  const MAX_SOCKET_MESSAGES = 100;
   const [socketMessage, setSocketMessage] = useState([]);
 
   const toggleTheme = () => {
@@ -65,7 +68,7 @@ export const AuthProvider = ({ children }) => {
     },
   });
 
-  const getUser = () => {
+  const getUser = useCallback(() => {
     const storedToken = localStorage.getItem(Strings.token_jwt);
 
     if (storedToken) {
@@ -74,7 +77,7 @@ export const AuthProvider = ({ children }) => {
       return decodedToken;
     }
     return null;
-  };
+  }, []);
 
   const sendSocketMessage = (type, data) => {
     sendJsonMessage({
@@ -102,7 +105,13 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     if (lastMessage) {
-      setSocketMessage([...socketMessage, lastMessage]);
+      setSocketMessage(prev => {
+        const next = [...prev, lastMessage];
+        // Mantém apenas as últimas N mensagens para evitar memory leak
+        return next.length > MAX_SOCKET_MESSAGES
+          ? next.slice(next.length - MAX_SOCKET_MESSAGES)
+          : next;
+      });
     }
   }, [lastMessage]);
 

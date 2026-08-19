@@ -13,6 +13,20 @@ import (
 	"github.com/carloshomar/fuudelivery/auth_api/app/models"
 )
 
+// createTokenPair gera access token + refresh token para um usuario.
+// Usado por Login e CreateUser para manter a resposta consistente.
+func createTokenPair(user *models.User, establishment *models.Establishment) (string, string, error) {
+	accessToken, err := middlewares.GenerateJWT(user, establishment)
+	if err != nil {
+		return "", "", err
+	}
+	refreshToken, err := middlewares.CreateRefreshToken(user.ID)
+	if err != nil {
+		return "", "", err
+	}
+	return accessToken, refreshToken, nil
+}
+
 // CreateUser cadastra um novo usuario e seu estabelecimento associado.
 // Requer: name, email, password, establishment.name.
 // Cria usuario e estabelecimento em transacao atomica no PostgreSQL.
@@ -100,13 +114,13 @@ func CreateUser(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	tokenString, err := middlewares.GenerateJWT(&user, &establishment)
+	accessToken, refreshToken, err := createTokenPair(&user, &establishment)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to generate JWT token"})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to generate tokens"})
 	}
 
 	request.Password = ""
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"user": request, "token": tokenString})
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"user": request, "token": accessToken, "refresh_token": refreshToken})
 }
 
 // CreateUserAdmin cria um usuario diretamente pelo painel admin (POST /users).
@@ -210,14 +224,15 @@ func Login(c *fiber.Ctx) error {
 		establishmentPtr = &establishment
 	}
 
-	tokenString, jwtError := middlewares.GenerateJWT(&user, establishmentPtr)
+	accessToken, refreshToken, jwtError := createTokenPair(&user, establishmentPtr)
 
 	if jwtError != nil {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Incorrect credentials"})
 	}
 
 	return c.JSON(fiber.Map{
-		"token": tokenString,
+		"token":         accessToken,
+		"refresh_token": refreshToken,
 	})
 }
 
@@ -435,4 +450,74 @@ func BootstrapAdmin(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"message": fmt.Sprintf("User %s promoted to admin", req.Email)})
+}
+
+// RefreshToken renova um access token usando um refresh token valido.
+// O refresh token antigo é revogado (rotação) e um novo par é emitido.
+func RefreshToken(c *fiber.Ctx) error {
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
+	}
+
+	if req.RefreshToken == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "refresh_token is required"})
+	}
+
+	// Valida o refresh token (existe, não expirado, não revogado)
+	userID, err := middlewares.ValidateRefreshToken(req.RefreshToken)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid or expired refresh token"})
+	}
+
+	// Rotação: revoga o refresh token antigo antes de gerar o novo
+	if err := middlewares.RevokeRefreshToken(req.RefreshToken); err != nil {
+		// Log mas não impede — pior caso fica com um token extra válido até expirar
+		fmt.Printf("[WARN] Failed to revoke old refresh token: %v\n", err)
+	}
+
+	// Busca o usuário
+	var user models.User
+	if err := models.DB.First(&user, userID).Error; err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "User not found"})
+	}
+
+	// Busca o estabelecimento (se houver)
+	var establishmentPtr *models.Establishment
+	if user.EstablishmentID != 0 {
+		var establishment models.Establishment
+		if err := models.DB.Where("id = ?", user.EstablishmentID).First(&establishment).Error; err == nil {
+			establishmentPtr = &establishment
+		}
+	}
+
+	accessToken, refreshToken, err := createTokenPair(&user, establishmentPtr)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to generate tokens"})
+	}
+
+	return c.JSON(fiber.Map{
+		"token":         accessToken,
+		"refresh_token": refreshToken,
+	})
+}
+
+// Logout revoga o refresh token do usuario, encerrando a sessao.
+func Logout(c *fiber.Ctx) error {
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
+	}
+
+	if req.RefreshToken != "" {
+		if err := middlewares.RevokeRefreshToken(req.RefreshToken); err != nil {
+			fmt.Printf("[WARN] Failed to revoke refresh token on logout: %v\n", err)
+		}
+	}
+
+	return c.JSON(fiber.Map{"message": "Logged out successfully"})
 }

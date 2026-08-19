@@ -714,6 +714,8 @@ func setupWebSocketRoutes(app *fiber.App) {
 func setupAuthRoutes(app *fiber.App) {
 	app.Post("/users/register", rateLimitMiddleware(5), authHandlers.CreateUser)
 	app.Post("/users/login", rateLimitMiddleware(10), authHandlers.Login)
+	app.Post("/auth/refresh", rateLimitMiddleware(30), authHandlers.RefreshToken)
+	app.Post("/auth/logout", authHandlers.Logout)
 	app.Post("/users", adminRequired, authHandlers.CreateUserAdmin)
 	app.Post("/admin/bootstrap", rateLimitMiddleware(3), authHandlers.BootstrapAdmin)
 	app.Get("/users", adminRequired, authHandlers.ListAllUsers)

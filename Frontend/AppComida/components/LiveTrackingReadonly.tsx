@@ -46,16 +46,26 @@ export default function LiveTrackingReadonly({
   useEffect(() => {
     if (!orderId) return;
 
-    const connectWebSocket = async () => {
-      try {
-        if (!token) {
-          setError("Token não encontrado");
-          return;
-        }
+  const connectWebSocket = async () => {
+    try {
+      if (!token) {
+        setError("Token não encontrado");
+        return;
+      }
 
-        const ws = new WebSocket(
-          `${getWsUrl()}/ws/delivery/${orderId}?token=${token}`
-        );
+      const apiUrl = getApiUrl();
+      const resp = await fetch(`${apiUrl}/ws-token`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await resp.json();
+      if (!data.ws_token) {
+        setError("Falha ao gerar token WebSocket");
+        return;
+      }
+
+      const ws = new WebSocket(
+        `${getWsUrl()}/ws/delivery/${orderId}?ws_token=${data.ws_token}`
+      );
 
         ws.onopen = () => {
           setConnected(true);

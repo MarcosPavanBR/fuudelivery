@@ -40,16 +40,27 @@ export const AuthProvider = ({ children }) => {
   const [wsUrl, setWsUrl] = useState(null);
   useEffect(() => {
     if (user?.sub) {
-      setWsUrl(
-        getWsBaseUrl() +
-          "/ws/" +
-          user.sub +
-          "?token=" +
-          localStorage.getItem(Strings.token_jwt)
-      );
+      const token = sessionStorage.getItem(Strings.token_jwt);
+      if (!token) return;
+      fetch(getWsBaseUrl() + "/ws-token", {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data.ws_token) {
+            setWsUrl(
+              getWsBaseUrl() +
+                "/ws/" +
+                user.sub +
+                "?ws_token=" +
+                data.ws_token
+            );
+          }
+        })
+        .catch(() => {});
     }
   }, [user]);
-  const { sendJsonMessage, lastMessage } = useWebSocket(wsUrl, {
+  const { sendJsonMessage, lastMessage, readyState } = useWebSocket(wsUrl, {
     enabled: !!wsUrl && !!user?.sub,
     reconnectInterval: 1000,
     retryOnError: true,
@@ -62,11 +73,20 @@ export const AuthProvider = ({ children }) => {
     },
     onOpen: () => {
       setFMode(false);
+      if (user?.establishment) {
+        sendJsonMessage({
+          type: "connect",
+          data: {
+            id: user.establishment.id,
+            name: user.establishment.name,
+          },
+        });
+      }
     },
   });
 
   const getUser = () => {
-    const storedToken = localStorage.getItem(Strings.token_jwt);
+    const storedToken = sessionStorage.getItem(Strings.token_jwt);
 
     if (storedToken) {
       const decodedToken = decodeToken(storedToken);
@@ -87,12 +107,6 @@ export const AuthProvider = ({ children }) => {
     try {
       const decodedToken = getUser();
       setUser(decodedToken);
-      if (decodedToken?.establishment) {
-        sendSocketMessage("connect", {
-          id: decodedToken.establishment.id,
-          name: decodedToken.establishment.name,
-        });
-      }
     } catch (e) {
       console.log(e);
     }
@@ -116,7 +130,7 @@ export const AuthProvider = ({ children }) => {
       const decoded = decodeToken(token);
       setUser(decoded);
 
-      localStorage.setItem(Strings.token_jwt, token);
+      sessionStorage.setItem(Strings.token_jwt, token);
     } catch (error) {
       console.error("Erro ao fazer login:", error);
       throw error;
@@ -125,7 +139,7 @@ export const AuthProvider = ({ children }) => {
 
   // Função para fazer logout
   const logout = () => {
-    localStorage.removeItem(Strings.token_jwt);
+    sessionStorage.removeItem(Strings.token_jwt);
     setUser(null);
   };
 

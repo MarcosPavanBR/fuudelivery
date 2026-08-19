@@ -8,7 +8,7 @@ import {
 import { Text, View } from "@/components/Themed";
 import Colors from "@/constants/Colors";
 import OrderSummary from "@/components/OrderSummary";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useApi } from "@/contexts/ApiContext";
 import { useIsFocused } from "@react-navigation/native";
 import Texts from "@/constants/Texts";
@@ -26,7 +26,7 @@ export default function TabTwoScreen() {
   const navigation = useNavigation();
   const [myOrders, setMyOrders] = useState([]);
   const isFocused = useIsFocused();
-  const [intervalId, setIntervalId] = useState<any>(null);
+  const intervalRef = useRef<any>(null);
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
   const [userHasPhone, setUserHasPhone] = useState<boolean | null>(null);
 
@@ -65,16 +65,15 @@ export default function TabTwoScreen() {
   useEffect(() => {
     if (isFocused) {
       getMyOrders();
-      const idinterval = setInterval(() => {
+      intervalRef.current = setInterval(() => {
         getMyOrders();
       }, Strings.wait_interval);
-
-      setIntervalId(idinterval);
     }
 
     return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
     };
   }, [isFocused]);

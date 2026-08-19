@@ -21,7 +21,7 @@ export const getApiBaseUrl = () => API_BASE_URL;
 
 api.interceptors.request.use(
   (config) => {
-    const toe = localStorage.getItem(Strings.token_jwt);
+    const toe = sessionStorage.getItem(Strings.token_jwt);
     if (toe) {
       config.headers.Authorization = `Bearer ${toe}`;
     }
@@ -34,7 +34,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem(Strings.token_jwt);
+      sessionStorage.removeItem(Strings.token_jwt);
       // HashRouter: redirect to base URL so HashRouter shows login
       window.location.href = window.location.pathname;
     }

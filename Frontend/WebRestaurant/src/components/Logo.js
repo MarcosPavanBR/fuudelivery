@@ -11,15 +11,15 @@ const Logo = ({ size = 40, variant = "full", className = "" }) => {
     >
       <defs>
         <linearGradient id={`fuuGrad-${s}`} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#EA1D2C" />
-          <stop offset="100%" stopColor="#C41420" />
+          <stop offset="0%" stopColor="#DC2626" />
+          <stop offset="100%" stopColor="#B91C1C" />
         </linearGradient>
         <linearGradient id={`accent-${s}`} x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stopColor="#FF6B35" />
-          <stop offset="100%" stopColor="#F7A11E" />
+          <stop offset="100%" stopColor="#F59E0B" />
         </linearGradient>
         <filter id={`shadow-${s}`} x="-10%" y="-5%" width="120%" height="120%">
-          <feDropShadow dx="0" dy="4" stdDeviation="6" floodColor="#EA1D2C" floodOpacity="0.25" />
+          <feDropShadow dx="0" dy="4" stdDeviation="6" floodColor="#DC2626" floodOpacity="0.25" />
         </filter>
       </defs>
       <rect
@@ -63,7 +63,7 @@ const Logo = ({ size = 40, variant = "full", className = "" }) => {
           style={{
             fontSize: size * 0.52,
             fontWeight: 900,
-            color: "#EA1D2C",
+            color: "#DC2626",
             letterSpacing: "-0.5px",
             lineHeight: 1,
             fontFamily: "Inter, system-ui, sans-serif",
@@ -110,7 +110,7 @@ const Logo = ({ size = 40, variant = "full", className = "" }) => {
           strokeLinecap="round"
           opacity="0.35"
         />
-        <circle cx="98" cy="26" r="10" fill="#F7A11E" />
+        <circle cx="98" cy="26" r="10" fill="#F59E0B" />
         <path
           d="M94 22l4 4 4-4"
           stroke="white"
@@ -162,15 +162,15 @@ const Logo = ({ size = 40, variant = "full", className = "" }) => {
       >
         <defs>
           <linearGradient id="loginGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#EA1D2C" />
-            <stop offset="100%" stopColor="#C41420" />
+            <stop offset="0%" stopColor="#DC2626" />
+            <stop offset="100%" stopColor="#B91C1C" />
           </linearGradient>
           <linearGradient id="loginAccent" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#FF6B35" />
-            <stop offset="100%" stopColor="#F7A11E" />
+            <stop offset="100%" stopColor="#F59E0B" />
           </linearGradient>
           <filter id="loginShadow" x="-15%" y="-10%" width="130%" height="130%">
-            <feDropShadow dx="0" dy="8" stdDeviation="12" floodColor="#EA1D2C" floodOpacity="0.3" />
+            <feDropShadow dx="0" dy="8" stdDeviation="12" floodColor="#DC2626" floodOpacity="0.3" />
           </filter>
         </defs>
         <rect
@@ -197,7 +197,7 @@ const Logo = ({ size = 40, variant = "full", className = "" }) => {
           style={{
             fontSize: size * 0.85,
             fontWeight: 900,
-            background: "linear-gradient(135deg, #EA1D2C, #C41420)",
+            background: "linear-gradient(135deg, #DC2626, #B91C1C)",
             WebkitBackgroundClip: "text",
             WebkitTextFillColor: "transparent",
             letterSpacing: "-1px",

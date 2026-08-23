@@ -456,3 +456,6 @@ dist-apks/
 
 # Ferramentas temporárias
 tools/
+-e 
+# Binário compilado do ETL operacional
+cmd/etl-payments/etl-payments

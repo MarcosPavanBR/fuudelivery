@@ -40,10 +40,40 @@ Scripts SQL testados de verdade (rodados duas vezes seguidas contra um Postgres 
 
 Não faça isso tudo de uma vez. Sugestão de ordem, do menos arriscado ao mais:
 
-1. **`push_tokens`** (script 01) — baixíssimo risco, não é dado financeiro nem afeta fluxo em tempo real. Bom para validar o processo de corte (trocar o código para escrever em Postgres, rodar os dois em paralelo por alguns dias, depois desligar o Mongo).
-2. **`chat_api`** (script 04) — sem dado financeiro, mas é tempo real (WebSocket). Testa o padrão de corte sob carga de leitura/escrita constante.
-3. **`delivery_api`** (script 02) — mais sensível porque afeta o motor de despacho ao vivo. Recomenda-se rodar os dois bancos em paralelo (dual-write) por um tempo, comparando os resultados do matching antes de desligar o Mongo.
-4. **Pagamentos** (script 03) — por último e com mais cuidado. Antes de apontar o código para a tabela unificada, é preciso um **script de migração de dados** (ETL) que reconcilie os registros que hoje representam o mesmo pagamento nos dois Mongos (provavelmente casando por `order_id`). Peça esse script como próximo passo, depois de validar o schema em homologação. Sugestão: manter os dois sistemas de pagamento escrevendo em paralelo (feature flag) por pelo menos um ciclo de fechamento financeiro completo antes de confiar 100% na tabela nova.
+1. ✅ **`push_tokens`** (script 01) — baixíssimo risco, não é dado financeiro nem afeta fluxo em tempo real. Bom para validar o processo de corte (trocar o código para escrever em Postgres, rodar os dois em paralelo por alguns dias, depois desligar o Mongo).
+2. ✅ **`chat_api`** (script 04) — sem dado financeiro, mas é tempo real (WebSocket). Testa o padrão de corte sob carga de leitura/escrita constante.
+3. ✅ **`delivery_api`** (script 02) — código já migrado: escrita/leitura primárias em Postgres, dual-write Mongo best-effort. Motor de despacho usa o read-model GORM.
+4. ✅ **Pagamentos** (script 03) — código migrado: todos os handlers (`payment_api`) usam GORM/Postgres como primário com dual-write best-effort no Mongo; ETL one-shot disponível em `cmd/etl-payments` (idempotente, não apaga nada). Teste E2E reescrito para Postgres via testcontainers.
+
+> ⚠️ **Corte 5 (pendente): recursos de pedidos ainda no Mongo.** Os handlers `pickup_code.go`, `review.go`, `scheduling.go` e `reorder.go` do `orders_api` leem/escrevem direto na collection `orders` do Mongo como caminho primário. É o último uso de Mongo fora de dual-writes — migrar para a tabela `orders` do Postgres (sql/01) antes de desligar o Atlas.
+
+## Status dos cortes (atualizado em 2026-08-23)
+
+| Corte | Status | Onde |
+|---|---|---|
+| 1. `push_tokens` | ✅ **Código migrado** — escrita primária em Postgres (`models.PushToken`, upsert por user_id+user_type), dual-write Mongo best-effort; leitura 100% Postgres. Bônus: corrigido caminho de envio de push que consultava Mongo por `user_phone` (campo nunca gravado pela escrita — provável caminho morto); agora resolve phone → client_id → tokens. | `orders_api/app/models/push_token.go`, `handlers/notifications.go`, `handlers/orders.go` |
+| 2. `chat_messages` | ✅ **Código migrado** — escrita primária em Postgres (GORM AutoMigrate + tabela sql/04), dual-write Mongo best-effort; leitura e MarkAsRead 100% Postgres. ID agora é BIGSERIAL (era ObjectID). | `chat_api/app/models/{message,database}.go`, `handlers/chat.go` |
+| 3. `delivery_solicitations` | ✅ **Código migrado** — Postgres primário, dual-write legado | `delivery_api/app/handlers/solicitations.go`, `dispatch_handler.go` |
+| 4. Pagamentos/carteiras | ✅ **Código migrado + ETL pronto** — handlers 100% GORM/Postgres com dual-write best-effort; lazy-ETL "on first touch" para carteiras + ferramenta `cmd/etl-payments` para importar histórico completo (payments, wallets, wallet_ledger → wallet_transactions) antes de desligar o Atlas. Suíte E2E reescrita para Postgres (testcontainers). | `payment_api/app/handlers/*`, `payment_api/app/models/{payment,wallet}.go`, `cmd/etl-payments/` |
+| 5. Recursos de pedidos | ⬜ Pendente — `pickup_code.go`, `review.go`, `scheduling.go`, `reorder.go` ainda usam a collection `orders` do Mongo como primário | `orders_api/app/handlers/` |
+
+**Como desligar o Mongo depois:** remova as chamadas `ConnectMongoDatabase()` e os blocos "dual-write" marcados nos handlers; então remova `MONGO_URI` do Render. Os blocos legados estão todos marcados com comentários "dual-write temporário" no código.
+
+### Runbook do ETL de pagamentos (`cmd/etl-payments`)
+
+Rode UMA vez (idempotente — pode repetir sem duplicar) antes de pausar o Atlas:
+
+```bash
+cd cmd/etl-payments && GOWORK=off go build -o etl-payments .
+DB_CONNECTION_STRING="postgres://..." \
+MONGO_URI="mongodb+srv://..." \
+PAYMENT_MONGO_DATABASE="fuudelivery_payments" \
+./etl-payments
+```
+
+O que faz: importa `payments` (dedup por abacatepay_id ou order_id+amount), cria carteiras que só existem no Mongo (**nunca sobrescreve saldo Postgres**) com lançamento de auditoria, e importa o `wallet_ledger` antigo para `wallet_transactions` (dedup por tupla característica). Não apaga nada em nenhum banco. Confira o resumo impresso ao final contra os totais do Atlas.
+
+Depois de 1 ciclo financeiro de dual-write observado + ETL validado: execute o corte 5 (recursos de pedidos) e só então remova o Atlas.
 
 ## Por que RLS não pode copiar o padrão `auth.uid()`
 

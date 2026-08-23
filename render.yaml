@@ -1,29 +1,44 @@
+# ============================================================================
+# render.yaml — Blueprint do FuuDelivery no Render
+# ============================================================================
+# ESTADO REAL DA CONTA (auditado 2026-08-23 via API):
+#   - 3 serviços ativos: fuudelivery-api, fuudelivery-web, fuudelivery-admin
+#   - Redis NÃO é gerenciado pelo Render — REDIS_URL aponta para provedor
+#     externo (*.db.redis.io). O antigo bloco `type: redis` foi REMOVIDO deste
+#     arquivo porque não existe mais na conta; mantê-lo faria o blueprint
+#     criar um Redis duplicado num próximo apply.
+#
+# CONVENÇÃO DE NOMES (não renomear sem coordenação — URLs mudam):
+#   - Todos os serviços usam o prefixo "fuudelivery-".
+#   - As URLs onrender.com estão gravadas em código (apps mobile compilados,
+#     frontends, CORS) e em references/URLS.md. Renomear = quebrar clientes.
+#
+# SECRETS (sync: false): preenchidos no dashboard Render → Environment.
+# Nunca commitar valores aqui.
+# ============================================================================
+
 services:
   # ============================================================
-  # MONOLITH — API Gateway (Go + Fiber)
-  # Unifica auth_api, orders_api, delivery_api, chat_api, payment_api
+  # API — Monolito Go (auth + orders + delivery + chat + payment)
+  # URL: https://fuudelivery-api-8y6l.onrender.com
   # ============================================================
   - type: web
     name: fuudelivery-api
     env: go
     buildCommand: cd cmd/fuudelivery && go build -o ../../server .
     startCommand: ./server
+    healthCheckPath: /health
     envVars:
+      # ── Infra básica ──────────────────────────────────────
       - key: PORT
         value: "3000"
       - key: GO_VERSION
         value: stable
       - key: GO_ENV
         value: production
-      - key: JWT_SECRET
-        sync: false
-      - key: ABACATE_PAY_WEBHOOK_SECRET
-        sync: false
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: fuudelivery-redis
-          property: connectionString
+
+      # ── Banco de dados / cache ────────────────────────────
+      # Postgres (Supabase) e MongoDB (Atlas) via secrets.
       - key: DB_CONNECTION_STRING
         sync: false
       - key: MONGO_URI
@@ -32,18 +47,43 @@ services:
         value: "fuudelivery"
       - key: PAYMENT_MONGO_DATABASE
         value: "fuudelivery_payments"
+      # Redis EXTERNO (não é serviço Render). Valor real no dashboard.
+      - key: REDIS_URL
+        sync: false
+
+      # ── Autenticação / pagamentos (secrets) ───────────────
+      - key: JWT_SECRET
+        sync: false
+      - key: ABACATE_PAY_API_KEY
+        sync: false
+      - key: ABACATE_PAY_WEBHOOK_SECRET
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+
+      # ── Observabilidade / rotas ───────────────────────────
+      # Protege GET /metrics (Bearer ou ?token=). Vazio = público.
+      - key: METRICS_TOKEN
+        sync: false
+      # Servidor OSRM próprio p/ cálculo de rotas. Vazio = demo público (só dev).
+      - key: OSRM_BASE_URL
+        sync: false
+
+      # ── URLs da aplicação ─────────────────────────────────
+      # ⚠️ Sufixo -8y6l hardcoded: se o serviço for recriado, atualize aqui,
+      #    ALLOWED_ORIGINS, config/api.ts dos apps mobile e os frontends.
       - key: APP_URL
         value: "https://fuudelivery-web.onrender.com"
       - key: API_BASE_URL
         value: "https://fuudelivery-api-8y6l.onrender.com"
-      - key: ABACATE_PAY_API_KEY
-        sync: false
       - key: ALLOWED_ORIGINS
         value: "https://fuudelivery-web.onrender.com,https://fuudelivery-admin-lv7f.onrender.com"
-    healthCheckPath: /health
 
   # ============================================================
-  # WEB — Frontend do Restaurante (React)
+  # WEB — Painel do Restaurante (Vite + React 19 + Tailwind 4)
+  # URL: https://fuudelivery-web.onrender.com
   # ============================================================
   - type: web
     name: fuudelivery-web
@@ -59,7 +99,8 @@ services:
         value: https://fuudelivery-api-8y6l.onrender.com
 
   # ============================================================
-  # ADMIN — Painel Administrativo (React)
+  # ADMIN — Painel Administrativo (Vite + React 19 + Tailwind 4)
+  # URL: https://fuudelivery-admin-lv7f.onrender.com
   # ============================================================
   - type: web
     name: fuudelivery-admin
@@ -74,10 +115,12 @@ services:
       - key: REACT_APP_API_URL
         value: https://fuudelivery-api-8y6l.onrender.com
 
-  # ============================================================
-  # REDIS — Cache + Fila de pagamentos (BRPop)
-  # ============================================================
-  - type: redis
-    name: fuudelivery-redis
-    plan: free
-    maxmemoryPolicy: allkeys-lru
+# ============================================================================
+# NOTA SOBRE REDIS EXTERNO
+# ============================================================================
+# O REDIS_URL aponta para um Redis externo (*.db.redis.io), não gerenciado
+# pelo Render. Se um dia migrar para o Redis gerenciado do Render, crie o
+# serviço no dashboard e troque o valor de REDIS_URL — NÃO re-adicione um
+# bloco `type: redis` aqui sem antes verificar o plano (free tem eviction
+# allkeys-lru: mensagens da fila de pagamentos podem ser perdidas).
+# ============================================================================

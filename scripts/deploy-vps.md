@@ -2,8 +2,8 @@
 
 > ## ⚠️ Payment Service removido (arquivado)
 >
-> O módulo `Backend/Payment` (payment-service) e o `Frontend/PaymentPanel`
-> (payment-panel) foram **arquivados e removidos do repositório** — as seções
+> O módulo `Backend/Payment` (payment-service) e o painel standalone
+> `PaymentPanel` (agora em `legacy/PaymentPanel/`) foram **arquivados** — as seções
 > deste guia que os citam estão **obsoletas e não devem ser seguidas**.
 > Todos os endpoints de pagamento (PIX, carteiras, chargebacks, aprovações)
 > agora vivem no **monolito `fuudelivery-api`** (`cmd/fuudelivery` + `payment_api`).
@@ -55,7 +55,7 @@ Todas as portas ficam **presas a `127.0.0.1`** — o **nginx instalado no host**
 |---|---|---|---|
 | `fuudelivery-api` | `Dockerfile` (raiz, Go) | 3000 | `127.0.0.1:3000` |
 | `payment-service` | `Backend/Payment/Dockerfile` (Go) | 8084 | `127.0.0.1:8084` |
-| `payment-panel` | `Frontend/PaymentPanel/Dockerfile` (nginx) | 80 | `127.0.0.1:3001` |
+| ~~`payment-panel`~~ | ~~`legacy/PaymentPanel/Dockerfile`~~ (arquivado 2026-08) | — | — |
 | `web-restaurant` | `Frontend/WebRestaurant/Dockerfile` (Vite→nginx) | 80 | `127.0.0.1:3002` |
 | `web-admin` | `Frontend/WebAdmin/Dockerfile` (Vite→nginx) | 80 | `127.0.0.1:3003` |
 | `redis` | `redis:7-alpine` | 6379 | `127.0.0.1:6379` |

@@ -1,0 +1,5 @@
+/* NativeWind entry — importado pelo app/_layout.tsx.
+   As diretivas abaixo são expandidas pelo Tailwind no build. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

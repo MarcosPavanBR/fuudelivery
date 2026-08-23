@@ -50,8 +50,8 @@ cd Frontend/WebRestaurant
 npm install
 npm start
 
-# Payment Panel (HTML/JS)
-# Just open Frontend/PaymentPanel/index.html in your browser
+# Payment Panel (HTML/JS) — ARQUIVADO em legacy/PaymentPanel (2026-08).
+# Funcionalidade equivalente vive na aba Financeiro do WebAdmin.
 
 # Mobile Apps (React Native/Expo)
 cd Frontend/AppComida
@@ -363,7 +363,7 @@ cd Frontend/WebRestaurant && npm install && npm test -- --watchAll=false && npm 
 # NPM audit
 cd Frontend/WebRestaurant && npm audit --audit-level=moderate && cd ../..
 cd Frontend/WebAdmin && npm audit --audit-level=moderate && cd ../..
-cd Frontend/PaymentPanel && npm audit --audit-level=moderate && cd ../..
+# PaymentPanel arquivado em legacy/ — não passa mais por npm audit
 ```
 
 ### Why CI Might Fail

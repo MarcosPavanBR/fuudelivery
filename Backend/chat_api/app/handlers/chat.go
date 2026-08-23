@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"strconv"
 	"sync"
@@ -13,15 +14,7 @@ import (
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
-
-func mongoCtx() context.Context {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	_ = cancel
-	return ctx
-}
 
 type Room struct {
 	Clients map[*websocket.Conn]*ClientInfo
@@ -173,10 +166,8 @@ func HandleChatWebSocket(c *websocket.Conn) {
 }
 
 func saveMessage(req dto.ChatMessageRequest) (*models.ChatMessage, error) {
-	collection := models.MongoDabase.Collection("chat_messages")
-
+	now := time.Now()
 	msg := models.ChatMessage{
-		ID:          primitive.NewObjectID(),
 		OrderID:     req.OrderID,
 		SenderID:    req.SenderID,
 		SenderType:  req.SenderType,
@@ -184,16 +175,42 @@ func saveMessage(req dto.ChatMessageRequest) (*models.ChatMessage, error) {
 		Message:     req.Message,
 		MessageType: req.MessageType,
 		ImageURL:    req.ImageURL,
-		CreatedAt:   time.Now(),
+		CreatedAt:   now,
 	}
 
 	if msg.MessageType == "" {
 		msg.MessageType = "text"
 	}
 
-	_, err := collection.InsertOne(mongoCtx(), msg)
-	if err != nil {
+	// ── CORTE 2 (banco-único): escrita PRIMÁRIA em Postgres ─────────────
+	// O ID volta preenchido pelo BIGSERIAL e é o que vai para o cliente.
+	if models.DB == nil {
+		return nil, fmt.Errorf("Postgres indisponível (chat_api models.DB nulo)")
+	}
+	if err := models.DB.Create(&msg).Error; err != nil {
 		return nil, err
+	}
+
+	// ── Escrita legada no Mongo (dual-write temporário, best-effort) ────
+	// Mantida até o ETL/desligamento do Mongo. Erro aqui NÃO falha a request.
+	if models.MongoDabase != nil {
+		legacy := bson.M{
+			"order_id":     msg.OrderID,
+			"sender_id":    msg.SenderID,
+			"sender_type":  msg.SenderType,
+			"sender_name":  msg.SenderName,
+			"message":      msg.Message,
+			"message_type": msg.MessageType,
+			"created_at":   msg.CreatedAt,
+		}
+		if msg.ImageURL != "" {
+			legacy["image_url"] = msg.ImageURL
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if _, err := models.MongoDabase.Collection("chat_messages").InsertOne(ctx, legacy); err != nil {
+			log.Printf("[CHAT] Dual-write Mongo falhou (não-crítico): %v", err)
+		}
 	}
 
 	return &msg, nil
@@ -205,20 +222,17 @@ func GetMessages(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "orderId é obrigatório"})
 	}
 
-	collection := models.MongoDabase.Collection("chat_messages")
-
-	filter := bson.M{"order_id": orderID}
-	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: 1}})
-
-	cursor, err := collection.Find(mongoCtx(), filter, opts)
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": "Erro ao buscar mensagens"})
+	// CORTE 2: leitura 100% Postgres, ordenada por created_at (índice da tabela).
+	if models.DB == nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Banco indisponível"})
 	}
-	defer cursor.Close(mongoCtx())
 
 	var messages []models.ChatMessage
-	if err := cursor.All(mongoCtx(), &messages); err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": "Erro ao decodificar mensagens"})
+	if err := models.DB.
+		Where("order_id = ?", orderID).
+		Order("created_at ASC").
+		Find(&messages).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Erro ao buscar mensagens"})
 	}
 
 	return c.JSON(messages)
@@ -256,16 +270,14 @@ func MarkAsRead(c *fiber.Ctx) error {
 
 	now := time.Now()
 
-	collection := models.MongoDabase.Collection("chat_messages")
-	filter := bson.M{
-		"order_id":  orderID,
-		"sender_id": bson.M{"$ne": userID},
-		"read_at":   nil,
+	// CORTE 2: marca como lidas em Postgres todas as mensagens do pedido
+	// que NÃO são deste usuário e ainda não foram lidas.
+	if models.DB == nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Banco indisponível"})
 	}
-	update := bson.M{"$set": bson.M{"read_at": now}}
-
-	_, err = collection.UpdateMany(mongoCtx(), filter, update)
-	if err != nil {
+	if err := models.DB.Model(&models.ChatMessage{}).
+		Where("order_id = ? AND sender_id <> ? AND read_at IS NULL", orderID, userID).
+		Update("read_at", now).Error; err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Erro ao marcar como lido"})
 	}
 

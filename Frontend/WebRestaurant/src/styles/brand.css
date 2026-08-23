@@ -1,20 +1,20 @@
 @layer base {
   :root {
-    --color-primary: #EA1D2C;
-    --color-primary-dark: #C41420;
+    --color-primary: #DC2626;
+    --color-primary-dark: #B91C1C;
     --color-primary-light: #FEF2F2;
     --color-primary-50: #FEF2F2;
     --color-primary-100: #FEE2E2;
     --color-primary-200: #FECACA;
     --color-primary-300: #FCA5A5;
     --color-primary-400: #F87171;
-    --color-primary-500: #EA1D2C;
+    --color-primary-500: #DC2626;
     --color-primary-600: #DC2626;
-    --color-primary-700: #C41420;
+    --color-primary-700: #B91C1C;
     --color-primary-800: #991B1B;
     --color-primary-900: #7F1D1D;
 
-    --color-secondary: #F7A11E;
+    --color-secondary: #F59E0B;
     --color-secondary-400: #FBBF24;
     --color-secondary-light: #FFFBEB;
 
@@ -31,7 +31,7 @@
 
     --color-success: #10B981;
     --color-warning: #F59E0B;
-    --color-error: #EA1D2C;
+    --color-error: #DC2626;
     --color-info: #3B82F6;
 
     --font-display: 'Inter', 'Segoe UI', sans-serif;

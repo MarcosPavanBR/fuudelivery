@@ -113,10 +113,10 @@ export default function Payments() {
   }
 
   const statCards = [
-    { label: "Total Transações", value: stats.total, icon: FiCreditCard, color: "#EA1D2C", bg: "#FEF2F2" },
+    { label: "Total Transações", value: stats.total, icon: FiCreditCard, color: "#DC2626", bg: "#FEF2F2" },
     { label: "Confirmados", value: stats.confirmed, icon: FiCheck, color: "#16A34A", bg: "#ECFDF5" },
     { label: "Pendentes", value: stats.pending, icon: FiClock, color: "#D97706", bg: "#FFFBEB" },
-    { label: "Receita", value: formatMoney(stats.revenue), icon: FiDollarSign, color: "#F7A11E", bg: "#FFFBEB" },
+    { label: "Receita", value: formatMoney(stats.revenue), icon: FiDollarSign, color: "#F59E0B", bg: "#FFFBEB" },
   ];
 
   return (

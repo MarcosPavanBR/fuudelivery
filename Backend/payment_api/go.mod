@@ -34,7 +34,6 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang-jwt/jwt/v5 v5.2.2 // indirect
 	github.com/golang/snappy v1.0.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 // indirect
@@ -90,8 +89,6 @@ require (
 	google.golang.org/grpc v1.83.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	gorm.io/driver/postgres v1.6.2 // indirect
-	gorm.io/gorm v1.31.2 // indirect
 )
 
 replace github.com/carloshomar/fuudelivery/pkg/queue => ../../pkg/queue
@@ -100,8 +97,11 @@ require github.com/carloshomar/fuudelivery/pkg/queue v0.0.0
 
 require (
 	github.com/carloshomar/fuudelivery/auth_api v0.0.0-00010101000000-000000000000
+	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/stretchr/testify v1.11.1
-	github.com/testcontainers/testcontainers-go/modules/mongodb v0.38.0
+	github.com/testcontainers/testcontainers-go/modules/postgres v0.38.0
+	gorm.io/driver/postgres v1.6.2
+	gorm.io/gorm v1.31.2
 )
 
 replace github.com/carloshomar/fuudelivery/pkg/health => ../../pkg/health

@@ -9,7 +9,7 @@ export async function saveDelivery({ establishmentId, fixedTaxa, perKm }) {
     });
     return true;
   } catch (e) {
-    console.log(e);
+    console.error(e);
     return false;
   }
 }
@@ -21,7 +21,7 @@ export async function getDelivery(establishmentId) {
     );
     return data;
   } catch (e) {
-    console.log(e);
+    console.error(e);
     return { fixedTaxa: 0, perKm: 0 };
   }
 }

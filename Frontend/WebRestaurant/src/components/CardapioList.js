@@ -38,7 +38,7 @@ const CardapioList = ({
               <h3 className="font-bold text-gray-900 group-hover:text-red-600 transition-colors">
                 {item?.Name}
               </h3>
-              <span className="font-bold text-lg whitespace-nowrap" style={{ color: "#EA1D2C" }}>
+              <span className="font-bold text-lg whitespace-nowrap" style={{ color: "#DC2626" }}>
                 {helper.formatCurrency(item.Price)}
               </span>
             </div>
@@ -48,7 +48,7 @@ const CardapioList = ({
                   <span
                     key={i}
                     className="text-xs font-medium px-2.5 py-1 rounded-full"
-                    style={{ background: "#FEF2F2", color: "#EA1D2C" }}
+                    style={{ background: "#FEF2F2", color: "#DC2626" }}
                   >
                     {e.Name}
                   </span>

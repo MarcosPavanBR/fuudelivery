@@ -4,8 +4,8 @@ import { FiUsers, FiShoppingBag, FiTruck, FiDollarSign, FiTrendingUp, FiActivity
 import api from "../services/api";
 
 const statCards = [
-  { label: "Restaurantes Ativos", value: "0", icon: FiHome, color: "#EA1D2C", bg: "#FEF2F2" },
-  { label: "Total de Usuários", value: "0", icon: FiUsers, color: "#F7A11E", bg: "#FFFBEB" },
+  { label: "Restaurantes Ativos", value: "0", icon: FiHome, color: "#DC2626", bg: "#FEF2F2" },
+  { label: "Total de Usuários", value: "0", icon: FiUsers, color: "#F59E0B", bg: "#FFFBEB" },
   { label: "Pedidos Hoje", value: "0", icon: FiShoppingBag, color: "#10B981", bg: "#ECFDF5" },
   { label: "Entregadores Online", value: "0", icon: FiTruck, color: "#3B82F6", bg: "#DBEAFE" },
 ];
@@ -112,8 +112,8 @@ export default function Dashboard() {
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
           {[
-            { label: "Restaurantes Ativos", value: stats.restaurants, IconComp: FiHome, color: "#EA1D2C", bg: "#FEF2F2", accent: "linear-gradient(135deg, #EA1D2C, #FF6B35)" },
-            { label: "Total de Usuarios", value: stats.users, IconComp: FiUsers, color: "#F7A11E", bg: "#FFFBEB", accent: "linear-gradient(135deg, #F7A11E, #FBBF24)" },
+            { label: "Restaurantes Ativos", value: stats.restaurants, IconComp: FiHome, color: "#DC2626", bg: "#FEF2F2", accent: "linear-gradient(135deg, #DC2626, #FF6B35)" },
+            { label: "Total de Usuarios", value: stats.users, IconComp: FiUsers, color: "#F59E0B", bg: "#FFFBEB", accent: "linear-gradient(135deg, #F59E0B, #FBBF24)" },
             { label: "Pedidos Hoje", value: stats.todayOrders, IconComp: FiShoppingBag, color: "#10B981", bg: "#ECFDF5", accent: "linear-gradient(135deg, #10B981, #34D399)" },
             { label: "Entregadores Online", value: stats.onlineDrivers, IconComp: FiTruck, color: "#3B82F6", bg: "#DBEAFE", accent: "linear-gradient(135deg, #3B82F6, #60A5FA)" },
           ].map((stat, i) => (
@@ -199,7 +199,7 @@ export default function Dashboard() {
           </table>
         </div>
         <div className="px-6 py-4 border-t border-gray-100">
-          <Link to="/orders" className="text-sm font-medium" style={{ color: "#EA1D2C" }}>
+          <Link to="/orders" className="text-sm font-medium" style={{ color: "#DC2626" }}>
             Ver todos os pedidos →
           </Link>
         </div>

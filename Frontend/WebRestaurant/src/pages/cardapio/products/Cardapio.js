@@ -64,7 +64,7 @@ const Cardapio = () => {
 
       {load ? (
         <div className="flex items-center justify-center h-32">
-          <FiLoader className="animate-spin h-6 w-6" style={{ color: "#EA1D2C" }} />
+          <FiLoader className="animate-spin h-6 w-6" style={{ color: "#DC2626" }} />
         </div>
       ) : (
         <CardapioList

@@ -7,10 +7,10 @@ import (
 	"github.com/carloshomar/fuudelivery/delivery_api/app/dto"
 	"github.com/carloshomar/fuudelivery/delivery_api/app/models"
 	"github.com/gofiber/fiber/v2"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+// GetExtrato lista os pedidos FINALIZADOS de um entregador, mais recentes
+// primeiro — CORTE 3 banco-único: leitura 100% Postgres.
 func GetExtrato(c *fiber.Ctx) error {
 	deliverymanIDStr := c.Params("id")
 	deliverymanID, err := strconv.ParseInt(deliverymanIDStr, 10, 64)
@@ -20,42 +20,24 @@ func GetExtrato(c *fiber.Ctx) error {
 		})
 	}
 
-	collection := models.MongoDabase.Collection("solicitations")
-
-	// Definir o filtro para encontrar os pedidos com base no ID do deliveryman, status e deliveryman.status igual a "FINISHED"
-	filter := bson.M{
-		"deliveryman.id":     deliverymanID,
-		"status":             "FINISHED",
-		"deliveryman.status": "FINISHED",
-	}
-
-	options := options.Find()
-	options.SetSort(bson.D{{Key: "operationDate", Value: -1}})
-
-	cursor, err := collection.Find(mongoCtx(), filter, options)
-	if err != nil {
+	var rows []models.DeliverySolicitation
+	// Equivalente ao filtro Mongo antigo {deliveryman.id, status=FINISHED,
+	// deliveryman.status=FINISHED} ordenado por operationDate DESC — aqui,
+	// updated_at (espelhado como Operation no modelo).
+	if err := models.DB.
+		Where("delivery_man_id = ? AND status = ? AND delivery_man_status = ?",
+			deliverymanID, "FINISHED", "FINISHED").
+		Order("updated_at DESC").
+		Find(&rows).Error; err != nil {
 		log.Printf("Erro ao consultar os pedidos: %s", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Erro ao consultar os pedidos",
 		})
 	}
-	defer cursor.Close(mongoCtx())
 
-	var orders []dto.OrderDTO
-	for cursor.Next(mongoCtx()) {
-		var order dto.OrderDTO
-		if err := cursor.Decode(&order); err != nil {
-			log.Printf("Erro ao decodificar o pedido: %s", err)
-			continue
-		}
-		orders = append(orders, order)
-	}
-
-	if err := cursor.Err(); err != nil {
-		log.Printf("Erro ao iterar sobre os resultados: %s", err)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Erro ao consultar os pedidos",
-		})
+	orders := make([]dto.OrderDTO, 0, len(rows))
+	for _, row := range rows {
+		orders = append(orders, row.ToDTO())
 	}
 
 	return c.JSON(orders)

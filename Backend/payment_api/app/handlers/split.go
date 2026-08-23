@@ -2,28 +2,31 @@ package handlers
 
 import (
 	"log"
+	"strconv"
 
 	"github.com/carloshomar/fuudelivery/payment_api/app/dto"
 	"github.com/carloshomar/fuudelivery/payment_api/app/models"
 	"github.com/gofiber/fiber/v2"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
+// ProcessSplit grava regras de split customizadas num pagamento (Postgres,
+// corte 4) com dual-write best-effort no Mongo legado.
+//
+// payment_id é o ID NUMÉRICO do Postgres desde o corte 4 (antes era o hex
+// do ObjectID do Mongo). IDs hex legados são rejeitados com 400.
 func ProcessSplit(c *fiber.Ctx) error {
 	var req dto.SplitPaymentRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
-	objID, err := primitive.ObjectIDFromHex(req.PaymentID)
-	if err != nil {
+	paymentID, err := strconv.ParseInt(req.PaymentID, 10, 64)
+	if err != nil || paymentID <= 0 {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid payment_id format"})
 	}
 
 	var payment models.Payment
-	err = models.MongoDabase.Collection("payments").FindOne(mongoCtx(), bson.M{"_id": objID}).Decode(&payment)
-	if err != nil {
+	if err := models.DB.First(&payment, paymentID).Error; err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Payment not found"})
 	}
 
@@ -40,19 +43,13 @@ func ProcessSplit(c *fiber.Ctx) error {
 		totalSplit += rules[i].Amount
 	}
 
-	_, err = models.MongoDabase.Collection("payments").UpdateOne(
-		mongoCtx(),
-		bson.M{"_id": objID},
-		bson.M{
-			"$set": bson.M{
-				"split_rules": rules,
-				"status":      "SPLIT",
-			},
-		},
-	)
-	if err != nil {
+	if err := models.DB.Model(&payment).Updates(map[string]interface{}{
+		"split_rules": models.SplitRules(rules),
+		"status":      "SPLIT",
+	}).Error; err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to save split rules"})
 	}
+	dualWritePaymentUpsert(&payment) // DUAL-WRITE LEGADO
 
 	// NOTA: RabbitMQ removido. Notificacao de split e feita via Redis pelo monolito.
 	log.Printf("[SPLIT] Split processado: payment=%s order=%s rules=%d", req.PaymentID, payment.OrderID, len(rules))

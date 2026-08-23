@@ -186,9 +186,12 @@ O FuuDelivery e uma plataforma completa de delivery que conecta restaurantes, en
 
 ---
 
-### 3.2 Payment Service (Microservico)
+### 3.2 Pagamentos (embutidos no monolito)
 
-**Base URL:** `https://fuudelivery-payment.onrender.com`
+> ⚠️ **O microserviço isolado `fuudelivery-payment` foi REMOVIDO (2026-08).**
+> Todas as rotas de pagamento vivem no monolito `fuudelivery-api`. As URLs
+> `fuudelivery-payment*.onrender.com` estão mortas.
+> **Base URL:** `https://fuudelivery-api-8y6l.onrender.com`
 
 #### Health Check
 | Metodo | Rota | Descricao |
@@ -554,8 +557,9 @@ cors.New(cors.Config{
 | fuudelivery-api | Web Service | https://fuudelivery-api-8y6l.onrender.com |
 | fuudelivery-web | Static Site | https://fuudelivery-web.onrender.com |
 | fuudelivery-admin | Static Site | https://fuudelivery-admin-lv7f.onrender.com |
-| fuudelivery-payment | Web Service | https://fuudelivery-payment.onrender.com |
-| fuudelivery-payment-panel | Static Site | https://fuudelivery-payment-panel.onrender.com |
+
+> ❌ ~~fuudelivery-payment~~ e ~~fuudelivery-payment-panel~~: removidos em 2026-08.
+> Redis é provedor externo (`REDIS_URL`), não serviço Render.
 
 ### 10.2 Variaveis de Ambiente
 
@@ -618,21 +622,21 @@ Webhook Secret: whsec_fuudelivery_prod_2024
 
 ### 12.2 Alterar Regras de Aprovacao
 
-1. Acesse o Payment Panel
+1. Acesse o WebAdmin (aba Financeiro)
 2. Va na aba "Aprovacoes"
-3. As regras podem ser atualizadas via API:
+3. As regras podem ser atualizadas via API do monolito:
 ```bash
-curl -X PUT https://fuudelivery-payment.onrender.com/api/approvals/rules \
+curl -X PUT https://fuudelivery-api-8y6l.onrender.com/api/approvals/rules \
   -H "Authorization: Bearer <token>" \
   -d '{"auto_approve_max_amount": 2000}'
 ```
 
 ### 12.3 Monitorar Pagamentos
 
-1. Acesse o Payment Panel: https://fuudelivery-payment-panel.onrender.com
+1. Acesse o WebAdmin (aba Financeiro): https://fuudelivery-admin-lv7f.onrender.com
 2. Ou via API:
 ```bash
-curl https://fuudelivery-payment.onrender.com/api/payments/stats \
+curl https://fuudelivery-api-8y6l.onrender.com/api/payments/stats \
   -H "Authorization: Bearer <token>"
 ```
 

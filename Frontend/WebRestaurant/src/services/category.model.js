@@ -7,7 +7,7 @@ async function getCategories(id) {
 
     return data;
   } catch (e) {
-    console.log(e);
+    console.error(e);
     return [];
   }
 }
@@ -26,7 +26,7 @@ async function createCategory(items, editItem, establishmentId) {
       ...items.filter((e) => e.ID !== Strings.id_default),
     ];
   } catch (e) {
-    console.log(e);
+    console.error(e);
     return items;
   }
 }
@@ -58,7 +58,7 @@ async function handlerVinculoProdutoCategoria(productID, categoryId) {
     });
     return true;
   } catch (e) {
-    console.log(e);
+    console.error(e);
     return false;
   }
 }
@@ -69,7 +69,7 @@ async function deleteCategory(items, id) {
 
     return [...items.filter((e) => e.ID !== id)];
   } catch (e) {
-    console.log(e);
+    console.error(e);
     return false;
   }
 }

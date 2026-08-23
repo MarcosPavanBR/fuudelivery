@@ -75,11 +75,16 @@ func updateLocalPaymentStatus(abacatepayID string, status string) {
 }
 
 // establishmentShare soma o valor destinado ao estabelecimento nas split
-// rules do pagamento (receiver_type == "establishment"). É o crédito que
-// precisa ser revertido na carteira quando o pagamento é estornado.
-func establishmentShare(payment *models.Payment) float64 {
+// rules (receiver_type == "establishment"). É o crédito que precisa ser
+// revertido na carteira quando o pagamento é estornado.
+//
+// IMPORTANTE: recebe as REGRAS, não o pagamento — no fluxo de confirmação as
+// rules são calculadas ali mesmo e ainda não estão persistidas em
+// payment.SplitRules (passar o pagamento zeraria o share e o estabelecimento
+// nunca seria creditado — bug pego pelo teste E2E de cashback).
+func establishmentShare(rules models.SplitRules) float64 {
 	var share float64
-	for _, rule := range payment.SplitRules {
+	for _, rule := range rules {
 		if rule.ReceiverType == "establishment" {
 			share += rule.Amount
 		}
@@ -91,9 +96,9 @@ func establishmentShare(payment *models.Payment) float64 {
 // pagamento (receiver_type == "customer") — o cashback creditado na carteira
 // do cliente quando o pagamento é confirmado. Também precisa ser revertido no
 // estorno, além do crédito do estabelecimento.
-func customerCashbackShare(payment *models.Payment) float64 {
+func customerCashbackShare(rules models.SplitRules) float64 {
 	var share float64
-	for _, rule := range payment.SplitRules {
+	for _, rule := range rules {
 		if rule.ReceiverType == "customer" {
 			share += rule.Amount
 		}
@@ -161,7 +166,7 @@ func processPaymentRefund(abacatepayID string) {
 		// 1. Crédito do estabelecimento (share do split)
 		reverseWalletCredit(
 			payment.EstablishmentID,
-			establishmentShare(payment),
+			establishmentShare(payment.SplitRules),
 			abacatepayID,
 			"Refund/chargeback: estorno do pagamento "+payment.OrderID,
 			now,
@@ -170,7 +175,7 @@ func processPaymentRefund(abacatepayID string) {
 		// 2. Crédito de cashback do cliente (receiver_type == "customer")
 		reverseWalletCredit(
 			payment.CustomerID,
-			customerCashbackShare(payment),
+			customerCashbackShare(payment.SplitRules),
 			abacatepayID,
 			"Refund/chargeback: estorno do cashback do pagamento "+payment.OrderID,
 			now,
@@ -306,7 +311,8 @@ func publishPaymentApproved(abacatepayID string) {
 	// updateLocalPaymentStatus ANTES de publishPaymentApproved, então o
 	// pagamento já está CONFIRMED aqui e o guard nunca dispararia.)
 	if payment.EstablishmentCreditedAt == nil && payment.Status != "REFUNDED" {
-		credit := establishmentShare(payment)
+		// Usa as regras recém-calculadas (ainda não persistidas em payment).
+		credit := establishmentShare(models.SplitRules(splitRules))
 		if credit > 0 && !models.HasLedgerEntry(models.DB, abacatepayID, "credit") {
 			wallet, wErr := adjustEstablishmentWallet(payment.EstablishmentID, credit, abacatepayID, payment.OrderID, now)
 			if wErr != nil {

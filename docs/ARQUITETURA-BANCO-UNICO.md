@@ -89,6 +89,15 @@ MONGO_DATABASE="fuudelivery" \
 
 Idempotente (dedup por `legacy_id`), não apaga nada nos dois lados. Confira os totais impressos contra o Atlas antes de pausá-lo.
 
+### ✅ ETLs executados em produção (23/08/2026)
+
+| Ferramenta | Resultado |
+|---|---|
+| `etl-payments` | 1 pagamento importado; 0 carteiras a criar (Atlas sem carteiras fora do Postgres); 0 ledger antigo |
+| `etl-orders` | 0 documentos na collection `orders` do Atlas (nenhum pedido pré-migração) — nada a importar |
+
+Durante o ETL foi descoberto e **corrigido em produção** um bug de schema: tabelas legadas vazias com `id TEXT` (era Mongo) bloqueavam o `CREATE TABLE IF NOT EXISTS` dos scripts 01–03, e o AutoMigrate do GORM não altera coluna existente — a tabela `payments` tinha `id TEXT`, quebrando TODO insert de pagamento. Reparo aplicado manualmente e registrado como script idempotente `sql/09_reparo_tabelas_legado_texto.sql` para ambientes futuros.
+
 ## Por que RLS não pode copiar o padrão `auth.uid()`
 
 Ver comentário detalhado no topo de `sql/06_rls_seguranca.sql`. Resumo: este projeto não usa Supabase Auth (login é JWT próprio), então `auth.uid()` sempre retorna nulo aqui — uma policy baseada nisso pareceria segura mas não protegeria nada. A estratégia usada foi: RLS habilitado + só a role `app_backend` tem acesso + revogação de `anon`/`authenticated`. O controle fino de "usuário só vê o que é dele" continua no middleware do backend Go, que já existe (ver `docs/seguranca.md`).

@@ -75,7 +75,21 @@ func setupCheckoutE2EEnv(t *testing.T) func() {
 		require.NoError(t, dErr)
 	}
 
-	gormDB, err := gorm.Open(postgresdriver.Open(dsn), &gorm.Config{})
+	// Backoff clássico de testcontainers em CI: o container pode não aceitar
+	// conexões imediatamente após o start (connection reset by peer).
+	var gormDB *gorm.DB
+	var err error
+	for attempt := 0; attempt < 10; attempt++ {
+		gormDB, err = gorm.Open(postgresdriver.Open(dsn), &gorm.Config{})
+		if err == nil {
+			var ping int
+			if pingErr := gormDB.Raw("SELECT 1").Scan(&ping).Error; pingErr == nil && ping == 1 {
+				break
+			}
+			err = fmt.Errorf("postgres não respondeu ao ping")
+		}
+		time.Sleep(2 * time.Second)
+	}
 	require.NoError(t, err, "conectar no Postgres de teste")
 
 	// Isolamento: dropa e recria as tabelas do domínio de pagamentos.

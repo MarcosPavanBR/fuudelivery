@@ -28,7 +28,7 @@ const TopMenu = ({ toggleMenu, isOpen }) => {
       await api.put("/establishments/status/handler/" + (user?.establishment_id || user?.id));
       await refreshOpen();
     } catch (e) {
-      console.log(e);
+      console.error(e);
     }
     if (res && openEstablishment) toast.success(Texts.establishment_open);
     else toast.error("Seu estabelecimento foi fechado.");
@@ -171,7 +171,7 @@ const SideMenu = ({ isOpen, isMobile, onClose }) => {
                     onClick={handleNavClick}
                     className={`flex items-center gap-2 px-4 py-2 rounded-r-lg transition-all duration-150 ${
                       location.pathname === item.href
-                        ? "text-[#EA1D2C] font-semibold border-l-[3px] border-[#EA1D2C] bg-[rgba(234,29,44,0.10)]"
+                        ? "text-[#DC2626] font-semibold border-l-[3px] border-[#DC2626] bg-[rgba(220,38,38,0.10)]"
                         : "text-[#9CA3AF] hover:bg-[rgba(255,255,255,0.03)]"
                     }`}
                   >
@@ -229,7 +229,7 @@ const SideMenu = ({ isOpen, isMobile, onClose }) => {
                   isOpen ? "px-4 py-2" : "px-0 py-2 justify-center"
                 } ${
                   location.pathname === item.href
-                    ? "text-[#EA1D2C] font-semibold border-l-[3px] border-[#EA1D2C] bg-[rgba(234,29,44,0.10)]"
+                    ? "text-[#DC2626] font-semibold border-l-[3px] border-[#DC2626] bg-[rgba(220,38,38,0.10)]"
                     : "text-[#9CA3AF] hover:bg-[rgba(255,255,255,0.03)]"
                 }`}
                 title={!isOpen ? item.title : undefined}

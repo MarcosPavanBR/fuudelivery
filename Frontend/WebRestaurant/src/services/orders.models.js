@@ -34,7 +34,7 @@ async function alterStatus(droppableId, draggableId) {
     });
     return true;
   } catch (e) {
-    console.log(e);
+    console.error(e);
     return false;
   }
 }

@@ -3,13 +3,13 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -19,12 +19,26 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go/modules/mongodb"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	postgresdriver "gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
+
+// ============================================================================
+// Suíte E2E do checkout — CORTE 4 banco-único.
+//
+// Desde o corte 4 os handlers de pagamento usam APENAS Postgres (models.DB).
+// O Mongo legado saiu da suíte: o dual-write é no-op quando models.MongoDabase
+// é nil, então os testes sobem um container Postgres isolado por teste.
+//
+// Como rodar:
+//
+//	go test -tags=integration -v -run 'TestCheckoutE2E' ./app/handlers/
+//
+// Por padrão usa Docker + testcontainers (postgres:16-alpine). Com
+// POSTGRES_TEST_URI definida conecta direto na instância informada (o schema
+// é recriado a cada setup para garantir isolamento).
+// ============================================================================
 
 // ptrTime retorna um ponteiro para o time.Time informado — usado para
 // preencher campos opcionais como WalletCreditedAt/RefundedAt.
@@ -32,68 +46,143 @@ func ptrTime(t time.Time) *time.Time {
 	return &t
 }
 
-// setupCheckoutE2EEnv prepara o MongoDB dos testes E2E:
-//   - Padrão (sem MONGODB_TEST_URI): Docker + testcontainers com a imagem
-//     mongo:7 — cada teste ganha um container isolado e descartável.
-//   - Com MONGODB_TEST_URI definida: conecta direto no MongoDB informado
-//     (ex.: mongod local ou Atlas de dev), sem precisar de Docker. O banco
-//     payment_api_e2e_test é dropado a cada setup para garantir isolamento
-//     entre os testes mesmo reutilizando a mesma instância.
+// setupCheckoutE2EEnv prepara o Postgres dos testes E2E:
+//   - Padrão (sem POSTGRES_TEST_URI): Docker + testcontainers com a imagem
+//     postgres:16-alpine — cada teste ganha um container isolado e descartável.
+//   - Com POSTGRES_TEST_URI definida: conecta direto no Postgres informado
+//     (ex.: instância local de dev). As tabelas são dropadas e recriadas
+//     a cada setup para garantir isolamento.
 func setupCheckoutE2EEnv(t *testing.T) func() {
 	t.Helper()
 	ctx := context.Background()
 
-	var client *mongo.Client
-	var container *mongodb.MongoDBContainer
+	var pgContainer *postgres.PostgresContainer
+	var dsn string
 
-	if uri := os.Getenv("MONGODB_TEST_URI"); uri != "" {
-		cli, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
-		require.NoError(t, err, "conectar no MongoDB de teste via MONGODB_TEST_URI")
-		require.NoError(t, cli.Ping(ctx, nil), "ping no MongoDB de teste")
-		client = cli
+	if uri := os.Getenv("POSTGRES_TEST_URI"); uri != "" {
+		dsn = uri
 	} else {
-		c, err := mongodb.Run(ctx, "mongo:7")
-		require.NoError(t, err, "subir container MongoDB")
-		container = c
+		c, err := postgres.Run(ctx, "postgres:16-alpine",
+			postgres.WithDatabase("payment_e2e_test"),
+			postgres.WithUsername("test"),
+			postgres.WithPassword("test"),
+		)
+		require.NoError(t, err, "subir container Postgres")
+		pgContainer = c
 
-		uri, err := container.ConnectionString(ctx)
-		require.NoError(t, err)
-
-		cli, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
-		require.NoError(t, err)
-		require.NoError(t, cli.Ping(ctx, nil))
-		client = cli
+		var dErr error
+		dsn, dErr = c.ConnectionString(ctx, "sslmode=disable")
+		require.NoError(t, dErr)
 	}
 
-	// Garante isolamento: começa do zero mesmo reutilizando uma instância
-	// externa (drop + recriação dos índices abaixo).
-	_ = client.Database("payment_api_e2e_test").Drop(ctx)
+	gormDB, err := gorm.Open(postgresdriver.Open(dsn), &gorm.Config{})
+	require.NoError(t, err, "conectar no Postgres de teste")
 
-	db := client.Database("payment_api_e2e_test")
-	models.MongoClient = client
-	models.MongoDabase = db
+	// Isolamento: dropa e recria as tabelas do domínio de pagamentos.
+	for _, table := range []string{"wallet_transactions", "wallets", "payments"} {
+		require.NoError(t, gormDB.Exec("DROP TABLE IF EXISTS "+table+" CASCADE").Error)
+	}
+	require.NoError(t, gormDB.AutoMigrate(&models.Payment{}, &models.Wallet{}, &models.WalletTxn{}))
+	models.DB = gormDB
 
-	db.Collection("payments").Indexes().CreateMany(ctx, []mongo.IndexModel{
-		{Keys: []string{"order_id"}, Options: options.Index().SetUnique(true)},
-		{Keys: []string{"abacatepay_id"}},
-	})
+	// Mongo desativado nos testes: dual-write vira no-op (helpers checam nil).
+	models.MongoClient = nil
+	models.MongoDabase = nil
 
 	return func() {
-		_ = client.Disconnect(ctx)
-		if container != nil {
-			_ = container.Terminate(ctx)
+		if sqlDB, err := gormDB.DB(); err == nil {
+			_ = sqlDB.Close()
+		}
+		if pgContainer != nil {
+			_ = pgContainer.Terminate(ctx)
 		}
 	}
 }
 
-// Teste 1: Fluxo completo pagamento -> webhook -> split -> CONFIRMED
+// bytesReader helper local (evita import direto de bytes em todo o arquivo).
+func bytesReader(b []byte) *strings.Reader { return strings.NewReader(string(b)) }
+
+// seedPayment insere um pagamento direto no Postgres (substitui o InsertOne
+// do Mongo das versões anteriores da suíte).
+func seedPayment(t *testing.T, p *models.Payment) {
+	t.Helper()
+	require.NoError(t, models.DB.Create(p).Error)
+}
+
+// findPaymentByAbacate recarrega o pagamento pelo ID externo do gateway.
+func findPaymentByAbacate(t *testing.T, abacatepayID string) models.Payment {
+	t.Helper()
+	var p models.Payment
+	require.NoError(t, models.DB.Where("abacatepay_id = ?", abacatepayID).First(&p).Error)
+	return p
+}
+
+// seedWallet cria uma carteira com saldo inicial.
+func seedWallet(t *testing.T, userID int64, userType string, balance float64) models.Wallet {
+	t.Helper()
+	w := models.Wallet{
+		UserID:      userID,
+		UserType:    userType,
+		Balance:     balance,
+		Currency:    "BRL",
+		Status:      "active",
+		LastUpdated: time.Now(),
+	}
+	require.NoError(t, models.DB.Create(&w).Error)
+	return w
+}
+
+// seedLedger cria um lançamento no ledger vinculado à carteira do usuário.
+func seedLedger(t *testing.T, walletID int64, txnType, kind string, amount, balanceAfter float64, refID, description string, createdAt time.Time) {
+	t.Helper()
+	entry := models.WalletTxn{
+		WalletID:     walletID,
+		Type:         txnType,
+		Kind:         kind,
+		Amount:       amount,
+		BalanceAfter: balanceAfter,
+		Description:  description,
+		ReferenceID:  refID,
+		CreatedAt:    createdAt,
+	}
+	require.NoError(t, models.DB.Create(&entry).Error)
+}
+
+// countLedger conta lançamentos do usuário (join com wallets), com filtros
+// opcionais de tipo/kind/referência — substitui os CountDocuments do Mongo.
+func countLedger(t *testing.T, userID int64, txnType, kind, refID string) int64 {
+	t.Helper()
+	q := models.DB.Model(&models.WalletTxn{}).
+		Joins("JOIN wallets ON wallets.id = wallet_transactions.wallet_id").
+		Where("wallets.user_id = ?", userID)
+	if txnType != "" {
+		q = q.Where("wallet_transactions.type = ?", txnType)
+	}
+	if kind != "" {
+		q = q.Where("wallet_transactions.kind = ?", kind)
+	}
+	if refID != "" {
+		q = q.Where("wallet_transactions.reference_id = ?", refID)
+	}
+	var count int64
+	require.NoError(t, q.Count(&count).Error)
+	return count
+}
+
+// getWalletByUser recarrega a carteira pelo user_id (qualquer tipo).
+func getWalletByUser(t *testing.T, userID int64) models.Wallet {
+	t.Helper()
+	var w models.Wallet
+	require.NoError(t, models.DB.Where("user_id = ?", userID).First(&w).Error)
+	return w
+}
+
+// Teste 1: Fluxo completo pagamento -> split rules -> CONFIRMED
 func TestCheckoutE2E_PaymentWebhookToSplit(t *testing.T) {
 	cleanup := setupCheckoutE2EEnv(t)
 	defer cleanup()
 
 	os.Unsetenv("ABACATE_PAY_WEBHOOK_SECRET")
-	ctx := context.Background()
-	paymentCollection := models.MongoDabase.Collection("payments")
 
 	payment := models.Payment{
 		OrderID:         "order-e2e-001",
@@ -107,17 +196,14 @@ func TestCheckoutE2E_PaymentWebhookToSplit(t *testing.T) {
 		AbacatePayID:    "charge-e2e-test-001",
 		CreatedAt:       time.Now(),
 	}
-	_, err := paymentCollection.InsertOne(ctx, payment)
-	require.NoError(t, err)
+	seedPayment(t, &payment)
 
-	var stored models.Payment
-	err = paymentCollection.FindOne(ctx, bson.M{"abacatepay_id": "charge-e2e-test-001"}).Decode(&stored)
-	require.NoError(t, err)
+	stored := findPaymentByAbacate(t, "charge-e2e-test-001")
 	require.Equal(t, "PENDING", stored.Status)
 
 	splitRules := defaultSplitRules(&stored, 5.0, 85.0)
-	// amount=89.90, delivery=7.00: 5%+85%+delivery = 87.91 → sobra 1.99
-	// de cashback → regra "customer" adicionada → 4 regras.
+	// amount=89.90, delivery=7.00: 5%+85%+delivery = 87.91 -> sobra 1.99
+	// de cashback -> regra "customer" adicionada -> 4 regras.
 	require.Len(t, splitRules, 4)
 
 	require.Equal(t, "platform", splitRules[0].ReceiverType)
@@ -139,22 +225,20 @@ func TestCheckoutE2E_PaymentWebhookToSplit(t *testing.T) {
 	require.LessOrEqual(t, totalSplit, 89.91)
 
 	now := time.Now()
-	_, err = paymentCollection.UpdateOne(ctx,
-		bson.M{"abacatepay_id": "charge-e2e-test-001"},
-		bson.M{"$set": bson.M{"status": "CONFIRMED", "split_rules": splitRules, "confirmed_at": now}},
-	)
-	require.NoError(t, err)
+	require.NoError(t, models.DB.Model(&stored).Updates(map[string]interface{}{
+		"status":       "CONFIRMED",
+		"split_rules":  models.SplitRules(splitRules),
+		"confirmed_at": now,
+	}).Error)
 
-	var confirmed models.Payment
-	err = paymentCollection.FindOne(ctx, bson.M{"abacatepay_id": "charge-e2e-test-001"}).Decode(&confirmed)
-	require.NoError(t, err)
+	confirmed := findPaymentByAbacate(t, "charge-e2e-test-001")
 	require.Equal(t, "CONFIRMED", confirmed.Status)
 	require.Len(t, confirmed.SplitRules, 4)
 	require.NotNil(t, confirmed.ConfirmedAt)
 
 	orderMsg := map[string]interface{}{
 		"order_id":     confirmed.OrderID,
-		"payment_id":   confirmed.ID.Hex(),
+		"payment_id":   confirmed.IDString(),
 		"status":       "PAYMENT_CONFIRMED",
 		"amount":       confirmed.Amount,
 		"method":       confirmed.Method,
@@ -167,13 +251,10 @@ func TestCheckoutE2E_PaymentWebhookToSplit(t *testing.T) {
 	require.Equal(t, "PAYMENT_CONFIRMED", parsed["status"])
 }
 
-// Teste 2: Idempotencia - webhook reprocessado nao duplica
+// Teste 2: Idempotencia de split — reaplicar nao duplica regras
 func TestCheckoutE2E_WebhookIdempotent(t *testing.T) {
 	cleanup := setupCheckoutE2EEnv(t)
 	defer cleanup()
-
-	ctx := context.Background()
-	paymentCollection := models.MongoDabase.Collection("payments")
 
 	payment := models.Payment{
 		OrderID:         "order-e2e-idempotent",
@@ -184,30 +265,21 @@ func TestCheckoutE2E_WebhookIdempotent(t *testing.T) {
 		Method:          "pix",
 		Status:          "CONFIRMED",
 		AbacatePayID:    "charge-idempotent-001",
-		SplitRules: []models.SplitRule{
+		SplitRules: models.SplitRules([]models.SplitRule{
 			{ReceiverType: "platform", Amount: 2.25, Percentage: 4.5},
 			{ReceiverType: "establishment", Amount: 40.25, Percentage: 80.5},
 			{ReceiverType: "deliveryman", Amount: 5.00, Percentage: 0},
-		},
+		}),
 		CreatedAt: time.Now(),
 	}
-	_, err := paymentCollection.InsertOne(ctx, payment)
-	require.NoError(t, err)
+	seedPayment(t, &payment)
 
-	var stored models.Payment
-	err = paymentCollection.FindOne(ctx, bson.M{"abacatepay_id": "charge-idempotent-001"}).Decode(&stored)
-	require.NoError(t, err)
+	stored := findPaymentByAbacate(t, "charge-idempotent-001")
 
 	newSplit := defaultSplitRules(&stored, 5.0, 85.0)
-	_, err = paymentCollection.UpdateOne(ctx,
-		bson.M{"abacatepay_id": "charge-idempotent-001"},
-		bson.M{"$set": bson.M{"split_rules": newSplit}},
-	)
-	require.NoError(t, err)
+	require.NoError(t, models.DB.Model(&stored).Update("split_rules", models.SplitRules(newSplit)).Error)
 
-	var result models.Payment
-	err = paymentCollection.FindOne(ctx, bson.M{"abacatepay_id": "charge-idempotent-001"}).Decode(&result)
-	require.NoError(t, err)
+	result := findPaymentByAbacate(t, "charge-idempotent-001")
 	require.Equal(t, "CONFIRMED", result.Status)
 	require.Len(t, result.SplitRules, 3)
 
@@ -223,9 +295,6 @@ func TestCheckoutE2E_SmallOrderNoNegativeSplit(t *testing.T) {
 	cleanup := setupCheckoutE2EEnv(t)
 	defer cleanup()
 
-	ctx := context.Background()
-	paymentCollection := models.MongoDabase.Collection("payments")
-
 	payment := models.Payment{
 		OrderID:         "order-e2e-small",
 		CustomerID:      300,
@@ -237,12 +306,9 @@ func TestCheckoutE2E_SmallOrderNoNegativeSplit(t *testing.T) {
 		AbacatePayID:    "charge-small-001",
 		CreatedAt:       time.Now(),
 	}
-	_, err := paymentCollection.InsertOne(ctx, payment)
-	require.NoError(t, err)
+	seedPayment(t, &payment)
 
-	var stored models.Payment
-	err = paymentCollection.FindOne(ctx, bson.M{"abacatepay_id": "charge-small-001"}).Decode(&stored)
-	require.NoError(t, err)
+	stored := findPaymentByAbacate(t, "charge-small-001")
 
 	splitRules := defaultSplitRules(&stored, 5.0, 85.0)
 	require.NotEmpty(t, splitRules)
@@ -257,7 +323,7 @@ func TestCheckoutE2E_SmallOrderNoNegativeSplit(t *testing.T) {
 		totalSplit += r.Amount
 	}
 	// delivery=7.00 > amount=5.00: o ajuste zera platform/establishment e
-	// o total fica igual à taxa de entrega (nunca excede, nunca fica negativo).
+	// o total fica igual a taxa de entrega (nunca excede, nunca fica negativo).
 	require.InDelta(t, 7.00, totalSplit, 0.01)
 }
 
@@ -290,15 +356,11 @@ func TestCheckoutE2E_QueueChannelAlignment(t *testing.T) {
 
 // Teste 5: Endpoints admin do painel Financeiro (monolito)
 // Cobre GET /payments/stats, POST /payments/:id/approve,
-// POST /payments/:id/reject e GET /wallets — as rotas que o WebAdmin
-// Financeiro.jsx usa e que antes viviam no serviço isolado removido.
+// POST /payments/:id/reject, GET /wallets e GET /chargebacks — as rotas que
+// o WebAdmin Financeiro.jsx usa.
 func TestCheckoutE2E_AdminEndpoints(t *testing.T) {
 	cleanup := setupCheckoutE2EEnv(t)
 	defer cleanup()
-
-	ctx := context.Background()
-	paymentCollection := models.MongoDabase.Collection("payments")
-	walletCollection := models.MongoDabase.Collection("wallets")
 
 	// --- Seeds: 1 PENDING + 1 CONFIRMED + 1 wallet ---
 	pending := models.Payment{
@@ -311,11 +373,10 @@ func TestCheckoutE2E_AdminEndpoints(t *testing.T) {
 		AbacatePayID:    "charge-admin-001",
 		CreatedAt:       time.Now(),
 	}
-	resPending, err := paymentCollection.InsertOne(ctx, pending)
-	require.NoError(t, err)
-	pendingID := resPending.InsertedID.(primitive.ObjectID).Hex()
+	seedPayment(t, &pending)
+	pendingID := strconv.FormatInt(pending.ID, 10)
 
-	confirmed := models.Payment{
+	confirmedSeed := models.Payment{
 		OrderID:         "order-admin-confirmed",
 		CustomerID:      11,
 		EstablishmentID: 43,
@@ -325,16 +386,9 @@ func TestCheckoutE2E_AdminEndpoints(t *testing.T) {
 		AbacatePayID:    "charge-admin-002",
 		CreatedAt:       time.Now(),
 	}
-	_, err = paymentCollection.InsertOne(ctx, confirmed)
-	require.NoError(t, err)
+	seedPayment(t, &confirmedSeed)
 
-	_, err = walletCollection.InsertOne(ctx, bson.M{
-		"user_id":      42,
-		"user_type":    "establishment",
-		"balance":      8500, // R$ 85,00
-		"last_updated": time.Now(),
-	})
-	require.NoError(t, err)
+	seedWallet(t, 42, "establishment", 8500) // R$ 85,00
 
 	app := fiber.New()
 
@@ -364,13 +418,11 @@ func TestCheckoutE2E_AdminEndpoints(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&approved))
 	require.Equal(t, "CONFIRMED", approved["status"])
 
-	var stored models.Payment
-	err = paymentCollection.FindOne(ctx, bson.M{"_id": resPending.InsertedID}).Decode(&stored)
-	require.NoError(t, err)
+	stored := findPaymentByAbacate(t, "charge-admin-001")
 	require.Equal(t, "CONFIRMED", stored.Status)
 	require.NotNil(t, stored.ConfirmedAt)
 
-	// Reaprovar um pagamento já confirmado deve dar 409
+	// Reaprovar um pagamento ja confirmado deve dar 409
 	req = httptest.NewRequest(http.MethodPost, "/payments/"+pendingID+"/approve", nil)
 	resp, err = app.Test(req, -1)
 	require.NoError(t, err)
@@ -378,12 +430,12 @@ func TestCheckoutE2E_AdminEndpoints(t *testing.T) {
 
 	// --- POST /payments/:id/reject ---
 	app.Post("/payments/:id/reject", RejectPayment)
-	rejectBody := bytes.NewBufferString(`{"reason":"chargeback do cliente"}`)
+	rejectBody := strings.NewReader(`{"reason":"chargeback do cliente"}`)
 	req = httptest.NewRequest(http.MethodPost, "/payments/"+pendingID+"/reject", rejectBody)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err = app.Test(req, -1)
 	require.NoError(t, err)
-	require.Equal(t, 409, resp.StatusCode, "já está CONFIRMED, não pode rejeitar")
+	require.Equal(t, 409, resp.StatusCode, "ja esta CONFIRMED, nao pode rejeitar")
 
 	// Cria um novo PENDING para rejeitar
 	pending2 := models.Payment{
@@ -396,11 +448,10 @@ func TestCheckoutE2E_AdminEndpoints(t *testing.T) {
 		AbacatePayID:    "charge-admin-003",
 		CreatedAt:       time.Now(),
 	}
-	resPending2, err := paymentCollection.InsertOne(ctx, pending2)
-	require.NoError(t, err)
-	pending2ID := resPending2.InsertedID.(primitive.ObjectID).Hex()
+	seedPayment(t, &pending2)
+	pending2ID := strconv.FormatInt(pending2.ID, 10)
 
-	rejectBody = bytes.NewBufferString(`{"reason":"fraude suspeita"}`)
+	rejectBody = strings.NewReader(`{"reason":"fraude suspeita"}`)
 	req = httptest.NewRequest(http.MethodPost, "/payments/"+pending2ID+"/reject", rejectBody)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err = app.Test(req, -1)
@@ -411,8 +462,7 @@ func TestCheckoutE2E_AdminEndpoints(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&rejected))
 	require.Equal(t, "REJECTED", rejected["status"])
 
-	err = paymentCollection.FindOne(ctx, bson.M{"_id": resPending2.InsertedID}).Decode(&stored)
-	require.NoError(t, err)
+	stored = findPaymentByAbacate(t, "charge-admin-003")
 	require.Equal(t, "REJECTED", stored.Status)
 	require.NotNil(t, stored.RejectedAt)
 
@@ -429,30 +479,15 @@ func TestCheckoutE2E_AdminEndpoints(t *testing.T) {
 	require.Equal(t, "establishment", wallets[0]["owner_type"])
 	require.Equal(t, float64(8500), wallets[0]["balance"])
 
-	// --- GET /chargebacks (wallet_ledger para o painel Financeiro) ---
-	// Seeds: 1 crédito (top-up do cliente) + 1 débito (chargeback do estab)
-	ledgerCollection := models.MongoDabase.Collection("wallet_ledger")
+	// --- GET /chargebacks (ledger para o painel Financeiro) ---
+	// Seeds: carteiras + 1 credito (top-up do cliente) + 1 debito (chargeback)
+	w5001 := seedWallet(t, 5001, "customer", 150.0)
+	w42 := getWalletByUser(t, 42)
 	now := time.Now()
-	_, err = ledgerCollection.InsertOne(ctx, bson.M{
-		"user_id":       5001,
-		"type":          "credit",
-		"amount":        100.0,
-		"payment_id":    "charge-ledger-001",
-		"balance_after": 150.0,
-		"description":   "Wallet top-up via confirmed payment",
-		"created_at":    now.Add(-2 * time.Hour),
-	})
-	require.NoError(t, err)
-	_, err = ledgerCollection.InsertOne(ctx, bson.M{
-		"user_id":       42,
-		"type":          "debit",
-		"amount":        85.0,
-		"payment_id":    "charge-e2e-refund-001",
-		"balance_after": 115.0,
-		"description":   "Refund/chargeback: estorno do pagamento order-x",
-		"created_at":    now.Add(-1 * time.Hour),
-	})
-	require.NoError(t, err)
+	seedLedger(t, w5001.ID, "credit", "", 100.0, 150.0, "charge-ledger-001",
+		"Wallet top-up via confirmed payment", now.Add(-2*time.Hour))
+	seedLedger(t, w42.ID, "debit", "", 85.0, 115.0, "charge-e2e-refund-001",
+		"Refund/chargeback: estorno do pagamento order-x", now.Add(-1*time.Hour))
 
 	app.Get("/chargebacks", ListChargebacks)
 	req = httptest.NewRequest(http.MethodGet, "/chargebacks", nil)
@@ -464,9 +499,9 @@ func TestCheckoutE2E_AdminEndpoints(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&chargebacks))
 	entries, ok := chargebacks["chargebacks"].([]interface{})
 	require.True(t, ok, "resposta deve ter lista chargebacks")
-	require.Len(t, entries, 2, "ledger deve listar crédito + débito")
+	require.Len(t, entries, 2, "ledger deve listar credito + debito")
 
-	// Ordenado por created_at desc: débito (mais recente) primeiro
+	// Ordenado por created_at desc: debito (mais recente) primeiro
 	first := entries[0].(map[string]interface{})
 	require.Equal(t, "debit", first["type"])
 	require.Equal(t, "charge-e2e-refund-001", first["payment_id"])
@@ -474,15 +509,14 @@ func TestCheckoutE2E_AdminEndpoints(t *testing.T) {
 	// owner_type enriquecido da carteira do estabelecimento 42
 	require.Equal(t, "establishment", first["owner_type"])
 
-	// Resumo agregado (sem filtro): crédito 100.0 (top-up) − débito 85.0
-	// (chargeback) = saldo líquido 15.0
+	// Resumo agregado (sem filtro): credito 100.0 (top-up) - debito 85.0
 	summary, hasSummary := chargebacks["summary"].(map[string]interface{})
 	require.True(t, hasSummary, "resposta deve incluir summary agregado")
-	require.InDelta(t, 100.0, summary["credit_total"], 0.01, "total de créditos do ledger")
-	require.InDelta(t, 85.0, summary["debit_total"], 0.01, "total de débitos do ledger")
-	require.InDelta(t, 15.0, summary["net"], 0.01, "saldo líquido = créditos − débitos")
+	require.InDelta(t, 100.0, summary["credit_total"], 0.01, "total de creditos do ledger")
+	require.InDelta(t, 85.0, summary["debit_total"], 0.01, "total de debitos do ledger")
+	require.InDelta(t, 15.0, summary["net"], 0.01, "saldo liquido = creditos - debitos")
 
-	// Resumo reflete os filtros: só débitos → credit_total 0 e net negativo
+	// Resumo reflete os filtros: so debitos -> credit_total 0 e net negativo
 	req = httptest.NewRequest(http.MethodGet, "/chargebacks?type=debit", nil)
 	resp, err = app.Test(req, -1)
 	require.NoError(t, err)
@@ -491,11 +525,11 @@ func TestCheckoutE2E_AdminEndpoints(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&cbFiltered))
 	summary, hasSummary = cbFiltered["summary"].(map[string]interface{})
 	require.True(t, hasSummary)
-	require.InDelta(t, 0.0, summary["credit_total"], 0.01, "filtro debit não deve ter créditos")
+	require.InDelta(t, 0.0, summary["credit_total"], 0.01, "filtro debit nao deve ter creditos")
 	require.InDelta(t, 85.0, summary["debit_total"], 0.01)
 	require.InDelta(t, -85.0, summary["net"], 0.01)
 
-	// Filtro por tipo: só débitos
+	// Filtro por tipo: so debitos
 	req = httptest.NewRequest(http.MethodGet, "/chargebacks?type=debit", nil)
 	resp, err = app.Test(req, -1)
 	require.NoError(t, err)
@@ -503,9 +537,9 @@ func TestCheckoutE2E_AdminEndpoints(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&chargebacks))
 	entries, ok = chargebacks["chargebacks"].([]interface{})
 	require.True(t, ok)
-	require.Len(t, entries, 1, "filtro type=debit deve retornar só o débito")
+	require.Len(t, entries, 1, "filtro type=debit deve retornar so o debito")
 
-	// Filtro por user_id do cliente (sem carteira → owner_type vazio)
+	// Filtro por user_id do cliente
 	req = httptest.NewRequest(http.MethodGet, "/chargebacks?user_id=5001", nil)
 	resp, err = app.Test(req, -1)
 	require.NoError(t, err)
@@ -513,10 +547,10 @@ func TestCheckoutE2E_AdminEndpoints(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&chargebacks))
 	entries, ok = chargebacks["chargebacks"].([]interface{})
 	require.True(t, ok)
-	require.Len(t, entries, 1, "filtro user_id=5001 deve retornar só o crédito do cliente")
+	require.Len(t, entries, 1, "filtro user_id=5001 deve retornar so o credito do cliente")
 	creditEntry := entries[0].(map[string]interface{})
 	require.Equal(t, "credit", creditEntry["type"])
-	require.Equal(t, "", creditEntry["owner_type"], "cliente sem carteira → owner_type vazio")
+	require.Equal(t, "customer", creditEntry["owner_type"])
 
 	// Sem resultados
 	req = httptest.NewRequest(http.MethodGet, "/chargebacks?payment_id=nao-existe", nil)
@@ -526,41 +560,37 @@ func TestCheckoutE2E_AdminEndpoints(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&chargebacks))
 	entries, ok = chargebacks["chargebacks"].([]interface{})
 	require.True(t, ok)
-	require.Empty(t, entries, "sem lançamentos para payment_id inexistente")
+	require.Empty(t, entries, "sem lancamentos para payment_id inexistente")
 
-	// --- Validação: ID inválido ---
+	// --- Validacao: ID invalido ---
 	req = httptest.NewRequest(http.MethodPost, "/payments/abc/approve", nil)
 	resp, err = app.Test(req, -1)
 	require.NoError(t, err)
 	require.Equal(t, 400, resp.StatusCode)
 
-	req = httptest.NewRequest(http.MethodPost, "/payments/ffffffffffffffffffffffff/reject", bytes.NewBufferString(`{}`))
+	// ID numerico inexistente -> 404
+	req = httptest.NewRequest(http.MethodPost, "/payments/999999999/reject", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err = app.Test(req, -1)
 	require.NoError(t, err)
-	require.Equal(t, 404, resp.StatusCode, "hex válido mas inexistente → not found")
+	require.Equal(t, 404, resp.StatusCode, "id numerico valido mas inexistente -> not found")
 }
 
 // TestCheckoutE2E_WebhookRealFlow_Cashback percorre o fluxo completo do
-// webhook real do AbacatePay: POST no HandlePaymentWebhook → verificação
-// server-side da charge na API (mockada) → atualização do status → split
+// webhook real do AbacatePay: POST no HandlePaymentWebhook -> verificacao
+// server-side da charge na API (mockada) -> atualizacao do status -> split
 // com cashback (customer credit > 0), cobrindo a regra de 4 receivers:
 // platform, establishment, deliveryman e customer.
 func TestCheckoutE2E_WebhookRealFlow_Cashback(t *testing.T) {
 	cleanup := setupCheckoutE2EEnv(t)
 	defer cleanup()
 
-	// Sem Redis: o publish das filas cai no fallback de Go channels (não bloqueia).
+	// Sem Redis: o publish das filas cai no fallback de Go channels (nao bloqueia).
 	os.Unsetenv("REDIS_URL")
 
-	ctx := context.Background()
-	paymentCollection := models.MongoDabase.Collection("payments")
-	walletCollection := models.MongoDabase.Collection("wallets")
-	ledgerCollection := models.MongoDabase.Collection("wallet_ledger")
-
-	// Mock da API AbacatePay v2: o webhook NÃO confia no body — verifica o
+	// Mock da API AbacatePay v2: o webhook NAO confia no body — verifica o
 	// status da charge consultando a API (aqui mockada). Conta as chamadas
-	// para provar que a verificação server-side aconteceu de verdade.
+	// para provar que a verificacao server-side aconteceu de verdade.
 	var mockCalls int32
 	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&mockCalls, 1)
@@ -571,7 +601,7 @@ func TestCheckoutE2E_WebhookRealFlow_Cashback(t *testing.T) {
 		if chargeID == "" {
 			t.Error("query param id ausente no check")
 		}
-		// Charge expirada → status EXPIRED na API (cenário de não-pagamento).
+		// Charge expirada -> status EXPIRED na API (cenario de nao-pagamento).
 		chargeStatus := "PAID"
 		if strings.Contains(chargeID, "expired") {
 			chargeStatus = "EXPIRED"
@@ -588,7 +618,7 @@ func TestCheckoutE2E_WebhookRealFlow_Cashback(t *testing.T) {
 	defer os.Unsetenv("ABACATE_PAY_WEBHOOK_SECRET")
 
 	// amount=89.90, delivery=7.00, 5%+85%: platform=4.495, est=76.415,
-	// delivery=7.00 → sobra 1.99 de cashback (customer credit > 0) → 4 receivers.
+	// delivery=7.00 -> sobra 1.99 de cashback (customer credit > 0) -> 4 receivers.
 	payment := models.Payment{
 		OrderID:         "order-e2e-webhook-cashback",
 		CustomerID:      777,
@@ -601,8 +631,7 @@ func TestCheckoutE2E_WebhookRealFlow_Cashback(t *testing.T) {
 		AbacatePayID:    "charge-e2e-cashback-001",
 		CreatedAt:       time.Now(),
 	}
-	_, err := paymentCollection.InsertOne(ctx, payment)
-	require.NoError(t, err)
+	seedPayment(t, &payment)
 
 	app := fiber.New()
 	app.Post("/api/payment/webhook", HandlePaymentWebhook)
@@ -610,22 +639,20 @@ func TestCheckoutE2E_WebhookRealFlow_Cashback(t *testing.T) {
 	// Payload real do webhook v2 (evento billing.paid)
 	webhookBody := []byte(`{"event":"billing.paid","charge":{"id":"charge-e2e-cashback-001","status":"PAID","amount":89.90}}`)
 
-	// --- 1. HMAC inválido → 401, API não consultada, status intacto ---
-	req := httptest.NewRequest(http.MethodPost, "/api/payment/webhook", bytes.NewReader(webhookBody))
+	// --- 1. HMAC invalido -> 401, API nao consultada, status intacto ---
+	req := httptest.NewRequest(http.MethodPost, "/api/payment/webhook", bytesReader(webhookBody))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-abacatepay-signature", "assinatura-errada")
 	resp, err := app.Test(req, -1)
 	require.NoError(t, err)
 	require.Equal(t, 401, resp.StatusCode)
-	require.Equal(t, int32(0), atomic.LoadInt32(&mockCalls), "HMAC inválido não deve consultar a API")
+	require.Equal(t, int32(0), atomic.LoadInt32(&mockCalls), "HMAC invalido nao deve consultar a API")
 
-	var stored models.Payment
-	err = paymentCollection.FindOne(ctx, bson.M{"abacatepay_id": "charge-e2e-cashback-001"}).Decode(&stored)
-	require.NoError(t, err)
-	require.Equal(t, "PENDING", stored.Status, "HMAC inválido não pode mudar o status")
+	stored := findPaymentByAbacate(t, "charge-e2e-cashback-001")
+	require.Equal(t, "PENDING", stored.Status, "HMAC invalido nao pode mudar o status")
 
-	// --- 2. Webhook legítimo (HMAC válido) → CONFIRMED + split com cashback ---
-	req = httptest.NewRequest(http.MethodPost, "/api/payment/webhook", bytes.NewReader(webhookBody))
+	// --- 2. Webhook legitimo (HMAC valido) -> CONFIRMED + split com cashback ---
+	req = httptest.NewRequest(http.MethodPost, "/api/payment/webhook", bytesReader(webhookBody))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-abacatepay-signature", computeHMAC(webhookBody, "e2e-webhook-secret"))
 	resp, err = app.Test(req, -1)
@@ -636,16 +663,15 @@ func TestCheckoutE2E_WebhookRealFlow_Cashback(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&processed))
 	require.Equal(t, "processed", processed["status"])
 
-	// A verificação server-side realmente consultou a API mockada.
-	require.Equal(t, int32(1), atomic.LoadInt32(&mockCalls), "webhook legítimo deve consultar a API para confirmar a charge")
+	// A verificacao server-side realmente consultou a API mockada.
+	require.Equal(t, int32(1), atomic.LoadInt32(&mockCalls), "webhook legitimo deve consultar a API para confirmar a charge")
 
-	err = paymentCollection.FindOne(ctx, bson.M{"abacatepay_id": "charge-e2e-cashback-001"}).Decode(&stored)
-	require.NoError(t, err)
+	stored = findPaymentByAbacate(t, "charge-e2e-cashback-001")
 	require.Equal(t, "CONFIRMED", stored.Status)
 	require.NotNil(t, stored.ConfirmedAt)
 
 	// 4 receivers: platform + establishment + deliveryman + customer (cashback)
-	require.Len(t, stored.SplitRules, 4, "cashback > 0 deve gerar a 4ª regra (customer)")
+	require.Len(t, stored.SplitRules, 4, "cashback > 0 deve gerar a 4a regra (customer)")
 
 	require.Equal(t, "platform", stored.SplitRules[0].ReceiverType)
 	require.InDelta(t, 89.90*0.05, stored.SplitRules[0].Amount, 0.01)
@@ -668,56 +694,39 @@ func TestCheckoutE2E_WebhookRealFlow_Cashback(t *testing.T) {
 	}
 	require.InDelta(t, 89.90, totalSplit, 0.01)
 
-	// --- 2b. Crédito real na carteira do restaurante após o split ---
-	// A confirmação do webhook deve criar (upsert) a carteira do
-	// estabelecimento e creditar o share do split: 89.90 * 85% = 76.415.
-	var estWallet models.Wallet
-	err = walletCollection.FindOne(ctx, bson.M{"user_id": 42}).Decode(&estWallet)
-	require.NoError(t, err, "webhook confirmado deve criar a carteira do estabelecimento")
+	// --- 2b. Credito real na carteira do restaurante apos o split ---
+	estWallet := getWalletByUser(t, 42)
 	require.Equal(t, "establishment", estWallet.UserType)
 	require.InDelta(t, 89.90*0.85, estWallet.Balance, 0.01, "carteira do restaurante recebe o share do split")
 
-	// Marcador de crédito gravado no pagamento
-	err = paymentCollection.FindOne(ctx, bson.M{"abacatepay_id": "charge-e2e-cashback-001"}).Decode(&stored)
-	require.NoError(t, err)
+	// Marcador de credito gravado no pagamento
+	stored = findPaymentByAbacate(t, "charge-e2e-cashback-001")
 	require.NotNil(t, stored.EstablishmentCreditedAt, "pagamento deve registrar establishment_credited_at")
 
-	// Lançamento de crédito no ledger
-	creditCount, err := ledgerCollection.CountDocuments(ctx, bson.M{
-		"user_id":    42,
-		"type":       "credit",
-		"payment_id": "charge-e2e-cashback-001",
-	})
-	require.NoError(t, err)
-	require.Equal(t, int64(1), creditCount, "deve existir 1 lançamento de crédito no ledger")
+	// Lancamento de credito no ledger
+	creditCount := countLedger(t, 42, "credit", "", "charge-e2e-cashback-001")
+	require.Equal(t, int64(1), creditCount, "deve existir 1 lancamento de credito no ledger")
 
-	// --- 3. Webhook idempotente: reprocessar não muda o status nem duplica ---
-	req = httptest.NewRequest(http.MethodPost, "/api/payment/webhook", bytes.NewReader(webhookBody))
+	// --- 3. Webhook idempotente: reprocessar nao muda o status nem duplica ---
+	req = httptest.NewRequest(http.MethodPost, "/api/payment/webhook", bytesReader(webhookBody))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-abacatepay-signature", computeHMAC(webhookBody, "e2e-webhook-secret"))
 	resp, err = app.Test(req, -1)
 	require.NoError(t, err)
 	require.Equal(t, 200, resp.StatusCode)
 
-	err = paymentCollection.FindOne(ctx, bson.M{"abacatepay_id": "charge-e2e-cashback-001"}).Decode(&stored)
-	require.NoError(t, err)
-	require.Equal(t, "CONFIRMED", stored.Status, "reprocessar webhook não pode regredir o status")
-	require.Len(t, stored.SplitRules, 4, "reprocessar não pode duplicar split rules")
+	stored = findPaymentByAbacate(t, "charge-e2e-cashback-001")
+	require.Equal(t, "CONFIRMED", stored.Status, "reprocessar webhook nao pode regredir o status")
+	require.Len(t, stored.SplitRules, 4, "reprocessar nao pode duplicar split rules")
 
-	// Reprocessar não credita a carteira de novo (idempotência do crédito)
-	err = walletCollection.FindOne(ctx, bson.M{"user_id": 42}).Decode(&estWallet)
-	require.NoError(t, err)
-	require.InDelta(t, 89.90*0.85, estWallet.Balance, 0.01, "reprocessar webhook não pode creditar duas vezes")
+	// Reprocessar nao credita a carteira de novo (idempotencia do credito)
+	estWallet = getWalletByUser(t, 42)
+	require.InDelta(t, 89.90*0.85, estWallet.Balance, 0.01, "reprocessar webhook nao pode creditar duas vezes")
 
-	creditCount, err = ledgerCollection.CountDocuments(ctx, bson.M{
-		"user_id":    42,
-		"type":       "credit",
-		"payment_id": "charge-e2e-cashback-001",
-	})
-	require.NoError(t, err)
-	require.Equal(t, int64(1), creditCount, "ledger não pode ter crédito duplicado")
+	creditCount = countLedger(t, 42, "credit", "", "charge-e2e-cashback-001")
+	require.Equal(t, int64(1), creditCount, "ledger nao pode ter credito duplicado")
 
-	// --- 4. Charge não paga (EXPIRED) → status EXPIRED, sem split ---
+	// --- 4. Charge nao paga (EXPIRED) -> status EXPIRED, sem split ---
 	expired := models.Payment{
 		OrderID:         "order-e2e-webhook-expired",
 		CustomerID:      778,
@@ -729,41 +738,33 @@ func TestCheckoutE2E_WebhookRealFlow_Cashback(t *testing.T) {
 		AbacatePayID:    "charge-e2e-expired-001",
 		CreatedAt:       time.Now(),
 	}
-	_, err = paymentCollection.InsertOne(ctx, expired)
-	require.NoError(t, err)
+	seedPayment(t, &expired)
 
 	expiredBody := []byte(`{"event":"billing.expired","charge":{"id":"charge-e2e-expired-001","status":"EXPIRED","amount":50.00}}`)
-	req = httptest.NewRequest(http.MethodPost, "/api/payment/webhook", bytes.NewReader(expiredBody))
+	req = httptest.NewRequest(http.MethodPost, "/api/payment/webhook", bytesReader(expiredBody))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-abacatepay-signature", computeHMAC(expiredBody, "e2e-webhook-secret"))
 	resp, err = app.Test(req, -1)
 	require.NoError(t, err)
 	require.Equal(t, 200, resp.StatusCode)
 
-	err = paymentCollection.FindOne(ctx, bson.M{"abacatepay_id": "charge-e2e-expired-001"}).Decode(&stored)
-	require.NoError(t, err)
+	stored = findPaymentByAbacate(t, "charge-e2e-expired-001")
 	require.Equal(t, "EXPIRED", stored.Status)
-	require.Empty(t, stored.SplitRules, "charge não paga não pode gerar split")
+	require.Empty(t, stored.SplitRules, "charge nao paga nao pode gerar split")
 }
 
 // TestCheckoutE2E_WebhookRealFlow_Refund cobre o fluxo de chargeback/reembolso:
-// webhook billing.refunded → verificação server-side (API mockada) → reversão
-// do crédito da carteira do estabelecimento → ledger de débito → evento
-// PAYMENT_REFUNDED nas filas → status REFUNDED. Também valida idempotência
-// (sem débito duplo), refund de pagamento nunca pago (sem reversão) e
-// saldo insuficiente (nunca deixa saldo negativo).
+// webhook billing.refunded -> verificacao server-side (API mockada) -> reversao
+// do credito da carteira do estabelecimento -> ledger de debito -> status
+// REFUNDED. Tambem valida idempotencia (sem debito duplo), refund de
+// pagamento nunca pago (sem reversao) e saldo insuficiente (nunca negativo).
 func TestCheckoutE2E_WebhookRealFlow_Refund(t *testing.T) {
 	cleanup := setupCheckoutE2EEnv(t)
 	defer cleanup()
 
 	os.Unsetenv("REDIS_URL")
 
-	ctx := context.Background()
-	paymentCollection := models.MongoDabase.Collection("payments")
-	walletCollection := models.MongoDabase.Collection("wallets")
-	ledgerCollection := models.MongoDabase.Collection("wallet_ledger")
-
-	// Mock AbacatePay: charges com "refund" no id → REFUNDED, resto → PAID.
+	// Mock AbacatePay: charges com "refund" no id -> REFUNDED, resto -> PAID.
 	var mockCalls int32
 	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&mockCalls, 1)
@@ -786,9 +787,9 @@ func TestCheckoutE2E_WebhookRealFlow_Refund(t *testing.T) {
 	app := fiber.New()
 	app.Post("/api/payment/webhook", HandlePaymentWebhook)
 
-	postWebhook := func(t *testing.T, chargeID string, body []byte) *http.Response {
+	postWebhook := func(t *testing.T, body []byte) *http.Response {
 		t.Helper()
-		req := httptest.NewRequest(http.MethodPost, "/api/payment/webhook", bytes.NewReader(body))
+		req := httptest.NewRequest(http.MethodPost, "/api/payment/webhook", bytesReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("x-abacatepay-signature", computeHMAC(body, "e2e-refund-secret"))
 		resp, err := app.Test(req, -1)
@@ -797,8 +798,7 @@ func TestCheckoutE2E_WebhookRealFlow_Refund(t *testing.T) {
 		return resp
 	}
 
-	// === Cenário 1: pagamento CONFIRMED → refund reverte a carteira ===
-	// amount=100, delivery=10 → split 5/85/10 = 100 (3 regras, est share 85).
+	// === Cenario 1: pagamento CONFIRMED -> refund reverte a carteira ===
 	confirmed := models.Payment{
 		OrderID:         "order-e2e-refund-001",
 		CustomerID:      500,
@@ -808,68 +808,45 @@ func TestCheckoutE2E_WebhookRealFlow_Refund(t *testing.T) {
 		Method:          "pix",
 		Status:          "CONFIRMED",
 		AbacatePayID:    "charge-e2e-refund-001",
-		SplitRules: []models.SplitRule{
+		SplitRules: models.SplitRules([]models.SplitRule{
 			{ReceiverType: "platform", Amount: 5.00, Percentage: 5.0},
 			{ReceiverType: "establishment", Amount: 85.00, Percentage: 85.0},
 			{ReceiverType: "deliveryman", Amount: 10.00, Percentage: 0},
-		},
+		}),
 		CreatedAt: time.Now(),
 	}
-	_, err := paymentCollection.InsertOne(ctx, confirmed)
-	require.NoError(t, err)
-
-	_, err = walletCollection.InsertOne(ctx, bson.M{
-		"user_id":      42,
-		"user_type":    "establishment",
-		"balance":      200.0,
-		"last_updated": time.Now(),
-	})
-	require.NoError(t, err)
+	seedPayment(t, &confirmed)
+	seedWallet(t, 42, "establishment", 200.0)
 
 	refundBody := []byte(`{"event":"billing.refunded","charge":{"id":"charge-e2e-refund-001","status":"REFUNDED","amount":100.00}}`)
-	postWebhook(t, "charge-e2e-refund-001", refundBody)
+	postWebhook(t, refundBody)
 
-	// Verificação server-side aconteceu
+	// Verificacao server-side aconteceu
 	require.Equal(t, int32(1), atomic.LoadInt32(&mockCalls))
 
-	var stored models.Payment
-	err = paymentCollection.FindOne(ctx, bson.M{"abacatepay_id": "charge-e2e-refund-001"}).Decode(&stored)
-	require.NoError(t, err)
+	stored := findPaymentByAbacate(t, "charge-e2e-refund-001")
 	require.Equal(t, "REFUNDED", stored.Status)
 	require.NotNil(t, stored.RefundedAt)
-	require.Len(t, stored.SplitRules, 3, "refund não pode regenerar/duplicar split rules")
+	require.Len(t, stored.SplitRules, 3, "refund nao pode regenerar/duplicar split rules")
 
 	// Carteira do estabelecimento debitada: 200 - 85 (share do split) = 115
-	var wallet models.Wallet
-	err = walletCollection.FindOne(ctx, bson.M{"user_id": 42}).Decode(&wallet)
-	require.NoError(t, err)
-	require.InDelta(t, 115.0, wallet.Balance, 0.01, "chargeback deve reverter o crédito do estabelecimento")
+	wallet := getWalletByUser(t, 42)
+	require.InDelta(t, 115.0, wallet.Balance, 0.01, "chargeback deve reverter o credito do estabelecimento")
 
-	// Ledger de débito gravado
-	count, err := ledgerCollection.CountDocuments(ctx, bson.M{
-		"user_id":    42,
-		"type":       "debit",
-		"payment_id": "charge-e2e-refund-001",
-	})
-	require.NoError(t, err)
-	require.Equal(t, int64(1), count, "deve existir 1 lançamento de débito no ledger")
+	// Ledger de debito gravado
+	count := countLedger(t, 42, "debit", "", "charge-e2e-refund-001")
+	require.Equal(t, int64(1), count, "deve existir 1 lancamento de debito no ledger")
 
-	// === Cenário 2: idempotência — reprocessar não debita de novo ===
-	postWebhook(t, "charge-e2e-refund-001", refundBody)
+	// === Cenario 2: idempotencia — reprocessar nao debita de novo ===
+	postWebhook(t, refundBody)
 
-	err = walletCollection.FindOne(ctx, bson.M{"user_id": 42}).Decode(&wallet)
-	require.NoError(t, err)
-	require.InDelta(t, 115.0, wallet.Balance, 0.01, "reprocessar webhook não pode debitar duas vezes")
+	wallet = getWalletByUser(t, 42)
+	require.InDelta(t, 115.0, wallet.Balance, 0.01, "reprocessar webhook nao pode debitar duas vezes")
 
-	count, err = ledgerCollection.CountDocuments(ctx, bson.M{
-		"user_id":    42,
-		"type":       "debit",
-		"payment_id": "charge-e2e-refund-001",
-	})
-	require.NoError(t, err)
-	require.Equal(t, int64(1), count, "ledger não pode ter débito duplicado")
+	count = countLedger(t, 42, "debit", "", "charge-e2e-refund-001")
+	require.Equal(t, int64(1), count, "ledger nao pode ter debito duplicado")
 
-	// === Cenário 3: refund de pagamento PENDING (nunca pago) → sem reversão ===
+	// === Cenario 3: refund de pagamento PENDING (nunca pago) -> sem reversao ===
 	pending := models.Payment{
 		OrderID:         "order-e2e-refund-pending",
 		CustomerID:      501,
@@ -881,29 +858,19 @@ func TestCheckoutE2E_WebhookRealFlow_Refund(t *testing.T) {
 		AbacatePayID:    "charge-e2e-refund-pending",
 		CreatedAt:       time.Now(),
 	}
-	_, err = paymentCollection.InsertOne(ctx, pending)
-	require.NoError(t, err)
-
-	_, err = walletCollection.InsertOne(ctx, bson.M{
-		"user_id":      43,
-		"user_type":    "establishment",
-		"balance":      500.0,
-		"last_updated": time.Now(),
-	})
-	require.NoError(t, err)
+	seedPayment(t, &pending)
+	seedWallet(t, 43, "establishment", 500.0)
 
 	pendingRefund := []byte(`{"event":"billing.refunded","charge":{"id":"charge-e2e-refund-pending","status":"REFUNDED","amount":50.00}}`)
-	postWebhook(t, "charge-e2e-refund-pending", pendingRefund)
+	postWebhook(t, pendingRefund)
 
-	err = paymentCollection.FindOne(ctx, bson.M{"abacatepay_id": "charge-e2e-refund-pending"}).Decode(&stored)
-	require.NoError(t, err)
+	stored = findPaymentByAbacate(t, "charge-e2e-refund-pending")
 	require.Equal(t, "REFUNDED", stored.Status)
 
-	err = walletCollection.FindOne(ctx, bson.M{"user_id": 43}).Decode(&wallet)
-	require.NoError(t, err)
-	require.InDelta(t, 500.0, wallet.Balance, 0.01, "pagamento nunca pago não pode reverter crédito")
+	wallet = getWalletByUser(t, 43)
+	require.InDelta(t, 500.0, wallet.Balance, 0.01, "pagamento nunca pago nao pode reverter credito")
 
-	// === Cenário 4: saldo insuficiente — nunca fica negativo ===
+	// === Cenario 4: saldo insuficiente — nunca fica negativo ===
 	low := models.Payment{
 		OrderID:         "order-e2e-refund-low",
 		CustomerID:      502,
@@ -913,49 +880,30 @@ func TestCheckoutE2E_WebhookRealFlow_Refund(t *testing.T) {
 		Method:          "pix",
 		Status:          "CONFIRMED",
 		AbacatePayID:    "charge-e2e-refund-low",
-		SplitRules: []models.SplitRule{
+		SplitRules: models.SplitRules([]models.SplitRule{
 			{ReceiverType: "platform", Amount: 5.00, Percentage: 5.0},
 			{ReceiverType: "establishment", Amount: 85.00, Percentage: 85.0},
 			{ReceiverType: "deliveryman", Amount: 10.00, Percentage: 0},
-		},
+		}),
 		CreatedAt: time.Now(),
 	}
-	_, err = paymentCollection.InsertOne(ctx, low)
-	require.NoError(t, err)
-
-	_, err = walletCollection.InsertOne(ctx, bson.M{
-		"user_id":      44,
-		"user_type":    "establishment",
-		"balance":      10.0, // < share de 85
-		"last_updated": time.Now(),
-	})
-	require.NoError(t, err)
+	seedPayment(t, &low)
+	seedWallet(t, 44, "establishment", 10.0) // < share de 85
 
 	lowRefund := []byte(`{"event":"billing.refunded","charge":{"id":"charge-e2e-refund-low","status":"REFUNDED","amount":100.00}}`)
-	postWebhook(t, "charge-e2e-refund-low", lowRefund)
+	postWebhook(t, lowRefund)
 
-	err = paymentCollection.FindOne(ctx, bson.M{"abacatepay_id": "charge-e2e-refund-low"}).Decode(&stored)
-	require.NoError(t, err)
+	stored = findPaymentByAbacate(t, "charge-e2e-refund-low")
 	require.Equal(t, "REFUNDED", stored.Status)
 
-	err = walletCollection.FindOne(ctx, bson.M{"user_id": 44}).Decode(&wallet)
-	require.NoError(t, err)
-	require.InDelta(t, 10.0, wallet.Balance, 0.01, "saldo insuficiente: débito bloqueado, nunca negativo")
+	wallet = getWalletByUser(t, 44)
+	require.InDelta(t, 10.0, wallet.Balance, 0.01, "saldo insuficiente: debito bloqueado, nunca negativo")
 
-	// Ledger não pode ter débito quando o saldo é insuficiente
-	count, err = ledgerCollection.CountDocuments(ctx, bson.M{
-		"user_id":    44,
-		"type":       "debit",
-		"payment_id": "charge-e2e-refund-low",
-	})
-	require.NoError(t, err)
+	// Ledger nao pode ter debito quando o saldo e insuficiente
+	count = countLedger(t, 44, "debit", "", "charge-e2e-refund-low")
 	require.Equal(t, int64(0), count)
 
-	// === Cenário 5: cashback do cliente (receiver_type customer) é revertido ===
-	// amount=100, delivery=10, split 5/85/10 → sobra 0; adicionamos uma regra
-	// customer (cashback 3) simulando zona com cashback → 4 receivers. O
-	// chargeback deve debitar a carteira do cliente pelo cashback, além do
-	// débito do estabelecimento.
+	// === Cenario 5: cashback do cliente (receiver_type customer) revertido ===
 	cashback := models.Payment{
 		OrderID:         "order-e2e-refund-cashback",
 		CustomerID:      503,
@@ -965,58 +913,35 @@ func TestCheckoutE2E_WebhookRealFlow_Refund(t *testing.T) {
 		Method:          "pix",
 		Status:          "CONFIRMED",
 		AbacatePayID:    "charge-e2e-refund-cashback",
-		SplitRules: []models.SplitRule{
+		SplitRules: models.SplitRules([]models.SplitRule{
 			{ReceiverType: "platform", Amount: 5.00, Percentage: 5.0},
 			{ReceiverType: "establishment", Amount: 82.00, Percentage: 82.0},
 			{ReceiverType: "deliveryman", Amount: 10.00, Percentage: 0},
 			{ReceiverType: "customer", Amount: 3.00, Percentage: 0},
-		},
+		}),
 		CreatedAt: time.Now(),
 	}
-	_, err = paymentCollection.InsertOne(ctx, cashback)
-	require.NoError(t, err)
+	seedPayment(t, &cashback)
 
-	// Carteira do estabelecimento (com crédito do share 82) e carteira do
-	// cliente (com crédito de cashback 3).
-	_, err = walletCollection.InsertOne(ctx, bson.M{
-		"user_id":      45,
-		"user_type":    "establishment",
-		"balance":      182.0,
-		"last_updated": time.Now(),
-	})
-	require.NoError(t, err)
-	_, err = walletCollection.InsertOne(ctx, bson.M{
-		"user_id":      503,
-		"user_type":    "customer",
-		"balance":      13.0, // 10 de saldo prévio + 3 de cashback
-		"last_updated": time.Now(),
-	})
-	require.NoError(t, err)
+	// Carteira do estabelecimento (com credito do share 82) e carteira do
+	// cliente (com credito de cashback 3).
+	seedWallet(t, 45, "establishment", 182.0)
+	seedWallet(t, 503, "customer", 13.0) // 10 de saldo previo + 3 de cashback
 
 	cashbackRefund := []byte(`{"event":"billing.refunded","charge":{"id":"charge-e2e-refund-cashback","status":"REFUNDED","amount":100.00}}`)
-	postWebhook(t, "charge-e2e-refund-cashback", cashbackRefund)
+	postWebhook(t, cashbackRefund)
 
-	err = walletCollection.FindOne(ctx, bson.M{"user_id": 45}).Decode(&wallet)
-	require.NoError(t, err)
-	require.InDelta(t, 100.0, wallet.Balance, 0.01, "chargeback reverte o crédito do estabelecimento (182 - 82)")
+	wallet = getWalletByUser(t, 45)
+	require.InDelta(t, 100.0, wallet.Balance, 0.01, "chargeback reverte o credito do estabelecimento (182 - 82)")
 
-	err = walletCollection.FindOne(ctx, bson.M{"user_id": 503}).Decode(&wallet)
-	require.NoError(t, err)
+	wallet = getWalletByUser(t, 503)
 	require.InDelta(t, 10.0, wallet.Balance, 0.01, "chargeback reverte o cashback do cliente (13 - 3)")
 
-	// Ledger: débito do cashback do cliente gravado
-	count, err = ledgerCollection.CountDocuments(ctx, bson.M{
-		"user_id":    503,
-		"type":       "debit",
-		"payment_id": "charge-e2e-refund-cashback",
-	})
-	require.NoError(t, err)
-	require.Equal(t, int64(1), count, "deve existir 1 débito de cashback do cliente no ledger")
+	// Ledger: debito do cashback do cliente gravado
+	count = countLedger(t, 503, "debit", "", "charge-e2e-refund-cashback")
+	require.Equal(t, int64(1), count, "deve existir 1 debito de cashback do cliente no ledger")
 
-	// === Cenário 6: top-up de carteira quando o pagamento foi usado ===
-	// Pagamento CONFIRMED com wallet_credited_at preenchido (cliente usou o
-	// pagamento para top-up da carteira). O chargeback deve reverter o valor
-	// total do top-up (payment.Amount) da carteira do cliente.
+	// === Cenario 6: top-up de carteira quando o pagamento foi usado ===
 	topup := models.Payment{
 		OrderID:         "order-e2e-refund-topup",
 		CustomerID:      504,
@@ -1026,56 +951,36 @@ func TestCheckoutE2E_WebhookRealFlow_Refund(t *testing.T) {
 		Method:          "pix",
 		Status:          "CONFIRMED",
 		AbacatePayID:    "charge-e2e-refund-topup",
-		SplitRules: []models.SplitRule{
+		SplitRules: models.SplitRules([]models.SplitRule{
 			{ReceiverType: "platform", Amount: 5.00, Percentage: 5.0},
 			{ReceiverType: "establishment", Amount: 85.00, Percentage: 85.0},
 			{ReceiverType: "deliveryman", Amount: 10.00, Percentage: 0},
-		},
+		}),
 		CreatedAt:        time.Now(),
 		WalletCreditedAt: ptrTime(time.Now().Add(-time.Hour)),
 	}
-	_, err = paymentCollection.InsertOne(ctx, topup)
-	require.NoError(t, err)
-
-	_, err = walletCollection.InsertOne(ctx, bson.M{
-		"user_id":      504,
-		"user_type":    "customer",
-		"balance":      250.0, // 150 prévio + 100 do top-up
-		"last_updated": time.Now(),
-	})
-	require.NoError(t, err)
+	seedPayment(t, &topup)
+	seedWallet(t, 504, "customer", 250.0) // 150 previo + 100 do top-up
 
 	topupRefund := []byte(`{"event":"billing.refunded","charge":{"id":"charge-e2e-refund-topup","status":"REFUNDED","amount":100.00}}`)
-	postWebhook(t, "charge-e2e-refund-topup", topupRefund)
+	postWebhook(t, topupRefund)
 
-	err = walletCollection.FindOne(ctx, bson.M{"user_id": 504}).Decode(&wallet)
-	require.NoError(t, err)
+	wallet = getWalletByUser(t, 504)
 	require.InDelta(t, 150.0, wallet.Balance, 0.01, "chargeback reverte o top-up de carteira (250 - 100)")
 
-	// Ledger: débito do top-up do cliente gravado
-	count, err = ledgerCollection.CountDocuments(ctx, bson.M{
-		"user_id":    504,
-		"type":       "debit",
-		"payment_id": "charge-e2e-refund-topup",
-	})
-	require.NoError(t, err)
-	require.Equal(t, int64(1), count, "deve existir 1 débito do top-up no ledger")
+	// Ledger: debito do top-up do cliente gravado
+	count = countLedger(t, 504, "debit", "", "charge-e2e-refund-topup")
+	require.Equal(t, int64(1), count, "deve existir 1 debito do top-up no ledger")
 }
 
 // TestCheckoutE2E_WebhookRealFlow_ZoneSplitConfig valida que o split usa os
 // percentuais customizados da zona do estabelecimento (via
-// GetSplitConfigForEstablishment, ligado pelo monólito) em vez do default
-// 5/85. Com zona 7%/80%, amount=100 e delivery=10: platform=7, estab=80,
-// delivery=10, cashback=3 → 4 receivers.
+// GetSplitConfigForEstablishment, ligado pelo monolito) em vez do default 5/85.
 func TestCheckoutE2E_WebhookRealFlow_ZoneSplitConfig(t *testing.T) {
 	cleanup := setupCheckoutE2EEnv(t)
 	defer cleanup()
 
 	os.Unsetenv("REDIS_URL")
-
-	ctx := context.Background()
-	paymentCollection := models.MongoDabase.Collection("payments")
-	walletCollection := models.MongoDabase.Collection("wallets")
 
 	// Mock AbacatePay: charge confirmada (PAID).
 	var mockCalls int32
@@ -1093,7 +998,7 @@ func TestCheckoutE2E_WebhookRealFlow_ZoneSplitConfig(t *testing.T) {
 	os.Setenv("ABACATE_PAY_WEBHOOK_SECRET", "e2e-zone-secret")
 	defer os.Unsetenv("ABACATE_PAY_WEBHOOK_SECRET")
 
-	// Ligação que o monólito faz em main(): resolver de split por zona.
+	// Ligacao que o monolito faz em main(): resolver de split por zona.
 	// Zona com percentuais customizados 7%/80% para o estabelecimento 42.
 	var resolverCalls int32
 	savedResolver := GetSplitConfigForEstablishment
@@ -1118,35 +1023,32 @@ func TestCheckoutE2E_WebhookRealFlow_ZoneSplitConfig(t *testing.T) {
 		AbacatePayID:    "charge-e2e-zone-split",
 		CreatedAt:       time.Now(),
 	}
-	_, err := paymentCollection.InsertOne(ctx, payment)
-	require.NoError(t, err)
+	seedPayment(t, &payment)
 
 	webhookBody := []byte(`{"event":"billing.paid","charge":{"id":"charge-e2e-zone-split","status":"PAID","amount":100.00}}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/payment/webhook", bytes.NewReader(webhookBody))
+	req := httptest.NewRequest(http.MethodPost, "/api/payment/webhook", bytesReader(webhookBody))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-abacatepay-signature", computeHMAC(webhookBody, "e2e-zone-secret"))
 	resp, err := app.Test(req, -1)
 	require.NoError(t, err)
 	require.Equal(t, 200, resp.StatusCode)
 
-	// Verificação server-side + resolver de zona chamados de verdade.
+	// Verificacao server-side + resolver de zona chamados de verdade.
 	require.Equal(t, int32(1), atomic.LoadInt32(&mockCalls))
 	require.Equal(t, int32(1), atomic.LoadInt32(&resolverCalls), "GetSplitConfigForEstablishment deve ser consultado no webhook")
 
-	var stored models.Payment
-	err = paymentCollection.FindOne(ctx, bson.M{"abacatepay_id": "charge-e2e-zone-split"}).Decode(&stored)
-	require.NoError(t, err)
+	stored := findPaymentByAbacate(t, "charge-e2e-zone-split")
 	require.Equal(t, "CONFIRMED", stored.Status)
 
-	// Split com percentuais da zona: 7/80/10 + cashback 3 → 4 regras.
-	require.Len(t, stored.SplitRules, 4, "7%%+80%%+delivery 10 = 97 → sobra 3 de cashback → 4 regras")
+	// Split com percentuais da zona: 7/80/10 + cashback 3 -> 4 regras.
+	require.Len(t, stored.SplitRules, 4)
 
 	require.Equal(t, "platform", stored.SplitRules[0].ReceiverType)
-	require.InDelta(t, 7.0, stored.SplitRules[0].Amount, 0.01, "7%% de 100")
+	require.InDelta(t, 7.0, stored.SplitRules[0].Amount, 0.01, "7% de 100")
 	require.InDelta(t, 7.0, stored.SplitRules[0].Percentage, 0.01)
 
 	require.Equal(t, "establishment", stored.SplitRules[1].ReceiverType)
-	require.InDelta(t, 80.0, stored.SplitRules[1].Amount, 0.01, "80%% de 100")
+	require.InDelta(t, 80.0, stored.SplitRules[1].Amount, 0.01, "80% de 100")
 	require.InDelta(t, 80.0, stored.SplitRules[1].Percentage, 0.01)
 
 	require.Equal(t, "deliveryman", stored.SplitRules[2].ReceiverType)
@@ -1162,35 +1064,25 @@ func TestCheckoutE2E_WebhookRealFlow_ZoneSplitConfig(t *testing.T) {
 	}
 	require.InDelta(t, 100.0, totalSplit, 0.01)
 
-	// Controle: se o resolver NÃO tivesse sido usado, o split seria 5/85
-	// (platform 5, estab 85, delivery 10, cashback 0 → 3 regras). As regras
-	// acima só existem com a config da zona — prova que o default foi trocado.
-	require.Greater(t, stored.SplitRules[0].Percentage, 5.0, "percentual da plataforma deve vir da zona (7%%), nao do default 5%%")
-	require.Less(t, stored.SplitRules[1].Percentage, 85.0, "percentual do estabelecimento deve vir da zona (80%%), nao do default 85%%")
+	// Controle: os percentuais vieram da zona (7/80), nao do default (5/85).
+	require.Greater(t, stored.SplitRules[0].Percentage, 5.0, "percentual da plataforma deve vir da zona (7%), nao do default 5%")
+	require.Less(t, stored.SplitRules[1].Percentage, 85.0, "percentual do estabelecimento deve vir da zona (80%), nao do default 85%")
 
-	// Carteira do restaurante creditada pelo share da ZONA (80%), não 85%.
-	var estWallet models.Wallet
-	err = walletCollection.FindOne(ctx, bson.M{"user_id": 42}).Decode(&estWallet)
-	require.NoError(t, err, "webhook confirmado deve criar a carteira do estabelecimento")
+	// Carteira do restaurante creditada pelo share da ZONA (80%), nao 85%.
+	estWallet := getWalletByUser(t, 42)
 	require.Equal(t, "establishment", estWallet.UserType)
-	require.InDelta(t, 80.0, estWallet.Balance, 0.01, "carteira recebe o share da zona (80), não o default 85")
+	require.InDelta(t, 80.0, estWallet.Balance, 0.01, "carteira recebe o share da zona (80), nao o default 85")
 }
 
 // TestCheckoutE2E_WalletEstablishmentEndpoints cobre os endpoints da carteira
 // do restaurante (WebRestaurant): GET /wallet/establishment/balance,
 // GET /wallet/establishment/transactions e POST /wallet/establishment/withdraw.
-// O estabelecimento é identificado pelo claim establishment_id do JWT (sem ID
-// na URL — sem IDOR).
 func TestCheckoutE2E_WalletEstablishmentEndpoints(t *testing.T) {
 	cleanup := setupCheckoutE2EEnv(t)
 	defer cleanup()
 
 	os.Setenv("JWT_SECRET", "e2e-wallet-secret")
 	defer os.Unsetenv("JWT_SECRET")
-
-	ctx := context.Background()
-	walletCollection := models.MongoDabase.Collection("wallets")
-	ledgerCollection := models.MongoDabase.Collection("wallet_ledger")
 
 	const estID int64 = 42
 
@@ -1214,7 +1106,7 @@ func TestCheckoutE2E_WalletEstablishmentEndpoints(t *testing.T) {
 
 	do := func(method, path string, body []byte, token string) *http.Response {
 		t.Helper()
-		req := httptest.NewRequest(method, path, bytes.NewReader(body))
+		req := httptest.NewRequest(method, path, bytesReader(body))
 		if body != nil {
 			req.Header.Set("Content-Type", "application/json")
 		}
@@ -1226,67 +1118,37 @@ func TestCheckoutE2E_WalletEstablishmentEndpoints(t *testing.T) {
 		return resp
 	}
 
-	// --- Seeds: carteira do estabelecimento + 3 lançamentos no ledger ---
-	_, err := walletCollection.InsertOne(ctx, bson.M{
-		"user_id":      estID,
-		"user_type":    "establishment",
-		"balance":      150.0,
-		"last_updated": time.Now(),
-	})
-	require.NoError(t, err)
+	// --- Seeds: carteira do estabelecimento + 3 lancamentos no ledger ---
+	walletSeed := seedWallet(t, estID, "establishment", 150.0)
 
 	now := time.Now()
-	// 1) crédito do split (mais antigo)
-	_, err = ledgerCollection.InsertOne(ctx, bson.M{
-		"user_id":       estID,
-		"type":          "credit",
-		"amount":        100.0,
-		"payment_id":    "charge-e2e-wallet-credit",
-		"balance_after": 100.0,
-		"description":   "Credito do split do pedido order-w-1",
-		"created_at":    now.Add(-2 * time.Hour),
-	})
-	require.NoError(t, err)
+	// 1) credito do split (mais antigo)
+	seedLedger(t, walletSeed.ID, "credit", "", 100.0, 100.0, "charge-e2e-wallet-credit",
+		"Credito do split do pedido order-w-1", now.Add(-2*time.Hour))
 	// 2) saque (kind=withdrawal — conta como "total sacado")
-	_, err = ledgerCollection.InsertOne(ctx, bson.M{
-		"user_id":       estID,
-		"type":          "debit",
-		"kind":          "withdrawal",
-		"amount":        50.0,
-		"balance_after": 150.0,
-		"description":   "Saque via PIX para pix@example.com",
-		"created_at":    now.Add(-1 * time.Hour),
-	})
-	require.NoError(t, err)
-	// 3) débito de chargeback (sem kind — NÃO conta como saque)
-	_, err = ledgerCollection.InsertOne(ctx, bson.M{
-		"user_id":       estID,
-		"type":          "debit",
-		"amount":        20.0,
-		"payment_id":    "charge-e2e-wallet-debit",
-		"balance_after": 130.0,
-		"description":   "Refund/chargeback: estorno do pagamento order-w-3",
-		"created_at":    now.Add(-30 * time.Minute),
-	})
-	require.NoError(t, err)
+	seedLedger(t, walletSeed.ID, "debit", "withdrawal", 50.0, 150.0, "",
+		"Saque via PIX para pix@example.com", now.Add(-1*time.Hour))
+	// 3) debito de chargeback (sem kind — NAO conta como saque)
+	seedLedger(t, walletSeed.ID, "debit", "", 20.0, 130.0, "charge-e2e-wallet-debit",
+		"Refund/chargeback: estorno do pagamento order-w-3", now.Add(-30*time.Minute))
 
-	// --- GET balance (token válido) ---
+	// --- GET balance (token valido) ---
 	resp := do(http.MethodGet, "/wallet/establishment/balance", nil, makeToken())
 	require.Equal(t, 200, resp.StatusCode)
 	var bal map[string]interface{}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&bal))
 	require.Equal(t, float64(estID), bal["user_id"])
-	require.InDelta(t, 150.0, bal["available"], 0.01, "saldo disponível = balance da carteira")
+	require.InDelta(t, 150.0, bal["available"], 0.01, "saldo disponivel = balance da carteira")
 	require.InDelta(t, 0.0, bal["pending"], 0.01)
 	require.InDelta(t, 0.0, bal["blocked"], 0.01)
-	require.InDelta(t, 100.0, bal["total_earned"], 0.01, "total ganho = soma dos créditos do ledger")
-	require.InDelta(t, 50.0, bal["total_withdrawn"], 0.01, "total sacado = só débitos kind=withdrawal")
+	require.InDelta(t, 100.0, bal["total_earned"], 0.01, "total ganho = soma dos creditos do ledger")
+	require.InDelta(t, 50.0, bal["total_withdrawn"], 0.01, "total sacado = so debitos kind=withdrawal")
 
-	// --- GET balance sem token → 403 (o estabelecimento vem do JWT) ---
+	// --- GET balance sem token -> 403 (o estabelecimento vem do JWT) ---
 	resp = do(http.MethodGet, "/wallet/establishment/balance", nil, "")
 	require.Equal(t, 403, resp.StatusCode)
 
-	// --- GET transactions: 3 lançamentos, tipos mapeados em MAIÚSCULAS ---
+	// --- GET transactions: 3 lancamentos, tipos mapeados em MAIUSCULAS ---
 	resp = do(http.MethodGet, "/wallet/establishment/transactions", nil, makeToken())
 	require.Equal(t, 200, resp.StatusCode)
 	var extract map[string]interface{}
@@ -1295,7 +1157,7 @@ func TestCheckoutE2E_WalletEstablishmentEndpoints(t *testing.T) {
 	require.Equal(t, "", extract["next_cursor"])
 	data, ok := extract["data"].([]interface{})
 	require.True(t, ok, "resposta deve ter lista data")
-	require.Len(t, data, 3, "3 lançamentos no ledger do estabelecimento")
+	require.Len(t, data, 3, "3 lancamentos no ledger do estabelecimento")
 
 	byType := map[string]map[string]interface{}{}
 	for _, it := range data {
@@ -1306,7 +1168,7 @@ func TestCheckoutE2E_WalletEstablishmentEndpoints(t *testing.T) {
 	}
 
 	credit := byType["CREDIT"]
-	require.NotNil(t, credit, "deve existir lançamento CREDIT")
+	require.NotNil(t, credit, "deve existir lancamento CREDIT")
 	require.Equal(t, "charge-e2e-wallet-credit", credit["payment_ref"])
 	require.InDelta(t, 100.0, credit["amount"], 0.01)
 	require.InDelta(t, 100.0, credit["balance"], 0.01)
@@ -1322,7 +1184,7 @@ func TestCheckoutE2E_WalletEstablishmentEndpoints(t *testing.T) {
 	require.NotNil(t, debit, "chargeback deve mapear para DEBIT")
 	require.Equal(t, "charge-e2e-wallet-debit", debit["payment_ref"])
 
-	// --- Paginação: limit=2 + cursor ---
+	// --- Paginacao: limit=2 + cursor ---
 	resp = do(http.MethodGet, "/wallet/establishment/transactions?limit=2", nil, makeToken())
 	require.Equal(t, 200, resp.StatusCode)
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&extract))
@@ -1339,13 +1201,13 @@ func TestCheckoutE2E_WalletEstablishmentEndpoints(t *testing.T) {
 	require.Equal(t, false, extract["has_more"])
 	data, ok = extract["data"].([]interface{})
 	require.True(t, ok)
-	require.Len(t, data, 1, "página 2 deve trazer apenas o lançamento mais antigo")
+	require.Len(t, data, 1, "pagina 2 deve trazer apenas o lancamento mais antigo")
 
-	// Cursor inválido → 400
+	// Cursor invalido -> 400
 	resp = do(http.MethodGet, "/wallet/establishment/transactions?cursor=abc", nil, makeToken())
 	require.Equal(t, 400, resp.StatusCode)
 
-	// --- POST withdraw: saque válido de 40 (150 → 110) ---
+	// --- POST withdraw: saque valido de 40 (150 -> 110) ---
 	withdrawBody := []byte(`{"amount":40,"destination":"pix@example.com","method":"PIX"}`)
 	resp = do(http.MethodPost, "/wallet/establishment/withdraw", withdrawBody, makeToken())
 	require.Equal(t, 200, resp.StatusCode)
@@ -1353,16 +1215,11 @@ func TestCheckoutE2E_WalletEstablishmentEndpoints(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&wd))
 	require.InDelta(t, 110.0, wd["balance"], 0.01, "150 - 40")
 
-	var wallet models.Wallet
-	err = walletCollection.FindOne(ctx, bson.M{"user_id": estID}).Decode(&wallet)
-	require.NoError(t, err)
+	wallet := getWalletByUser(t, estID)
 	require.InDelta(t, 110.0, wallet.Balance, 0.01, "saque deve debitar a carteira")
 
-	// Novo lançamento de saque no ledger (type=debit, kind=withdrawal)
-	withdrawCount, err := ledgerCollection.CountDocuments(ctx, bson.M{
-		"user_id": estID, "type": "debit", "kind": "withdrawal",
-	})
-	require.NoError(t, err)
+	// Novo lancamento de saque no ledger (type=debit, kind=withdrawal)
+	withdrawCount := countLedger(t, estID, "debit", "withdrawal", "")
 	require.Equal(t, int64(2), withdrawCount, "1 saque seed + 1 novo saque")
 
 	// total_withdrawn e available refletem o novo saque
@@ -1371,12 +1228,12 @@ func TestCheckoutE2E_WalletEstablishmentEndpoints(t *testing.T) {
 	require.InDelta(t, 90.0, bal["total_withdrawn"], 0.01, "50 + 40")
 	require.InDelta(t, 110.0, bal["available"], 0.01)
 
-	// --- Validações do saque ---
-	// Abaixo do mínimo (R$ 10)
+	// --- Validacoes do saque ---
+	// Abaixo do minimo (R$ 10)
 	resp = do(http.MethodPost, "/wallet/establishment/withdraw", []byte(`{"amount":5,"destination":"pix@example.com","method":"PIX"}`), makeToken())
 	require.Equal(t, 400, resp.StatusCode)
 
-	// Chave/destino inválido (curto demais)
+	// Chave/destino invalido (curto demais)
 	resp = do(http.MethodPost, "/wallet/establishment/withdraw", []byte(`{"amount":20,"destination":"abc","method":"PIX"}`), makeToken())
 	require.Equal(t, 400, resp.StatusCode)
 
@@ -1384,12 +1241,11 @@ func TestCheckoutE2E_WalletEstablishmentEndpoints(t *testing.T) {
 	resp = do(http.MethodPost, "/wallet/establishment/withdraw", []byte(`{"amount":111,"destination":"pix@example.com","method":"PIX"}`), makeToken())
 	require.Equal(t, 400, resp.StatusCode)
 
-	// Sem token → 403
+	// Sem token -> 403
 	resp = do(http.MethodPost, "/wallet/establishment/withdraw", withdrawBody, "")
 	require.Equal(t, 403, resp.StatusCode)
 
-	// Nenhum saque inválido pode ter mexido no saldo
-	err = walletCollection.FindOne(ctx, bson.M{"user_id": estID}).Decode(&wallet)
-	require.NoError(t, err)
-	require.InDelta(t, 110.0, wallet.Balance, 0.01, "saques inválidos não podem alterar o saldo")
+	// Nenhum saque invalido pode ter mexido no saldo
+	wallet = getWalletByUser(t, estID)
+	require.InDelta(t, 110.0, wallet.Balance, 0.01, "saques invalidos nao podem alterar o saldo")
 }

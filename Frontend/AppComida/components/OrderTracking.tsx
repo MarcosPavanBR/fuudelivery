@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import Colors from "@/constants/Colors";
 
 interface OrderTrackingProps {
   currentStatus: string;
@@ -75,7 +76,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#22C55E",
   },
   dotCurrent: {
-    backgroundColor: "#F97316",
+    backgroundColor: Colors.light.accent,
     transform: [{ scale: 1.15 }],
   },
   line: {

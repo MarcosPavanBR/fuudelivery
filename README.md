@@ -49,7 +49,7 @@ Fork do [vercardapio/appdelivery](https://github.com/carloshomar/appdelivery) es
 │   embutido no         │  │  PostgreSQL (Supabase) — auth, pedidos    │
 │   monolito)           │  │  MongoDB (Atlas) — pagamentos, chat,      │
 │                       │  │               entregas, pedidos          │
-│   • PIX/Cartão        │  │  Redis (Render) — fila + cache            │
+│   • PIX/Cartão        │  │  Redis (externo) — fila + cache           │
 │   • Carteiras         │  │  AbacatePay — gateway PIX/Cartão          │
 │   • Chargebacks       │  │  OSRM — rotas e cálculo de entrega        │
 │   • Aprovações        │  │  Supabase Storage — upload de imagens     │
@@ -66,7 +66,7 @@ Fork do [vercardapio/appdelivery](https://github.com/carloshomar/appdelivery) es
 | **Fiber** | v2 | Framework HTTP (inspirado em Express) |
 | **MongoDB** | Atlas | Banco para pagamentos, chat, entregas, pedidos |
 | **PostgreSQL** | Supabase | Banco para auth, usuários, estabelecimentos, zonas |
-| **Redis** | Render | Fila de mensagens (Streams + consumer groups) + cache |
+| **Redis** | Provedor externo (`*.db.redis.io`) | Fila de mensagens (Streams + consumer groups) + cache |
 | **GORM** | v2 | ORM para PostgreSQL |
 | **go-redis** | v8 | Cliente Redis |
 | **golang-jwt** | v5 | Autenticação JWT |
@@ -94,7 +94,7 @@ Fork do [vercardapio/appdelivery](https://github.com/carloshomar/appdelivery) es
 
 | Tecnologia | Uso |
 |---|---|
-| **Render** | Hosting (web services + Redis) |
+| **Render** | Hosting (API monolito + 2 sites estáticos) |
 | **GitHub Actions** | CI/CD (build, test, lint, deploy) |
 | **Docker** | Containerização (desenvolvimento local) |
 | **EAS (Expo)** | Build de APKs Android |
@@ -114,7 +114,8 @@ Fork do [vercardapio/appdelivery](https://github.com/carloshomar/appdelivery) es
 
 > **📌 Referência de URLs:** todos os links de produção (serviços, health checks,
 > CORS, apps mobile) estão organizados em [`references/URLS.md`](references/URLS.md).
-| fuudelivery-redis | Redis | Gerenciado pelo Render |
+> O Redis NÃO é serviço Render — `REDIS_URL` aponta para provedor externo
+> (`*.db.redis.io`). Não há bloco `type: redis` no render.yaml.
 
 ## Features
 
@@ -144,7 +145,7 @@ Fork do [vercardapio/appdelivery](https://github.com/carloshomar/appdelivery) es
 - **AppEntrega** (React Native/Expo): app do entregador
 - **WebRestaurant** (React + Tailwind): kanban, cardápio, carteira, relatórios, cadastro
 - **WebAdmin** (React): painel administrativo
-- **PaymentPanel** (HTML/JS): painel standalone de aprovação de pagamentos
+- **PaymentPanel** (HTML/JS): painel standalone de aprovação de pagamentos — conecta ao MONOLITO (o serviço isolado de pagamentos foi removido em 2026-08; não é deployado pelo render.yaml)
 
 ### Segurança
 - JWT com validação de SigningMethod
@@ -230,12 +231,10 @@ npm install
 npm start
 ```
 
-### Frontend (PaymentPanel)
+### Frontend (PaymentPanel) — arquivado
 
-```bash
-cd Frontend/PaymentPanel
-# Abra index.html no navegador
-```
+O painel standalone foi **arquivado em `legacy/PaymentPanel/`** (2026-08).
+A funcionalidade equivalente está na aba **Financeiro** do WebAdmin.
 
 ### Apps Mobile
 
@@ -412,28 +411,22 @@ bash scripts/build-apks.sh
 | `REDIS_URL` | Redis (Render) | Não (fallback Go channels) |
 | `ABACATE_PAY_API_KEY` | API key do AbacatePay | Sim (pagamentos) |
 | `ABACATE_PAY_WEBHOOK_SECRET` | Webhook secret do AbacatePay | Sim (pagamentos) |
+| `METRICS_TOKEN` | Token para proteger `GET /metrics` (header Bearer ou ?token=) | Recomendado em produção |
+| `OSRM_BASE_URL` | Base do servidor OSRM (rotas). Default: demo público — configure instância própria em produção | Não |
+| `URL_CHECK_ESTABLISHMENT_OPEN` | Template da checagem de estabelecimento aberto (`%d` = ID). Default: localhost:PORT | Não |
 | `ALLOWED_ORIGINS` | Domínios permitidos (CORS) | Não (usa defaults) |
 | `PORT` | Porta do servidor | Não (default: 3000) |
 | `GO_ENV` | Ambiente (production/development) | Não |
 
-### Payment Service (fuudelivery-payment)
-
-| Variável | Descrição | Obrigatória |
-|---|---|---|
-| `MONGO_URI` | MongoDB Atlas (fuudelivery_payments) | Sim |
-| `JWT_SECRET` | Mesmo secret da API | Sim |
-| `ADMIN_PASSWORD` | Senha do admin | Sim |
-| `ABACATE_PAY_API_KEY` | API key do AbacatePay | Sim |
-| `ABACATE_PAY_WEBHOOK_SECRET` | Webhook secret do AbacatePay | Sim |
-| `REDIS_URL` | Redis para fila de pagamentos | Recomendado (necessario para credito em producao) |
-| `PORT` | Porta do servidor | Não (default: 8084) |
+> **⚠️ O Payment Service isolado (`fuudelivery-payment`) foi removido (2026-08).**
+> Todas as rotas de pagamento vivem no monolito — as variáveis abaixo são do
+> monolito `fuudelivery-api` (ver tabela anterior).
 
 ### Frontends
 
 | Variável | Descrição |
 |---|---|
-| `REACT_APP_API_URL` | URL base da API Go |
-| `REACT_APP_PAYMENT_API_URL` | URL base do Payment Service |
+| `REACT_APP_API_URL` | URL base da API Go (monolito) |
 
 ## Testes
 

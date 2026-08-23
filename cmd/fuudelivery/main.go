@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -21,7 +20,6 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/joho/godotenv"
-	"go.mongodb.org/mongo-driver/bson"
 	"golang.org/x/time/rate"
 	"gorm.io/gorm"
 
@@ -202,8 +200,8 @@ func initDispatchEngine(db *gorm.DB) {
 		}
 	}()
 
-	// Cria handler HTTP
-	dispatchHandler = deliveryHandlers.NewDispatchHandler(courierStore, matchingEngine, deliveryModels.MongoDabase)
+	// Cria handler HTTP (corte 3: dispatch não usa mais Mongo)
+	dispatchHandler = deliveryHandlers.NewDispatchHandler(courierStore, matchingEngine)
 
 	// === Job de calibracao automatica ===
 	calConfig := dispatchServices.DefaultCalibrationConfig()
@@ -677,15 +675,10 @@ func setupWebSocketRoutes(app *fiber.App) {
 			return c.Status(400).JSON(fiber.Map{"error": "order_id, lat, and lng are required"})
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		var solicitation struct {
-			DeliveryMan struct {
-				Id int64 `bson:"id"`
-			} `bson:"deliveryman"`
-		}
-		err = deliveryModels.MongoDabase.Collection("solicitations").FindOne(ctx, bson.M{"order_id": req.OrderID}).Decode(&solicitation)
-		if err != nil || solicitation.DeliveryMan.Id != tokenUserID {
+		// Corte 3: leitura do entregador atribuído direto do Postgres.
+		var solicitation deliveryModels.DeliverySolicitation
+		err = deliveryModels.DB.Where("order_id = ?", req.OrderID).First(&solicitation).Error
+		if err != nil || solicitation.DeliveryManID != tokenUserID {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Not the assigned deliveryman for this order"})
 		}
 
@@ -947,15 +940,10 @@ func setupChatRoutes(app *fiber.App) {
 			}
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		var solicitation struct {
-			DeliveryMan struct {
-				Id int64 `bson:"id"`
-			} `bson:"deliveryman"`
-		}
-		_ = deliveryModels.MongoDabase.Collection("solicitations").FindOne(ctx, bson.M{"order_id": orderID}).Decode(&solicitation)
-		if solicitation.DeliveryMan.Id != 0 && solicitation.DeliveryMan.Id == tokenUserID {
+		// Corte 3: leitura do entregador atribuído direto do Postgres.
+		var solicitation deliveryModels.DeliverySolicitation
+		_ = deliveryModels.DB.Where("order_id = ?", orderID).First(&solicitation).Error
+		if solicitation.DeliveryManID != 0 && solicitation.DeliveryManID == tokenUserID {
 			return chatHandlers.GetMessages(c)
 		}
 
@@ -1022,10 +1010,13 @@ func main() {
 	// Initialize databases
 	models.ConnectDatabase()
 	ordersModels.ConnectPostgresDatabase()
-	ordersModels.ConnectMongoDatabase()
-	deliveryModels.ConnectMongoDatabase()
-	paymentModels.ConnectMongoDatabase()
-	chatModels.ConnectMongoDatabase()
+	ordersModels.ConnectMongoDatabase()      // dual-write legado (cortes 1-2)
+	deliveryModels.ConnectPostgresDatabase() // corte 3: entrega agora é Postgres
+	deliveryModels.ConnectMongoDatabase()    // dual-write legado (remover no desligamento do Mongo)
+	paymentModels.ConnectPostgresDatabase()  // corte 4: pagamentos agora é Postgres
+	paymentModels.ConnectMongoDatabase()     // dual-write legado (remover no desligamento do Mongo)
+	chatModels.ConnectPostgresDatabase()     // corte 2: chat agora é Postgres
+	chatModels.ConnectMongoDatabase()        // dual-write legado (remover no desligamento do Mongo)
 
 	// Initialize message queue
 	queue.Init()
@@ -1156,7 +1147,16 @@ func main() {
 	})
 
 	// Metricas em formato Prometheus text (para Prometheus/Grafana/BetterStack/UptimeRobot)
-	app.Get("/metrics", metrics.Handler)
+	// GET /metrics — protegido por bearer token (env METRICS_TOKEN).
+	// Sem a env var configurada (ex.: dev local), o endpoint fica aberto.
+	app.Get("/metrics", func(c *fiber.Ctx) error {
+		if want := os.Getenv("METRICS_TOKEN"); want != "" {
+			if c.Get("Authorization") != "Bearer "+want {
+				return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+			}
+		}
+		return metrics.Handler(c)
+	})
 
 	// Busca full-text basica (Fase 3 — construcao nova): GET /search?q=...
 	// Busca estabelecimentos e produtos no PostgreSQL (ILIKE + scoring).
@@ -1180,6 +1180,7 @@ func main() {
 
 	// Start background workers
 	go startQueueListeners()
+	go startRefreshTokenCleanup() // limpa tokens expirados a cada 24h
 	startRateLimitCleanup()
 
 	// Graceful shutdown
@@ -1289,4 +1290,14 @@ func isLocalDevOrigin(origin string) bool {
 		return true
 	}
 	return false
+}
+
+// startRefreshTokenCleanup remove refresh tokens expirados do banco uma vez
+// por dia. Sem isso a tabela refresh_tokens cresceria indefinidamente.
+func startRefreshTokenCleanup() {
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+	for range ticker.C {
+		middlewares.CleanupExpiredRefreshTokens()
+	}
 }

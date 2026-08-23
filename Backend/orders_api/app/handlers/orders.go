@@ -107,14 +107,28 @@ func GetEstablishment(establishmentID int64) (*dto.Establishment, error) {
 	return &establishmentDTO, nil
 }
 
+// clientHTTPCheck é o client HTTP usado para checagens internas entre domínios.
+// Timeout curto e obrigatório: sem ele, um endpoint lento travaria a criação
+// de pedidos inteira (o handler é síncrono).
+var clientHTTPCheck = &http.Client{Timeout: 3 * time.Second}
+
+// checkEstablishmentOpen verifica se o estabelecimento está aberto antes de
+// aceitar pedidos. A URL base é configurável via URL_CHECK_ESTABLISHMENT_OPEN
+// (template com %d para o ID). O default aponta para o PRÓPRIO processo —
+// desde 2026-08 auth e orders vivem no mesmo binário (monolito), então o
+// antigo hostname de Docker Compose "auth-api" não resolve mais em produção.
 func checkEstablishmentOpen(establishmentID int64) (bool, error) {
 	urlEnv := os.Getenv("URL_CHECK_ESTABLISHMENT_OPEN")
 	if urlEnv == "" {
-		urlEnv = "http://auth-api:3000/api/auth/establishments/%d/is-open"
+		port := os.Getenv("PORT")
+		if port == "" {
+			port = "3000"
+		}
+		urlEnv = fmt.Sprintf("http://localhost:%s/api/auth/establishments/%%d/is-open", port)
 	}
 
 	url := fmt.Sprintf(urlEnv, establishmentID)
-	resp, err := http.Get(url)
+	resp, err := clientHTTPCheck.Get(url)
 	if err != nil {
 		return false, err
 	}
@@ -212,9 +226,13 @@ func UpdateOrderStatus(c *fiber.Ctx, sendMessageToClient func(clientID int64, me
 	})
 }
 
+// sendStatusPushNotification envia push de mudança de status ao cliente.
+// CORTE 1 (banco-único): a leitura dos tokens agora é 100% Postgres.
+// O caminho antigo consultava o Mongo por user_phone — campo que a escrita
+// (RegisterPushToken) nunca gravava, ou seja: provável caminho morto. Aqui
+// resolvemos phone → user_id na tabela clients (auth_api) e buscamos os
+// tokens por user_id, que é como eles são realmente indexados.
 func sendStatusPushNotification(order dto.RequestPayload, status string) {
-	pushTokensCollection := models.MongoDabase.Collection("push_tokens")
-
 	statusMessages := map[string]string{
 		"APPROVED":          "Seu pedido foi aprovado e está sendo preparado!",
 		"DONE":              "Seu pedido está pronto e saiu para entrega!",
@@ -237,19 +255,28 @@ func sendStatusPushNotification(order dto.RequestPayload, status string) {
 	}
 
 	userPhone := order.User.Phone
-
-	cursor, err := pushTokensCollection.Find(mongoCtx(), bson.M{"user_phone": userPhone})
-	if err != nil {
-		log.Printf("Erro ao buscar push tokens: %v", err)
+	if userPhone == "" || models.DB == nil {
 		return
 	}
-	defer cursor.Close(mongoCtx())
 
-	var tokens []struct {
-		PushToken string `bson:"push_token"`
+	// 1) Resolve o id do cliente pelo telefone (tabela clients, auth_api).
+	var clientIDs []int64
+	if err := models.DB.Table("clients").
+		Where("phone = ?", userPhone).
+		Pluck("id", &clientIDs).Error; err != nil {
+		log.Printf("[PUSH] Erro ao buscar cliente por phone=%s: %v", userPhone, err)
+		return
 	}
-	if err := cursor.All(mongoCtx(), &tokens); err != nil {
-		log.Printf("Erro ao decodificar push tokens: %v", err)
+	if len(clientIDs) == 0 {
+		return // cliente sem cadastro/telefone — nada a notificar
+	}
+
+	// 2) Busca os tokens registrados para esses ids.
+	var tokens []models.PushToken
+	if err := models.DB.
+		Where("user_id IN ? AND user_type = ?", clientIDs, "client").
+		Find(&tokens).Error; err != nil {
+		log.Printf("[PUSH] Erro ao buscar push tokens: %v", err)
 		return
 	}
 

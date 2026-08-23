@@ -112,9 +112,8 @@ npm install
 npm run dev
 npm run build        # gera build/ (mantido para o render.yaml)
 
-# PaymentPanel
-cd Frontend/PaymentPanel
-npm run build        # copia index.html para dist/
+# PaymentPanel — ARQUIVADO em legacy/PaymentPanel (2026-08).
+# Não é mais buildado nem deployado; a aba Financeiro do WebAdmin o substitui.
 ```
 
 **Notas**

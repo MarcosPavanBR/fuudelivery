@@ -2,25 +2,32 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"log"
 	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"go.mongodb.org/mongo-driver/bson"
 
 	"github.com/carloshomar/fuudelivery/delivery_api/app/dto"
 	"github.com/carloshomar/fuudelivery/delivery_api/app/models"
+	"gorm.io/gorm"
 )
 
+// mongoCtx devolve um contexto com timeout para as operações legadas de
+// dual-write no Mongo. Será removida junto com o dual-write.
 func mongoCtx() context.Context {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	_ = cancel
+	defer cancel()
 	return ctx
 }
 
-func GetOrdersByDeliverymanID(c *fiber.Ctx) error {
+// ============================================================================
+// Handlers do entregador — CORTE 3 banco-único: leitura/escrita 100% Postgres
+// (tabela delivery_solicitations, sql/02), com dual-write Mongo best-effort.
+// ============================================================================
 
+func GetOrdersByDeliverymanID(c *fiber.Ctx) error {
 	deliverymanIDStr := c.Params("id")
 	deliverymanID, err := strconv.ParseInt(deliverymanIDStr, 10, 64)
 	if err != nil {
@@ -29,60 +36,42 @@ func GetOrdersByDeliverymanID(c *fiber.Ctx) error {
 		})
 	}
 
-	collection := models.MongoDabase.Collection("solicitations")
-
-	// Definir o filtro para encontrar os pedidos com base no ID do deliveryman e no status diferente de "FINISHED"
-	filter := bson.M{
-		"deliveryman.id": deliverymanID,
-		"status": bson.M{
-			"$ne": "FINISHED",
-		},
-		"deliveryman.status": bson.M{
-			"$ne": "FINISHED",
-		},
-	}
-
-	cursor, err := collection.Find(mongoCtx(), filter)
-	if err != nil {
+	var rows []models.DeliverySolicitation
+	// Equivalente ao filtro Mongo antigo: nem o pedido nem a atribuição do
+	// entregador podem estar finalizados.
+	if err := models.DB.
+		Where("delivery_man_id = ?", deliverymanID).
+		Where("status <> ? OR status IS NULL", "FINISHED").
+		Where("delivery_man_status <> ? OR delivery_man_status IS NULL", "FINISHED").
+		Find(&rows).Error; err != nil {
 		log.Printf("Erro ao consultar os pedidos: %s", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Erro ao consultar os pedidos",
 		})
 	}
-	defer cursor.Close(mongoCtx())
 
-	var orders []dto.OrderDTO
-	for cursor.Next(mongoCtx()) {
-		var order dto.OrderDTO
-		if err := cursor.Decode(&order); err != nil {
-			log.Printf("Erro ao decodificar o pedido: %s", err)
-			continue
-		}
-		orders = append(orders, order)
-	}
-
-	if err := cursor.Err(); err != nil {
-		log.Printf("Erro ao iterar sobre os resultados: %s", err)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Erro ao consultar os pedidos",
-		})
+	orders := make([]dto.OrderDTO, 0, len(rows))
+	for _, row := range rows {
+		orders = append(orders, row.ToDTO())
 	}
 
 	return c.JSON(orders)
 }
 
+// GetOrderByID busca uma solicitação no read-model Postgres.
+// Usado pelo handshake e pelo motor de despacho.
 func GetOrderByID(orderID string) (*dto.OrderDTO, error) {
-	collection := models.MongoDabase.Collection("solicitations")
-
-	filter := bson.M{"orderid": orderID}
-
-	var order dto.OrderDTO
-	err := collection.FindOne(mongoCtx(), filter).Decode(&order)
+	var row models.DeliverySolicitation
+	err := models.DB.Where("order_id = ?", orderID).First(&row).Error
 	if err != nil {
-		log.Printf("Erro ao consultar o pedido: %s", err)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+		log.Printf("Erro ao consultar o pedido %s: %s", orderID, err)
 		return nil, err
 	}
 
+	order := row.ToDTO()
 	return &order, nil
 }
 
@@ -102,23 +91,21 @@ func UpdateOrderStatusByDeliverymanID(c *fiber.Ctx, sendMessageToClient func(cli
 		})
 	}
 
-	collection := models.MongoDabase.Collection("solicitations")
+	// Atualiza somente se o pedido pertence ao entregador informado —
+	// equivalente ao filtro composto {orderid, deliveryman.id} do Mongo.
+	result := models.DB.Model(&models.DeliverySolicitation{}).
+		Where("order_id = ? AND delivery_man_id = ?", request.OrderID, request.Deliveryman.Id).
+		Updates(map[string]interface{}{
+			"delivery_man_status": request.Deliveryman.Status,
+		})
 
-	filter := bson.M{
-		"orderid":        request.OrderID,
-		"deliveryman.id": request.Deliveryman.Id,
-	}
-
-	update := bson.M{"$set": bson.M{"deliveryman.status": request.Deliveryman.Status}}
-
-	updateResult, err := collection.UpdateOne(mongoCtx(), filter, update)
-	if err != nil {
+	if result.Error != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Erro ao atualizar o status do pedido",
 		})
 	}
 
-	if updateResult.ModifiedCount == 0 {
+	if result.RowsAffected == 0 {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Pedido nao encontrado ou entregador nao autorizado",
 		})
@@ -128,6 +115,8 @@ func UpdateOrderStatusByDeliverymanID(c *fiber.Ctx, sendMessageToClient func(cli
 	if err != nil || order == nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Order not found"})
 	}
+
+	dualWriteMongo(*order) // DUAL-WRITE LEGADO
 
 	// RabbitMQ removido — fila gerenciada pelo monolito via Redis
 	log.Printf("[DELIVERY] Order %s status update published", order.OrderId)

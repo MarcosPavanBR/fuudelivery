@@ -3,6 +3,7 @@ package handlers
 
 import (
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/gofiber/fiber/v2"
@@ -475,7 +476,7 @@ func RefreshToken(c *fiber.Ctx) error {
 	// Rotação: revoga o refresh token antigo antes de gerar o novo
 	if err := middlewares.RevokeRefreshToken(req.RefreshToken); err != nil {
 		// Log mas não impede — pior caso fica com um token extra válido até expirar
-		fmt.Printf("[WARN] Failed to revoke old refresh token: %v\n", err)
+		log.Printf("[WARN] Failed to revoke old refresh token: %v", err)
 	}
 
 	// Busca o usuário
@@ -515,7 +516,7 @@ func Logout(c *fiber.Ctx) error {
 
 	if req.RefreshToken != "" {
 		if err := middlewares.RevokeRefreshToken(req.RefreshToken); err != nil {
-			fmt.Printf("[WARN] Failed to revoke refresh token on logout: %v\n", err)
+			log.Printf("[WARN] Failed to revoke refresh token on logout: %v", err)
 		}
 	}
 

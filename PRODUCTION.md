@@ -10,15 +10,14 @@
 | API (Monolito) | fuudelivery-api-8y6l.onrender.com | Online |
 | WebRestaurant | fuudelivery-web.onrender.com | Online |
 | WebAdmin | fuudelivery-admin-lv7f.onrender.com | Online |
-| Redis | Render Managed | Online |
-
-> Os servicos isolados `fuudelivery-payment` e `fuudelivery-payment-panel` foram
-> removidos (2026-08): as rotas de pagamento rodam no monolito.
 | MongoDB Atlas | Cloud | Connected |
 | PostgreSQL (Supabase) | Cloud | Connected |
+| Redis | **Externo** (`*.db.redis.io` — não é serviço Render) | Connected |
 
-> **Nota (2026-08-02):** corrigida a variável `API_BASE_URL` abaixo — apontava para
-> `fuudelivery-api.onrender.com` (404). Ver `references/URLS.md` para o histórico.
+> Os serviços isolados `fuudelivery-payment` e `fuudelivery-payment-panel` foram
+> **removidos (2026-08)**: todas as rotas de pagamento (PIX, cartão, carteira,
+> webhook, split) vivem no monolito `fuudelivery-api`. NÃO provisione esses
+> serviços de novo — qualquer doc que os mencione está desatualizada.
 
 ---
 
@@ -26,7 +25,7 @@
 
 O deploy e automatizado via GitHub Actions. Push para master dispara:
 
-1. CI workflow (go build, go vet, go test, gofmt, govulncheck, npm audit)
+1. CI workflow (go build, go vet, go test, gofmt, govulncheck, npm audit, testes de integração com testcontainers)
 2. Deploy workflow (apenas se CI passar)
 3. Render hot-reload automatico
 
@@ -44,7 +43,7 @@ O deploy e automatizado via GitHub Actions. Push para master dispara:
 
 ## Variaveis de Ambiente
 
-### Monolito
+### Monolito (fuudelivery-api) — unico serviço backend
 
 | Variavel | Descricao |
 |----------|-----------|
@@ -56,23 +55,28 @@ O deploy e automatizado via GitHub Actions. Push para master dispara:
 | DB_CONNECTION_STRING | PostgreSQL Supabase (secret) |
 | MONGO_URI | MongoDB Atlas (secret) |
 | MONGO_DATABASE | fuudelivery |
+| PAYMENT_MONGO_DATABASE | fuudelivery_payments |
 | APP_URL | https://fuudelivery-web.onrender.com |
 | API_BASE_URL | https://fuudelivery-api-8y6l.onrender.com |
 | ABACATE_PAY_API_KEY | API key AbacatePay (secret) |
-| ALLOWED_ORIGINS | CORS origins |
+| ALLOWED_ORIGINS | CORS origins (domínios web + admin) |
+| METRICS_TOKEN | Protege `GET /metrics` (Bearer ou ?token=). Vazio = público — evite em produção |
+| OSRM_BASE_URL | Servidor OSRM próprio p/ cálculo de rotas. Vazio = demo público (só dev) |
 
-### Payment Service
+### Como configurar no Render Dashboard
 
-| Variavel | Descricao |
-|----------|-----------|
-| PORT | 8084 |
-| MONGO_URI | MongoDB Atlas (secret) |
-| PAYMENT_MONGO_DATABASE | fuudelivery_payments |
-| REDIS_URL | Auto-linked |
-| JWT_SECRET | Mesmo JWT do monolito |
-| ABACATE_PAY_API_KEY | API key AbacatePay |
-| ABACATE_PAY_WEBHOOK_SECRET | Webhook secret |
-| ADMIN_PASSWORD | Senha admin painel |
+1. Acesse **Render → fuudelivery-api → Environment**
+2. Adicione cada chave e o valor correspondente:
+   - `METRICS_TOKEN`: gere com `openssl rand -hex 32`
+   - `OSRM_BASE_URL`: URL da sua instância OSRM (opcional até ter volume)
+3. Clique em **Save & Deploy** (variáveis só aplicam no próximo deploy)
+4. Se usar o blueprint (`render.yaml`), as chaves já aparecem como `sync: false` —
+   preencha os valores no dashboard; eles nunca são commitados no repo
+
+> **Refresh tokens:** a tabela `refresh_tokens` (Postgres) guarda as sessões de
+> 30 dias. O monolito limpa tokens expirados/revogados a cada 24h
+> (`startRefreshTokenCleanup`). Se trocar `JWT_SECRET`, todas as sessões caem —
+> os usuários precisarão logar de novo (esperado).
 
 ---
 
@@ -92,16 +96,14 @@ bash scripts/verify-deploy.sh
 ### UptimeRobot (Gratuito)
 
 1. Criar conta em uptimerobot.com
-2. Adicionar 2 monitores HTTP:
-   - https://fuudelivery-api-8y6l.onrender.com/health (5 min)
-   - https://fuudelivery-payment.onrender.com/health (5 min)
+2. Adicionar monitores HTTP (5 min):
+   - https://fuudelivery-api-8y6l.onrender.com/health
+   - https://fuudelivery-web.onrender.com
+   - https://fuudelivery-admin-lv7f.onrender.com
 3. Configurar alertas via email/Telegram
 
-### Keepalive Script
-
-```powershell
-powershell -File scripts/keepalive-payment.ps1
-```
+> O job "Monitor Production" do GitHub Actions (`monitor.yml`) também verifica
+> os health checks — confira se os alertas dele estão ativos.
 
 ---
 
@@ -109,12 +111,12 @@ powershell -File scripts/keepalive-payment.ps1
 
 | Problema | Solucao |
 |----------|--------|
-| API retorna 503 | Verificar verify-deploy.sh |
-| Payment offline | Logs no Render Dashboard |
+| API retorna 503 | Verificar verify-deploy.sh (Postgres/Mongo caídos) |
 | Webhook nao chega | Verificar ABACATE_PAY_WEBHOOK_SECRET |
 | CORS error | Verificar ALLOWED_ORIGINS |
 | Build APK falha | Verificar eas build:list |
-| Render sleep | UptimeRobot ou keepalive |
+| Render sleep | UptimeRobot ou monitor.yml |
+| Sessões caindo | Verificar JWT_SECRET (mudou? tokens antigos invalidam) |
 
 ---
 
@@ -125,17 +127,23 @@ powershell -File scripts/keepalive-payment.ps1
 | fuudelivery-api | Starter | $7 |
 | fuudelivery-web | Static | $0 |
 | fuudelivery-admin | Static | $0 |
-| fuudelivery-payment | Starter | $7 |
-| fuudelivery-payment-panel | Static | $0 |
-| fuudelivery-redis | Free | $0 |
-| **Total** | | **~$14/mes** |
+| Redis externo | conforme provedor | ver conta do provedor |
+| **Total Render** | | **~$7/mes** |
+
+> ⚠️ **Redis EXTERNO e fila de pagamentos:** o `REDIS_URL` aponta para um provedor
+> externo (não é serviço Render). Verifique na conta do provedor qual plano está
+> ativo — planos com eviction (`allkeys-lru`) ou sem persistência podem perder
+> mensagens da fila de pagamentos em pico de tráfego. Sem Redis, o monolito usa
+> fallback in-memory (eventos não sobrevivem a restart). O render.yaml NÃO
+> declara mais um serviço Redis — se migrar para o Redis gerenciado do Render,
+> atualize só o valor de REDIS_URL no dashboard.
 
 ---
 
 ## Checklist Pre-Deploy
 
 - [ ] Todos health checks retornam status ok
-- [ ] CI pipeline passa
+- [ ] CI pipeline passa (inclui integração E2E do fluxo PIX)
 - [ ] GitHub Secrets configurados
 - [ ] UptimeRobot monitors criados
 - [ ] Credenciais nao estao no repositorio
@@ -144,7 +152,8 @@ powershell -File scripts/keepalive-payment.ps1
 - [ ] ALLOWED_ORIGINS inclui todas URLs frontend
 - [ ] Docker build funciona
 - [ ] APKs gerados e testados
+- [ ] Plano do Redis revisado (ver risco acima) se houver volume de pagamentos
 
 ---
 
-*Ultima atualizacao: 2 de agosto de 2026*
+*Ultima atualizacao: 22 de agosto de 2026*

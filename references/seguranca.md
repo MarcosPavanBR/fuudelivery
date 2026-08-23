@@ -55,12 +55,15 @@ Nova connection string:
 postgresql://postgres.prpfuoqhazfynpsfsrpb:NOVA_SENHA@aws-1-us-east-2.pooler.supabase.com:6543/postgres
 ```
 
-#### Passo 3 — Redis (Render)
+#### Passo 3 — Redis (provedor EXTERNO, não é serviço Render)
 
 ```bash
-# 1. Dashboard Render → fuudelivery-redis → Info
-# 2. Copie a nova Connection String
-# 3. Atualize REDIS_URL no Render (API + Payment)
+# 1. Acesse o painel do provedor externo (*.db.redis.io) → Connection String
+# 2. Rotacione a senha / gere nova connection string lá
+# 3. Atualize REDIS_URL no dashboard Render → fuudelivery-api → Environment
+#
+# NOTA: não existe serviço "fuudelivery-redis" no Render — o bloco foi removido
+# do render.yaml (auditado 2026-08-23). O Redis é externo ao Render.
 ```
 
 #### Passo 4 — AbacatePay

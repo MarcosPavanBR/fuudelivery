@@ -1,4 +1,6 @@
 import FontAwesome from "@expo/vector-icons/FontAwesome";
+// NativeWind: estilos globais Tailwind (ver tailwind.config.js e global.css)
+import "../global.css";
 import {
   DarkTheme,
   DefaultTheme,

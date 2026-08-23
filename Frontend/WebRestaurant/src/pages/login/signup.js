@@ -82,14 +82,14 @@ const SignupPage = ({ onBack }) => {
         className="hidden lg:flex lg:w-1/2 relative overflow-hidden items-center justify-center"
         style={{
           background:
-            "linear-gradient(135deg, #EA1D2C 0%, #C41420 40%, #8B0F18 100%)",
+            "linear-gradient(135deg, #DC2626 0%, #B91C1C 40%, #7F1D1D 100%)",
         }}
       >
         <div className="absolute inset-0 opacity-10">
           <div
             className="absolute -top-20 -left-20 w-96 h-96 rounded-full"
             style={{
-              background: "radial-gradient(circle, #F7A11E 0%, transparent 70%)",
+              background: "radial-gradient(circle, #F59E0B 0%, transparent 70%)",
             }}
           />
           <div
@@ -108,7 +108,7 @@ const SignupPage = ({ onBack }) => {
             >
               Comece a gerenciar
               <br />
-              <span style={{ color: "#F7A11E" }}>seu restaurante</span>
+              <span style={{ color: "#F59E0B" }}>seu restaurante</span>
             </h2>
             <p className="text-white/70 text-lg max-w-md mx-auto">
               Crie sua conta e comece a receber pedidos online hoje mesmo
@@ -253,7 +253,7 @@ const SignupPage = ({ onBack }) => {
               disabled={loading}
               className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-white font-semibold text-sm transition-all duration-200 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 mt-2"
               style={{
-                background: "linear-gradient(135deg, #EA1D2C, #C41420)",
+                background: "linear-gradient(135deg, #DC2626, #B91C1C)",
               }}
             >
               {loading ? (
@@ -276,7 +276,7 @@ const SignupPage = ({ onBack }) => {
               <button
                 onClick={onBack}
                 className="font-semibold hover:underline"
-                style={{ color: "#EA1D2C" }}
+                style={{ color: "#DC2626" }}
               >
                 Faça login
               </button>

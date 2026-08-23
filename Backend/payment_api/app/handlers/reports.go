@@ -8,7 +8,6 @@ import (
 	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/payment_api/app/models"
 	"github.com/gofiber/fiber/v2"
-	"go.mongodb.org/mongo-driver/bson"
 )
 
 // GetEstablishmentReport retorna o relatório de vendas de um estabelecimento
@@ -17,6 +16,9 @@ import (
 //
 // Permissão: admin ou o dono do estabelecimento (claim establishment_id do
 // JWT — o dono só vê o relatório do próprio restaurante).
+//
+// Fonte: tabela payments no Postgres (corte 4). Histórico anterior ao corte
+// só aparece depois de rodar cmd/etl-payments.
 //
 // A resposta inclui os DOIS formatos (snake_case para o DashboardCharts e
 // camelCase para a página de Relatórios) para compatibilidade com o
@@ -41,15 +43,12 @@ func GetEstablishmentReport(c *fiber.Ctx) error {
 	now := time.Now()
 	start := reportPeriodStart(period, now)
 
-	collection := models.MongoDabase.Collection("payments")
-	cursor, err := collection.Find(mongoCtx(), bson.M{
-		"establishment_id": estID,
-		"created_at":       bson.M{"$gte": start},
-	})
-	if err != nil {
+	var rows []models.Payment
+	if err := models.DB.
+		Where("establishment_id = ? AND created_at >= ?", estID, start).
+		Find(&rows).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao consultar pagamentos"})
 	}
-	defer cursor.Close(mongoCtx())
 
 	var (
 		totalRevenue    float64
@@ -60,11 +59,8 @@ func GetEstablishmentReport(c *fiber.Ctx) error {
 		revenueByDay    = map[string]float64{}
 	)
 
-	for cursor.Next(mongoCtx()) {
-		var p models.Payment
-		if err := cursor.Decode(&p); err != nil {
-			continue
-		}
+	for i := range rows {
+		p := &rows[i]
 		statusCounts[p.Status]++
 
 		ts := p.ConfirmedAt

@@ -39,5 +39,17 @@ export default defineConfig({
 
   build: {
     outDir: "build",
+    rollupOptions: {
+      output: {
+        // Code splitting de vendor: react e react-icons mudam raramente —
+        // ficam em chunks separados para melhor cache de longo prazo.
+        manualChunks(id) {
+          if (id.includes("node_modules")) {
+            if (id.includes("react-icons")) return "vendor-icons";
+            if (/[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/.test(id)) return "vendor-react";
+          }
+        },
+      },
+    },
   },
 });

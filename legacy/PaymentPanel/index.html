@@ -3,7 +3,7 @@
 <head>
   <!-- FuuPayment Panel — Painel de gestao de pagamentos standalone -->
   <!-- Funcionalidades: Login, Dashboard, Tabela de pagamentos, Chargebacks, Carteiras -->
-  <!-- Conecta ao Payment Service via REST API (fuudelivery-payment.onrender.com) -->
+  <!-- Conecta ao monolito fuudelivery-api via REST (o Payment Service isolado foi removido) -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FuuPayment Panel</title>
@@ -143,11 +143,13 @@
     // FuuPayment Panel — Cliente JavaScript
     // =====================================================
 
-    // URL do Payment Service: localhost em dev, produção no Render.
-    // Lista canônica de URLs em references/URLS.md.
+    // URL da API: localhost em dev, produção no Render.
+    // IMPORTANTE (2026-08): o serviço isolado fuudelivery-payment foi REMOVIDO —
+    // todas as rotas de pagamento vivem no monolito fuudelivery-api.
+    // Se a URL do monolito mudar, atualize aqui E em references/URLS.md.
     const API_URL = window.location.hostname === 'localhost'
-      ? 'http://localhost:8084'
-      : 'https://fuudelivery-payment.onrender.com';
+      ? 'http://localhost:3000'
+      : 'https://fuudelivery-api-8y6l.onrender.com';
 
     let token = '';
     let currentUser = null;

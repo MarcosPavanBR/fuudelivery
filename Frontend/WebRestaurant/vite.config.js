@@ -47,6 +47,17 @@ export default defineConfig({
 
   build: {
     outDir: "dist",
+
+    // Separa vendors pesados em chunks próprios (cacheados entre deploys,
+    // já que o hash só muda quando a lib muda) e evita um bundle único gigante.
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "vendor-react": ["react", "react-dom", "react-router-dom"],
+          "vendor-dnd": ["@hello-pangea/dnd"],
+        },
+      },
+    },
   },
 
   // Configuração do vitest (substitui react-scripts test)

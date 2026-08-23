@@ -8,18 +8,22 @@
    Gera utilidades: bg-fuu-red, shadow-card, animate-fade-in, etc.
    ============================================================ */
 @theme {
-  /* Cores da marca FuuDelivery */
-  --color-fuu-red: #EA1D2C;
-  --color-fuu-red-dark: #C41420;
+  /* Cores da marca FuuDelivery
+     Fonte única de verdade: brand/tokens.ts (decisão 2026-08-23 —
+     o vermelho oficial é o do brand #DC2626, não o antigo #EA1D2C).
+     Ao trocar uma cor aqui, espelhe em :root abaixo (variáveis usadas
+     pelos estilos inline dos componentes). */
+  --color-fuu-red: #DC2626;
+  --color-fuu-red-dark: #B91C1C;
   --color-fuu-red-light: #FEF2F2;
-  --color-fuu-yellow: #F7A11E;
+  --color-fuu-yellow: #F59E0B;
   --color-fuu-yellow-light: #FFFBEB;
-  --color-fuu-orange: #FF6B35;
-  --color-customRed: #EA1D2C;
-  --color-customRed2: #FF4444;
-  --color-menu1: #EA1D2C;
-  --color-menu2: #C41420;
-  --color-primary: #EA1D2C;
+  --color-fuu-orange: #D97706;
+  --color-customRed: #DC2626;
+  --color-customRed2: #F87171;
+  --color-menu1: #DC2626;
+  --color-menu2: #B91C1C;
+  --color-primary: #DC2626;
 
   /* Fontes */
   --font-display: "Inter", "Segoe UI", sans-serif;
@@ -81,17 +85,19 @@
 
   input:focus, textarea:focus, select:focus {
     outline: none;
-    border-color: #EA1D2C !important;
-    box-shadow: 0 0 0 3px rgba(234, 29, 44, 0.1) !important;
+    border-color: var(--fuu-red) !important;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1) !important;
   }
 
   :root {
-    --fuu-red: #EA1D2C;
-    --fuu-red-dark: #C41420;
-    --fuu-yellow: #F7A11E;
-    --fuu-orange: #FF6B35;
-    --menu1: #EA1D2C;
-    --menu2: #C41420;
+    /* Espelho das cores do @theme para uso em estilos inline/JS.
+       Manter sincronizado com brand/tokens.ts. */
+    --fuu-red: #DC2626;
+    --fuu-red-dark: #B91C1C;
+    --fuu-yellow: #F59E0B;
+    --fuu-orange: #D97706;
+    --menu1: #DC2626;
+    --menu2: #B91C1C;
   }
 
   [data-theme="light"] {
@@ -101,7 +107,7 @@
     --text-primary: #1A1A1A;
     --text-secondary: #666666;
     --border-color: #E5E7EB;
-    --accent: #EA1D2C;
+    --accent: #DC2626;
   }
 
   [data-theme="dark"] {
@@ -111,7 +117,7 @@
     --text-primary: #F0F0F0;
     --text-secondary: #AAAAAA;
     --border-color: #2C2C2E;
-    --accent: #FF4444;
+    --accent: #F87171;
   }
 
   body {
@@ -140,7 +146,7 @@
 
   /* Acessibilidade — foco visível em qualquer elemento interativo */
   :focus-visible {
-    outline: 2px solid var(--color-primary, #EA1D2C);
+    outline: 2px solid var(--color-primary, #DC2626);
     outline-offset: 2px;
   }
 }
@@ -174,9 +180,9 @@
 
   .input:focus {
     outline: none;
-    border-color: var(--color-primary, #EA1D2C);
+    border-color: var(--color-primary, #DC2626);
     background: var(--bg-card, #fff);
-    box-shadow: 0 0 0 3px rgba(234, 29, 44, 0.10);
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.10);
   }
 
   .input.is-invalid {
@@ -211,20 +217,20 @@
   }
 
   .btn:focus-visible {
-    outline: 2px solid var(--color-primary, #EA1D2C);
+    outline: 2px solid var(--color-primary, #DC2626);
     outline-offset: 2px;
   }
 
   .btn-primary {
-    background: linear-gradient(135deg, #EA1D2C, #C41420);
+    background: linear-gradient(135deg, #DC2626, #B91C1C);
     color: #fff;
-    box-shadow: 0 4px 14px rgba(234, 29, 44, 0.3);
+    box-shadow: 0 4px 14px rgba(220, 38, 38, 0.3);
   }
 
   .btn-primary:hover:not(:disabled) {
-    background: #C41420;
+    background: #B91C1C;
     transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(234, 29, 44, 0.4);
+    box-shadow: 0 6px 20px rgba(220, 38, 38, 0.4);
   }
 
   .btn-success {

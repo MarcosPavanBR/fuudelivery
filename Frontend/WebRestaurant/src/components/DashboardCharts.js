@@ -122,9 +122,9 @@ const DashboardCharts = ({ establishmentId }) => {
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
         </svg>
       ),
-      color: "#EA1D2C",
+      color: "#DC2626",
       bg: "#FEF2F2",
-      accent: "linear-gradient(135deg, #EA1D2C, #FF6B35)",
+      accent: "linear-gradient(135deg, #DC2626, #FF6B35)",
     },
     {
       label: "Receita da Semana",
@@ -134,9 +134,9 @@ const DashboardCharts = ({ establishmentId }) => {
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
       ),
-      color: "#F7A11E",
+      color: "#F59E0B",
       bg: "#FFFBEB",
-      accent: "linear-gradient(135deg, #F7A11E, #FBBF24)",
+      accent: "linear-gradient(135deg, #F59E0B, #FBBF24)",
     },
     {
       label: "Ticket Médio",
@@ -208,8 +208,8 @@ const DashboardCharts = ({ establishmentId }) => {
                     height: `${Math.max((day.value / maxRevenue) * 160, day.value > 0 ? 8 : 2)}px`,
                     background:
                       i === 5 || i === 6
-                        ? "linear-gradient(180deg, #F7A11E, #F59E0B)"
-                        : "linear-gradient(180deg, #EA1D2C, #FF6B35)",
+                        ? "linear-gradient(180deg, #F59E0B, #F59E0B)"
+                        : "linear-gradient(180deg, #DC2626, #FF6B35)",
                   }}
                 />
                 <span className="text-xs font-medium text-gray-500 mt-2">
@@ -248,9 +248,9 @@ const DashboardCharts = ({ establishmentId }) => {
                   style={{
                     background:
                       i === 0
-                        ? "linear-gradient(135deg, #EA1D2C, #FF6B35)"
+                        ? "linear-gradient(135deg, #DC2626, #FF6B35)"
                         : i === 1
-                        ? "linear-gradient(135deg, #F7A11E, #FBBF24)"
+                        ? "linear-gradient(135deg, #F59E0B, #FBBF24)"
                         : "linear-gradient(135deg, #6B7280, #9CA3AF)",
                   }}
                 >

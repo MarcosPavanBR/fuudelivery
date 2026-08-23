@@ -3,17 +3,23 @@ package handlers
 import (
 	"fmt"
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/payment_api/app/dto"
 	"github.com/carloshomar/fuudelivery/payment_api/app/models"
 	"github.com/gofiber/fiber/v2"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+// ============================================================================
+// Carteiras — corte 4: todas as movimentações passam por
+// models.AdjustWalletBalance (transação + SELECT FOR UPDATE + ledger),
+// garantindo atomicidade que o Mongo legado não tinha. Saldo legado do
+// Mongo é semeado na primeira movimentação (ensureWalletSeeded).
+// ============================================================================
+
+// GetBalance retorna o saldo da carteira do próprio usuário autenticado.
 func GetBalance(c *fiber.Ctx) error {
 	tokenUserID, err := middlewares.GetUserIDFromToken(c)
 	if err != nil {
@@ -31,9 +37,8 @@ func GetBalance(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot view another user's balance"})
 	}
 
-	var wallet models.Wallet
-	findErr := models.MongoDabase.Collection("wallets").FindOne(mongoCtx(), bson.M{"user_id": userIDStr}).Decode(&wallet)
-	if findErr != nil {
+	wallet, wErr := ensureWalletSeeded(models.DB, reqUserID, "customer")
+	if wErr != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Wallet not found", "balance": 0})
 	}
 
@@ -44,6 +49,8 @@ func GetBalance(c *fiber.Ctx) error {
 	})
 }
 
+// TopUp credita na carteira do cliente o valor de um pagamento CONFIRMADO.
+// Idempotente: wallet_credited_at no pagamento + checagem prévia no ledger.
 func TopUp(c *fiber.Ctx) error {
 	tokenUserID, err := middlewares.GetUserIDFromToken(c)
 	if err != nil {
@@ -68,12 +75,8 @@ func TopUp(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot top up another user's wallet"})
 	}
 
-	var payment models.Payment
-	err = models.MongoDabase.Collection("payments").FindOne(
-		mongoCtx(),
-		bson.M{"abacatepay_id": req.PaymentID},
-	).Decode(&payment)
-	if err != nil {
+	payment, pErr := findPaymentByAbacatePayID(req.PaymentID)
+	if pErr != nil {
 		log.Printf("[WALLET] TopUp rejected: payment %s not found (user=%d)", req.PaymentID, req.UserID)
 		return c.Status(404).JSON(fiber.Map{"error": "Payment not found"})
 	}
@@ -88,64 +91,53 @@ func TopUp(c *fiber.Ctx) error {
 		return c.Status(403).JSON(fiber.Map{"error": "Payment does not belong to this user"})
 	}
 
-	if payment.WalletCreditedAt != nil {
-		log.Printf("[WALLET] TopUp rejected: payment %s already used for wallet credit at %v", req.PaymentID, payment.WalletCreditedAt)
+	if payment.WalletCreditedAt != nil || models.HasLedgerEntry(models.DB, req.PaymentID, "credit") {
+		log.Printf("[WALLET] TopUp rejected: payment %s already used for wallet credit", req.PaymentID)
 		return c.Status(409).JSON(fiber.Map{"error": "Payment already used for wallet top-up"})
 	}
 
-	amountToCredit := payment.Amount
-
-	filter := bson.M{"user_id": req.UserID}
-	update := bson.M{
-		"$inc": bson.M{"balance": amountToCredit},
-		"$set": bson.M{"last_updated": time.Now()},
-		"$setOnInsert": bson.M{
-			"_id":       primitive.NewObjectID(),
-			"user_id":   req.UserID,
-			"user_type": "customer",
-		},
-	}
-
-	opts := options.Update().SetUpsert(true)
-	_, err = models.MongoDabase.Collection("wallets").UpdateOne(mongoCtx(), filter, update, opts)
-	if err != nil {
+	wallet, tErr := ensureWalletSeeded(models.DB, req.UserID, "customer")
+	if tErr != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to top up wallet"})
 	}
 
-	now := time.Now()
-	models.MongoDabase.Collection("payments").UpdateOne(
-		mongoCtx(),
-		bson.M{"abacatepay_id": req.PaymentID},
-		bson.M{"$set": bson.M{"wallet_credited_at": now}},
+	newWallet, aErr := models.AdjustWalletBalance(
+		models.DB, req.UserID, "customer",
+		"credit", "", payment.Amount,
+		req.PaymentID,
+		"Wallet top-up via confirmed payment",
+		"",
 	)
-
-	var wallet models.Wallet
-	models.MongoDabase.Collection("wallets").FindOne(mongoCtx(), filter).Decode(&wallet)
-
-	ledgerEntry := bson.M{
-		"_id":           primitive.NewObjectID(),
-		"user_id":       req.UserID,
-		"type":          "credit",
-		"amount":        amountToCredit,
-		"payment_id":    req.PaymentID,
-		"balance_after": wallet.Balance,
-		"description":   "Wallet top-up via confirmed payment",
-		"created_at":    time.Now(),
+	if aErr != nil {
+		log.Printf("[WALLET] TopUp failed: user=%d payment=%s: %v", req.UserID, req.PaymentID, aErr)
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to top up wallet"})
 	}
-	if _, ledgerErr := models.MongoDabase.Collection("wallet_ledger").InsertOne(mongoCtx(), ledgerEntry); ledgerErr != nil {
-		log.Printf("[WALLET] WARNING: Failed to write ledger for user=%d: %v", req.UserID, ledgerErr)
+	wallet = newWallet
+
+	// Marca o pagamento como já usado para crédito (idempotência).
+	now := time.Now()
+	if uErr := models.DB.Model(payment).Update("wallet_credited_at", now).Error; uErr != nil {
+		log.Printf("[WALLET] WARNING: falha ao marcar wallet_credited_at do pagamento %s: %v", req.PaymentID, uErr)
+	} else {
+		dualWritePaymentUpsert(payment) // DUAL-WRITE LEGADO
 	}
 
-	log.Printf("[WALLET] TopUp OK: user=%d amount=%.2f payment=%s new_balance=%.2f", req.UserID, amountToCredit, req.PaymentID, wallet.Balance)
+	dualWriteLedgerEntry(req.UserID, "credit", "", payment.Amount, wallet.Balance, req.PaymentID,
+		"Wallet top-up via confirmed payment", "") // DUAL-WRITE LEGADO
+	dualWriteWallet(wallet) // DUAL-WRITE LEGADO
+
+	log.Printf("[WALLET] TopUp OK: user=%d amount=%.2f payment=%s new_balance=%.2f", req.UserID, payment.Amount, req.PaymentID, wallet.Balance)
 
 	return c.Status(200).JSON(fiber.Map{
 		"user_id":      req.UserID,
 		"balance":      wallet.Balance,
-		"amount_added": amountToCredit,
+		"amount_added": payment.Amount,
 		"message":      "Wallet topped up successfully",
 	})
 }
 
+// DeductFromWallet debita um valor da carteira do usuário para pagar pedido.
+// Atômico com guarda de saldo (nunca fica negativo).
 func DeductFromWallet(c *fiber.Ctx) error {
 	tokenUserID, err := middlewares.GetUserIDFromToken(c)
 	if err != nil {
@@ -170,121 +162,74 @@ func DeductFromWallet(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot deduct from another user's wallet"})
 	}
 
-	result, err := models.MongoDabase.Collection("wallets").UpdateOne(
-		mongoCtx(),
-		bson.M{
-			"user_id": req.UserID,
-			"balance": bson.M{"$gte": req.Amount},
-		},
-		bson.M{
-			"$inc": bson.M{"balance": -req.Amount},
-			"$set": bson.M{"last_updated": time.Now()},
-		},
+	walletType := walletTypeForUser(req.UserID)
+	newWallet, dErr := models.AdjustWalletBalance(
+		models.DB, req.UserID, walletType,
+		"debit", "", req.Amount,
+		req.OrderID,
+		"Wallet deduction",
+		"",
 	)
-	if err != nil {
+	if dErr == models.ErrInsufficientBalance {
+		return c.Status(400).JSON(fiber.Map{"error": "Insufficient balance or wallet not found"})
+	}
+	if dErr != nil {
+		log.Printf("[WALLET] Deduct failed: user=%d: %v", req.UserID, dErr)
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to deduct from wallet"})
 	}
 
-	if result.ModifiedCount == 0 {
-		return c.Status(400).JSON(fiber.Map{"error": "Insufficient balance or wallet not found"})
-	}
+	dualWriteLedgerEntry(req.UserID, "debit", "", req.Amount, newWallet.Balance, req.OrderID,
+		"Wallet deduction", "") // DUAL-WRITE LEGADO
+	dualWriteWallet(newWallet) // DUAL-WRITE LEGADO
 
-	var wallet models.Wallet
-	models.MongoDabase.Collection("wallets").FindOne(mongoCtx(), bson.M{"user_id": req.UserID}).Decode(&wallet)
-
-	ledgerEntry := bson.M{
-		"_id":           primitive.NewObjectID(),
-		"user_id":       req.UserID,
-		"type":          "debit",
-		"amount":        req.Amount,
-		"order_id":      req.OrderID,
-		"balance_after": wallet.Balance,
-		"description":   "Wallet deduction",
-		"created_at":    time.Now(),
-	}
-	if _, ledgerErr := models.MongoDabase.Collection("wallet_ledger").InsertOne(mongoCtx(), ledgerEntry); ledgerErr != nil {
-		log.Printf("[WALLET] WARNING: Failed to write ledger for user=%d: %v", req.UserID, ledgerErr)
-	}
-
-	log.Printf("[WALLET] Deduct OK: user=%d amount=%.2f new_balance=%.2f", req.UserID, req.Amount, wallet.Balance)
+	log.Printf("[WALLET] Deduct OK: user=%d amount=%.2f new_balance=%.2f", req.UserID, req.Amount, newWallet.Balance)
 
 	return c.Status(200).JSON(fiber.Map{
 		"user_id":         req.UserID,
-		"balance":         wallet.Balance,
+		"balance":         newWallet.Balance,
 		"amount_deducted": req.Amount,
 		"message":         "Amount deducted successfully",
 	})
 }
 
 // establishmentLedgerTotals soma os créditos (total ganho) e os débitos de
-// saque (kind == "withdrawal") do wallet_ledger de um estabelecimento.
-// A carteira do restaurante é identificada pelo establishment_id (user_id).
+// saque (kind == "withdrawal") do ledger de um estabelecimento via SQL.
 func establishmentLedgerTotals(estID int64) (earned, withdrawn float64) {
-	ctx := mongoCtx()
-	ledger := models.MongoDabase.Collection("wallet_ledger")
-
-	// Total ganho = soma dos créditos
-	cursor, err := ledger.Aggregate(ctx, []bson.M{
-		{"$match": bson.M{"user_id": estID}},
-		{"$group": bson.M{
-			"_id":   "$type",
-			"total": bson.M{"$sum": "$amount"},
-		}},
-	})
-	if err == nil {
-		defer cursor.Close(ctx)
-		for cursor.Next(ctx) {
-			var row struct {
-				ID    string  `bson:"_id"`
-				Total float64 `bson:"total"`
-			}
-			if cursor.Decode(&row) == nil && row.ID == "credit" {
-				earned += row.Total
-			}
-		}
+	var res struct {
+		Earned    float64
+		Withdrawn float64
 	}
-
-	// Total sacado = soma dos débitos marcados como saque (kind=withdrawal)
-	cursor2, err := ledger.Aggregate(ctx, []bson.M{
-		{"$match": bson.M{"user_id": estID, "kind": "withdrawal"}},
-		{"$group": bson.M{
-			"_id":   nil,
-			"total": bson.M{"$sum": "$amount"},
-		}},
-	})
-	if err == nil {
-		defer cursor2.Close(ctx)
-		for cursor2.Next(ctx) {
-			var row struct {
-				Total float64 `bson:"total"`
-			}
-			if cursor2.Decode(&row) == nil {
-				withdrawn += row.Total
-			}
-		}
+	err := models.DB.Model(&models.WalletTxn{}).
+		Joins("JOIN wallets ON wallets.id = wallet_transactions.wallet_id").
+		Where("wallets.user_id = ? AND wallets.user_type = ?", estID, "establishment").
+		Select(`COALESCE(SUM(CASE WHEN wallet_transactions.type = 'credit' THEN wallet_transactions.amount ELSE 0 END), 0) AS earned,
+		       COALESCE(SUM(CASE WHEN wallet_transactions.kind = 'withdrawal' THEN wallet_transactions.amount ELSE 0 END), 0) AS withdrawn`).
+		Scan(&res).Error
+	if err != nil {
+		log.Printf("[WALLET] Falha ao somar ledger do estabelecimento %d: %v", estID, err)
+		return 0, 0
 	}
-	return
+	return res.Earned, res.Withdrawn
 }
 
 // GetEstablishmentWallet retorna o saldo da carteira do estabelecimento
 // autenticado (papel restaurante no WebRestaurant).
 // GET /wallet/establishment/balance
 //
-// A carteira do restaurante é creditada pelo split quando um pagamento é
-// confirmado (user_id = establishment_id). pending/blocked são 0: o modelo
-// atual só tem saldo disponível; total_earned/total_withdrawn vêm do ledger.
+// pending/blocked são 0: o modelo atual só tem saldo disponível;
+// total_earned/total_withdrawn vêm do ledger.
 func GetEstablishmentWallet(c *fiber.Ctx) error {
 	estID, err := middlewares.GetEstablishmentIDFromToken(c)
 	if err != nil {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Establishment ID not found in token"})
 	}
 
-	var wallet models.Wallet
-	findErr := models.MongoDabase.Collection("wallets").FindOne(mongoCtx(), bson.M{"user_id": estID}).Decode(&wallet)
-
+	wallet, wErr := ensureWalletSeeded(models.DB, estID, "establishment")
 	available := 0.0
-	if findErr == nil {
+	var lastUpdated time.Time
+	if wErr == nil {
 		available = wallet.Balance
+		lastUpdated = wallet.LastUpdated
 	}
 
 	earned, withdrawn := establishmentLedgerTotals(estID)
@@ -296,12 +241,13 @@ func GetEstablishmentWallet(c *fiber.Ctx) error {
 		"blocked":         0.0,
 		"total_earned":    earned,
 		"total_withdrawn": withdrawn,
-		"last_updated":    wallet.LastUpdated,
+		"last_updated":    lastUpdated,
 	})
 }
 
-// GetEstablishmentTransactions lista o extrato (wallet_ledger) do
-// estabelecimento autenticado, paginado por cursor (ObjectID hex).
+// GetEstablishmentTransactions lista o extrato do estabelecimento autenticado,
+// paginado por cursor (ID numérico em string — antes era ObjectID hex; o
+// frontend trata cursor como opaco, então a troca é transparente).
 // GET /wallet/establishment/transactions?limit=20&cursor=...
 //
 // Retorna { data, next_cursor, has_more }. Cada item expõe type em
@@ -317,81 +263,52 @@ func GetEstablishmentTransactions(c *fiber.Ctx) error {
 		limit = l
 	}
 
-	query := bson.M{"user_id": estID}
-	if cursorHex := c.Query("cursor"); cursorHex != "" {
-		oid, oidErr := primitive.ObjectIDFromHex(cursorHex)
-		if oidErr != nil {
+	q := models.DB.Model(&models.WalletTxn{}).
+		Joins("JOIN wallets ON wallets.id = wallet_transactions.wallet_id").
+		Where("wallets.user_id = ? AND wallets.user_type = ?", estID, "establishment")
+
+	if cursorStr := c.Query("cursor"); cursorStr != "" {
+		cursorID, cErr := strconv.ParseInt(cursorStr, 10, 64)
+		if cErr != nil || cursorID <= 0 {
 			return c.Status(400).JSON(fiber.Map{"error": "Invalid cursor"})
 		}
-		query["_id"] = bson.M{"$lt": oid}
+		q = q.Where("wallet_transactions.id < ?", cursorID)
 	}
 
-	opts := options.Find().SetSort(bson.D{{Key: "_id", Value: -1}}).SetLimit(int64(limit + 1))
-	cursor, err := models.MongoDabase.Collection("wallet_ledger").Find(mongoCtx(), query, opts)
-	if err != nil {
+	var rows []models.WalletTxn
+	if err := q.Order("wallet_transactions.id DESC").Limit(limit + 1).Find(&rows).Error; err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to list transactions"})
 	}
-	defer cursor.Close(mongoCtx())
 
-	var entries []bson.M
-	if err := cursor.All(mongoCtx(), &entries); err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": "Failed to decode transactions"})
-	}
-
-	hasMore := len(entries) > limit
+	hasMore := len(rows) > limit
 	if hasMore {
-		entries = entries[:limit]
+		rows = rows[:limit]
 	}
 
-	data := make([]map[string]interface{}, 0, len(entries))
-	for _, e := range entries {
-		item := map[string]interface{}{}
-		if oid, ok := e["_id"].(primitive.ObjectID); ok {
-			item["id"] = oid.Hex()
+	data := make([]map[string]interface{}, 0, len(rows))
+	for _, r := range rows {
+		item := map[string]interface{}{
+			"id":          strconv.FormatInt(r.ID, 10),
+			"description": r.Description,
+			"amount":      r.Amount,
+			"balance":     r.BalanceAfter,
+			"created_at":  r.CreatedAt.Format(time.RFC3339),
+			"payment_ref": r.ReferenceID,
 		}
-
-		typ, _ := e["type"].(string)
-		if kind, ok := e["kind"].(string); ok && kind == "withdrawal" {
+		switch {
+		case r.Kind == "withdrawal":
 			item["type"] = "WITHDRAWAL"
-		} else if typ == "credit" {
+		case r.Type == "credit":
 			item["type"] = "CREDIT"
-		} else {
+		default:
 			item["type"] = "DEBIT"
 		}
-
-		if desc, ok := e["description"].(string); ok {
-			item["description"] = desc
-		}
-		if amt, ok := e["amount"].(float64); ok {
-			item["amount"] = amt
-		}
-		if bal, ok := e["balance_after"].(float64); ok {
-			item["balance"] = bal
-		}
-		// bson.M decodifica datetime como primitive.DateTime (não time.Time)
-		// — cobre os dois tipos para nunca omitir a data do extrato.
-		if ts, ok := e["created_at"].(time.Time); ok {
-			item["created_at"] = ts.Format(time.RFC3339)
-		} else if dts, ok := e["created_at"].(primitive.DateTime); ok {
-			item["created_at"] = dts.Time().Format(time.RFC3339)
-		}
-
-		ref := ""
-		if pid, ok := e["payment_id"].(string); ok {
-			ref = pid
-		} else if oid, ok := e["order_id"].(string); ok {
-			ref = oid
-		}
-		item["payment_ref"] = ref
-
 		data = append(data, item)
 	}
 
 	nextCursor := ""
-	if hasMore {
-		if last, ok := entries[len(entries)-1]["_id"].(primitive.ObjectID); ok {
-			nextCursor = last.Hex()
-		}
+	if hasMore && len(rows) > 0 {
+		nextCursor = strconv.FormatInt(rows[len(rows)-1].ID, 10)
 	}
 
 	return c.JSON(fiber.Map{
@@ -403,7 +320,7 @@ func GetEstablishmentTransactions(c *fiber.Ctx) error {
 
 // EstablishmentWithdraw processa um saque da carteira do estabelecimento
 // autenticado (papel restaurante). Débito atômico com guarda de saldo e
-// lançamento no wallet_ledger (type=debit, kind=withdrawal).
+// lançamento no ledger (type=debit, kind=withdrawal, destination=chave PIX).
 // POST /wallet/establishment/withdraw  body: {amount, destination, method}
 func EstablishmentWithdraw(c *fiber.Ctx) error {
 	estID, err := middlewares.GetEstablishmentIDFromToken(c)
@@ -430,45 +347,30 @@ func EstablishmentWithdraw(c *fiber.Ctx) error {
 		req.Method = "PIX"
 	}
 
-	wallets := models.MongoDabase.Collection("wallets")
-	res, err := wallets.UpdateOne(
-		mongoCtx(),
-		bson.M{"user_id": estID, "balance": bson.M{"$gte": req.Amount}},
-		bson.M{
-			"$inc": bson.M{"balance": -req.Amount},
-			"$set": bson.M{"last_updated": time.Now()},
-		},
+	description := fmt.Sprintf("Saque via %s para %s", req.Method, req.Destination)
+	newWallet, dErr := models.AdjustWalletBalance(
+		models.DB, estID, "establishment",
+		"debit", "withdrawal", req.Amount,
+		"", // saques não têm referência de pagamento
+		description,
+		req.Destination,
 	)
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": "Falha ao processar saque"})
-	}
-	if res.ModifiedCount == 0 {
+	if dErr == models.ErrInsufficientBalance {
 		return c.Status(400).JSON(fiber.Map{"error": "Saldo insuficiente para este saque"})
 	}
-
-	var wallet models.Wallet
-	wallets.FindOne(mongoCtx(), bson.M{"user_id": estID}).Decode(&wallet)
-
-	now := time.Now()
-	ledgerEntry := bson.M{
-		"_id":           primitive.NewObjectID(),
-		"user_id":       estID,
-		"type":          "debit",
-		"kind":          "withdrawal",
-		"amount":        req.Amount,
-		"balance_after": wallet.Balance,
-		"description":   fmt.Sprintf("Saque via %s para %s", req.Method, req.Destination),
-		"destination":   req.Destination,
-		"created_at":    now,
-	}
-	if _, ledgerErr := models.MongoDabase.Collection("wallet_ledger").InsertOne(mongoCtx(), ledgerEntry); ledgerErr != nil {
-		log.Printf("[WALLET] WARNING: falha ao gravar ledger do saque establishment=%d: %v", estID, ledgerErr)
+	if dErr != nil {
+		log.Printf("[WALLET] Saque falhou: establishment=%d: %v", estID, dErr)
+		return c.Status(500).JSON(fiber.Map{"error": "Falha ao processar saque"})
 	}
 
-	log.Printf("[WALLET] Saque OK: establishment=%d amount=%.2f method=%s novo_saldo=%.2f", estID, req.Amount, req.Method, wallet.Balance)
+	dualWriteLedgerEntry(estID, "debit", "withdrawal", req.Amount, newWallet.Balance, "",
+		description, req.Destination) // DUAL-WRITE LEGADO
+	dualWriteWallet(newWallet) // DUAL-WRITE LEGADO
+
+	log.Printf("[WALLET] Saque OK: establishment=%d amount=%.2f method=%s novo_saldo=%.2f", estID, req.Amount, req.Method, newWallet.Balance)
 
 	return c.JSON(fiber.Map{
 		"message": "Saque solicitado com sucesso",
-		"balance": wallet.Balance,
+		"balance": newWallet.Balance,
 	})
 }

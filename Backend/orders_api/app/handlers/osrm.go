@@ -7,8 +7,24 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"os"
 	"time"
 )
+
+// osrmBaseURL retorna a base do servidor OSRM configurada.
+// Configurar via OSRM_BASE_URL em produção — o default é o servidor DEMO
+// público (router.project-osrm.org), que proíbe uso em produção e tem rate
+// limit agressivo. Mesma convenção de delivery_api (código espelhado —
+// TODO: extrair para pacote compartilhado pkg/geospatial).
+func osrmBaseURL() string {
+	if base := os.Getenv("OSRM_BASE_URL"); base != "" {
+		return base
+	}
+	return "https://router.project-osrm.org" // demo — apenas dev
+}
+
+// clientOSRM reutilizado entre chamadas.
+var clientOSRM = &http.Client{Timeout: 5 * time.Second}
 
 type osrmResponse struct {
 	Code   string `json:"code"`
@@ -20,12 +36,11 @@ type osrmResponse struct {
 
 func getOSRMDistance(lat1, lon1, lat2, lon2 float64) (distanceKm float64, durationMin float64, ok bool) {
 	url := fmt.Sprintf(
-		"https://router.project-osrm.org/route/v1/driving/%f,%f;%f,%f?overview=false",
-		lon1, lat1, lon2, lat2,
+		"%s/route/v1/driving/%f,%f;%f,%f?overview=false",
+		osrmBaseURL(), lon1, lat1, lon2, lat2,
 	)
 
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get(url)
+	resp, err := clientOSRM.Get(url)
 	if err != nil {
 		log.Printf("[OSRM] Request failed: %v, falling back to Haversine", err)
 		return 0, 0, false

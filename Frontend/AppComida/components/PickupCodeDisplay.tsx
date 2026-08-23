@@ -18,7 +18,7 @@ const PickupCodeDisplay: React.FC<PickupCodeDisplayProps> = ({ code }) => {
       <Text style={styles.label}>Código de Retirada</Text>
       <Text style={styles.code}>{code}</Text>
       <TouchableOpacity style={styles.copyBtn} onPress={copyToClipboard}>
-        <Ionicons name="copy-outline" size={16} color="#F97316" />
+        <Ionicons name="copy-outline" size={16} color={Colors.light.accent} />
         <Text style={styles.copyText}>Copiar</Text>
       </TouchableOpacity>
     </View>
@@ -30,7 +30,7 @@ const styles = StyleSheet.create({
   label: { fontSize: 12, color: "#9A3412", fontWeight: "500" },
   code: { fontSize: 32, fontWeight: "800", letterSpacing: 8, color: "#C2410C", marginVertical: 4 },
   copyBtn: { flexDirection: "row", alignItems: "center", gap: 4 },
-  copyText: { color: "#F97316", fontSize: 13, fontWeight: "500" },
+  copyText: { color: Colors.light.accent, fontSize: 13, fontWeight: "500" },
 });
 
 export default PickupCodeDisplay;

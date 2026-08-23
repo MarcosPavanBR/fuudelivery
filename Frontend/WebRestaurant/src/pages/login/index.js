@@ -37,13 +37,13 @@ const LoginPage = () => {
       <div
         className="hidden lg:flex lg:w-1/2 relative overflow-hidden items-center justify-center"
         style={{
-          background: "linear-gradient(135deg, #EA1D2C 0%, #C41420 40%, #8B0F18 100%)",
+          background: "linear-gradient(135deg, #DC2626 0%, #B91C1C 40%, #7F1D1D 100%)",
         }}
       >
         <div className="absolute inset-0 opacity-10">
           <div
             className="absolute -top-20 -left-20 w-96 h-96 rounded-full"
-            style={{ background: "radial-gradient(circle, #F7A11E 0%, transparent 70%)" }}
+            style={{ background: "radial-gradient(circle, #F59E0B 0%, transparent 70%)" }}
           />
           <div
             className="absolute -bottom-32 -right-32 w-[500px] h-[500px] rounded-full"
@@ -59,7 +59,7 @@ const LoginPage = () => {
             >
               Gerencie seu restaurante
               <br />
-              <span style={{ color: "#F7A11E" }}>com inteligência</span>
+              <span style={{ color: "#F59E0B" }}>com inteligência</span>
             </h2>
             <p className="text-white/70 text-lg max-w-md mx-auto">
               Acesse pedidos em tempo real, gerencie seu cardápio e acompanhe suas vendas
@@ -72,7 +72,7 @@ const LoginPage = () => {
               { num: "4.9", label: "Avaliação" },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
-                <div className="text-2xl font-bold" style={{ color: "#F7A11E" }}>
+                <div className="text-2xl font-bold" style={{ color: "#F59E0B" }}>
                   {stat.num}
                 </div>
                 <div className="text-white/60 text-sm mt-1">{stat.label}</div>

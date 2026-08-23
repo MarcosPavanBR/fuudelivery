@@ -6,7 +6,7 @@ async function deleteProduct(id) {
 
     return true;
   } catch (e) {
-    console.log(e);
+    console.error(e);
     return false;
   }
 }

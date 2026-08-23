@@ -7,7 +7,7 @@ async function updateEstablishment(id, body) {
     });
     return true;
   } catch (e) {
-    console.log(e);
+    console.error(e);
     return false;
   }
 }

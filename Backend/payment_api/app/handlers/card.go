@@ -9,9 +9,11 @@ import (
 	"github.com/carloshomar/fuudelivery/payment_api/app/models"
 	"github.com/carloshomar/fuudelivery/payment_api/app/services"
 	"github.com/gofiber/fiber/v2"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
+// ChargeCard cobra diretamente um cartão tokenizado no gateway (AbacatePay).
+// Não persiste pagamento — é uma cobrança avulsa (o fluxo de pedidos usa
+// ProcessPayment, que grava em Postgres com dual-write).
 func ChargeCard(c *fiber.Ctx) error {
 	var req struct {
 		CardToken    string  `json:"card_token"`
@@ -72,6 +74,8 @@ func ChargeCard(c *fiber.Ctx) error {
 	})
 }
 
+// ProcessPayment cria a cobrança (cartão ou PIX) e persiste o pagamento em
+// Postgres (corte 4 — fonte da verdade), com dual-write best-effort no Mongo.
 func ProcessPayment(c *fiber.Ctx) error {
 	var req dto.PaymentRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -119,8 +123,8 @@ func ProcessPayment(c *fiber.Ctx) error {
 			paymentStatus = "REFUSED"
 		}
 
+		// ID é BIGSERIAL no Postgres — preenchido automaticamente pelo Create.
 		payment := models.Payment{
-			ID:              primitive.NewObjectID(),
 			OrderID:         req.OrderID,
 			CustomerID:      req.CustomerID,
 			CustomerPhone:   req.CustomerPhone,
@@ -137,13 +141,15 @@ func ProcessPayment(c *fiber.Ctx) error {
 			ConfirmedAt:     confirmedAt,
 		}
 
-		_, err = models.MongoDabase.Collection("payments").InsertOne(mongoCtx(), payment)
-		if err != nil {
+		if err := models.DB.Create(&payment).Error; err != nil {
+			log.Printf("[CARD] Erro ao salvar pagamento no Postgres: %v", err)
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to save payment"})
 		}
 
+		dualWritePaymentUpsert(&payment) // DUAL-WRITE LEGADO
+
 		response := dto.PaymentResponse{
-			PaymentID:    payment.ID.Hex(),
+			PaymentID:    payment.IDString(),
 			Status:       paymentStatus,
 			AbacatePayID: apiResp.ID,
 			Message:      "Payment processed via AbacatePay",
@@ -166,7 +172,6 @@ func ProcessPayment(c *fiber.Ctx) error {
 		}
 
 		payment := models.Payment{
-			ID:              primitive.NewObjectID(),
 			OrderID:         req.OrderID,
 			CustomerID:      req.CustomerID,
 			CustomerPhone:   req.CustomerPhone,
@@ -182,13 +187,15 @@ func ProcessPayment(c *fiber.Ctx) error {
 			CreatedAt:       time.Now(),
 		}
 
-		_, err = models.MongoDabase.Collection("payments").InsertOne(mongoCtx(), payment)
-		if err != nil {
+		if err := models.DB.Create(&payment).Error; err != nil {
+			log.Printf("[PIX] Erro ao salvar pagamento no Postgres: %v", err)
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to save payment"})
 		}
 
+		dualWritePaymentUpsert(&payment) // DUAL-WRITE LEGADO
+
 		response := dto.PaymentResponse{
-			PaymentID:    payment.ID.Hex(),
+			PaymentID:    payment.IDString(),
 			Status:       "PENDING",
 			PixCopyPaste: apiResp.CopyPaste,
 			QRCodeBase64: apiResp.QRCodeBase64,

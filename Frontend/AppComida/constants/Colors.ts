@@ -27,6 +27,11 @@ export default {
     secondary: "#6B7280",
     gray: "#6B7280",
     lightGray: "#F3F4F6",
+    // Accent de personalidade do AppComida ("quente e apetitoso"):
+    // laranja para CTAs de fome/apetite — CTAs primários continuam no
+    // vermelho do brand (primary). Fonte: brand/tokens.ts + plano-melhorias.
+    accent: "#F97316",
+    accentLight: "#FFF7ED",
   },
   dark: {
     text: "#F3F4F6",
@@ -50,5 +55,8 @@ export default {
     warning: "#F59E0B",
     error: "#EF4444",
     info: "#60A5FA",
+    // Accent de personalidade (ver comentário no tema light)
+    accent: "#FB923C",
+    accentLight: "#7C2D12",
   },
 };

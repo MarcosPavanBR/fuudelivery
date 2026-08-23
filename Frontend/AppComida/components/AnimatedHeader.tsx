@@ -1,6 +1,7 @@
 import React, { useRef } from "react";
 import { Animated, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Colors from "@/constants/Colors";
 
 interface AnimatedHeaderProps {
   scrollY: Animated.Value;
@@ -41,7 +42,7 @@ const AnimatedHeader: React.FC<AnimatedHeaderProps> = ({ scrollY, title, subtitl
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: "#F97316",
+    backgroundColor: Colors.light.accent,
     justifyContent: "flex-end",
     alignItems: "center",
     paddingBottom: 10,

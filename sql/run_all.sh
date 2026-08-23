@@ -48,15 +48,18 @@ if [ "$confirm" != "sim" ]; then
 fi
 
 run "00_role_e_controle_migracoes.sql"
+# 09 é um reparo que DEVE rodar ANTES dos scripts de domínio: ele renomeia
+# tabelas legadas vazias com id TEXT que, se existirem, fariam o CREATE TABLE
+# IF NOT EXISTS dos scripts 01–03 preservar o schema errado (bug real visto em
+# produção — ver cabeçalho do próprio 09).
+run "09_reparo_tabelas_legado_texto.sql"
 run "01_dominio_pedidos.sql"
 run "02_dominio_entrega.sql"
 run "03_dominio_pagamentos.sql"
 run "04_dominio_chat.sql"
 run "05_audit_log.sql"
 run "06_rls_seguranca.sql"
-# 09 é um reparo idempotente (renomeia tabelas legadas vazias com id TEXT);
-# roda ANTES de 01–03 recriarem o schema correto na segunda passada.
-run "09_reparo_tabelas_legado_texto.sql"
+run "10_wallet_ledger_kind.sql"
 run "07_auditoria_tabelas_orfas.sql"
 run "08_testes.sql"
 

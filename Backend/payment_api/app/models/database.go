@@ -63,7 +63,7 @@ func ConnectPostgresDatabase() {
 	}
 
 	// O schema oficial vive nos scripts SQL (sql/03_dominio_pagamentos.sql e
-	// sql/09_wallet_ledger_kind.sql). O AutoMigrate é rede de segurança para
+	// sql/10_wallet_ledger_kind.sql). O AutoMigrate é rede de segurança para
 	// ambientes novos/dev — em produção quem manda é o run_all.sh.
 	if err := database.AutoMigrate(&Payment{}, &Wallet{}, &WalletTxn{}); err != nil {
 		panic(fmt.Sprintf("Falha no AutoMigrate das tabelas de pagamento: %v", err))

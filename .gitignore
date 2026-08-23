@@ -463,3 +463,9 @@ cmd/etl-payments/etl-payments
 # Binários compilados das ferramentas ETL
 etl-payments
 etl-orders
+
+# P0 segurança: nunca versionar credenciais/backups
+.fuudelivery-config/
+backups/
+*.sql.gz
+*db_backup*.json

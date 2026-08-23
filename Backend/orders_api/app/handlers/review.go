@@ -7,10 +7,10 @@ import (
 	"github.com/carloshomar/fuudelivery/orders_api/app/dto"
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
+// createReview lê o pedido via camada Postgres-first (orders_pg.go) e grava
+// a avaliação em Postgres, creditando pontos de fidelidade.
 func CreateReview(c *fiber.Ctx) error {
 	var req dto.CreateReviewRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -21,21 +21,14 @@ func CreateReview(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Rating must be between 1 and 5"})
 	}
 
-	orderID, err := primitive.ObjectIDFromHex(req.OrderID)
+	// Corte 5: existência/status/estabelecimento vêm do Postgres-first
+	// (findOrderByLegacyId faz lazy import do Mongo para pedidos antigos).
+	doc, err := findOrderByLegacyID(req.OrderID)
 	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid order ID"})
-	}
-
-	collection := models.MongoDabase.Collection("orders")
-	filter := bson.M{"_id": orderID}
-
-	var order bson.M
-	if err := collection.FindOne(mongoCtx(), filter).Decode(&order); err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Order not found"})
 	}
 
-	status, ok := order["status"].(string)
-	if !ok || status != "FINISHED" {
+	if doc.Status != "FINISHED" {
 		return c.Status(400).JSON(fiber.Map{"error": "Order is not finished yet"})
 	}
 
@@ -45,15 +38,7 @@ func CreateReview(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "You have already reviewed this order"})
 	}
 
-	establishmentID := uint(0)
-	if estID, ok := order["establishmentid"]; ok {
-		switch v := estID.(type) {
-		case int64:
-			establishmentID = uint(v)
-		case float64:
-			establishmentID = uint(v)
-		}
-	}
+	establishmentID := uint(doc.EstablishmentID)
 
 	review := models.Review{
 		OrderID:         req.OrderID,

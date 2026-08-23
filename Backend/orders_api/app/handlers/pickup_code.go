@@ -1,14 +1,14 @@
 package handlers
 
+// pickup_code.go — geração e validação do código de retirada.
+// CORTE 5: Postgres primário (coluna tipada pickup_code em order_documents);
+// o Mongo legado é espelhado best-effort dentro de saveOrderPrimary.
+
 import (
 	"crypto/rand"
 	"math/big"
-	"time"
 
-	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 func generateSecureCode() string {
@@ -29,29 +29,18 @@ func GeneratePickupCode(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
 	}
 
-	orderID, err := primitive.ObjectIDFromHex(req.OrderID)
+	doc, err := findOrderByLegacyID(req.OrderID)
 	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid order ID"})
+		return c.Status(404).JSON(fiber.Map{"error": "Order not found"})
 	}
 
-	code := generateSecureCode()
-
-	collection := models.MongoDabase.Collection("orders")
-	filter := bson.M{"_id": orderID}
-	update := bson.M{
-		"$set": bson.M{
-			"pickup_code":              code,
-			"pickup_code_generated_at": time.Now(),
-		},
-	}
-
-	result, err := collection.UpdateOne(mongoCtx(), filter, update)
-	if err != nil || result.ModifiedCount == 0 {
+	doc.PickupCode = generateSecureCode()
+	if err := saveOrderPrimary(doc); err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to generate code"})
 	}
 
 	return c.JSON(fiber.Map{
-		"pickup_code": code,
+		"pickup_code": doc.PickupCode,
 		"order_id":    req.OrderID,
 		"message":     "Código de retirada gerado com sucesso",
 	})
@@ -66,25 +55,16 @@ func ValidatePickupCode(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
 	}
 
-	orderID, err := primitive.ObjectIDFromHex(req.OrderID)
+	doc, err := findOrderByLegacyID(req.OrderID)
 	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid order ID"})
-	}
-
-	collection := models.MongoDabase.Collection("orders")
-	filter := bson.M{"_id": orderID}
-
-	var order bson.M
-	if err := collection.FindOne(mongoCtx(), filter).Decode(&order); err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Order not found"})
 	}
 
-	storedCode, ok := order["pickup_code"].(string)
-	if !ok || storedCode == "" {
+	if doc.PickupCode == "" {
 		return c.Status(400).JSON(fiber.Map{"error": "Nenhum código de retirada gerado"})
 	}
 
-	if storedCode != req.PickupCode {
+	if doc.PickupCode != req.PickupCode {
 		return c.Status(401).JSON(fiber.Map{
 			"valid": false,
 			"error": "Código inválido",
@@ -101,26 +81,20 @@ func ValidatePickupCode(c *fiber.Ctx) error {
 func GetPickupCode(c *fiber.Ctx) error {
 	orderID := c.Params("id")
 
-	oid, err := primitive.ObjectIDFromHex(orderID)
+	doc, err := findOrderByLegacyID(orderID)
 	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid order ID"})
-	}
-
-	collection := models.MongoDabase.Collection("orders")
-	filter := bson.M{"_id": oid}
-
-	var order bson.M
-	if err := collection.FindOne(mongoCtx(), filter).Decode(&order); err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Order not found"})
 	}
 
-	code, _ := order["pickup_code"].(string)
-	generatedAt, _ := order["pickup_code_generated_at"].(string)
+	generatedAt := ""
+	if !doc.UpdatedAt.IsZero() && doc.PickupCode != "" {
+		generatedAt = doc.UpdatedAt.Format("2006-01-02 15:04:05")
+	}
 
 	return c.JSON(fiber.Map{
 		"order_id":        orderID,
-		"pickup_code":     code,
+		"pickup_code":     doc.PickupCode,
 		"generated_at":    generatedAt,
-		"has_pickup_code": code != "",
+		"has_pickup_code": doc.PickupCode != "",
 	})
 }

@@ -1,5 +1,13 @@
 package handlers
 
+// orders.go — CRUD de pedidos.
+// CORTE 5 (banco-único): o POSTGRES é a fonte da verdade (tabela
+// order_documents). O Mongo legado é usado apenas em:
+//   - dual-write best-effort na escrita (orders_pg.go);
+//   - fallback de leitura em listagens enquanto o ETL não roda;
+//   - lazy import em buscas pontuais por ID.
+// Quando o Atlas for desligado, remover os ramos *_legacy* — nada mais muda.
+
 import (
 	"encoding/json"
 	"fmt"
@@ -16,8 +24,6 @@ import (
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 func CreateOrder(c *fiber.Ctx, sendMessageToClient func(clientID int64, message []byte) error) error {
@@ -61,10 +67,19 @@ func CreateOrder(c *fiber.Ctx, sendMessageToClient func(clientID int64, message 
 
 	request.Establishment = *establishment
 
-	collection := models.MongoDabase.Collection("orders")
+	// Corte 5: ID público gerado no formato legado (ObjectID hex) para não
+	// quebrar nenhum consumidor; Postgres é a fonte primária, Mongo espelhado.
+	orderID := newLegacyOrderID()
+	request.OrderId = orderID
 
-	insertResult, err := collection.InsertOne(mongoCtx(), request)
+	doc, err := payloadToDoc(orderID, &request)
 	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Erro ao serializar a ordem",
+		})
+	}
+	if err := saveOrderPrimary(doc); err != nil {
+		log.Printf("[ORDER] Falha ao persistir pedido: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Erro ao inserir a ordem no banco de dados",
 		})
@@ -77,7 +92,7 @@ func CreateOrder(c *fiber.Ctx, sendMessageToClient func(clientID int64, message 
 
 	return c.JSON(fiber.Map{
 		"message": "Ordem criada com sucesso",
-		"orderId": insertResult.InsertedID,
+		"orderId": orderID,
 	})
 }
 
@@ -157,25 +172,20 @@ func UpdateOrderStatus(c *fiber.Ctx, sendMessageToClient func(clientID int64, me
 		})
 	}
 
-	orderID, err := primitive.ObjectIDFromHex(requestBody.ID)
+	// Corte 5: leitura Postgres-first com lazy import do Mongo (legado).
+	doc, err := findOrderByLegacyID(requestBody.ID)
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "ID inválido",
-		})
-	}
-
-	filter := bson.M{"_id": orderID}
-
-	collection := models.MongoDabase.Collection("orders")
-
-	var order dto.RequestPayload
-	if err := collection.FindOne(mongoCtx(), filter).Decode(&order); err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Pedido não encontrado",
 		})
 	}
+
+	// Payload atual para WebSocket e push notification.
+	var order dto.RequestPayload
+	_ = json.Unmarshal(doc.Payload, &order)
+
 	if requestBody.Status != "REQUEST_APPROVE" {
-		order.OrderId = orderID.Hex()
+		order.OrderId = doc.LegacyID
 		order.Status = requestBody.Status
 		// RabbitMQ removido — fila gerenciada pelo monolito via Redis
 		log.Printf("[ORDER] Order %s status update published", order.OrderId)
@@ -183,43 +193,27 @@ func UpdateOrderStatus(c *fiber.Ctx, sendMessageToClient func(clientID int64, me
 
 	jsonData, _ := json.Marshal(requestBody)
 
-	if err := sendMessageToClient(order.EstablishmentId, jsonData); err != nil {
+	if err := sendMessageToClient(doc.EstablishmentID, jsonData); err != nil {
 		return err
 	}
 
-	update := bson.M{
-		"$set": bson.M{
-			"status": requestBody.Status,
-		},
-		"$currentDate": bson.M{
-			"lastModified": true,
-		},
-	}
-
-	updateResult, err := collection.UpdateOne(mongoCtx(), filter, update)
+	// Mutação única: status + código de retirada quando DONE. Grava no
+	// Postgres e espelha no Mongo best-effort (orders_pg.go).
+	err = patchOrderDoc(doc, func(p *dto.RequestPayload) {
+		p.Status = requestBody.Status
+		if requestBody.Status == "DONE" {
+			// Código de retirada fica na coluna tipada (doc.PickupCode);
+			// o payload não tem esse campo por design.
+			doc.PickupCode = generateSecureCode()
+		}
+	})
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Erro ao atualizar ordem no banco de dados",
 		})
 	}
 
-	if updateResult.ModifiedCount == 0 {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "Nenhum pedido encontrado com o ID fornecido",
-		})
-	}
-
 	go sendStatusPushNotification(order, requestBody.Status)
-
-	if requestBody.Status == "DONE" {
-		code := generateSecureCode()
-		collection.UpdateOne(mongoCtx(), filter, bson.M{
-			"$set": bson.M{
-				"pickup_code":              code,
-				"pickup_code_generated_at": time.Now(),
-			},
-		})
-	}
 
 	return c.JSON(fiber.Map{
 		"message": "Status do pedido atualizado com sucesso",
@@ -291,6 +285,30 @@ func sendStatusPushNotification(order dto.RequestPayload, status string) {
 	}
 }
 
+// listOrdersFromMongoLegacy executa a mesma query que os handlers faziam antes
+// do corte 5. Serve de FALLBACK enquanto o ETL Mongo→Postgres não rodou:
+// se o Postgres ainda não tem pedidos daquele filtro, servimos do Atlas.
+func listOrdersFromMongoLegacy(filter bson.M, sortField string, limit int64) []map[string]interface{} {
+	if models.MongoDabase == nil {
+		return nil
+	}
+	collection := models.MongoDabase.Collection("orders")
+
+	findOpts := mongoFindOptions(sortField, limit)
+	cursor, err := collection.Find(mongoCtx(), filter, findOpts)
+	if err != nil {
+		log.Printf("[ORDER-LEGACY] Falha na consulta fallback ao Mongo: %v", err)
+		return nil
+	}
+	defer cursor.Close(mongoCtx())
+
+	var orders []map[string]interface{}
+	if err := cursor.All(mongoCtx(), &orders); err != nil {
+		return nil
+	}
+	return orders
+}
+
 func ListOrdersByEstablishmentID(c *fiber.Ctx) error {
 	establishmentID := c.Params("establishmentId")
 
@@ -307,32 +325,28 @@ func ListOrdersByEstablishmentID(c *fiber.Ctx) error {
 		})
 	}
 
-	filter := bson.M{"establishmentid": establishmentIDInt}
-
-	collection := models.MongoDabase.Collection("orders")
-
-	cursor, err := collection.Find(mongoCtx(), filter)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Falha ao buscar pedidos",
-		})
-	}
-	defer cursor.Close(mongoCtx())
-
-	var orders []map[string]interface{}
-	if err := cursor.All(mongoCtx(), &orders); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Falha ao decodificar resultados",
-		})
+	// Postgres primário (corte 5).
+	var docs []models.OrderDocument
+	if models.DB != nil {
+		models.DB.Where("establishment_id = ?", establishmentIDInt).
+			Order("created_at desc").Limit(500).Find(&docs)
 	}
 
 	var formattedOrders []map[string]interface{}
-	for _, order := range orders {
-		formattedOrder := make(map[string]interface{})
-		for key, value := range order {
-			formattedOrder[key] = value
+	for _, d := range docs {
+		formattedOrders = append(formattedOrders, docToResponseMap(&d))
+	}
+
+	// Fallback legado: nada migrado ainda para este estabelecimento.
+	if len(formattedOrders) == 0 {
+		legacy := listOrdersFromMongoLegacy(
+			bson.M{"establishmentid": establishmentIDInt}, "", 0)
+		if legacy != nil {
+			formattedOrders = legacy
 		}
-		formattedOrders = append(formattedOrders, formattedOrder)
+	}
+	if formattedOrders == nil {
+		formattedOrders = []map[string]interface{}{}
 	}
 
 	return c.JSON(formattedOrders)
@@ -352,41 +366,53 @@ func ListOrdersByEstablishmentIDAndPhone(c *fiber.Ctx) error {
 	}
 
 	phoneNumber, err := url.QueryUnescape(phoneNumberEncoded)
-	filter := bson.M{
-		"establishmentid": establishmentIDInt,
-		"user.phone":      phoneNumber,
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Número de telefone inválido"})
 	}
 
-	collection := models.MongoDabase.Collection("orders")
-	cursor, err := collection.Find(mongoCtx(), filter)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao buscar pedidos"})
+	var docs []models.OrderDocument
+	if models.DB != nil {
+		models.DB.Where("establishment_id = ? AND user_phone = ?", establishmentIDInt, phoneNumber).
+			Order("created_at desc").Limit(500).Find(&docs)
 	}
-	defer cursor.Close(mongoCtx())
 
 	var orders []map[string]interface{}
-	if err := cursor.All(mongoCtx(), &orders); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao decodificar resultados"})
+	for _, d := range docs {
+		orders = append(orders, docToResponseMap(&d))
+	}
+
+	if len(orders) == 0 {
+		legacy := listOrdersFromMongoLegacy(
+			bson.M{"establishmentid": establishmentIDInt, "user.phone": phoneNumber}, "", 0)
+		if legacy != nil {
+			orders = legacy
+		}
+	}
+	if orders == nil {
+		orders = []map[string]interface{}{}
 	}
 
 	return c.JSON(orders)
 }
 
 func ListAllOrders(c *fiber.Ctx) error {
-	collection := models.MongoDabase.Collection("orders")
-
-	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}}).SetLimit(500)
-	cursor, err := collection.Find(mongoCtx(), bson.M{}, opts)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao buscar pedidos"})
+	var docs []models.OrderDocument
+	if models.DB != nil {
+		models.DB.Order("created_at desc").Limit(500).Find(&docs)
 	}
-	defer cursor.Close(mongoCtx())
 
 	var orders []map[string]interface{}
-	if err := cursor.All(mongoCtx(), &orders); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao decodificar resultados"})
+	for _, d := range docs {
+		orders = append(orders, docToResponseMap(&d))
 	}
 
+	// Fallback legado: banco Postgres ainda vazio (ETL pendente).
+	if len(orders) == 0 {
+		legacy := listOrdersFromMongoLegacy(bson.M{}, "created_at", 500)
+		if legacy != nil {
+			orders = legacy
+		}
+	}
 	if orders == nil {
 		orders = []map[string]interface{}{}
 	}
@@ -470,21 +496,25 @@ func ListOrdersByPhone(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Erro ao decodificar número de telefone"})
 	}
 
-	filter := bson.M{
-		"user.phone": phoneNumber,
+	var docs []models.OrderDocument
+	if models.DB != nil {
+		models.DB.Where("user_phone = ?", phoneNumber).
+			Order("created_at desc").Limit(500).Find(&docs)
 	}
-
-	collection := models.MongoDabase.Collection("orders")
-	options := options.Find().SetSort(bson.D{{Key: "lastModified", Value: -1}})
-	cursor, err := collection.Find(mongoCtx(), filter, options)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao buscar pedidos"})
-	}
-	defer cursor.Close(mongoCtx())
 
 	var orders []map[string]interface{}
-	if err := cursor.All(mongoCtx(), &orders); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao decodificar resultados"})
+	for _, d := range docs {
+		orders = append(orders, docToResponseMap(&d))
+	}
+
+	if len(orders) == 0 {
+		legacy := listOrdersFromMongoLegacy(bson.M{"user.phone": phoneNumber}, "lastModified", 0)
+		if legacy != nil {
+			orders = legacy
+		}
+	}
+	if orders == nil {
+		orders = []map[string]interface{}{}
 	}
 
 	return c.JSON(orders)

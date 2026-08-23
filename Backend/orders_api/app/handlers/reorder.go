@@ -1,31 +1,35 @@
 package handlers
 
+// reorder.go — "repetir pedido" (monta carrinho a partir de um pedido antigo).
+// CORTE 5: leitura Postgres-first com lazy import do Mongo legado.
+
 import (
-	"github.com/carloshomar/fuudelivery/orders_api/app/models"
+	"encoding/json"
+
 	"github.com/gofiber/fiber/v2"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 func RepeatOrder(c *fiber.Ctx) error {
 	orderID := c.Params("orderId")
 
-	oid, err := primitive.ObjectIDFromHex(orderID)
+	doc, err := findOrderByLegacyID(orderID)
 	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid order ID"})
-	}
-
-	collection := models.MongoDabase.Collection("orders")
-	filter := bson.M{"_id": oid}
-
-	var order bson.M
-	if err := collection.FindOne(mongoCtx(), filter).Decode(&order); err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Order not found"})
 	}
 
+	// O payload completo (cart + establishment) está no JSONB; extraímos
+	// apenas os campos que o cliente consome.
+	var payload struct {
+		Cart          json.RawMessage `json:"cart"`
+		Establishment json.RawMessage `json:"establishment"`
+	}
+	if err := json.Unmarshal(doc.Payload, &payload); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Falha ao ler o pedido"})
+	}
+
 	response := fiber.Map{
-		"cart":          order["cart"],
-		"establishment": order["establishment"],
+		"cart":          json.RawMessage(payload.Cart),
+		"establishment": json.RawMessage(payload.Establishment),
 	}
 
 	return c.JSON(response)

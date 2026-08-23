@@ -45,7 +45,7 @@ Não faça isso tudo de uma vez. Sugestão de ordem, do menos arriscado ao mais:
 3. ✅ **`delivery_api`** (script 02) — código já migrado: escrita/leitura primárias em Postgres, dual-write Mongo best-effort. Motor de despacho usa o read-model GORM.
 4. ✅ **Pagamentos** (script 03) — código migrado: todos os handlers (`payment_api`) usam GORM/Postgres como primário com dual-write best-effort no Mongo; ETL one-shot disponível em `cmd/etl-payments` (idempotente, não apaga nada). Teste E2E reescrito para Postgres via testcontainers.
 
-> ⚠️ **Corte 5 (pendente): recursos de pedidos ainda no Mongo.** Os handlers `pickup_code.go`, `review.go`, `scheduling.go` e `reorder.go` do `orders_api` leem/escrevem direto na collection `orders` do Mongo como caminho primário. É o último uso de Mongo fora de dual-writes — migrar para a tabela `orders` do Postgres (sql/01) antes de desligar o Atlas.
+5. ✅ **Recursos de pedidos** — código migrado: TODOS os handlers do `orders_api` usam Postgres primário com dual-write best-effort no Mongo. Detalhes no corte 5 da tabela abaixo.
 
 ## Status dos cortes (atualizado em 2026-08-23)
 
@@ -55,7 +55,7 @@ Não faça isso tudo de uma vez. Sugestão de ordem, do menos arriscado ao mais:
 | 2. `chat_messages` | ✅ **Código migrado** — escrita primária em Postgres (GORM AutoMigrate + tabela sql/04), dual-write Mongo best-effort; leitura e MarkAsRead 100% Postgres. ID agora é BIGSERIAL (era ObjectID). | `chat_api/app/models/{message,database}.go`, `handlers/chat.go` |
 | 3. `delivery_solicitations` | ✅ **Código migrado** — Postgres primário, dual-write legado | `delivery_api/app/handlers/solicitations.go`, `dispatch_handler.go` |
 | 4. Pagamentos/carteiras | ✅ **Código migrado + ETL pronto** — handlers 100% GORM/Postgres com dual-write best-effort; lazy-ETL "on first touch" para carteiras + ferramenta `cmd/etl-payments` para importar histórico completo (payments, wallets, wallet_ledger → wallet_transactions) antes de desligar o Atlas. Suíte E2E reescrita para Postgres (testcontainers). | `payment_api/app/handlers/*`, `payment_api/app/models/{payment,wallet}.go`, `cmd/etl-payments/` |
-| 5. Recursos de pedidos | ⬜ Pendente — `pickup_code.go`, `review.go`, `scheduling.go`, `reorder.go` ainda usam a collection `orders` do Mongo como primário | `orders_api/app/handlers/` |
+| 5. Recursos de pedidos | ✅ **Código migrado** — a tabela `order_documents` guarda o payload completo (JSONB) + colunas tipadas para filtros/índices (`establishment_id`, `user_phone`, `status`, `pickup_code`, agendamento). O ID público continua no formato legado (ObjectID hex) — nenhum cliente precisou mudar. Leitura Postgres-first com **lazy import** do Mongo (pedido antigo é importado no primeiro acesso) e fallback de listagem enquanto o ETL não roda. Teste de integração atualizado: valida persistência em Postgres, dual-write no Mongo e geração de pickup code. | `orders_api/app/models/order_document.go`, `handlers/orders_pg.go`, `handlers/{orders,pickup_code,review,scheduling,reorder}.go` |
 
 **Como desligar o Mongo depois:** remova as chamadas `ConnectMongoDatabase()` e os blocos "dual-write" marcados nos handlers; então remova `MONGO_URI` do Render. Os blocos legados estão todos marcados com comentários "dual-write temporário" no código.
 
@@ -73,7 +73,21 @@ PAYMENT_MONGO_DATABASE="fuudelivery_payments" \
 
 O que faz: importa `payments` (dedup por abacatepay_id ou order_id+amount), cria carteiras que só existem no Mongo (**nunca sobrescreve saldo Postgres**) com lançamento de auditoria, e importa o `wallet_ledger` antigo para `wallet_transactions` (dedup por tupla característica). Não apaga nada em nenhum banco. Confira o resumo impresso ao final contra os totais do Atlas.
 
-Depois de 1 ciclo financeiro de dual-write observado + ETL validado: execute o corte 5 (recursos de pedidos) e só então remova o Atlas.
+Depois de 1 ciclo financeiro de dual-write observado + ETL validado: execute o ETL de pedidos (abaixo) e só então remova o Atlas.
+
+### Runbook do ETL de pedidos
+
+O corte 5 tem lazy import por pedido individual, mas para desligar o Atlas sem lacunas em LISTAGENS (pedidos antigos só aparecem nas listas depois do ETL), rode uma vez:
+
+```bash
+cd cmd/etl-orders && GOWORK=off go build -o etl-orders .
+DB_CONNECTION_STRING="postgres://..." \
+MONGO_URI="mongodb+srv://..." \
+MONGO_DATABASE="fuudelivery" \
+./etl-orders
+```
+
+Idempotente (dedup por `legacy_id`), não apaga nada nos dois lados. Confira os totais impressos contra o Atlas antes de pausá-lo.
 
 ## Por que RLS não pode copiar o padrão `auth.uid()`
 

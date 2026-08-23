@@ -1,12 +1,14 @@
 package handlers
 
+// scheduling.go — agendamento de pedidos.
+// CORTE 5: Postgres primário (colunas scheduled_at / is_scheduled em
+// order_documents), com espelho no Mongo best-effort via patchOrderDoc.
+
 import (
 	"time"
 
-	"github.com/carloshomar/fuudelivery/orders_api/app/models"
+	"github.com/carloshomar/fuudelivery/orders_api/app/dto"
 	"github.com/gofiber/fiber/v2"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type ScheduleRequest struct {
@@ -25,16 +27,15 @@ func ScheduleOrder(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid date format"})
 	}
 
-	orderID, err := primitive.ObjectIDFromHex(req.OrderID)
+	doc, err := findOrderByLegacyID(req.OrderID)
 	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid order ID"})
+		return c.Status(404).JSON(fiber.Map{"error": "Order not found"})
 	}
 
-	collection := models.MongoDabase.Collection("orders")
-	filter := bson.M{"_id": orderID}
-	update := bson.M{"$set": bson.M{"scheduled_at": scheduledTime, "is_scheduled": true}}
-
-	_, err = collection.UpdateOne(mongoCtx(), filter, update)
+	err = patchOrderDoc(doc, func(p *dto.RequestPayload) {
+		p.ScheduledAt = &scheduledTime
+		p.IsScheduled = true
+	})
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to schedule"})
 	}

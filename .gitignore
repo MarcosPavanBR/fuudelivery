@@ -459,3 +459,7 @@ tools/
 -e 
 # Binário compilado do ETL operacional
 cmd/etl-payments/etl-payments
+-e 
+# Binários compilados das ferramentas ETL
+etl-payments
+etl-orders

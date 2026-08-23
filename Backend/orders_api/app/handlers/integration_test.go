@@ -35,6 +35,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/mongodb"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	postgresdriver "gorm.io/driver/postgres"
@@ -87,6 +89,9 @@ func setupIntegrationEnv(t *testing.T) func() {
 		&models.Category{},
 		&models.Product{},
 		&models.Order{},
+		// Corte 5: pedidos agora vivem primariamente em Postgres.
+		&models.OrderDocument{},
+		&models.PushToken{},
 	))
 	models.DB = gormDB
 
@@ -174,8 +179,23 @@ func TestOrderLifecycle(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&createResp))
 	require.NotEmpty(t, createResp.OrderId)
 
-	// TODO: confirmar direto no Mongo que o documento foi persistido com
-	// status "AWAIT_APPROVE" antes de seguir pro próximo passo.
+	// Corte 5: o pedido DEVE estar no Postgres (fonte da verdade) com status
+	// AWAIT_APPROVE; o Mongo recebe apenas o espelho best-effort.
+	var stored models.OrderDocument
+	require.NoError(t, models.DB.Where("legacy_id = ?", createResp.OrderId).First(&stored).Error,
+		"pedido deveria ter sido persistido em Postgres (order_documents)")
+	require.Equal(t, "AWAIT_APPROVE", stored.Status)
+	require.Equal(t, int64(1), stored.EstablishmentID)
+	require.Equal(t, "+5511999999999", stored.UserPhone)
+
+	// Espelho no Mongo também deve existir (dual-write).
+	var mirrored dto.RequestPayload
+	oid, err := primitive.ObjectIDFromHex(createResp.OrderId)
+	require.NoError(t, err)
+	require.NoError(t, models.MongoDabase.Collection("orders").
+		FindOne(context.Background(), bson.M{"_id": oid}).Decode(&mirrored),
+		"dual-write deveria ter espelhado o pedido no Mongo")
+	require.Equal(t, "AWAIT_APPROVE", mirrored.Status)
 
 	// 2. Atualiza status para DONE (dispara geração de pickup_code)
 	updatePayload := map[string]string{"id": createResp.OrderId, "status": "DONE"}
@@ -187,7 +207,10 @@ func TestOrderLifecycle(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, updateResp.StatusCode)
 
-	// TODO: confirmar no Mongo que pickup_code foi gravado e tem 6 chars.
+	// DONE deve gerar pickup_code de 6 dígitos na coluna tipada do Postgres.
+	require.NoError(t, models.DB.Where("legacy_id = ?", createResp.OrderId).First(&stored).Error)
+	require.Len(t, stored.PickupCode, 6, "pickup_code deveria ter 6 dígitos após DONE")
+	require.Equal(t, "DONE", stored.Status)
 
 	// 3. Credita pontos de fidelidade para o telefone do cliente
 	err = EarnPointsForOrder(orderPayload.User.Phone, createResp.OrderId, 55.90)

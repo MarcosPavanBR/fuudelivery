@@ -54,6 +54,9 @@ run "03_dominio_pagamentos.sql"
 run "04_dominio_chat.sql"
 run "05_audit_log.sql"
 run "06_rls_seguranca.sql"
+# 09 é um reparo idempotente (renomeia tabelas legadas vazias com id TEXT);
+# roda ANTES de 01–03 recriarem o schema correto na segunda passada.
+run "09_reparo_tabelas_legado_texto.sql"
 run "07_auditoria_tabelas_orfas.sql"
 run "08_testes.sql"
 

@@ -73,8 +73,11 @@ jobs:
         # detecta MONGO_TEST_URI/POSTGRES_TEST_URI e conecta direto,
         # pulando o testcontainers.
         run: |
-          docker run -d --name mongo-it -p 27017:27017 mongo:7
-          docker run -d --name pg-it -p 5432:5432 -e POSTGRES_USER=test -e POSTGRES_PASSWORD=test -e POSTGRES_DB=fuudelivery_staging postgres:16-alpine
+          # Mongo com credenciais root test:test (o driver autentica via authSource=admin).
+          docker run -d --name mongo-it -p 27017:27017 \
+            -e MONGO_INITDB_ROOT_USERNAME=test -e MONGO_INITDB_ROOT_PASSWORD=test mongo:7
+          docker run -d --name pg-it -p 5432:5432 \
+            -e POSTGRES_USER=test -e POSTGRES_PASSWORD=test -e POSTGRES_DB=fuudelivery_staging postgres:16-alpine
           for i in $(seq 1 30); do
             docker exec mongo-it mongosh --eval 'db.runCommand("ping")' --quiet 2>/dev/null && break
             sleep 1
@@ -83,13 +86,31 @@ jobs:
             docker exec pg-it pg_isready -U test 2>/dev/null && break
             sleep 1
           done
+          # Uma database por suíte — antes cada teste tinha o próprio container,
+          # então rodar tudo na mesma database causaria interferência de dados.
+          docker exec pg-it psql -U test -d fuudelivery_staging \
+            -c "CREATE DATABASE it_fullflow" -c "CREATE DATABASE it_err_scenarios" -c "CREATE DATABASE it_admin_bootstrap"
           echo "Services ready."
 
-      - name: Run integration tests
+      # Cada suíte roda isolada (database própria), replicando o isolamento
+      # que os containers individuais garantiam antes do escape hatch.
+      - name: Run TestFullFlow
         env:
-          MONGO_TEST_URI: mongodb://test:test@localhost:27017/fuudelivery_staging_payments?directConnection=true
-          POSTGRES_TEST_URI: postgres://test:test@localhost:5432/fuudelivery_staging?sslmode=disable
-        run: go test -tags=integration -v -count=1 -timeout 20m -run 'TestFullFlow|TestErrorScenarios|TestAdminBootstrap' ./
+          MONGO_TEST_URI: mongodb://test:test@localhost:27017/fuudelivery_test?directConnection=true&authSource=admin
+          POSTGRES_TEST_URI: postgres://test:test@localhost:5432/it_fullflow?sslmode=disable
+        run: go test -tags=integration -v -count=1 -timeout 10m -run 'TestFullFlow' ./
+
+      - name: Run TestErrorScenarios
+        env:
+          MONGO_TEST_URI: mongodb://test:test@localhost:27017/fuudelivery_err_test?directConnection=true&authSource=admin
+          POSTGRES_TEST_URI: postgres://test:test@localhost:5432/it_err_scenarios?sslmode=disable
+        run: go test -tags=integration -v -count=1 -timeout 10m -run 'TestErrorScenarios' ./
+
+      - name: Run TestAdminBootstrap
+        env:
+          MONGO_TEST_URI: mongodb://test:test@localhost:27017/fuudelivery_bootstrap?directConnection=true&authSource=admin
+          POSTGRES_TEST_URI: postgres://test:test@localhost:5432/it_admin_bootstrap?sslmode=disable
+        run: go test -tags=integration -v -count=1 -timeout 10m -run 'TestAdminBootstrap' ./
 
       - name: Cleanup Docker services
         if: always()

@@ -150,9 +150,17 @@ func GetPaymentStats(c *fiber.Ctx) error {
 	models.DB.Model(&models.Payment{}).Where("status = ?", "CONFIRMED").Count(&cs.Confirmed)
 	models.DB.Model(&models.Payment{}).Where("status = ?", "REJECTED").Count(&cs.Rejected)
 	// SUM ignora NULL automaticamente; sem linhas retorna NULL → coalesce.
-	models.DB.Model(&models.Payment{}).
+	// ⚠️ Destino separado: o Scan do GORM zera TODA a struct de destino
+	// (inclusive campos sem coluna correspondente), então não pode reaproveitar
+	// `cs` — senão os counts acima voltam a 0 (bug real pego pelo teste E2E).
+	var sumRow struct {
+		TotalAmount float64
+	}
+	if err := models.DB.Model(&models.Payment{}).
 		Select("COALESCE(SUM(amount), 0) as total_amount").
-		Scan(&cs)
+		Scan(&sumRow).Error; err == nil {
+		cs.TotalAmount = sumRow.TotalAmount
+	}
 
 	return c.JSON(fiber.Map{
 		"total":        cs.Total,

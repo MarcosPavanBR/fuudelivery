@@ -56,33 +56,56 @@ import (
 func TestAdminBootstrapPaymentsAll(t *testing.T) {
 	ctx := context.Background()
 
+	// Modo CI/serviço externo: quando POSTGRES_TEST_URI e MONGO_TEST_URI estão
+	// definidos, usa os serviços já iniciados pelo workflow (padrão
+	// "docker run" + wait, mais estável que testcontainers no runner atual).
+	externalPG := os.Getenv("POSTGRES_TEST_URI") != ""
+	externalMongo := os.Getenv("MONGO_TEST_URI") != ""
+
 	// ---- Setup: MongoDB + Postgres reais (staging) ----
-	mongoContainer, err := mongodb.Run(ctx, "mongo:7")
-	require.NoError(t, err, "subir MongoDB")
-	defer mongoContainer.Terminate(ctx)
+	var mongoURI string
+	var mongoClient *mongo.Client
+	if externalMongo {
+		mongoURI = os.Getenv("MONGO_TEST_URI")
+		var cErr error
+		mongoClient, cErr = mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+		require.NoError(t, cErr)
+		require.NoError(t, mongoClient.Ping(ctx, nil))
+		defer func() { _ = mongoClient.Disconnect(ctx) }()
+	} else {
+		mongoContainer, mErr := mongodb.Run(ctx, "mongo:7")
+		require.NoError(t, mErr, "subir MongoDB")
+		defer mongoContainer.Terminate(ctx)
 
-	mongoURI, err := mongoContainer.ConnectionString(ctx)
-	require.NoError(t, err)
+		mongoURI, mErr = mongoContainer.ConnectionString(ctx)
+		require.NoError(t, mErr)
 
-	mongoClient, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
-	require.NoError(t, err)
-	require.NoError(t, mongoClient.Ping(ctx, nil))
-	defer mongoClient.Disconnect(ctx)
+		mongoClient, mErr = mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+		require.NoError(t, mErr)
+		require.NoError(t, mongoClient.Ping(ctx, nil))
+		defer mongoClient.Disconnect(ctx)
+	}
 
-	pgContainer, err := postgres.Run(ctx, "postgres:16-alpine",
-		postgres.WithDatabase("fuudelivery_staging"),
-		postgres.WithUsername("test"),
-		postgres.WithPassword("test"),
-	)
-	require.NoError(t, err, "subir Postgres")
-	defer pgContainer.Terminate(ctx)
+	var pgDSN string
+	if externalPG {
+		pgDSN = os.Getenv("POSTGRES_TEST_URI")
+	} else {
+		pgContainer, pErr := postgres.Run(ctx, "postgres:16-alpine",
+			postgres.WithDatabase("fuudelivery_staging"),
+			postgres.WithUsername("test"),
+			postgres.WithPassword("test"),
+		)
+		require.NoError(t, pErr, "subir Postgres")
+		defer pgContainer.Terminate(ctx)
 
-	pgDSN, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
-	require.NoError(t, err)
+		pgDSN, pErr = pgContainer.ConnectionString(ctx, "sslmode=disable")
+		require.NoError(t, pErr)
+	}
 
 	// Backoff classico de testcontainers em CI (o container pode nao aceitar
 	// conexoes imediatamente apos o start).
 	var pgDB *gorm.DB
+	var err error
 	for attempt := 0; attempt < 10; attempt++ {
 		pgDB, err = gorm.Open(postgresdriver.Open(pgDSN), &gorm.Config{})
 		if err == nil {

@@ -59,28 +59,50 @@ func TestFullFlowAuthOrderPayment(t *testing.T) {
 	ctx := context.Background()
 
 	// ---- Setup: MongoDB + Postgres reais ----
-	mongoContainer, err := mongodb.Run(ctx, "mongo:7")
-	require.NoError(t, err, "subir MongoDB")
-	defer mongoContainer.Terminate(ctx)
+	// Modo CI/serviço externo: com MONGO_TEST_URI/POSTGRES_TEST_URI definidas,
+	// conecta direto nos serviços iniciados pelo workflow (padrão "docker run"
+	// + wait, mais estável que testcontainers no runner atual).
+	externalMongo := os.Getenv("MONGO_TEST_URI") != ""
+	externalPG := os.Getenv("POSTGRES_TEST_URI") != ""
 
-	mongoURI, err := mongoContainer.ConnectionString(ctx)
-	require.NoError(t, err)
+	var mongoURI string
+	var mongoClient *mongo.Client
+	var err error
+	if externalMongo {
+		mongoURI = os.Getenv("MONGO_TEST_URI")
+		mongoClient, err = mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+		require.NoError(t, err)
+		require.NoError(t, mongoClient.Ping(ctx, nil))
+		defer func() { _ = mongoClient.Disconnect(ctx) }()
+	} else {
+		mongoContainer, mErr := mongodb.Run(ctx, "mongo:7")
+		require.NoError(t, mErr, "subir MongoDB")
+		defer mongoContainer.Terminate(ctx)
 
-	mongoClient, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
-	require.NoError(t, err)
-	require.NoError(t, mongoClient.Ping(ctx, nil))
-	defer mongoClient.Disconnect(ctx)
+		mongoURI, mErr = mongoContainer.ConnectionString(ctx)
+		require.NoError(t, mErr)
 
-	pgContainer, err := postgres.Run(ctx, "postgres:16-alpine",
-		postgres.WithDatabase("fuudelivery_test"),
-		postgres.WithUsername("test"),
-		postgres.WithPassword("test"),
-	)
-	require.NoError(t, err, "subir Postgres")
-	defer pgContainer.Terminate(ctx)
+		mongoClient, mErr = mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+		require.NoError(t, mErr)
+		require.NoError(t, mongoClient.Ping(ctx, nil))
+		defer mongoClient.Disconnect(ctx)
+	}
 
-	pgDSN, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
-	require.NoError(t, err)
+	var pgDSN string
+	if externalPG {
+		pgDSN = os.Getenv("POSTGRES_TEST_URI")
+	} else {
+		pgContainer, pErr := postgres.Run(ctx, "postgres:16-alpine",
+			postgres.WithDatabase("fuudelivery_test"),
+			postgres.WithUsername("test"),
+			postgres.WithPassword("test"),
+		)
+		require.NoError(t, pErr, "subir Postgres")
+		defer pgContainer.Terminate(ctx)
+
+		pgDSN, pErr = pgContainer.ConnectionString(ctx, "sslmode=disable")
+		require.NoError(t, pErr)
+	}
 
 	// O container pode nao estar 100% pronto para aceitar conexoes
 	// logo apos o start (race classico de testcontainers em CI).

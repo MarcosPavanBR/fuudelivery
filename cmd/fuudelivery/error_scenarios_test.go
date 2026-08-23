@@ -43,31 +43,59 @@ func setupErrorTestEnv(t *testing.T) (*fiber.App, func(), uint, uint, string) {
 	t.Helper()
 	ctx := context.Background()
 
-	// --- MongoDB ---
-	mongoC, err := mongodb.Run(ctx, "mongo:7")
-	require.NoError(t, err)
+	// Modo CI/serviço externo: com MONGO_TEST_URI/POSTGRES_TEST_URI definidas,
+	// conecta direto nos serviços iniciados pelo workflow (mesmo padrão dos
+	// demais testes de integração — "docker run" + wait em vez de testcontainers).
+	externalMongo := os.Getenv("MONGO_TEST_URI") != ""
+	externalPG := os.Getenv("POSTGRES_TEST_URI") != ""
 
-	mongoURI, err := mongoC.ConnectionString(ctx)
-	require.NoError(t, err)
+	// Containers só existem no modo local (testcontainers); no modo CI os
+	// serviços já foram iniciados pelo workflow e o cleanup é no-op para eles.
+	var mongoC *mongodb.MongoDBContainer
+	var pgC *postgres.PostgresContainer
 
-	mongoClient, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
-	require.NoError(t, err)
-	require.NoError(t, mongoClient.Ping(ctx, nil))
+	var mongoURI string
+	var mongoClient *mongo.Client
+	if externalMongo {
+		mongoURI = os.Getenv("MONGO_TEST_URI")
+		var cErr error
+		mongoClient, cErr = mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+		require.NoError(t, cErr)
+		require.NoError(t, mongoClient.Ping(ctx, nil))
+		defer func() { _ = mongoClient.Disconnect(ctx) }()
+	} else {
+		var mErr error
+		mongoC, mErr = mongodb.Run(ctx, "mongo:7")
+		require.NoError(t, mErr)
 
-	// --- Postgres ---
-	pgC, err := postgres.Run(ctx, "postgres:16-alpine",
-		postgres.WithDatabase("fuudelivery_err_test"),
-		postgres.WithUsername("test"),
-		postgres.WithPassword("test"),
-	)
-	require.NoError(t, err)
+		mongoURI, mErr = mongoC.ConnectionString(ctx)
+		require.NoError(t, mErr)
 
-	pgDSN, err := pgC.ConnectionString(ctx, "sslmode=disable")
-	require.NoError(t, err)
+		mongoClient, mErr = mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+		require.NoError(t, mErr)
+		require.NoError(t, mongoClient.Ping(ctx, nil))
+	}
+
+	var pgDSN string
+	if externalPG {
+		pgDSN = os.Getenv("POSTGRES_TEST_URI")
+	} else {
+		var pErr error
+		pgC, pErr = postgres.Run(ctx, "postgres:16-alpine",
+			postgres.WithDatabase("fuudelivery_err_test"),
+			postgres.WithUsername("test"),
+			postgres.WithPassword("test"),
+		)
+		require.NoError(t, pErr)
+
+		pgDSN, pErr = pgC.ConnectionString(ctx, "sslmode=disable")
+		require.NoError(t, pErr)
+	}
 
 	// Retry com backoff: o container pode nao estar pronto logo apos o start
 	// (race classico de testcontainers em CI).
 	var pgDB *gorm.DB
+	var err error
 	for attempt := 0; attempt < 10; attempt++ {
 		pgDB, err = gorm.Open(postgresdriver.Open(pgDSN), &gorm.Config{})
 		if err == nil {
@@ -250,8 +278,13 @@ func setupErrorTestEnv(t *testing.T) (*fiber.App, func(), uint, uint, string) {
 
 	cleanup := func() {
 		mongoClient.Disconnect(ctx)
-		mongoC.Terminate(ctx)
-		pgC.Terminate(ctx)
+		// No modo CI (serviços externos) os containers não existem — nada a encerrar.
+		if mongoC != nil {
+			mongoC.Terminate(ctx)
+		}
+		if pgC != nil {
+			pgC.Terminate(ctx)
+		}
 	}
 
 	return app, cleanup, defaultZone.ID, est.ID, tokenString

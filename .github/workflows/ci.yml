@@ -82,18 +82,19 @@ jobs:
             if docker exec mongo-it mongosh --eval 'db.runCommand("ping")' --quiet >/dev/null 2>&1; then break; fi
             sleep 1
           done
-          # Espera o Postgres terminar de vez o initdb: durante a fase de
-          # setup ele reinicia e recusa conexões ("terminating connection due
-          # to administrator command"). O `if` evita que uma tentativa falha
-          # aborte o passo via errexit (bash -e do GitHub Actions).
-          for i in $(seq 1 30); do
-            if docker exec pg-it psql -U test -d postgres -c 'SELECT 1' >/dev/null 2>&1; then break; fi
-            sleep 1
-          done
+          # Espera o Postgres TERMINAR de vez o initdb com espera real (until +
+          # sleep 1): durante o setup ele reinicia e recusa conexões, e 30
+          # tentativas sem sleep passam em ~2s, antes do servidor estar pronto.
+          # `until`/`if` são imunes a errexit (bash -e do GitHub Actions).
+          until docker exec pg-it psql -U test -d postgres -c 'SELECT 1' >/dev/null 2>&1; do sleep 1; done
           # Uma database por suíte — antes cada teste tinha o próprio container,
           # então rodar tudo na mesma database causaria interferência de dados.
-          docker exec pg-it psql -U test -d postgres \
-            -c "CREATE DATABASE it_fullflow" -c "CREATE DATABASE it_err_scenarios" -c "CREATE DATABASE it_admin_bootstrap"
+          # Retry: pode ainda pegar a cauda do reinício do initdb.
+          for i in $(seq 1 30); do
+            if docker exec pg-it psql -U test -d postgres \
+              -c "CREATE DATABASE it_fullflow" -c "CREATE DATABASE it_err_scenarios" -c "CREATE DATABASE it_admin_bootstrap"; then break; fi
+            sleep 2
+          done
           echo "Services ready."
 
       # Cada suíte roda isolada (database própria), replicando o isolamento

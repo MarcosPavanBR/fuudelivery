@@ -1,0 +1,69 @@
+# Dependabot — PRs automáticos quando sair CVE nova ou atualização de
+# dependência. Complementa o govulncheck/npm audit do CI (que só rodam a cada
+# push): aqui o alerta chega sozinho.
+version: 2
+
+updates:
+  # Módulos Go (monolito + APIs + ETLs + pacotes compartilhados)
+  - package-ecosystem: gomod
+    directory: /cmd/fuudelivery
+    schedule:
+      interval: weekly
+  - package-ecosystem: gomod
+    directory: /Backend/auth_api
+    schedule:
+      interval: weekly
+  - package-ecosystem: gomod
+    directory: /Backend/payment_api
+    schedule:
+      interval: weekly
+  - package-ecosystem: gomod
+    directory: /Backend/orders_api
+    schedule:
+      interval: weekly
+  - package-ecosystem: gomod
+    directory: /Backend/delivery_api
+    schedule:
+      interval: weekly
+  - package-ecosystem: gomod
+    directory: /Backend/chat_api
+    schedule:
+      interval: weekly
+  - package-ecosystem: gomod
+    directory: /cmd/etl-payments
+    schedule:
+      interval: weekly
+  - package-ecosystem: gomod
+    directory: /cmd/etl-orders
+    schedule:
+      interval: weekly
+
+  # Frontends web
+  - package-ecosystem: npm
+    directory: /Frontend/WebRestaurant
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
+    directory: /Frontend/WebAdmin
+    schedule:
+      interval: weekly
+
+  # Apps mobile (Expo)
+  - package-ecosystem: npm
+    directory: /Frontend/AppComida
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
+    directory: /Frontend/AppEntrega
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
+    directory: /Frontend/AppRestaurante
+    schedule:
+      interval: weekly
+
+  # GitHub Actions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

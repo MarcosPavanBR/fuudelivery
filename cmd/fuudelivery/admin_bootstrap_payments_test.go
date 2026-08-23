@@ -33,8 +33,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/mongodb"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/crypto/bcrypt"
@@ -131,8 +129,12 @@ func TestAdminBootstrapPaymentsAll(t *testing.T) {
 	// Conecta os models GLOBAIS usados pelos handlers reais.
 	// ConnectDatabase() faz AutoMigrate + cria a zona padrao (5/85).
 	require.NotPanics(t, func() { authModels.ConnectDatabase() }, "conectar authModels.DB (Postgres)")
+	// Corte 4: os handlers de pagamento leem/escrevem via GORM (paymentModels.DB);
+	// o Mongo virou dual-write legado, mas continua conectado para o seed.
+	require.NotPanics(t, func() { paymentModels.ConnectPostgresDatabase() }, "conectar paymentModels.DB (Postgres)")
 	require.NotPanics(t, func() { paymentModels.ConnectMongoDatabase() }, "conectar paymentModels (Mongo)")
 	require.NotNil(t, authModels.DB, "authModels.DB deve estar conectado")
+	require.NotNil(t, paymentModels.DB, "paymentModels.DB deve estar conectado")
 	require.NotNil(t, paymentModels.MongoDabase, "paymentModels.MongoDabase deve estar conectado")
 
 	// ---- Setup: app Fiber com as rotas REAIS do monolith ----
@@ -215,35 +217,37 @@ func TestAdminBootstrapPaymentsAll(t *testing.T) {
 		require.NotEmpty(t, adminToken, "token JWT")
 	})
 
-	// ---- 5. Seed de pagamentos no MongoDB (banco de payments) ----
+	// ---- 5. Seed de pagamentos no Postgres (tabela payments, corte 4) ----
 	// Um pagamento com customer_id existente no Postgres (deve virar user.nome)
 	// e outro com customer_id inexistente (deve ficar sem user).
-	paymentsCol := paymentModels.MongoDabase.Collection("payments")
+	// Desde o corte 4 o /payments/all le do Postgres; o Mongo e apenas
+	// dual-write legado, então o seed precisa ir pela mesma via do handler.
 	t.Run("SeedPayments", func(t *testing.T) {
 		now := time.Now()
-		_, err := paymentsCol.InsertOne(ctx, bson.M{
-			"_id":            primitive.NewObjectID(),
-			"order_id":       "order-staging-001",
-			"customer_id":    int64(userID),
-			"customer_phone": "11999990001",
-			"amount":         8500,
-			"status":         "CONFIRMED",
-			"method":         "pix",
-			"created_at":     now,
-		})
-		require.NoError(t, err, "inserir pagamento com customer conhecido")
-
-		_, err = paymentsCol.InsertOne(ctx, bson.M{
-			"_id":            primitive.NewObjectID(),
-			"order_id":       "order-staging-002",
-			"customer_id":    int64(999999),
-			"customer_phone": "11999990002",
-			"amount":         2500,
-			"status":         "PENDING",
-			"method":         "pix",
-			"created_at":     now.Add(time.Second),
-		})
-		require.NoError(t, err, "inserir pagamento com customer inexistente")
+		seed := []paymentModels.Payment{
+			{
+				OrderID:       "order-staging-001",
+				CustomerID:    int64(userID),
+				CustomerPhone: "11999990001",
+				Amount:        8500,
+				Status:        "CONFIRMED",
+				Method:        "pix",
+				CreatedAt:     now,
+			},
+			{
+				OrderID:       "order-staging-002",
+				CustomerID:    int64(999999),
+				CustomerPhone: "11999990002",
+				Amount:        2500,
+				Status:        "PENDING",
+				Method:        "pix",
+				CreatedAt:     now.Add(time.Second),
+			},
+		}
+		for i := range seed {
+			require.NoError(t, paymentModels.DB.Create(&seed[i]).Error,
+				"semear pagamento no Postgres")
+		}
 	})
 
 	// ---- 6. /payments/all sem token -> 401 ----

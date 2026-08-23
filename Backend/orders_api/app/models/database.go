@@ -71,6 +71,9 @@ func ConnectPostgresDatabase() {
 		// Corte 1 da migração banco-único: push tokens agora em Postgres
 		// (tabela também criada por sql/01_dominio_pedidos.sql).
 		&PushToken{},
+		// Corte 5 da migração banco-único: pedidos (collection Mongo "orders")
+		// agora têm espelho em Postgres. Ver models/order_document.go.
+		&OrderDocument{},
 	); err != nil {
 		log.Printf("[CRITICAL] Falha no AutoMigrate do PostgreSQL: %v. "+
 			"O servidor continuara, mas tabelas podem estar ausentes. "+

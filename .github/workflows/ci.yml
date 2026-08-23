@@ -49,8 +49,8 @@ jobs:
 
   # ──────────────────────────────────────────────
   # Integration — fluxo completo de pagamento PIX
-  # (exige Docker + testcontainers: MongoDB + Postgres reais,
-  #  AbacatePay mockado por httptest.Server)
+  # (exige Docker: MongoDB + Postgres via "docker run"; AbacatePay mockado
+  #  por httptest.Server)
   # ──────────────────────────────────────────────
   integration-payments:
     name: Integration — fluxo PIX (auth→order→payment→split→wallet)
@@ -67,12 +67,37 @@ jobs:
           # (connection reset) + govulncheck v1.1.4. Alinhar com go.work/go.mod.
           go-version: "1.25.x"
 
-      - name: Run integration tests (testcontainers)
-        run: go test -tags=integration -v -timeout 20m -run 'TestFullFlow|TestErrorScenarios|TestAdminBootstrap' ./
+      - name: Start Docker services (Mongo + Postgres)
+        # Mesmo padrão do job e2e-delivery (que passa estável no runner
+        # atual): "docker run" cru + wait via mongosh/pg_isready. O teste
+        # detecta MONGO_TEST_URI/POSTGRES_TEST_URI e conecta direto,
+        # pulando o testcontainers.
+        run: |
+          docker run -d --name mongo-it -p 27017:27017 mongo:7
+          docker run -d --name pg-it -p 5432:5432 -e POSTGRES_USER=test -e POSTGRES_PASSWORD=test -e POSTGRES_DB=fuudelivery_staging postgres:16-alpine
+          for i in $(seq 1 30); do
+            docker exec mongo-it mongosh --eval 'db.runCommand("ping")' --quiet 2>/dev/null && break
+            sleep 1
+          done
+          for i in $(seq 1 30); do
+            docker exec pg-it pg_isready -U test 2>/dev/null && break
+            sleep 1
+          done
+          echo "Services ready."
+
+      - name: Run integration tests
+        env:
+          MONGO_TEST_URI: mongodb://test:test@localhost:27017/fuudelivery_staging_payments?directConnection=true
+          POSTGRES_TEST_URI: postgres://test:test@localhost:5432/fuudelivery_staging?sslmode=disable
+        run: go test -tags=integration -v -count=1 -timeout 20m -run 'TestFullFlow|TestErrorScenarios|TestAdminBootstrap' ./
+
+      - name: Cleanup Docker services
+        if: always()
+        run: docker rm -f mongo-it pg-it 2>/dev/null || true
 
   # ──────────────────────────────────────────────
   # Integration — payment_api (checkout E2E + admin Financeiro)
-  # (exige Docker + testcontainers MongoDB real)
+  # (exige Docker: Postgres via "docker run")
   # ──────────────────────────────────────────────
   integration-payment-api:
     name: Integration — payment_api (checkout + admin)
@@ -89,8 +114,25 @@ jobs:
           # (connection reset) + govulncheck v1.1.4. Alinhar com go.work/go.mod.
           go-version: "1.25.x"
 
-      - name: Run payment_api integration tests (testcontainers)
-        run: go test -tags=integration -v -timeout 20m -run 'TestCheckoutE2E' ./app/handlers/
+      - name: Start Docker service (Postgres)
+        # Mesmo padrão comprovado do job e2e-delivery: "docker run" cru +
+        # pg_isready. O teste detecta POSTGRES_TEST_URI e conecta direto.
+        run: |
+          docker run -d --name pg-pay -p 5432:5432 -e POSTGRES_USER=test -e POSTGRES_PASSWORD=test -e POSTGRES_DB=payment_e2e_test postgres:16-alpine
+          for i in $(seq 1 30); do
+            docker exec pg-pay pg_isready -U test 2>/dev/null && break
+            sleep 1
+          done
+          echo "Service ready."
+
+      - name: Run payment_api integration tests
+        env:
+          POSTGRES_TEST_URI: postgres://test:test@localhost:5432/payment_e2e_test?sslmode=disable
+        run: go test -tags=integration -v -count=1 -timeout 20m -run 'TestCheckoutE2E' ./app/handlers/
+
+      - name: Cleanup Docker services
+        if: always()
+        run: docker rm -f pg-pay 2>/dev/null || true
 
   # ──────────────────────────────────────────────
   # Formatting — all Go modules

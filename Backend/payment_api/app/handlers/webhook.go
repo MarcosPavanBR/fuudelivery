@@ -362,13 +362,19 @@ func adjustEstablishmentWallet(establishmentID int64, credit float64, abacatepay
 
 // ValidateWebhookSignature verifica a assinatura HMAC-SHA256 do header
 // x-abacatepay-signature contra o body do webhook usando a secret configurada.
-// Retorna true se a assinatura for válida ou se a secret não estiver configurada
-// (fallback: a verificação via API AbacatePay continua sendo o check primário).
+// Retorna true se a assinatura for válida. Em produção (GO_ENV=production),
+// secret ausente = REJEITA (fail-closed): sem isso, um erro de configuração
+// desligaria a defesa em profundidade silenciosamente. O handler continua
+// revalidando o status contra a API da AbacatePay de qualquer forma.
 func ValidateWebhookSignature(body []byte, signature string) bool {
 	secret := os.Getenv("ABACATE_PAY_WEBHOOK_SECRET")
 	if secret == "" {
-		// Secret não configurada —skip HMAC (a verificação via API é o check primário)
-		log.Println("[WEBHOOK] ABACATE_PAY_WEBHOOK_SECRET not set — skipping HMAC validation")
+		if os.Getenv("GO_ENV") == "production" {
+			log.Println("[WEBHOOK] ABACATE_PAY_WEBHOOK_SECRET ausente em produção — rejeitando (fail-closed)")
+			return false
+		}
+		// Fora de produção, permite rodar sem secret para desenvolvimento local.
+		log.Println("[WEBHOOK] ABACATE_PAY_WEBHOOK_SECRET not set — skipping HMAC validation (dev)")
 		return true
 	}
 

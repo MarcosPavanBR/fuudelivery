@@ -64,7 +64,8 @@ func main() {
 		log.Fatalf("ping no Mongo falhou: %v", err)
 	}
 	legacy := mc.Database(dbName)
-	log.Printf("[ETL] Mongo legado: %s (db=%s)", mongoURI, dbName)
+	// NUNCA logar a URI inteira: contém usuário/senha do Atlas (P0 de segurança).
+	log.Printf("[ETL] Mongo legado: db=%s (URI configurada)", dbName)
 
 	models.ConnectPostgresDatabase() // mesmo padrão de retry do monolito
 	db := models.DB

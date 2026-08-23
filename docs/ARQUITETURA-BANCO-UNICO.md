@@ -104,6 +104,13 @@ Achados adicionais da auditoria de 23/08:
 2. As colunas `kind`/`destination` do ledger só existiam via AutoMigrate; versionadas em `sql/10_wallet_ledger_kind.sql` (aplicado em produção).
 3. A tabela `schema_migrations` não existia no banco de produção (script 00 nunca rodou lá). Criada manualmente; o changelog de produção começa na versão 10. Recomendação: rodar `sql/run_all.sh --so-testes` e depois avaliar aplicar 00–08 completos em janela planejada (06/RLS merece revisão antes, pois muda privilégios).
 
+### ⏰ Critério com data para desligar o Atlas
+
+"Esperar 1 ciclo financeiro" sem data vira "esperar para sempre". Marcado:
+
+- **Data limite de revisão: 22/09/2026** (30 dias após o ETL de 23/08). Na revisão: re-rodar ambos os ETLs (agora seguros para re-execução — pulam linhas já existentes), comparar totais contra o Atlas e decidir a remoção do `MONGO_URI`.
+- Antes de pausar o Atlas, **confirmar que as collections do antigo `Backend/Payment`** (`chargebacks`, `chargeback_evidence`, `payout_requests`, `payment_approval_rules`, `payment_admin_users`) estão vazias — o `cmd/etl-payments` não as migra por não haver caminho primário nelas; se houver dado real, estender o ETL primeiro.
+
 ## Por que RLS não pode copiar o padrão `auth.uid()`
 
 Ver comentário detalhado no topo de `sql/06_rls_seguranca.sql`. Resumo: este projeto não usa Supabase Auth (login é JWT próprio), então `auth.uid()` sempre retorna nulo aqui — uma policy baseada nisso pareceria segura mas não protegeria nada. A estratégia usada foi: RLS habilitado + só a role `app_backend` tem acesso + revogação de `anon`/`authenticated`. O controle fino de "usuário só vê o que é dele" continua no middleware do backend Go, que já existe (ver `docs/seguranca.md`).

@@ -3,12 +3,16 @@
 // (CORTE 5 banco-único — docs/ARQUITETURA-BANCO-UNICO.md).
 //
 // O que faz (one-shot, idempotente — pode rodar mais de uma vez):
+// //   Copia cada documento da collection "orders" (Mongo legado) para a tabela
 //
-//	Copia cada documento da collection "orders" (Mongo legado) para a tabela
 //	order_documents do Postgres, exatamente como o handler faz em produção:
-//	payload completo em JSONB + colunas tipadas extraídas. Dedup por
-//	legacy_id (upsert manual) — pedidos já importados pelo lazy import do
-//	handler não são duplicados.
+//	payload completo em JSONB + colunas tipadas extraídas.
+//
+// SEGURANÇA DE RE-EXECUÇÃO: linhas que JÁ existem no Postgres são PULADAS —
+// o Mongo só recebe dual-write best-effort e pode estar ATRASADO; sobrescrever
+// status/agendamento de um pedido já evoluído no Postgres com dado velho do
+// Atlas seria regressão silenciosa. Idempotência = rodar 2x não duplica nem
+// rebaixa nada.
 //
 // Por que existe: o lazy import cobre leituras pontuais por ID, mas as
 // LISTAGENS só servem dados que já estão no Postgres. Rodar este ETL uma vez
@@ -66,7 +70,8 @@ func main() {
 		log.Fatalf("ping no Mongo falhou: %v", err)
 	}
 	legacy := mc.Database(dbName)
-	log.Printf("[ETL] Mongo legado: %s (db=%s)", mongoURI, dbName)
+	// NUNCA logar a URI inteira: contém usuário/senha do Atlas (P0 de segurança).
+	log.Printf("[ETL] Mongo legado: db=%s (URI configurada)", dbName)
 
 	models.ConnectPostgresDatabase() // mesmo padrão de retry do monolito
 	db := models.DB
@@ -77,7 +82,7 @@ func main() {
 	}
 	defer cursor.Close(ctx)
 
-	var imported, skipped int
+	var imported, skipped, alreadyPG int
 	for cursor.Next(ctx) {
 		var raw bson.M
 		if err := cursor.Decode(&raw); err != nil {
@@ -116,6 +121,15 @@ func main() {
 			continue
 		}
 
+		// Corte 5: Postgres é a fonte da verdade. Se a linha já existe (criada
+		// pelo lazy import do handler ou por execução anterior deste ETL), NÃO
+		// tocamos nela — o estado atual do Postgres prevalece sobre o Atlas.
+		var existing models.OrderDocument
+		if err := db.Where("legacy_id = ?", legacyID).First(&existing).Error; err == nil {
+			alreadyPG++
+			continue
+		}
+
 		payloadBytes, _ := json.Marshal(p)
 		doc := &models.OrderDocument{
 			LegacyID:        legacyID,
@@ -127,19 +141,9 @@ func main() {
 			Payload:         payloadBytes,
 		}
 
-		// Upsert por legacy_id (idempotente). Preserva pickup_code e datas
-		// caso o lazy import já tenha criado a linha.
-		res := db.Where("legacy_id = ?", legacyID).
-			Assign(models.OrderDocument{
-				EstablishmentID: doc.EstablishmentID,
-				UserPhone:       doc.UserPhone,
-				Status:          doc.Status,
-				ScheduledAt:     doc.ScheduledAt,
-				IsScheduled:     doc.IsScheduled,
-				Payload:         doc.Payload,
-			}).FirstOrCreate(doc)
-		if res.Error != nil {
-			log.Printf("[ETL] pedido %s: falha ao gravar: %v", legacyID, res.Error)
+		// INSERT simples: só cria o que ainda não existe no Postgres.
+		if err := db.Create(doc).Error; err != nil {
+			log.Printf("[ETL] pedido %s: falha ao gravar: %v", legacyID, err)
 			continue
 		}
 		imported++
@@ -149,8 +153,9 @@ func main() {
 	}
 
 	fmt.Println("\n================ RESUMO DO ETL (orders) ================")
-	fmt.Printf("Pedidos importados/atualizados : %d\n", imported)
-	fmt.Printf("Documentos ignorados/inválidos : %d\n", skipped)
+	fmt.Printf("Pedidos importados            : %d\n", imported)
+	fmt.Printf("Já existiam no Postgres (skip): %d\n", alreadyPG)
+	fmt.Printf("Documentos ignorados/inválidos: %d\n", skipped)
 	fmt.Println("Confira estes totais contra o Atlas antes de pausá-lo.")
 	fmt.Println("========================================================")
 }

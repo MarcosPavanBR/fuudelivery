@@ -40,7 +40,7 @@ func (Wallet) TableName() string { return "wallets" }
 // Equivalente ao documento antigo da collection wallet_ledger do Mongo:
 //   - ReferenceID guarda o payment_id ou order_id de origem;
 //   - Kind classifica o débito ("" normal | "withdrawal" saque);
-//   - Destination guarda a chave PIX do saque (coluna do script 09).
+//   - Destination guarda a chave PIX do saque (coluna do script 10).
 type WalletTxn struct {
 	ID            int64     `gorm:"primaryKey;column:id" json:"id"`
 	WalletID      int64     `gorm:"column:wallet_id" json:"wallet_id"`

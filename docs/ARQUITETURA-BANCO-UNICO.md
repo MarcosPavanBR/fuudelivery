@@ -98,6 +98,12 @@ Idempotente (dedup por `legacy_id`), não apaga nada nos dois lados. Confira os 
 
 Durante o ETL foi descoberto e **corrigido em produção** um bug de schema: tabelas legadas vazias com `id TEXT` (era Mongo) bloqueavam o `CREATE TABLE IF NOT EXISTS` dos scripts 01–03, e o AutoMigrate do GORM não altera coluna existente — a tabela `payments` tinha `id TEXT`, quebrando TODO insert de pagamento. Reparo aplicado manualmente e registrado como script idempotente `sql/09_reparo_tabelas_legado_texto.sql` para ambientes futuros.
 
+Achados adicionais da auditoria de 23/08:
+
+1. `run_all.sh` rodava o reparo 09 DEPOIS dos scripts 01–03 — ordem trocada (09 agora roda logo após o 00, como ele mesmo exige).
+2. As colunas `kind`/`destination` do ledger só existiam via AutoMigrate; versionadas em `sql/10_wallet_ledger_kind.sql` (aplicado em produção).
+3. A tabela `schema_migrations` não existia no banco de produção (script 00 nunca rodou lá). Criada manualmente; o changelog de produção começa na versão 10. Recomendação: rodar `sql/run_all.sh --so-testes` e depois avaliar aplicar 00–08 completos em janela planejada (06/RLS merece revisão antes, pois muda privilégios).
+
 ## Por que RLS não pode copiar o padrão `auth.uid()`
 
 Ver comentário detalhado no topo de `sql/06_rls_seguranca.sql`. Resumo: este projeto não usa Supabase Auth (login é JWT próprio), então `auth.uid()` sempre retorna nulo aqui — uma policy baseada nisso pareceria segura mas não protegeria nada. A estratégia usada foi: RLS habilitado + só a role `app_backend` tem acesso + revogação de `anon`/`authenticated`. O controle fino de "usuário só vê o que é dele" continua no middleware do backend Go, que já existe (ver `docs/seguranca.md`).

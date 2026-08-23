@@ -79,11 +79,15 @@ jobs:
           docker run -d --name pg-it -p 5432:5432 \
             -e POSTGRES_USER=test -e POSTGRES_PASSWORD=test -e POSTGRES_DB=fuudelivery_staging postgres:16-alpine
           for i in $(seq 1 30); do
-            docker exec mongo-it mongosh --eval 'db.runCommand("ping")' --quiet 2>/dev/null && break
+            if docker exec mongo-it mongosh --eval 'db.runCommand("ping")' --quiet >/dev/null 2>&1; then break; fi
             sleep 1
           done
+          # Espera o Postgres terminar de vez o initdb: durante a fase de
+          # setup ele reinicia e recusa conexões ("terminating connection due
+          # to administrator command"). O `if` evita que uma tentativa falha
+          # aborte o passo via errexit (bash -e do GitHub Actions).
           for i in $(seq 1 30); do
-            docker exec pg-it psql -U test -d postgres -c 'SELECT 1' >/dev/null 2>&1 && break
+            if docker exec pg-it psql -U test -d postgres -c 'SELECT 1' >/dev/null 2>&1; then break; fi
             sleep 1
           done
           # Uma database por suíte — antes cada teste tinha o próprio container,

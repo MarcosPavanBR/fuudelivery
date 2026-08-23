@@ -341,7 +341,7 @@ export default function MinhaCarteira() {
                     onClick={() => setWithdrawMethod("PIX")}
                     className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-2 transition ${
                       withdrawMethod === "PIX"
-                        ? "bg-[#EA1D2C] text-white"
+                        ? "bg-[#DC2626] text-white"
                         : "bg-gray-100 text-gray-500"
                     }`}
                   >
@@ -351,7 +351,7 @@ export default function MinhaCarteira() {
                     onClick={() => setWithdrawMethod("TED")}
                     className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-2 transition ${
                       withdrawMethod === "TED"
-                        ? "bg-[#EA1D2C] text-white"
+                        ? "bg-[#DC2626] text-white"
                         : "bg-gray-100 text-gray-500"
                     }`}
                   >

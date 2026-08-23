@@ -114,7 +114,7 @@ const Reports = () => {
     return (
       <MenuLayout>
         <div className="flex items-center justify-center min-h-[400px]">
-          <FiLoader className="animate-spin h-8 w-8" style={{ color: "#EA1D2C" }} />
+          <FiLoader className="animate-spin h-8 w-8" style={{ color: "#DC2626" }} />
         </div>
       </MenuLayout>
     );
@@ -127,7 +127,7 @@ const Reports = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-2">
           <div className="p-2 rounded-lg bg-red-50">
-            <FiBarChart2 className="h-5 w-5" style={{ color: "#EA1D2C" }} />
+            <FiBarChart2 className="h-5 w-5" style={{ color: "#DC2626" }} />
           </div>
           <div>
             <h1 className="text-lg font-bold text-gray-900">Relatórios</h1>
@@ -216,7 +216,7 @@ const Reports = () => {
                     className="h-full rounded-full transition-all duration-500"
                     style={{
                       width: `${percentage}%`,
-                      background: "linear-gradient(135deg, #EA1D2C, #C41420)",
+                      background: "linear-gradient(135deg, #DC2626, #B91C1C)",
                     }}
                   />
                 </div>

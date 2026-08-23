@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -65,14 +66,36 @@ func RegisterPushToken(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
 	}
 
-	collection := models.MongoDabase.Collection("push_tokens")
-	filter := bson.M{"user_id": req.UserID, "user_type": req.UserType}
-	update := bson.M{"$set": bson.M{"push_token": req.PushToken, "updated_at": time.Now()}}
-	opts := options.Update().SetUpsert(true)
-
-	_, err := collection.UpdateOne(mongoCtx(), filter, update, opts)
-	if err != nil {
+	// ── CORTE 1 (banco-único): escrita PRIMÁRIA em Postgres ─────────────
+	// Upsert por (user_id, user_type) — espelha o índice único da tabela
+	// criada em sql/01_dominio_pedidos.sql.
+	db := models.DB
+	if db == nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Postgres indisponível"})
+	}
+	pushToken := models.PushToken{
+		UserID:    req.UserID,
+		UserType:  req.UserType,
+		PushToken: req.PushToken,
+	}
+	if err := db.Where(models.PushToken{UserID: req.UserID, UserType: req.UserType}).
+		Assign(models.PushToken{PushToken: req.PushToken, UpdatedAt: time.Now()}).
+		FirstOrCreate(&pushToken).Error; err != nil {
+		log.Printf("[PUSH_TOKEN] Falha ao salvar token no Postgres (user=%d): %v", req.UserID, err)
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to register token"})
+	}
+
+	// ── Escrita legada no Mongo (dual-write temporário) ──────────────────
+	// Mantida até o ETL/desligamento do Mongo. Erro aqui NÃO falha a request:
+	// o Postgres já é a fonte de verdade da leitura.
+	if models.MongoDabase != nil {
+		collection := models.MongoDabase.Collection("push_tokens")
+		filter := bson.M{"user_id": req.UserID, "user_type": req.UserType}
+		update := bson.M{"$set": bson.M{"push_token": req.PushToken, "updated_at": time.Now()}}
+		opts := options.Update().SetUpsert(true)
+		if _, err := collection.UpdateOne(mongoCtx(), filter, update, opts); err != nil {
+			log.Printf("[PUSH_TOKEN] Dual-write Mongo falhou (não-crítico): %v", err)
+		}
 	}
 
 	return c.JSON(fiber.Map{"message": "Token registered"})

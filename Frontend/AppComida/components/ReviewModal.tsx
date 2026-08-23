@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
   buttons: { flexDirection: "row", gap: 12 },
   cancelBtn: { flex: 1, padding: 14, borderRadius: 8, borderWidth: 1, borderColor: "#E5E7EB", alignItems: "center" },
   cancelText: { color: "#666", fontWeight: "600" },
-  submitBtn: { flex: 2, padding: 14, borderRadius: 8, backgroundColor: "#F97316", alignItems: "center" },
+  submitBtn: { flex: 2, padding: 14, borderRadius: 8, backgroundColor: Colors.light.accent, alignItems: "center" },
   submitText: { color: "#FFF", fontWeight: "600" },
 });
 

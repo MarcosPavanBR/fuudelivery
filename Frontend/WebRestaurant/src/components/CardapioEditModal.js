@@ -221,7 +221,7 @@ const CardapioEditModal = ({
                 <span
                   key={i}
                   className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium"
-                  style={{ background: "#FEF2F2", color: "#EA1D2C" }}
+                  style={{ background: "#FEF2F2", color: "#DC2626" }}
                 >
                   {e.Name}
                 </span>
@@ -300,7 +300,7 @@ const CardapioEditModal = ({
               form="product-form"
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-white transition-all duration-200 hover:shadow-lg"
               style={{
-                background: "linear-gradient(135deg, #EA1D2C, #C41420)",
+                background: "linear-gradient(135deg, #DC2626, #B91C1C)",
               }}
             >
               <FiSave className="h-4 w-4" />

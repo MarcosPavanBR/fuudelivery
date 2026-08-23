@@ -19,12 +19,15 @@ github.com/MarcosPavanBR/fuudelivery
     │       └── RENDER_API_KEY + RENDER_SERVICE_ID
     │
     └── Render.com (Blueprint via render.yaml)
-        ├── fuudelivery-api        (Go web service, porta 8080)
-        ├── fuudelivery-web        (Static site, React)
-        ├── fuudelivery-admin      (Static site, React)
-        ├── fuudelivery-payment    (Go web service, porta 8084)
-        ├── fuudelivery-payment-panel (Static site, React)
-        └── fuudelivery-redis      (Redis managed)
+        ├── fuudelivery-api        (Go web service — monolito: auth, orders,
+        │                            delivery, chat, payment)
+        ├── fuudelivery-web        (Static site, WebRestaurant)
+        └── fuudelivery-admin      (Static site, WebAdmin)
+
+    Fora do Render (externos):
+        ├── Redis                  (provedor externo *.db.redis.io — REDIS_URL)
+        ├── PostgreSQL             (Supabase)
+        └── MongoDB                (Atlas)
 ```
 
 ## Checklist de deploy (pré-release)
@@ -42,24 +45,20 @@ github.com/MarcosPavanBR/fuudelivery
 
 ### Verificação pós-deploy
 
-Para cada um dos 5 serviços:
+Para cada um dos 3 serviços (auditado 2026-08-23 — payment e painel foram removidos):
 
 ```bash
-# API
+# API (monolito: auth, orders, delivery, chat, pagamento)
 curl -s https://fuudelivery-api-8y6l.onrender.com/health
-
-# Payment
-curl -s https://fuudelivery-payment.onrender.com/health
 
 # WebRestaurant (verificar se retorna HTML)
 curl -s -o /dev/null -w "%{http_code}" https://fuudelivery-web.onrender.com
 
 # WebAdmin
 curl -s -o /dev/null -w "%{http_code}" https://fuudelivery-admin-lv7f.onrender.com
-
-# PaymentPanel
-curl -s -o /dev/null -w "%{http_code}" https://fuudelivery-payment-panel.onrender.com
 ```
+
+> ❌ ~~Payment~~ e ~~PaymentPanel~~: serviços removidos em 2026-08 — não monitorar.
 
 ### Variáveis de ambiente por serviço
 
@@ -90,8 +89,9 @@ curl -s -o /dev/null -w "%{http_code}" https://fuudelivery-payment-panel.onrende
 | Variável | Serviço | Valor |
 |---|---|---|
 | `REACT_APP_API_URL` | WebRestaurant | https://fuudelivery-api-8y6l.onrender.com |
-| `REACT_APP_PAYMENT_API_URL` | WebRestaurant | https://fuudelivery-payment.onrender.com |
 | `REACT_APP_API_URL` | WebAdmin | https://fuudelivery-api-8y6l.onrender.com |
+
+> `REACT_APP_PAYMENT_API_URL` é obsoleta — pagamentos vivem no monolito.
 
 ## Confiabilidade da fila
 
@@ -188,8 +188,8 @@ Quando o domínio `fuudelivery.com.br` estiver configurado:
    - `fuudelivery.com.br` → fuudelivery-web.onrender.com
    - `api.fuudelivery.com.br` → fuudelivery-api-8y6l.onrender.com
    - `admin.fuudelivery.com.br` → fuudelivery-admin-lv7f.onrender.com
-   - `payment.fuudelivery.com.br` → fuudelivery-payment.onrender.com
-   - `painel.fuudelivery.com.br` → fuudelivery-payment-panel.onrender.com
+
+   (sem subdomínios de pagamento — o monolito atende tudo via `api.`)
 
 2. Atualizar CORS no Backend:
    ```go

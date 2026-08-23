@@ -60,7 +60,7 @@ const BusinessHoursEditor = ({ establishmentId }) => {
     <div className="bg-white rounded-2xl border border-gray-100 shadow-card p-6">
       <div className="flex items-center gap-3 mb-6">
         <div className="p-2.5 rounded-xl bg-red-50">
-          <FiClock className="h-5 w-5" style={{ color: "#EA1D2C" }} />
+          <FiClock className="h-5 w-5" style={{ color: "#DC2626" }} />
         </div>
         <h3 className="text-lg font-bold text-gray-900">Horário de Funcionamento</h3>
       </div>
@@ -109,7 +109,7 @@ const BusinessHoursEditor = ({ establishmentId }) => {
           onClick={saveHours}
           disabled={saving}
           className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white font-semibold text-sm transition-all duration-200 hover:shadow-lg disabled:opacity-50"
-          style={{ background: "linear-gradient(135deg, #EA1D2C, #C41420)" }}
+          style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
         >
           {saving ? (
             <>

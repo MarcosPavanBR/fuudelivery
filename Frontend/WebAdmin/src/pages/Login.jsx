@@ -30,21 +30,21 @@ export default function Login() {
     <div className="min-h-screen flex">
       {/* Left Panel - Branding */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden items-center justify-center"
-        style={{ background: "linear-gradient(135deg, #EA1D2C 0%, #C41420 40%, #8B0F18 100%)" }}>
+        style={{ background: "linear-gradient(135deg, #DC2626 0%, #B91C1C 40%, #7F1D1D 100%)" }}>
         <div className="absolute inset-0 opacity-10">
-          <div className="absolute -top-20 -left-20 w-96 h-96 rounded-full" style={{ background: "radial-gradient(circle, #F7A11E 0%, transparent 70%)" }} />
+          <div className="absolute -top-20 -left-20 w-96 h-96 rounded-full" style={{ background: "radial-gradient(circle, #F59E0B 0%, transparent 70%)" }} />
           <div className="absolute -bottom-32 -right-32 w-[500px] h-[500px] rounded-full" style={{ background: "radial-gradient(circle, #FF6B35 0%, transparent 70%)" }} />
         </div>
         <div className="relative z-10 text-center px-12">
           <svg width={80} height={80} viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
             <defs>
               <linearGradient id="loginGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#EA1D2C" />
+                <stop offset="0%" stopColor="#DC2626" />
                 <stop offset="50%" stopColor="#FF4444" />
-                <stop offset="100%" stopColor="#F7A11E" />
+                <stop offset="100%" stopColor="#F59E0B" />
               </linearGradient>
               <filter id="loginShadow" x="-20%" y="-20%" width="140%" height="140%">
-                <feDropShadow dx="0" dy="6" stdDeviation="10" floodColor="#EA1D2C" floodOpacity="0.35" />
+                <feDropShadow dx="0" dy="6" stdDeviation="10" floodColor="#DC2626" floodOpacity="0.35" />
               </filter>
             </defs>
             <rect width="48" height="48" rx="14" fill="url(#loginGrad)" filter="url(#loginShadow)" />
@@ -54,7 +54,7 @@ export default function Login() {
             <h2 className="text-3xl font-bold mb-4" style={{ lineHeight: 1.2 }}>
               Gerencie seu restaurante
               <br />
-              <span style={{ color: "#F7A11E" }}>com inteligência</span>
+              <span style={{ color: "#F59E0B" }}>com inteligência</span>
             </h2>
             <p className="text-white/70 text-lg max-w-md mx-auto">
               Acesse pedidos em tempo real, gerencie seu cardápio e acompanhe suas vendas
@@ -67,7 +67,7 @@ export default function Login() {
               { num: "4.9", label: "Avaliação" },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
-                <div className="text-2xl font-bold" style={{ color: "#F7A11E" }}>{stat.num}</div>
+                <div className="text-2xl font-bold" style={{ color: "#F59E0B" }}>{stat.num}</div>
                 <div className="text-white/60 text-sm mt-1">{stat.label}</div>
               </div>
             ))}
@@ -83,12 +83,12 @@ export default function Login() {
             <svg width={60} height={60} viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
               <defs>
                 <linearGradient id="loginGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#EA1D2C" />
+                  <stop offset="0%" stopColor="#DC2626" />
                   <stop offset="50%" stopColor="#FF4444" />
-                  <stop offset="100%" stopColor="#F7A11E" />
+                  <stop offset="100%" stopColor="#F59E0B" />
                 </linearGradient>
                 <filter id="loginShadow2" x="-20%" y="-20%" width="140%" height="140%">
-                  <feDropShadow dx="0" dy="6" stdDeviation="10" floodColor="#EA1D2C" floodOpacity="0.35" />
+                  <feDropShadow dx="0" dy="6" stdDeviation="10" floodColor="#DC2626" floodOpacity="0.35" />
                 </filter>
               </defs>
               <rect width="48" height="48" rx="14" fill="url(#loginGrad2)" filter="url(#loginShadow2)" />

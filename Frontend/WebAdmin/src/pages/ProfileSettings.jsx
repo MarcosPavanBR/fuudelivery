@@ -305,7 +305,7 @@ export default function ProfileSettings() {
               style={{
                 background: avatar
                   ? "transparent"
-                  : "linear-gradient(135deg, #EA1D2C, #FF6B35)",
+                  : "linear-gradient(135deg, #DC2626, #D97706)",
                 boxShadow: "0 4px 16px rgba(234, 29, 44, 0.25)",
               }}
             >

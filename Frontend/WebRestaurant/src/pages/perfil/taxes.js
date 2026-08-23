@@ -47,7 +47,7 @@ function Taxes() {
         <div className="bg-white rounded-xl border border-gray-100 shadow-card p-6">
           <div className="flex items-center gap-2 mb-4">
             <div className="p-2 rounded-lg bg-red-50">
-              <FiTruck className="h-5 w-5" style={{ color: "#EA1D2C" }} />
+              <FiTruck className="h-5 w-5" style={{ color: "#DC2626" }} />
             </div>
             <h4 className="font-bold text-gray-900">Configurações de Entrega</h4>
           </div>

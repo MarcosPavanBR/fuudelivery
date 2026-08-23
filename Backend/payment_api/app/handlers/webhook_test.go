@@ -245,7 +245,7 @@ func TestPaymentApprovedMessageFormat(t *testing.T) {
 	// Replicate the message format from publishPaymentApproved
 	payment := &models.Payment{
 		OrderID:         "order_123",
-		ID:              [12]byte{1, 2, 3},
+		ID:              123456, // ID numérico (BIGSERIAL) desde o corte 4
 		Amount:          100.0,
 		Method:          "pix",
 		EstablishmentID: 100,

@@ -69,18 +69,18 @@ export default function Layout() {
           <svg width={sidebarOpen ? 36 : 32} height={sidebarOpen ? 36 : 32} viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
             <defs>
               <linearGradient id="fuuGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#EA1D2C" />
+                <stop offset="0%" stopColor="#DC2626" />
                 <stop offset="50%" stopColor="#FF4444" />
-                <stop offset="100%" stopColor="#F7A11E" />
+                <stop offset="100%" stopColor="#F59E0B" />
               </linearGradient>
             </defs>
             <rect width="48" height="48" rx="14" fill="url(#fuuGrad)" />
             <path d="M14 14h12c4.4 0 8 3.6 8 8s-3.6 8-8 8h-4v8h-8V14zm8 12h4c2.2 0 4-1.8 4-4s-1.8-4-4-4h-4v8z" fill="white" />
-            <circle cx="38" cy="12" r="4" fill="#F7A11E" />
+            <circle cx="38" cy="12" r="4" fill="#F59E0B" />
           </svg>
           {sidebarOpen && (
             <div className="ml-3 flex flex-col leading-none">
-              <span style={{ fontSize: "18px", fontWeight: 900, color: "#EA1D2C", letterSpacing: "-0.5px", lineHeight: 1 }}>Fuu</span>
+              <span style={{ fontSize: "18px", fontWeight: 900, color: "#DC2626", letterSpacing: "-0.5px", lineHeight: 1 }}>Fuu</span>
               <span style={{ fontSize: "10px", fontWeight: 700, color: "#9CA3AF", letterSpacing: "2px", textTransform: "uppercase", lineHeight: 1, marginTop: 2 }}>Delivery</span>
             </div>
           )}
@@ -96,7 +96,7 @@ export default function Layout() {
                   className={({ isActive }) =>
                     "relative flex items-center gap-2 px-4 py-2 rounded-r-xl transition-all duration-200 group " +
                     (isActive
-                      ? "text-[#EA1D2C] font-semibold bg-[rgba(234,29,44,0.10)]"
+                      ? "text-[#DC2626] font-semibold bg-[rgba(220,38,38,0.10)]"
                       : "text-[#9CA3AF] hover:text-white hover:bg-[rgba(255,255,255,0.03)]") +
                     (!sidebarOpen ? " justify-center px-0" : "")
                   }
@@ -105,7 +105,7 @@ export default function Layout() {
                   {({ isActive }) => (
                     <>
                       {isActive && (
-                        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full" style={{ background: "#EA1D2C" }} />
+                        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full" style={{ background: "#DC2626" }} />
                       )}
                       <span className="flex-shrink-0">
                         <SidebarIcon iconKey={item.iconKey} className="h-5 w-5" />
@@ -121,7 +121,7 @@ export default function Layout() {
 
         <div className={`border-t border-white/10 p-4 transition-all duration-300 ${!sidebarOpen ? "px-2" : ""}`}>
           <div className={`flex items-center gap-3 rounded-xl p-2 ${sidebarOpen ? "hover:bg-white/10" : "justify-center"}`}>
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, #EA1D2C, #C41420)" }}>
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}>
               <FiLogOut className="h-4 w-4 text-white" />
             </div>
             {sidebarOpen && (
@@ -153,7 +153,7 @@ export default function Layout() {
               </div>
               <div className="relative min-w-0">
                 <button className="flex items-center gap-2 p-2 rounded-xl hover:bg-gray-100 transition-colors min-w-0">
-                  <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, #EA1D2C, #C41420)" }}>
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}>
                     <span className="text-white font-bold text-sm">{user?.name?.charAt(0) || "A"}</span>
                   </div>
                   <div className="hidden sm:block text-left min-w-0">

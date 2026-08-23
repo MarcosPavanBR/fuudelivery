@@ -1,15 +1,17 @@
-import React, { Component } from "react";
+import React, { Component, Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+// Code splitting: páginas pesadas carregam sob demanda (React.lazy).
+// Login e Dashboard ficam eager — são o primeiro paint e o destino pós-login.
 import Login from "./pages/Login.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
-import Establishments from "./pages/Establishments.jsx";
-import Users from "./pages/Users.jsx";
-import Orders from "./pages/Orders.jsx";
-import DeliveryMen from "./pages/DeliveryMen.jsx";
-import Payments from "./pages/Payments.jsx";
-import Financeiro from "./pages/Financeiro.jsx";
-import Settings from "./pages/Settings.jsx";
+const Establishments = lazy(() => import("./pages/Establishments.jsx"));
+const Users = lazy(() => import("./pages/Users.jsx"));
+const Orders = lazy(() => import("./pages/Orders.jsx"));
+const DeliveryMen = lazy(() => import("./pages/DeliveryMen.jsx"));
+const Payments = lazy(() => import("./pages/Payments.jsx"));
+const Financeiro = lazy(() => import("./pages/Financeiro.jsx"));
+const Settings = lazy(() => import("./pages/Settings.jsx"));
 import Layout from "./components/Layout.jsx";
 import { FiLoader } from "react-icons/fi";
 import { ToastContainer } from "react-toastify";
@@ -27,7 +29,7 @@ class ErrorBoundary extends Component {
     if (this.state.hasError) {
       return (
         <div style={{ padding: 40, fontFamily: "monospace", background: "#fff", minHeight: "100vh" }}>
-          <h1 style={{ color: "#EA1D2C" }}>Erro na aplicação</h1>
+          <h1 style={{ color: "#DC2626" }}>Erro na aplicação</h1>
           <pre style={{ whiteSpace: "pre-wrap", marginTop: 16, color: "#333" }}>
             {this.state.error?.message}
           </pre>
@@ -47,7 +49,7 @@ const ProtectedRoute = ({ children }) => {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <FiLoader className="animate-spin h-8 w-8" style={{ color: "#EA1D2C" }} />
+        <FiLoader className="animate-spin h-8 w-8" style={{ color: "#DC2626" }} />
       </div>
     );
   }
@@ -65,7 +67,7 @@ function AppRoutes() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <FiLoader className="animate-spin h-8 w-8" style={{ color: "#EA1D2C" }} />
+        <FiLoader className="animate-spin h-8 w-8" style={{ color: "#DC2626" }} />
       </div>
     );
   }
@@ -81,6 +83,7 @@ function AppRoutes() {
         }
       >
         <Route path="/" element={<Dashboard />} />
+        {/* Páginas lazy: o Suspense do App() exibe spinner durante o fetch do chunk */}
         <Route path="/establishments" element={<Establishments />} />
         <Route path="/users" element={<Users />} />
         <Route path="/orders" element={<Orders />} />
@@ -99,7 +102,16 @@ export default function App() {
     <ErrorBoundary>
       <BrowserRouter>
         <AuthProvider>
-          <AppRoutes />
+          {/* Suspense cobre as rotas React.lazy — fallback consistente com o loading inicial */}
+          <Suspense
+            fallback={
+              <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                <FiLoader className="animate-spin h-8 w-8" style={{ color: "#DC2626" }} />
+              </div>
+            }
+          >
+            <AppRoutes />
+          </Suspense>
           <ToastContainer position="top-right" autoClose={3000} />
         </AuthProvider>
       </BrowserRouter>

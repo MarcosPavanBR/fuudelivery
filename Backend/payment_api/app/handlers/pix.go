@@ -9,9 +9,11 @@ import (
 	"github.com/carloshomar/fuudelivery/payment_api/app/models"
 	"github.com/carloshomar/fuudelivery/payment_api/app/services"
 	"github.com/gofiber/fiber/v2"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
+// GeneratePIX cria uma cobrança PIX no gateway (AbacatePay) e persiste o
+// pagamento em Postgres (corte 4 — fonte da verdade), com dual-write
+// best-effort no Mongo legado.
 func GeneratePIX(c *fiber.Ctx) error {
 	var req dto.PaymentRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -35,8 +37,8 @@ func GeneratePIX(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to create PIX payment"})
 	}
 
+	// ID é BIGSERIAL no Postgres — preenchido automaticamente pelo Create.
 	payment := models.Payment{
-		ID:              primitive.NewObjectID(),
 		OrderID:         req.OrderID,
 		CustomerID:      req.CustomerID,
 		CustomerPhone:   req.CustomerPhone,
@@ -52,13 +54,15 @@ func GeneratePIX(c *fiber.Ctx) error {
 		CreatedAt:       time.Now(),
 	}
 
-	_, err = models.MongoDabase.Collection("payments").InsertOne(mongoCtx(), payment)
-	if err != nil {
+	if err := models.DB.Create(&payment).Error; err != nil {
+		log.Printf("[PIX] Erro ao salvar pagamento no Postgres: %v", err)
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to save payment"})
 	}
 
+	dualWritePaymentUpsert(&payment) // DUAL-WRITE LEGADO
+
 	response := dto.PaymentResponse{
-		PaymentID:    payment.ID.Hex(),
+		PaymentID:    payment.IDString(),
 		Status:       "PENDING",
 		PixQRCode:    apiResp.QRCode,
 		PixCopyPaste: apiResp.CopyPaste,

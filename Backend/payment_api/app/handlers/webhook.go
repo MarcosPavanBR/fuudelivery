@@ -13,9 +13,6 @@ import (
 	"github.com/carloshomar/fuudelivery/payment_api/app/services"
 	"github.com/carloshomar/fuudelivery/pkg/queue"
 	"github.com/gofiber/fiber/v2"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 const (
@@ -51,26 +48,30 @@ func publishToPaymentQueue(body []byte) error {
 	return nil
 }
 
+// updateLocalPaymentStatus atualiza status/confirmação do pagamento no
+// Postgres (corte 4) com dual-write no Mongo legado.
 func updateLocalPaymentStatus(abacatepayID string, status string) {
 	now := time.Now()
-	updateFields := bson.M{
-		"status": status,
-	}
-	if status == "paid" || status == "CONFIRMED" {
-		updateFields["confirmed_at"] = now
-	}
-	if status == "REFUNDED" {
-		updateFields["refunded_at"] = now
-	}
 
-	_, err := models.MongoDabase.Collection("payments").UpdateOne(
-		mongoCtx(),
-		bson.M{"abacatepay_id": abacatepayID},
-		bson.M{"$set": updateFields},
-	)
+	payment, err := findPaymentByAbacatePayID(abacatepayID)
 	if err != nil {
 		log.Printf("Failed to update payment %s: %v", abacatepayID, err)
+		return
 	}
+
+	updates := map[string]interface{}{"status": status}
+	switch status {
+	case "paid", "CONFIRMED":
+		updates["confirmed_at"] = now
+	case "REFUNDED":
+		updates["refunded_at"] = now
+	}
+
+	if err := models.DB.Model(payment).Updates(updates).Error; err != nil {
+		log.Printf("Failed to update payment %s: %v", abacatepayID, err)
+		return
+	}
+	dualWritePaymentUpsert(payment) // DUAL-WRITE LEGADO
 }
 
 // establishmentShare soma o valor destinado ao estabelecimento nas split
@@ -101,50 +102,34 @@ func customerCashbackShare(payment *models.Payment) float64 {
 }
 
 // reverseWalletCredit debita um valor da carteira do usuário de forma
-// atômica (guarda de saldo suficiente — nunca deixa saldo negativo) e grava
-// o débito no wallet_ledger para auditoria. Retorna true se o débito foi
-// realmente aplicado. Usado pelo chargeback para reverter os créditos de
-// split (estabelecimento e cashback do cliente) e o top-up de carteira.
+// atômica via AdjustWalletBalance (transação + SELECT FOR UPDATE + guarda de
+// saldo). Retorna true se o débito foi realmente aplicado. Usado pelo
+// chargeback para reverter os créditos de split (estabelecimento e cashback
+// do cliente) e o top-up de carteira.
+//
+// Nota: nunca deixa saldo negativo; se a carteira não existe ou o saldo é
+// insuficiente, o débito é recusado e logado.
 func reverseWalletCredit(userID int64, amount float64, abacatepayID, description string, now time.Time) bool {
 	if amount <= 0 {
 		return false
 	}
 
-	wallets := models.MongoDabase.Collection("wallets")
-	res, wErr := wallets.UpdateOne(
-		mongoCtx(),
-		bson.M{
-			"user_id": userID,
-			"balance": bson.M{"$gte": amount},
-		},
-		bson.M{
-			"$inc": bson.M{"balance": -amount},
-			"$set": bson.M{"last_updated": now},
-		},
-	)
-	if wErr == nil && res.ModifiedCount > 0 {
-		var wallet models.Wallet
-		wallets.FindOne(mongoCtx(), bson.M{"user_id": userID}).Decode(&wallet)
-
-		ledgerEntry := bson.M{
-			"_id":           primitive.NewObjectID(),
-			"user_id":       userID,
-			"type":          "debit",
-			"amount":        amount,
-			"payment_id":    abacatepayID,
-			"balance_after": wallet.Balance,
-			"description":   description,
-			"created_at":    now,
-		}
-		if _, ledgerErr := models.MongoDabase.Collection("wallet_ledger").InsertOne(mongoCtx(), ledgerEntry); ledgerErr != nil {
-			log.Printf("[REFUND] WARNING: falha ao gravar ledger do estorno user=%d: %v", userID, ledgerErr)
-		}
-		log.Printf("[REFUND] Carteira do usuário %d debitada em %.2f (payment=%s)", userID, amount, abacatepayID)
-		return true
+	wallet, err := ensureWalletSeeded(models.DB, userID, walletTypeForUser(userID))
+	if err != nil {
+		log.Printf("[REFUND] Carteira do usuário %d NAO debitada em %.2f (falha ao carregar carteira): %v", userID, amount, err)
+		return false
 	}
 
-	log.Printf("[REFUND] Carteira do usuário %d NAO debitada em %.2f (saldo insuficiente ou inexistente): %v", userID, amount, wErr)
-	return false
+	newBalance, dErr := models.AdjustWalletBalance(models.DB, userID, wallet.UserType, "debit", "", amount, abacatepayID, description, "")
+	if dErr != nil {
+		log.Printf("[REFUND] Carteira do usuário %d NAO debitada em %.2f (%v)", userID, amount, dErr)
+		return false
+	}
+
+	dualWriteLedgerEntry(userID, "debit", "", amount, newBalance.Balance, abacatepayID, description, "") // DUAL-WRITE LEGADO
+	dualWriteWallet(newBalance)                                                                          // DUAL-WRITE LEGADO
+	log.Printf("[REFUND] Carteira do usuário %d debitada em %.2f (payment=%s)", userID, amount, abacatepayID)
+	return true
 }
 
 // processPaymentRefund trata o estorno/chargeback de um pagamento:
@@ -161,11 +146,7 @@ func reverseWalletCredit(userID int64, amount float64, abacatepayID, description
 // Idempotente: um webhook reprocessado não debita duas vezes (a segunda
 // chamada encontra o status já REFUNDED e pula a reversão).
 func processPaymentRefund(abacatepayID string) {
-	var payment models.Payment
-	err := models.MongoDabase.Collection("payments").FindOne(
-		mongoCtx(),
-		bson.M{"abacatepay_id": abacatepayID},
-	).Decode(&payment)
+	payment, err := findPaymentByAbacatePayID(abacatepayID)
 	if err != nil {
 		log.Printf("[REFUND] Payment not found for AbacatePay ID %s: %v", abacatepayID, err)
 		return
@@ -180,7 +161,7 @@ func processPaymentRefund(abacatepayID string) {
 		// 1. Crédito do estabelecimento (share do split)
 		reverseWalletCredit(
 			payment.EstablishmentID,
-			establishmentShare(&payment),
+			establishmentShare(payment),
 			abacatepayID,
 			"Refund/chargeback: estorno do pagamento "+payment.OrderID,
 			now,
@@ -189,7 +170,7 @@ func processPaymentRefund(abacatepayID string) {
 		// 2. Crédito de cashback do cliente (receiver_type == "customer")
 		reverseWalletCredit(
 			payment.CustomerID,
-			customerCashbackShare(&payment),
+			customerCashbackShare(payment),
 			abacatepayID,
 			"Refund/chargeback: estorno do cashback do pagamento "+payment.OrderID,
 			now,
@@ -211,7 +192,7 @@ func processPaymentRefund(abacatepayID string) {
 		orderMsg := map[string]interface{}{
 			"type":        "PAYMENT_REFUNDED",
 			"order_id":    payment.OrderID,
-			"payment_id":  payment.ID.Hex(),
+			"payment_id":  payment.IDString(),
 			"user_id":     payment.CustomerID,
 			"status":      "REFUNDED",
 			"amount":      payment.Amount,
@@ -239,14 +220,16 @@ func processPaymentRefund(abacatepayID string) {
 		}
 	}
 
-	_, err = models.MongoDabase.Collection("payments").UpdateOne(
-		mongoCtx(),
-		bson.M{"abacatepay_id": abacatepayID},
-		bson.M{"$set": bson.M{"status": "REFUNDED", "refunded_at": now}},
-	)
-	if err != nil {
+	payment.Status = "REFUNDED"
+	payment.RefundedAt = &now
+	if err := models.DB.Model(payment).Updates(map[string]interface{}{
+		"status":      "REFUNDED",
+		"refunded_at": now,
+	}).Error; err != nil {
 		log.Printf("[REFUND] Falha ao marcar payment %s como REFUNDED: %v", abacatepayID, err)
+		return
 	}
+	dualWritePaymentUpsert(payment) // DUAL-WRITE LEGADO
 }
 
 // SplitConfigResolver e chamado para obter os percentuais de split
@@ -262,12 +245,12 @@ var GetSplitConfigForEstablishment SplitConfigResolver
 
 var OnPaymentApproved func(customerPhone, orderID string, orderValue float64) error
 
+// publishPaymentApproved confirma o pagamento: calcula e grava as regras de
+// split, credita a carteira do estabelecimento (idempotente via ledger),
+// publica eventos nas filas e marca confirmed_at. Tudo em Postgres (corte 4)
+// com dual-write best-effort no Mongo.
 func publishPaymentApproved(abacatepayID string) {
-	var payment models.Payment
-	err := models.MongoDabase.Collection("payments").FindOne(
-		mongoCtx(),
-		bson.M{"abacatepay_id": abacatepayID},
-	).Decode(&payment)
+	payment, err := findPaymentByAbacatePayID(abacatepayID)
 	if err != nil {
 		log.Printf("Payment not found for AbacatePay ID %s: %v", abacatepayID, err)
 		return
@@ -276,7 +259,7 @@ func publishPaymentApproved(abacatepayID string) {
 	now := time.Now()
 	orderMsg := map[string]interface{}{
 		"order_id":     payment.OrderID,
-		"payment_id":   payment.ID.Hex(),
+		"payment_id":   payment.IDString(),
 		"status":       "PAYMENT_CONFIRMED",
 		"amount":       payment.Amount,
 		"method":       payment.Method,
@@ -288,8 +271,8 @@ func publishPaymentApproved(abacatepayID string) {
 		log.Printf("Failed to publish payment confirmation to order queue: %v", err)
 	}
 
-	// Publica na fila de pagamentos do Payment Service (microsserviço)
-	// para que ele credite o valor na carteira do restaurante
+	// Publica na fila de pagamentos para que a carteira do restaurante
+	// seja creditada pelo fluxo de split abaixo.
 	paymentMsg := map[string]interface{}{
 		"order_id":         payment.OrderID,
 		"establishment_id": payment.EstablishmentID,
@@ -302,21 +285,17 @@ func publishPaymentApproved(abacatepayID string) {
 		log.Printf("Failed to publish to payment queue: %v", err)
 	}
 
-	publishedAt := now
-	payment.Status = "CONFIRMED"
-	payment.ConfirmedAt = &publishedAt
 	// Determina os percentuais de split com base na zona do estabelecimento
 	platformPct, establishmentPct := 5.0, 85.0
 	if GetSplitConfigForEstablishment != nil {
 		platformPct, establishmentPct = GetSplitConfigForEstablishment(payment.EstablishmentID)
 	}
 
-	splitRules := defaultSplitRules(&payment, platformPct, establishmentPct)
-	payment.SplitRules = splitRules
+	splitRules := defaultSplitRules(payment, platformPct, establishmentPct)
 
-	setFields := bson.M{
+	setFields := map[string]interface{}{
 		"status":       "CONFIRMED",
-		"split_rules":  splitRules,
+		"split_rules":  models.SplitRules(splitRules),
 		"confirmed_at": now,
 	}
 
@@ -325,71 +304,54 @@ func publishPaymentApproved(abacatepayID string) {
 	// pagamento, reprocessar o webhook não credita de novo.
 	// (NÃO usar payment.Status == "PENDING" como guard: o webhook chama
 	// updateLocalPaymentStatus ANTES de publishPaymentApproved, então o
-	// pagamento recarregado aqui já está CONFIRMED e o guard nunca dispararia.)
+	// pagamento já está CONFIRMED aqui e o guard nunca dispararia.)
 	if payment.EstablishmentCreditedAt == nil && payment.Status != "REFUNDED" {
-		ledger := models.MongoDabase.Collection("wallet_ledger")
-		existing, lErr := ledger.CountDocuments(mongoCtx(), bson.M{"payment_id": abacatepayID, "type": "credit"})
-		if lErr != nil {
-			log.Printf("[WALLET] WARNING: falha ao checar ledger do crédito user=%d: %v", payment.EstablishmentID, lErr)
-		} else if existing == 0 {
-			credit := establishmentShare(&payment)
-			if credit > 0 {
-				wallets := models.MongoDabase.Collection("wallets")
-				_, wErr := wallets.UpdateOne(
-					mongoCtx(),
-					bson.M{"user_id": payment.EstablishmentID},
-					bson.M{
-						"$inc": bson.M{"balance": credit},
-						"$set": bson.M{"last_updated": now},
-						"$setOnInsert": bson.M{
-							"_id":       primitive.NewObjectID(),
-							"user_id":   payment.EstablishmentID,
-							"user_type": "establishment",
-						},
-					},
-					options.Update().SetUpsert(true),
-				)
-				if wErr == nil {
-					setFields["establishment_credited_at"] = now
-
-					var wallet models.Wallet
-					wallets.FindOne(mongoCtx(), bson.M{"user_id": payment.EstablishmentID}).Decode(&wallet)
-
-					ledgerEntry := bson.M{
-						"_id":           primitive.NewObjectID(),
-						"user_id":       payment.EstablishmentID,
-						"type":          "credit",
-						"amount":        credit,
-						"payment_id":    abacatepayID,
-						"balance_after": wallet.Balance,
-						"description":   "Credito do split do pedido " + payment.OrderID,
-						"created_at":    now,
-					}
-					if _, ledgerErr := ledger.InsertOne(mongoCtx(), ledgerEntry); ledgerErr != nil {
-						log.Printf("[WALLET] WARNING: falha ao gravar ledger do crédito user=%d: %v", payment.EstablishmentID, ledgerErr)
-					}
-					log.Printf("[WALLET] Carteira do estabelecimento %d creditada em %.2f (payment=%s)", payment.EstablishmentID, credit, abacatepayID)
-				} else {
-					log.Printf("[WALLET] WARNING: falha ao creditar carteira do estabelecimento %d: %v", payment.EstablishmentID, wErr)
-				}
+		credit := establishmentShare(payment)
+		if credit > 0 && !models.HasLedgerEntry(models.DB, abacatepayID, "credit") {
+			wallet, wErr := adjustEstablishmentWallet(payment.EstablishmentID, credit, abacatepayID, payment.OrderID, now)
+			if wErr != nil {
+				log.Printf("[WALLET] WARNING: falha ao creditar carteira do estabelecimento %d: %v", payment.EstablishmentID, wErr)
+			} else {
+				setFields["establishment_credited_at"] = now
+				dualWriteLedgerEntry(payment.EstablishmentID, "credit", "", credit, wallet.Balance, abacatepayID,
+					"Credito do split do pedido "+payment.OrderID, "") // DUAL-WRITE LEGADO
+				dualWriteWallet(wallet) // DUAL-WRITE LEGADO
+				log.Printf("[WALLET] Carteira do estabelecimento %d creditada em %.2f (payment=%s)", payment.EstablishmentID, credit, abacatepayID)
 			}
 		}
 	}
 
-	_, err = models.MongoDabase.Collection("payments").UpdateOne(
-		mongoCtx(),
-		bson.M{"abacatepay_id": abacatepayID},
-		bson.M{"$set": setFields},
-	)
-	if err != nil {
+	if err := models.DB.Model(payment).Updates(setFields).Error; err != nil {
 		log.Printf("Failed to save split rules for AbacatePay ID %s: %v", abacatepayID, err)
+		return
 	}
+	dualWritePaymentUpsert(payment) // DUAL-WRITE LEGADO
 
 	if OnPaymentApproved != nil {
 		if err := OnPaymentApproved(payment.CustomerPhone, payment.OrderID, payment.Amount); err != nil {
 			log.Printf("[LOYALTY] Failed to award points for order %s: %v", payment.OrderID, err)
 		}
 	}
+}
+
+// adjustEstablishmentWallet credita a carteira do estabelecimento de forma
+// atômica (AdjustWalletBalance), semeando antes o saldo legado do Mongo se
+// for a primeira movimentação da carteira pós-corte.
+func adjustEstablishmentWallet(establishmentID int64, credit float64, abacatepayID, orderID string, now time.Time) (*models.Wallet, error) {
+	if _, err := ensureWalletSeeded(models.DB, establishmentID, "establishment"); err != nil {
+		return nil, err
+	}
+	return models.AdjustWalletBalance(
+		models.DB,
+		establishmentID,
+		"establishment",
+		"credit",
+		"",
+		credit,
+		abacatepayID,
+		"Credito do split do pedido "+orderID,
+		"",
+	)
 }
 
 // ValidateWebhookSignature verifica a assinatura HMAC-SHA256 do header
@@ -414,7 +376,7 @@ func ValidateWebhookSignature(body []byte, signature string) bool {
 	expected := hex.EncodeToString(mac.Sum(nil))
 
 	if !hmac.Equal([]byte(expected), []byte(signature)) {
-		log.Printf("[WEBHOOK] HMAC mismatch: expected=%s got=%s", expected[:16]+"...", signature[:min(16, len(signature))]+"...")
+		log.Printf("[WEBHOOK] HMAC mismatch: expected=%s got=%s...", expected[:16], signature[:min(16, len(signature))])
 		return false
 	}
 	return true
@@ -476,8 +438,8 @@ func HandlePaymentWebhook(c *fiber.Ctx) error {
 	}
 
 	if abacatepayStatus == "REFUNDED" {
-		// Estorno/chargeback: reverte crédito da carteira do estabelecimento,
-		// notifica o cliente via fila e marca o pagamento como REFUNDED.
+		// Estorno/chargeback: reverte créditos da carteira, notifica via fila
+		// e marca o pagamento como REFUNDED.
 		processPaymentRefund(chargeID)
 	} else {
 		updateLocalPaymentStatus(chargeID, abacatepayStatus)

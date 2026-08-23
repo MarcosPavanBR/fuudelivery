@@ -9,7 +9,7 @@ async function handlerVinculoProdutoAdicional(productID, additionalID) {
     });
     return true;
   } catch (e) {
-    console.log(e);
+    console.error(e);
     return false;
   }
 }
@@ -19,7 +19,7 @@ async function getAdditionals(id) {
     const { data } = await api.get("/additional/" + id);
     return data;
   } catch (e) {
-    console.log(e);
+    console.error(e);
     return [];
   }
 }
@@ -39,7 +39,7 @@ async function updateAdditional(items, editItem) {
     });
     return finalItem;
   } catch (e) {
-    console.log(e);
+    console.error(e);
     return false;
   }
 }
@@ -55,7 +55,7 @@ async function createAdditional(items, editItem, establishmentId) {
 
     return [data, ...items.filter((e) => e.ID && e.ID !== Strings.id_default)];
   } catch (e) {
-    console.log(e);
+    console.error(e);
     return false;
   }
 }
@@ -66,7 +66,7 @@ async function deleteAdditional(items, id) {
 
     return [...items.filter((e) => e.ID !== id)];
   } catch (e) {
-    console.log(e);
+    console.error(e);
     return false;
   }
 }

@@ -198,7 +198,7 @@ export default function WalletPage() {
                 disabled={creating}
                 className="w-full py-3 rounded-lg font-semibold text-white transition-colors"
                 style={{
-                  background: creating ? "#9CA3AF" : "linear-gradient(135deg, #EA1D2C, #C41420)",
+                  background: creating ? "#9CA3AF" : "linear-gradient(135deg, #DC2626, #B91C1C)",
                 }}
               >
                 {creating ? "Criando conta..." : "Criar Conta de Recebimento"}

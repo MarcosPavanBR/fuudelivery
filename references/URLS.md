@@ -5,9 +5,10 @@
 > de pagamento ativo vive em `payment_api` (embutido no monolito `cmd/fuudelivery`).
 > As menções a `Backend/Payment` neste documento são **históricas** — não edite,
 > não busque e não rode comandos apontando para esse diretório.
-> **Última auditoria:** 2 de agosto de 2026
-> Todas as URLs abaixo foram testadas (HTTP status) nesta data.
-> URLs que retornavam 404 foram removidas — ver histórico no rodapé.
+> ⚠️ **Os serviços Render `fuudelivery-payment` e `fuudelivery-payment-panel`
+> foram REMOVIDOS (2026-08).** Qualquer URL `fuudelivery-payment*.onrender.com`
+> está morta — não use, não provisione, não monitore.
+> **Última auditoria:** 22 de agosto de 2026
 
 ---
 
@@ -15,15 +16,12 @@
 
 | Serviço | Função | URL | Status |
 |---------|--------|-----|--------|
-| **API (Monolito)** | Backend principal — auth, pedidos, entregas, chat, health | `https://fuudelivery-api-8y6l.onrender.com` | ✅ 200 |
-| **Payment Service** | Pagamentos PIX/AbacatePay, split, wallets | `https://fuudelivery-payment.onrender.com` | ✅ /health 200 |
+| **API (Monolito)** | Backend principal — auth, pedidos, entregas, chat, PAGAMENTOS, health | `https://fuudelivery-api-8y6l.onrender.com` | ✅ 200 |
 | **WebRestaurant** | Painel do restaurante (React) | `https://fuudelivery-web.onrender.com` | ✅ 200 |
 | **WebAdmin** | Painel administrativo (React) | `https://fuudelivery-admin-lv7f.onrender.com` | ✅ 200 |
-| **PaymentPanel** | Painel de pagamentos standalone | `https://fuudelivery-payment-panel.onrender.com` | ✅ 200 |
 | **Repositório** | Código-fonte | `https://github.com/MarcosPavanBR/fuudelivery` | ✅ |
-
-> **Nota:** `fuudelivery-payment.onrender.com` retorna 404 na raiz (normal — é uma API
-> sem rota `/`), mas o endpoint `/health` responde 200 `{"status":"ok"}`.
+| ~~Payment Service~~ | ❌ REMOVIDO 2026-08 — rotas absorvidas pelo monolito | ~~fuudelivery-payment.onrender.com~~ | 💀 morto |
+| ~~PaymentPanel (deploy)~~ | ❌ REMOVIDO 2026-08 — código arquivado em `legacy/PaymentPanel/`, não é deployado (aba Financeiro do WebAdmin o substitui) | ~~fuudelivery-payment-panel.onrender.com~~ | 💀 morto |
 
 ---
 
@@ -32,7 +30,8 @@
 | Serviço | Endpoint |
 |---------|----------|
 | API (Monolito) | `https://fuudelivery-api-8y6l.onrender.com/health` |
-| Payment Service | `https://fuudelivery-payment.onrender.com/health` |
+| WebRestaurant | `https://fuudelivery-web.onrender.com` |
+| WebAdmin | `https://fuudelivery-admin-lv7f.onrender.com` |
 
 ---
 
@@ -44,21 +43,20 @@
 | **AppEntrega** (entregador) | `https://fuudelivery-api-8y6l.onrender.com` | `config/api.ts` (`API_URL` — fonte única) → consumida por `services/api.tsx` e `helpers/helper.tsx` |
 | **WebRestaurant** | `https://fuudelivery-api-8y6l.onrender.com` | `src/services/api.js` + env `REACT_APP_API_URL` |
 | **WebAdmin** | `https://fuudelivery-api-8y6l.onrender.com` | `src/services/api.js` + env `REACT_APP_API_URL` |
-| **WebAdmin** (pagamentos) | `https://fuudelivery-payment.onrender.com/api` | `src/services/paymentApi.js` + env `REACT_APP_PAYMENT_API_URL` |
-| **PaymentPanel** | `https://fuudelivery-payment.onrender.com` | `index.html` (`API_URL`, switch por hostname) |
+| **WebAdmin** (pagamentos) | `https://fuudelivery-api-8y6l.onrender.com` | `src/services/paymentApi.js` (fallback hardcoded; env `REACT_APP_PAYMENT_API_URL`) |
+| **PaymentPanel** | `https://fuudelivery-api-8y6l.onrender.com` | `index.html` (`API_URL`, switch por hostname — corrigido 2026-08-22 para o monolito) |
 
 ---
 
 ## 🌐 CORS (ALLOWED_ORIGINS)
 
-O monolito (`cmd/fuudelivery/main.go`) e o Payment Service (`Backend/Payment/main.go`)
-aceitam as seguintes origens (a env var `ALLOWED_ORIGINS` **soma** com esses defaults,
+O monolito (`cmd/fuudelivery/main.go`)
+aceita as seguintes origens (a env var `ALLOWED_ORIGINS` **soma** com esses defaults,
 nunca os substitui):
 
 ```
 https://fuudelivery-web.onrender.com
 https://fuudelivery-admin-lv7f.onrender.com
-https://fuudelivery-payment-panel.onrender.com
 ```
 
 Além disso, o middleware aceita programaticamente (sem precisar de env):
@@ -74,9 +72,9 @@ Além disso, o middleware aceita programaticamente (sem precisar de env):
 
 | Script | URL usada |
 |--------|-----------|
-| `scripts/verify-deploy.sh` | API + Payment + 3 sites estáticos (acima) |
-| `scripts/load-test.sh` | API (default) + Payment (`PAY_URL`) |
-| `scripts/keepalive-payment.ps1` | `https://fuudelivery-payment.onrender.com/health` |
+| `scripts/verify-deploy.sh` | API + WebRestaurant + WebAdmin (Payment Service removido) |
+| `scripts/load-test.sh` | API (default; `PAY_URL` obsoleto — serviço removido) |
+| ~~`scripts/keepalive-payment.ps1`~~ | ❌ obsoleto — serviço removido; pode ser deletado |
 | `scripts/seed-data.sh` | API (argumento; default localhost:3000) |
 
 ---

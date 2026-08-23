@@ -2,64 +2,92 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"math"
 	"strconv"
-	"time"
 
 	"github.com/carloshomar/fuudelivery/delivery_api/app/dto"
 	"github.com/carloshomar/fuudelivery/delivery_api/app/models"
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"gorm.io/gorm"
 )
 
+// ============================================================================
+// Handlers de solicitações de entrega — CORTE 3 da migração banco-único.
+//
+// Fonte da verdade: tabela Postgres `delivery_solicitations` (sql/02).
+// O MongoDB permanece apenas como dual-write best-effort durante a
+// transição: qualquer falha nea é logada mas NÃO falha a request — o
+// Mongo não é mais consultado para leitura em nenhum ponto.
+//
+// Para desligar o Mongo definitivamente: remover os blocos marcados
+// com "DUAL-WRITE LEGADO" neste arquivo e em deliveryman.go/reports.go.
+// ============================================================================
+
+// dualWriteMongo grava/atualiza a solicitação na collection legada do Mongo.
+// Best-effort: erro só aparece no log, nunca quebra o fluxo principal.
+func dualWriteMongo(order dto.OrderDTO) {
+	if models.MongoDabase == nil {
+		return // Mongo não configurado — dual-write desativado
+	}
+	collection := models.MongoDabase.Collection("solicitations")
+	filter := bson.M{"orderid": order.OrderId}
+	update := bson.M{"$set": order}
+	if _, err := collection.UpdateOne(mongoCtx(), filter, update, options.Update().SetUpsert(true)); err != nil {
+		log.Printf("[DUAL-WRITE] Mongo solicitations %s: %v (ignorado)", order.OrderId, err)
+	}
+}
+
+// CreateSolicitation é chamado pela fila do monolito quando um pedido é aprovado.
+// Cria (ou atualiza) a solicitação no read-model do motor de despacho.
 func CreateSolicitation(msg string, sendMessageToClient func(clientID int64, message []byte) error) error {
 	var orderDTO dto.OrderDTO
 
-	err := json.Unmarshal([]byte(msg), &orderDTO)
-	if err != nil {
+	if err := json.Unmarshal([]byte(msg), &orderDTO); err != nil {
 		log.Printf("Erro ao decodificar a mensagem JSON: %s", err)
 		return nil
 	}
 
-	collection := models.MongoDabase.Collection("solicitations")
+	var existing models.DeliverySolicitation
+	err := models.DB.Where("order_id = ?", orderDTO.OrderId).First(&existing).Error
 
-	filter := bson.M{"orderid": orderDTO.OrderId}
+	if err == nil {
+		// Pedido já existe no read-model: atualiza status e preserva o
+		// entregador já atribuído (comportamento idêntico ao fluxo antigo).
+		log.Printf("Atualizando pedido %s para Status: %s", orderDTO.OrderId, orderDTO.Status)
 
-	existingSolicitation := collection.FindOne(mongoCtx(), filter)
-	if existingSolicitation.Err() != nil {
-		if existingSolicitation.Err() != mongo.ErrNoDocuments {
-			log.Printf("Erro ao buscar a solicitação existente: %s", existingSolicitation.Err())
-			return nil
-		}
-	} else {
-		update := bson.M{"$set": bson.M{"status": orderDTO.Status, "operationDate": time.Now()}}
-
-		log.Printf("Atualizando pedido %s", orderDTO.OrderId)
-		log.Printf("Para Status: %s", orderDTO.Status)
-
-		_, err := collection.UpdateOne(mongoCtx(), filter, update)
-		if err != nil {
+		existing.Status = orderDTO.Status
+		if err := models.DB.Save(&existing).Error; err != nil {
 			log.Printf("Erro ao atualizar a solicitação: %s", err)
 			return nil
 		}
 
-		var solicitationExistent dto.OrderDTO
-		existingSolicitation.Decode(&solicitationExistent)
-		orderDTO.DeliveryMan = solicitationExistent.DeliveryMan
+		orderDTO.DeliveryMan = existing.ToDTO().DeliveryMan
 
 		jsonData, _ := json.Marshal(&orderDTO)
 		sendMessageToClient(orderDTO.DeliveryMan.Id, jsonData)
 
+		dualWriteMongo(orderDTO) // DUAL-WRITE LEGADO
 		return nil
 	}
 
-	_, err = collection.InsertOne(mongoCtx(), &orderDTO)
-	if err != nil {
+	// ErrRecordNotFound = fluxo normal de criação; outro erro = problema real.
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		log.Printf("Erro ao buscar a solicitação existente: %s", err)
+		return nil
+	}
+
+	var row models.DeliverySolicitation
+	row.FromDTO(orderDTO)
+	if err := models.DB.Create(&row).Error; err != nil {
 		log.Printf("[SOLICITATION] Failed to insert: %v", err)
 		return err
 	}
+
+	dualWriteMongo(orderDTO) // DUAL-WRITE LEGADO
 	return nil
 }
 
@@ -71,14 +99,10 @@ func HandShakeDeliveryman(c *fiber.Ctx) error {
 		})
 	}
 
-	collection := models.MongoDabase.Collection("solicitations")
-
-	filter := bson.M{"orderid": orderDTO.OrderId}
-
-	var existingOrder dto.OrderDTO
-	err := collection.FindOne(mongoCtx(), filter).Decode(&existingOrder)
+	var existing models.DeliverySolicitation
+	err := models.DB.Where("order_id = ?", orderDTO.OrderId).First(&existing).Error
 	if err != nil {
-		if err == mongo.ErrNoDocuments {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 				"error": "Pedido não encontrado",
 			})
@@ -88,31 +112,26 @@ func HandShakeDeliveryman(c *fiber.Ctx) error {
 		})
 	}
 
-	if existingOrder.DeliveryMan != (dto.DeliveryManDTO{}) {
+	// Um entregador só pode assumir um pedido ainda sem atribuição.
+	if existing.DeliveryManID != 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "O deliveryman já foi atribuído a este pedido",
 		})
 	}
 
-	orderDTO.DeliveryMan.Status = "IN_ROUTE_COLECT"
-	existingOrder.DeliveryMan = orderDTO.DeliveryMan
+	existing.DeliveryManID = orderDTO.DeliveryMan.Id
+	existing.DeliveryManName = orderDTO.DeliveryMan.Name
+	existing.DeliveryManStatus = "IN_ROUTE_COLECT"
 
-	update := bson.M{"$set": bson.M{"deliveryman": existingOrder.DeliveryMan}}
-
-	_, err = collection.UpdateOne(mongoCtx(), filter, update)
-	if err != nil {
+	if err := models.DB.Save(&existing).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Erro ao atualizar a solicitação",
 		})
 	}
 
-	order, err := GetOrderByID(orderDTO.OrderId)
-	if err != nil || order == nil {
-		log.Printf("[SOLICITATION] Order %s not found after handshake", orderDTO.OrderId)
-		return c.JSON(fiber.Map{"message": "Pedido atualizado com sucesso"})
-	}
+	dualWriteMongo(existing.ToDTO()) // DUAL-WRITE LEGADO
 
-	// RabbitMQ removido — fila gerenciada pelo monolito via Redis
+	order := existing.ToDTO()
 	log.Printf("[DELIVERY] Order %s handshake published", order.OrderId)
 
 	return c.JSON(fiber.Map{
@@ -120,6 +139,8 @@ func HandShakeDeliveryman(c *fiber.Ctx) error {
 	})
 }
 
+// GetApprovedSolicitations lista pedidos aprovados/feitos num raio de
+// `limitDistance` km das coordenadas informadas (busca do app do entregador).
 func GetApprovedSolicitations(c *fiber.Ctx) error {
 	lat := c.Query("latitude")
 	long := c.Query("longitude")
@@ -140,30 +161,23 @@ func GetApprovedSolicitations(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid limitDistance parameter"})
 	}
 
-	var approvedSolicitations []dto.OrderDTO
+	approvedSolicitations := []dto.OrderDTO{}
 
-	collection := models.MongoDabase.Collection("solicitations")
-
-	filter := bson.M{
-		"status": bson.M{"$in": []string{"APPROVED", "DONE"}},
-		"$or": []bson.M{
-			{"deliveryman": nil},
-			{"deliveryman.id": 0},
-		},
+	var rows []models.DeliverySolicitation
+	// Equivalente ao filtro Mongo antigo:
+	//   status IN (APPROVED, DONE) AND deliveryman ausente ou id = 0
+	if err := models.DB.
+		Where("status IN ?", []string{"APPROVED", "DONE"}).
+		Where("delivery_man_id = 0 OR delivery_man_id IS NULL").
+		Find(&rows).Error; err != nil {
+		log.Printf("[SOLICITATION] Erro ao listar aprovados: %s", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Erro ao consultar pedidos",
+		})
 	}
 
-	cur, err := collection.Find(mongoCtx(), filter)
-	if err != nil {
-		return err
-	}
-	defer cur.Close(mongoCtx())
-
-	for cur.Next(mongoCtx()) {
-		var orderDTO dto.OrderDTO
-		err := cur.Decode(&orderDTO)
-		if err != nil {
-			return err
-		}
+	for _, row := range rows {
+		orderDTO := row.ToDTO()
 
 		// Calcular a distância entre o estabelecimento e as coordenadas fornecidas
 		distance := calculateDistance(latitude, longitude, orderDTO.Establishment.Lat, orderDTO.Establishment.Long)
@@ -191,7 +205,7 @@ func calculateDistance(lat1, lon1, lat2, lon2 float64) float64 {
 	deltaLat := lat2Rad - lat1Rad
 	deltaLon := lon2Rad - lon1Rad
 
-	// Calcula as distância usando a fórmula de Haversine
+	// Calcula as distância usando a Haversine
 	a := math.Pow(math.Sin(deltaLat/2), 2) + math.Cos(lat1Rad)*math.Cos(lat2Rad)*math.Pow(math.Sin(deltaLon/2), 2)
 	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
 	distance := earthRadius * c

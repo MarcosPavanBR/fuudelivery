@@ -97,7 +97,7 @@ export const AuthProvider = ({ children }) => {
         });
       }
     } catch (e) {
-      console.log(e);
+      console.error(e);
     }
 
     setLoading(false);
@@ -218,7 +218,7 @@ export const AuthProvider = ({ children }) => {
 
       setOpenEstablishment(data?.open_data ?? false);
     } catch (e) {
-      console.log(e);
+      console.error(e);
     }
   };
 

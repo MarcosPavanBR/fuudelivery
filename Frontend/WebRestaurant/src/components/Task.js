@@ -41,7 +41,7 @@ const Task = ({ task, index }) => {
             <div className="flex items-center gap-2">
               <div
                 className="w-8 h-8 rounded-lg flex items-center justify-center"
-                style={{ background: "#FEF2F2", color: "#EA1D2C" }}
+                style={{ background: "#FEF2F2", color: "#DC2626" }}
               >
                 <FiUser className="h-4 w-4" />
               </div>
@@ -62,7 +62,7 @@ const Task = ({ task, index }) => {
             <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
               {paymentLabel}
             </span>
-            <span className="text-lg font-bold" style={{ color: "#EA1D2C" }}>
+            <span className="text-lg font-bold" style={{ color: "#DC2626" }}>
               {helper.formatCurrency(subTotal)}
             </span>
           </div>

@@ -27,7 +27,7 @@ const ToggleSwitch = ({ label, onChange, checked }) => {
             className="w-10 h-5 rounded-full shadow-inner transition-colors duration-200"
             style={{
               background: isChecked
-                ? "linear-gradient(135deg, #EA1D2C, #C41420)"
+                ? "linear-gradient(135deg, #DC2626, #B91C1C)"
                 : "#D1D5DB",
             }}
           />

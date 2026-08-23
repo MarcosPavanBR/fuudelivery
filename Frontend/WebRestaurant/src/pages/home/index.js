@@ -7,8 +7,8 @@ import Texts from "../../constants/Texts";
 import ordersModels from "../../services/orders.models";
 
 const columns = [
-  { id: "AWAIT_APPROVE", title: "Em análise", background: "linear-gradient(135deg, #EA1D2C, #FF6B35)" },
-  { id: "APPROVED", title: "Em produção", background: "linear-gradient(135deg, #F7A11E, #FBBF24)" },
+  { id: "AWAIT_APPROVE", title: "Em análise", background: "linear-gradient(135deg, #DC2626, #FF6B35)" },
+  { id: "APPROVED", title: "Em produção", background: "linear-gradient(135deg, #F59E0B, #FBBF24)" },
   { id: "DONE", title: "Pronto p/ entrega", background: "linear-gradient(135deg, #10B981, #34D399)" },
 ];
 
@@ -23,7 +23,7 @@ const Home = () => {
       if (verifyFmode && !fmode) return;
       setTasks(await ordersModels.getOrders(getUser().id));
     } catch (e) {
-      console.log(e);
+      console.error(e);
     }
   }
 

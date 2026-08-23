@@ -68,6 +68,9 @@ func ConnectPostgresDatabase() {
 		&LoyaltyTransaction{},
 		&Review{},
 		&Batch{},
+		// Corte 1 da migração banco-único: push tokens agora em Postgres
+		// (tabela também criada por sql/01_dominio_pedidos.sql).
+		&PushToken{},
 	); err != nil {
 		log.Printf("[CRITICAL] Falha no AutoMigrate do PostgreSQL: %v. "+
 			"O servidor continuara, mas tabelas podem estar ausentes. "+

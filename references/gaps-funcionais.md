@@ -154,11 +154,10 @@ O README.md foi atualizado em 2026-07-26 para refletir o FuuDelivery:
 
 ## Ainda pendente
 
-### Payment Service offline (P0)
+### ~~Payment Service offline (P0)~~ — RESOLVIDO (2026-08)
 
-- [ ] Fazer rollback do Payment Service no Render Dashboard
-- [ ] Configurar REDIS_URL manualmente no Dashboard (Environment → Secret Files)
-- [ ] Verificar health check: `https://fuudelivery-payment.onrender.com/health`
+> O Payment Service isolado foi **removido** do Render; todas as rotas de
+> pagamento vivem no monolito `fuudelivery-api`. Nada pendente aqui.
 
 ### Credenciais no histórico do git (P0)
 

@@ -53,11 +53,11 @@ function Perfil() {
             localStorage.setItem("fuu_restaurant_avatar", me.avatar_url);
           }
         } catch (e) {
-          console.log(e);
+          console.error(e);
         }
       }
     } catch (e) {
-      console.log(e);
+      console.error(e);
     }
     setLoading(false);
   };
@@ -105,7 +105,7 @@ function Perfil() {
     <MenuLayout>
       {loading && (
         <div className="flex items-center justify-center h-32">
-          <FiLoader className="animate-spin h-6 w-6" style={{ color: "#EA1D2C" }} />
+          <FiLoader className="animate-spin h-6 w-6" style={{ color: "#DC2626" }} />
         </div>
       )}
 
@@ -114,7 +114,7 @@ function Perfil() {
         <div className="card p-6">
           <div className="flex items-center gap-2 mb-4">
             <div className="p-2 rounded-lg bg-red-50">
-              <FiUser className="h-5 w-5" style={{ color: "#EA1D2C" }} />
+              <FiUser className="h-5 w-5" style={{ color: "#DC2626" }} />
             </div>
             <h3 className="text-lg font-bold text-gray-900 dark:text-white">Usuário</h3>
           </div>
@@ -124,7 +124,7 @@ function Perfil() {
             <div className="relative flex-shrink-0">
               <div
                 className="w-16 h-16 rounded-full flex items-center justify-center overflow-hidden border-4 border-gray-100 shadow-sm"
-                style={{ background: "linear-gradient(135deg, #EA1D2C, #F7A11E)" }}
+                style={{ background: "linear-gradient(135deg, #DC2626, #F59E0B)" }}
               >
                 {avatar ? (
                   <img
@@ -194,7 +194,7 @@ function Perfil() {
         <div className="card p-6">
           <div className="flex items-center gap-2 mb-4">
             <div className="p-2 rounded-lg bg-red-50">
-              <FiGrid className="h-5 w-5" style={{ color: "#EA1D2C" }} />
+              <FiGrid className="h-5 w-5" style={{ color: "#DC2626" }} />
             </div>
             <h3 className="text-lg font-bold text-gray-900 dark:text-white">Estabelecimento</h3>
           </div>
@@ -252,7 +252,7 @@ function Perfil() {
         <div className="card p-6">
           <div className="flex items-center gap-2 mb-4">
             <div className="p-2 rounded-lg bg-red-50">
-              <FiMapPin className="h-5 w-5" style={{ color: "#EA1D2C" }} />
+              <FiMapPin className="h-5 w-5" style={{ color: "#DC2626" }} />
             </div>
             <h3 className="text-lg font-bold text-gray-900 dark:text-white">Endereço</h3>
           </div>

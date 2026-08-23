@@ -77,7 +77,7 @@ export default function DeliveryMen() {
           <h1 className="text-2xl font-bold text-gray-900">Entregadores</h1>
           <p className="text-gray-500 mt-1">{filtered.length} de {drivers.length}</p>
         </div>
-        <button onClick={openNew} className="flex items-center gap-2 px-4 py-2 rounded-xl text-white font-semibold text-sm" style={{ background: "linear-gradient(135deg, #EA1D2C, #C41420)" }}>
+        <button onClick={openNew} className="flex items-center gap-2 px-4 py-2 rounded-xl text-white font-semibold text-sm" style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}>
           <FiPlus className="h-4 w-4" />Novo
         </button>
       </div>
@@ -179,7 +179,7 @@ export default function DeliveryMen() {
               </div>
               <div className="flex justify-end gap-2 pt-4 border-t border-gray-100">
                 <button type="button" onClick={() => { setModalOpen(false); setEditing(null); }} className="px-5 py-2.5 rounded-xl text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50">Cancelar</button>
-                <button type="submit" className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-white transition-all" style={{ background: "linear-gradient(135deg, #EA1D2C, #C41420)" }}>
+                <button type="submit" className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-white transition-all" style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}>
                   <FiPlus className="h-4 w-4" />{editing ? " Atualizar" : " Criar"}
                 </button>
               </div>

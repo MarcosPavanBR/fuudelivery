@@ -8,11 +8,12 @@
    Gera utilidades: bg-fuu-red, text-fuu-red, etc.
    ============================================================ */
 @theme {
-  /* Cores da marca FuuDelivery */
-  --color-fuu-red: #EA1D2C;
-  --color-fuu-red-dark: #C41420;
+  /* Cores da marca FuuDelivery — fonte única: brand/tokens.ts
+     (decisão 2026-08-23: vermelho oficial do brand #DC2626). */
+  --color-fuu-red: #DC2626;
+  --color-fuu-red-dark: #B91C1C;
   --color-fuu-red-light: #FEF2F2;
-  --color-fuu-yellow: #F7A11E;
+  --color-fuu-yellow: #F59E0B;
   --color-fuu-yellow-light: #FFFBEB;
 
   /* ===== Tokens semânticos (Design System) =====
@@ -21,12 +22,12 @@
        — é troca de token, nada mais precisa mudar.
      - success: confirmações/salvar | warning: alertas | danger: erros/destrutivas
      - info: informativo (azul) */
-  --color-primary: #EA1D2C;
-  --color-primary-dark: #C41420;
+  --color-primary: #DC2626;
+  --color-primary-dark: #B91C1C;
   --color-primary-light: #FEF2F2;
   --color-success: #16A34A;
   --color-success-light: #F0FDF4;
-  --color-warning: #F7A11E;
+  --color-warning: #F59E0B;
   --color-warning-light: #FFFBEB;
   --color-danger: #DC2626;
   --color-danger-light: #FEF2F2;
@@ -39,7 +40,7 @@
 
   /* Sombras sutis */
   --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.10);
-  --shadow-card-hover: 0 8px 24px rgba(234, 29, 44, 0.12);
+  --shadow-card-hover: 0 8px 24px rgba(220, 38, 38, 0.12);
 
   /* Fontes */
   --font-display: Inter, system-ui, sans-serif;
@@ -213,7 +214,7 @@
 
   input:focus, textarea:focus, select:focus {
     outline: none;
-    border-color: #EA1D2C !important;
+    border-color: #DC2626 !important;
     box-shadow: 0 0 0 3px rgba(234, 29, 44, 0.1) !important;
   }
 

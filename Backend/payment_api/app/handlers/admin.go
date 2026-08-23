@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"strconv"
@@ -11,42 +11,48 @@ import (
 	authModels "github.com/carloshomar/fuudelivery/auth_api/app/models"
 	"github.com/carloshomar/fuudelivery/payment_api/app/models"
 	"github.com/gofiber/fiber/v2"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"gorm.io/gorm"
 )
 
-func mongoCtx() context.Context {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	_ = cancel
-	return ctx
-}
+// ============================================================================
+// Painel admin — corte 4: todas as consultas agora vêm do Postgres.
+// Histórico anterior ao corte só aparece depois de rodar cmd/etl-payments.
+// ============================================================================
 
+// ListAllPayments lista os últimos 500 pagamentos (mais recentes primeiro),
+// enriquecidos com o nome do cliente (tabela users, consulta em lote).
 func ListAllPayments(c *fiber.Ctx) error {
-	collection := models.MongoDabase.Collection("payments")
-
-	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}}).SetLimit(500)
-	cursor, err := collection.Find(mongoCtx(), bson.M{}, opts)
-	if err != nil {
+	var payments []models.Payment
+	if err := models.DB.Order("created_at DESC").Limit(500).Find(&payments).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao buscar pagamentos"})
 	}
-	defer cursor.Close(mongoCtx())
 
-	var payments []map[string]interface{}
-	if err := cursor.All(mongoCtx(), &payments); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao decodificar resultados"})
+	// Converte para map preservando o contrato JSON antigo (mesmos campos).
+	out := make([]map[string]interface{}, 0, len(payments))
+	for i := range payments {
+		p := paymentToMap(&payments[i])
+		out = append(out, p)
 	}
 
-	if payments == nil {
-		payments = []map[string]interface{}{}
+	// Enriquece cada pagamento com o nome do cliente (user.nome) lido da
+	// tabela users via customer_id — evita N+1 com consulta em lote.
+	enrichPaymentsWithUsers(out)
+
+	return c.JSON(out)
+}
+
+// paymentToMap serializa o pagamento mantendo as chaves que o WebAdmin
+// consome (json tags do modelo já são snake_case legado).
+func paymentToMap(p *models.Payment) map[string]interface{} {
+	b, err := json.Marshal(p)
+	if err != nil {
+		return map[string]interface{}{}
 	}
-
-	// Enriquece cada pagamento com o nome do cliente (user.nome) lido do
-	// Postgres (tabela users), via customer_id — o documento do Mongo nao
-	// guarda o nome do usuario. Consulta em lote para evitar N+1.
-	enrichPaymentsWithUsers(payments)
-
-	return c.JSON(payments)
+	var m map[string]interface{}
+	if err := json.Unmarshal(b, &m); err != nil {
+		return map[string]interface{}{}
+	}
+	return m
 }
 
 // enrichPaymentsWithUsers anexa user: {id, nome, phone} a cada pagamento
@@ -62,7 +68,7 @@ func enrichPaymentsWithUsers(payments []map[string]interface{}) {
 		return
 	}
 
-	// Coleta customer_ids unicos (BSON decodifica como int64 ou float64)
+	// Coleta customer_ids unicos
 	seen := make(map[int64]bool)
 	var ids []int64
 	for _, p := range payments {
@@ -110,7 +116,8 @@ func enrichPaymentsWithUsers(payments []map[string]interface{}) {
 	}
 }
 
-// paymentCustomerID extrai o customer_id de um pagamento decodificado do Mongo.
+// paymentCustomerID extrai o customer_id de um pagamento já decodificado
+// (JSON numérico chega como float64 após round-trip de interface{}).
 func paymentCustomerID(p map[string]interface{}) int64 {
 	switch v := p["customer_id"].(type) {
 	case int64:
@@ -119,85 +126,80 @@ func paymentCustomerID(p map[string]interface{}) int64 {
 		return int64(v)
 	case float64:
 		return int64(v)
+	case json.Number:
+		if n, err := v.Int64(); err == nil {
+			return n
+		}
 	}
 	return 0
 }
 
 // GetPaymentStats retorna estatísticas agregadas dos pagamentos (admin).
-// GET /payments/stats
+// GET /payments/stats — tudo via SQL no Postgres (sem varrer linhas na app).
 func GetPaymentStats(c *fiber.Ctx) error {
-	collection := models.MongoDabase.Collection("payments")
-
-	total, _ := collection.CountDocuments(mongoCtx(), bson.M{})
-	pending, _ := collection.CountDocuments(mongoCtx(), bson.M{"status": "PENDING"})
-	confirmed, _ := collection.CountDocuments(mongoCtx(), bson.M{"status": "CONFIRMED"})
-	rejected, _ := collection.CountDocuments(mongoCtx(), bson.M{"status": "REJECTED"})
-
-	// Soma de valores (armazenados em centavos)
-	var totalAmount float64
-	cursor, err := collection.Find(mongoCtx(), bson.M{})
-	if err == nil {
-		defer cursor.Close(mongoCtx())
-		for cursor.Next(mongoCtx()) {
-			var p struct {
-				Amount float64 `bson:"amount"`
-			}
-			if err := cursor.Decode(&p); err == nil {
-				totalAmount += p.Amount
-			}
-		}
+	type counts struct {
+		Total, Pending, Confirmed, Rejected int64
+		TotalAmount                         float64
 	}
+	var cs counts
+
+	if err := models.DB.Model(&models.Payment{}).Count(&cs.Total).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha nas estatísticas"})
+	}
+	models.DB.Model(&models.Payment{}).Where("status = ?", "PENDING").Count(&cs.Pending)
+	models.DB.Model(&models.Payment{}).Where("status = ?", "CONFIRMED").Count(&cs.Confirmed)
+	models.DB.Model(&models.Payment{}).Where("status = ?", "REJECTED").Count(&cs.Rejected)
+	// SUM ignora NULL automaticamente; sem linhas retorna NULL → coalesce.
+	models.DB.Model(&models.Payment{}).
+		Select("COALESCE(SUM(amount), 0) as total_amount").
+		Scan(&cs)
 
 	return c.JSON(fiber.Map{
-		"total":        total,
-		"total_amount": totalAmount,
-		"pending":      pending,
-		"confirmed":    confirmed,
-		"rejected":     rejected,
+		"total":        cs.Total,
+		"total_amount": cs.TotalAmount,
+		"pending":      cs.Pending,
+		"confirmed":    cs.Confirmed,
+		"rejected":     cs.Rejected,
 		"status_counts": fiber.Map{
-			"PENDING":   pending,
-			"CONFIRMED": confirmed,
-			"REJECTED":  rejected,
+			"PENDING":   cs.Pending,
+			"CONFIRMED": cs.Confirmed,
+			"REJECTED":  cs.Rejected,
 		},
 	})
+}
+
+// parsePaymentID aceita somente ID numérico (Postgres BIGSERIAL desde o corte 4).
+func parsePaymentID(id string) (int64, error) {
+	return strconv.ParseInt(id, 10, 64)
 }
 
 // ApprovePayment aprova manualmente um pagamento pendente (admin).
 // POST /payments/:id/approve
 func ApprovePayment(c *fiber.Ctx) error {
 	id := c.Params("id")
-	objID, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
+	paymentID, err := parsePaymentID(id)
+	if err != nil || paymentID <= 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid payment ID"})
 	}
 
-	var payment models.Payment
-	err = models.MongoDabase.Collection("payments").FindOne(mongoCtx(), bson.M{"_id": objID}).Decode(&payment)
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Payment not found"})
-	}
-
-	if payment.Status != "PENDING" {
-		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Payment is not pending", "status": payment.Status})
-	}
-
-	adminID := ""
-	if uid, err := middlewares.GetUserIDFromToken(c); err == nil {
-		adminID = fmt.Sprintf("%d", uid)
-	}
-
-	now := time.Now()
-	_, err = models.MongoDabase.Collection("payments").UpdateOne(
-		mongoCtx(),
-		bson.M{"_id": objID},
-		bson.M{"$set": bson.M{
+	result := models.DB.Model(&models.Payment{}).
+		Where("id = ? AND status = ?", paymentID, "PENDING").
+		Updates(map[string]interface{}{
 			"status":       "CONFIRMED",
-			"confirmed_at": now,
-			"approved_by":  adminID,
-		}},
-	)
-	if err != nil {
+			"confirmed_at": time.Now(),
+			"approved_by":  adminIDFromToken(c),
+		})
+	if result.Error != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to approve payment"})
+	}
+	if result.RowsAffected == 0 {
+		// Distingui inexistente de não-pendente para a resposta correta.
+		var count int64
+		models.DB.Model(&models.Payment{}).Where("id = ?", paymentID).Count(&count)
+		if count == 0 {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Payment not found"})
+		}
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Payment is not pending"})
 	}
 
 	return c.JSON(fiber.Map{"message": "Payment approved", "payment_id": id, "status": "CONFIRMED"})
@@ -207,8 +209,8 @@ func ApprovePayment(c *fiber.Ctx) error {
 // POST /payments/:id/reject  body: {"reason": "..."}
 func RejectPayment(c *fiber.Ctx) error {
 	id := c.Params("id")
-	objID, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
+	paymentID, err := parsePaymentID(id)
+	if err != nil || paymentID <= 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid payment ID"})
 	}
 
@@ -219,133 +221,152 @@ func RejectPayment(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
-	var payment models.Payment
-	err = models.MongoDabase.Collection("payments").FindOne(mongoCtx(), bson.M{"_id": objID}).Decode(&payment)
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Payment not found"})
-	}
-
-	if payment.Status != "PENDING" {
-		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Payment is not pending", "status": payment.Status})
-	}
-
-	adminID := ""
-	if uid, err := middlewares.GetUserIDFromToken(c); err == nil {
-		adminID = fmt.Sprintf("%d", uid)
-	}
-
-	now := time.Now()
-	_, err = models.MongoDabase.Collection("payments").UpdateOne(
-		mongoCtx(),
-		bson.M{"_id": objID},
-		bson.M{"$set": bson.M{
+	result := models.DB.Model(&models.Payment{}).
+		Where("id = ? AND status = ?", paymentID, "PENDING").
+		Updates(map[string]interface{}{
 			"status":           "REJECTED",
-			"rejected_at":      now,
-			"rejected_by":      adminID,
+			"rejected_at":      time.Now(),
+			"rejected_by":      adminIDFromToken(c),
 			"rejection_reason": body.Reason,
-		}},
-	)
-	if err != nil {
+		})
+	if result.Error != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to reject payment"})
+	}
+	if result.RowsAffected == 0 {
+		var count int64
+		models.DB.Model(&models.Payment{}).Where("id = ?", paymentID).Count(&count)
+		if count == 0 {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Payment not found"})
+		}
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Payment is not pending"})
 	}
 
 	return c.JSON(fiber.Map{"message": "Payment rejected", "payment_id": id, "status": "REJECTED"})
 }
 
-// ListWallets lista todas as carteiras (admin).
-// GET /wallets
-func ListWallets(c *fiber.Ctx) error {
-	collection := models.MongoDabase.Collection("wallets")
-
-	opts := options.Find().SetSort(bson.D{{Key: "last_updated", Value: -1}}).SetLimit(500)
-	cursor, err := collection.Find(mongoCtx(), bson.M{}, opts)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao listar carteiras"})
+// adminIDFromToken devolve o id do admin autenticado como string ("" se ausente).
+func adminIDFromToken(c *fiber.Ctx) string {
+	if uid, err := middlewares.GetUserIDFromToken(c); err == nil {
+		return fmt.Sprintf("%d", uid)
 	}
-	defer cursor.Close(mongoCtx())
-
-	var wallets []map[string]interface{}
-	if err := cursor.All(mongoCtx(), &wallets); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao decodificar carteiras"})
-	}
-
-	// Enriquece com owner_type derivado de user_type para o painel Financeiro
-	for i, w := range wallets {
-		if t, ok := w["user_type"].(string); ok {
-			wallets[i]["owner_type"] = t
-		}
-	}
-
-	if wallets == nil {
-		wallets = []map[string]interface{}{}
-	}
-
-	return c.JSON(wallets)
+	return ""
 }
 
-// ListChargebacks lista os lançamentos (créditos/débitos) do wallet_ledger
-// para o painel Financeiro do WebAdmin (admin).
-// GET /chargebacks?type=debit&user_id=42&payment_id=charge-...&limit=100
-//
-// Cada lançamento é enriquecido com o owner_type da carteira do usuário
-// (establishment/customer/...) para o painel identificar o dono do saldo.
-func ListChargebacks(c *fiber.Ctx) error {
-	query := bson.M{}
-
-	if t := c.Query("type"); t != "" {
-		query["type"] = t
+// ListWallets lista todas as carteiras (admin), mais recentes primeiro.
+func ListWallets(c *fiber.Ctx) error {
+	var wallets []models.Wallet
+	if err := models.DB.Order("updated_at DESC").Limit(500).Find(&wallets).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao listar carteiras"})
 	}
+
+	out := make([]map[string]interface{}, 0, len(wallets))
+	for _, w := range wallets {
+		m := map[string]interface{}{
+			"id":           w.ID,
+			"user_id":      w.UserID,
+			"user_type":    w.UserType,
+			"owner_type":   w.UserType, // alias usado pelo painel Financeiro
+			"balance":      w.Balance,
+			"currency":     w.Currency,
+			"status":       w.Status,
+			"last_updated": w.LastUpdated,
+		}
+		out = append(out, m)
+	}
+	return c.JSON(out)
+}
+
+// ledgerFilter representa os filtros de query de /chargebacks, reaproveitados
+// tanto pela listagem quanto pelo resumo agregado.
+type ledgerFilter struct {
+	Type       string
+	UserID     int64
+	HasUserID  bool
+	PaymentRef string
+	Limit      int
+}
+
+// parseLedgerFilter extrai os filtros comuns da querystring.
+func parseLedgerFilter(c *fiber.Ctx) ledgerFilter {
+	f := ledgerFilter{Limit: 100}
+	f.Type = c.Query("type")
 	if uid := c.Query("user_id"); uid != "" {
-		// user_id é int64 no wallet/ledger — converte para o filtro casar com
-		// o BSON numérico (string não casa com número no MongoDB).
 		if id, err := strconv.ParseInt(uid, 10, 64); err == nil {
-			query["user_id"] = id
-		} else {
-			query["user_id"] = uid
+			f.UserID = id
+			f.HasUserID = true
 		}
 	}
-	if pid := c.Query("payment_id"); pid != "" {
-		query["payment_id"] = pid
-	}
-
-	limit := 100
+	f.PaymentRef = c.Query("payment_id")
 	if l := c.QueryInt("limit"); l > 0 && l <= 500 {
-		limit = l
+		f.Limit = l
 	}
+	return f
+}
 
-	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}}).SetLimit(int64(limit))
-	cursor, err := models.MongoDabase.Collection("wallet_ledger").Find(mongoCtx(), query, opts)
-	if err != nil {
+// applyLedgerFilter aplica os filtros numa query de WalletTxn. O user_id vive
+// na tabela wallets (join), e reference_id guarda payment_id/order_id de origem.
+func applyLedgerFilter(q *gorm.DB, f ledgerFilter) *gorm.DB {
+	q = q.Model(&models.WalletTxn{}).
+		Joins("JOIN wallets ON wallets.id = wallet_transactions.wallet_id")
+	if f.Type != "" {
+		q = q.Where("wallet_transactions.type = ?", f.Type)
+	}
+	if f.HasUserID {
+		q = q.Where("wallets.user_id = ?", f.UserID)
+	}
+	if f.PaymentRef != "" {
+		q = q.Where("wallet_transactions.reference_id = ?", f.PaymentRef)
+	}
+	return q
+}
+
+// ListChargebacks lista os lançamentos (créditos/débitos) do ledger para o
+// painel Financeiro do WebAdmin (admin).
+// GET /chargebacks?type=debit&user_id=42&payment_id=...&limit=100
+//
+// Cada lançamento é enriquecido com o owner_type da carteira (join direto).
+func ListChargebacks(c *fiber.Ctx) error {
+	f := parseLedgerFilter(c)
+
+	var rows []struct {
+		models.WalletTxn
+		WalletUserID int64
+		OwnerType    string
+	}
+	if err := applyLedgerFilter(models.DB.
+		Select(`wallet_transactions.*, wallets.user_id AS wallet_user_id, wallets.user_type AS owner_type`), f).
+		Order("wallet_transactions.created_at DESC").
+		Limit(f.Limit).
+		Scan(&rows).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao listar lançamentos do ledger"})
 	}
-	defer cursor.Close(mongoCtx())
 
-	var entries []map[string]interface{}
-	if err := cursor.All(mongoCtx(), &entries); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao decodificar lançamentos do ledger"})
-	}
-
-	// Enriquece cada lançamento com o owner_type da carteira do usuário.
-	wallets := models.MongoDabase.Collection("wallets")
-	for i, e := range entries {
-		var wallet models.Wallet
-		if uid, ok := e["user_id"]; ok {
-			if err := wallets.FindOne(mongoCtx(), bson.M{"user_id": uid}).Decode(&wallet); err == nil {
-				entries[i]["owner_type"] = wallet.UserType
-			}
+	entries := make([]map[string]interface{}, 0, len(rows))
+	for _, r := range rows {
+		e := map[string]interface{}{
+			"id":         strconv.FormatInt(r.ID, 10),
+			"type":       r.Type,
+			"amount":     r.Amount,
+			"owner_type": r.OwnerType,
+			"user_id":    r.WalletUserID,
 		}
-		if _, ok := e["owner_type"]; !ok {
-			entries[i]["owner_type"] = ""
+		if r.Kind == "withdrawal" {
+			e["kind"] = r.Kind
+			e["destination"] = r.Destination
 		}
+		if r.Description != "" {
+			e["description"] = r.Description
+		}
+		if r.ReferenceID != "" {
+			e["payment_id"] = r.ReferenceID
+		}
+		e["balance_after"] = r.BalanceAfter
+		e["created_at"] = r.CreatedAt.Format(time.RFC3339)
+		entries = append(entries, e)
 	}
 
-	if entries == nil {
-		entries = []map[string]interface{}{}
-	}
-
-	// Resumo agregado com os MESMOS filtros da listagem (ignora o limit — é o
-	// total geral, não apenas os primeiros N lançamentos).
-	summary := computeLedgerSummary(query)
+	// Resumo agregado com os MESMOS filtros da listagem (ignora o limit).
+	summary := computeLedgerSummary(f)
 
 	return c.JSON(fiber.Map{
 		"chargebacks": entries,
@@ -354,44 +375,26 @@ func ListChargebacks(c *fiber.Ctx) error {
 	})
 }
 
-// computeLedgerSummary agrega o wallet_ledger pelos filtros informados e
-// retorna os totais de créditos, débitos e saldo líquido. Ignora paginação:
-// o resumo cobre TODOS os lançamentos que casam com o query.
-func computeLedgerSummary(query bson.M) fiber.Map {
-	pipeline := []bson.M{
-		{"$match": query},
-		{"$group": bson.M{
-			"_id":   "$type",
-			"total": bson.M{"$sum": "$amount"},
-		}},
+// computeLedgerSummary agrega o ledger pelos filtros informados e retorna os
+// totais de créditos, débitos e saldo líquido (SQL GROUP BY, sem carregar rows).
+func computeLedgerSummary(f ledgerFilter) fiber.Map {
+	type agg struct {
+		CreditTotal float64
+		DebitTotal  float64
 	}
-
-	cursor, err := models.MongoDabase.Collection("wallet_ledger").Aggregate(mongoCtx(), pipeline)
+	var a agg
+	err := applyLedgerFilter(models.DB.
+		Select(`COALESCE(SUM(CASE WHEN wallet_transactions.type = 'credit' THEN wallet_transactions.amount ELSE 0 END), 0) AS credit_total,
+		       COALESCE(SUM(CASE WHEN wallet_transactions.type = 'debit' THEN wallet_transactions.amount ELSE 0 END), 0) AS debit_total`), f).
+		Scan(&a).Error
 	if err != nil {
+		log.Printf("[LEDGER] Falha no resumo agregado: %v", err)
 		return fiber.Map{"credit_total": 0.0, "debit_total": 0.0, "net": 0.0}
-	}
-	defer cursor.Close(mongoCtx())
-
-	var creditTotal, debitTotal float64
-	for cursor.Next(mongoCtx()) {
-		var row struct {
-			ID    string  `bson:"_id"`
-			Total float64 `bson:"total"`
-		}
-		if err := cursor.Decode(&row); err != nil {
-			continue
-		}
-		switch row.ID {
-		case "credit":
-			creditTotal += row.Total
-		case "debit":
-			debitTotal += row.Total
-		}
 	}
 
 	return fiber.Map{
-		"credit_total": creditTotal,
-		"debit_total":  debitTotal,
-		"net":          creditTotal - debitTotal,
+		"credit_total": a.CreditTotal,
+		"debit_total":  a.DebitTotal,
+		"net":          a.CreditTotal - a.DebitTotal,
 	}
 }

@@ -153,7 +153,7 @@ const ModalAddItens = ({
             onClick={() => newItem()}
             disabled={items.find((e) => e.ID === Strings.id_default)}
             className="flex items-center justify-center px-4 py-2.5 rounded-xl text-white text-sm font-semibold disabled:opacity-50"
-            style={{ background: "linear-gradient(135deg, #EA1D2C, #C41420)" }}
+            style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
           >
             <FiX className="h-5 w-5 rotate-45" />
           </button>
@@ -174,7 +174,7 @@ const ModalAddItens = ({
             <tbody>
               {items.map((myItem) => (
                 <tr key={myItem.ID} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                  <td className="py-3 px-3 text-sm font-medium" style={{ color: "#EA1D2C" }}>
+                  <td className="py-3 px-3 text-sm font-medium" style={{ color: "#DC2626" }}>
                     {myItem.ID !== Strings.id_default ? myItem.ID : "-"}
                   </td>
                   <td className="py-3 px-3">

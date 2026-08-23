@@ -117,7 +117,7 @@ const RegisterEstablishment = () => {
           <div className="bg-white rounded-2xl border border-gray-100 shadow-card p-6">
             <div className="flex items-center gap-2 mb-4">
               <div className="p-2.5 rounded-xl bg-red-50">
-                <FiHome className="h-5 w-5" style={{ color: "#EA1D2C" }} />
+                <FiHome className="h-5 w-5" style={{ color: "#DC2626" }} />
               </div>
               <h2 className="text-sm font-semibold text-gray-900">Dados do Restaurante</h2>
             </div>
@@ -169,7 +169,7 @@ const RegisterEstablishment = () => {
           <div className="bg-white rounded-2xl border border-gray-100 shadow-card p-6">
             <div className="flex items-center gap-2 mb-4">
               <div className="p-2.5 rounded-xl bg-red-50">
-                <FiMail className="h-5 w-5" style={{ color: "#EA1D2C" }} />
+                <FiMail className="h-5 w-5" style={{ color: "#DC2626" }} />
               </div>
               <h2 className="text-sm font-semibold text-gray-900">Conta de Acesso</h2>
             </div>
@@ -243,7 +243,7 @@ const RegisterEstablishment = () => {
           <div className="bg-white rounded-2xl border border-gray-100 shadow-card p-6">
             <div className="flex items-center gap-2 mb-4">
               <div className="p-2.5 rounded-xl bg-red-50">
-                <FiMapPin className="h-5 w-5" style={{ color: "#EA1D2C" }} />
+                <FiMapPin className="h-5 w-5" style={{ color: "#DC2626" }} />
               </div>
               <h2 className="text-sm font-semibold text-gray-900">Contato e Endereço</h2>
             </div>
@@ -315,7 +315,7 @@ const RegisterEstablishment = () => {
           <div className="bg-white rounded-2xl border border-gray-100 shadow-card p-6">
             <div className="flex items-center gap-2 mb-4">
               <div className="p-2.5 rounded-xl bg-red-50">
-                <FiClock className="h-5 w-5" style={{ color: "#EA1D2C" }} />
+                <FiClock className="h-5 w-5" style={{ color: "#DC2626" }} />
               </div>
               <h2 className="text-sm font-semibold text-gray-900">Horário de Funcionamento</h2>
             </div>
@@ -353,7 +353,7 @@ const RegisterEstablishment = () => {
             type="submit"
             disabled={loading}
             className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-white font-semibold text-sm transition-all duration-200 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{ background: "linear-gradient(135deg, #EA1D2C, #C41420)" }}
+            style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
           >
             {loading ? (
               <>

@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { Ionicons } from "@expo/vector-icons";
+import Colors from "@/constants/Colors";
 
 interface PIXQRCodeProps {
   qrCodeBase64: string;
@@ -26,7 +27,7 @@ const PIXQRCode: React.FC<PIXQRCodeProps> = ({ qrCodeBase64, copyPaste, expiresI
         />
       ) : (
         <View style={[styles.qrcode, styles.qrcodePlaceholder]}>
-          <Ionicons name="qr-code" size={80} color="#F97316" />
+          <Ionicons name="qr-code" size={80} color={Colors.light.accent} />
         </View>
       )}
 
@@ -47,8 +48,8 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, fontWeight: "700", marginBottom: 4 },
   subtitle: { fontSize: 14, color: "#666", marginBottom: 20, textAlign: "center" },
   qrcode: { width: 200, height: 200, borderRadius: 12, marginBottom: 20 },
-  qrcodePlaceholder: { backgroundColor: "#FFF", justifyContent: "center", alignItems: "center", borderWidth: 2, borderColor: "#F97316", borderStyle: "dashed" },
-  copyButton: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#F97316", paddingVertical: 12, paddingHorizontal: 24, borderRadius: 8 },
+  qrcodePlaceholder: { backgroundColor: "#FFF", justifyContent: "center", alignItems: "center", borderWidth: 2, borderColor: Colors.light.accent, borderStyle: "dashed" },
+  copyButton: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.light.accent, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 8 },
   copyText: { color: "#FFF", fontWeight: "600", fontSize: 15 },
   expiry: { marginTop: 12, fontSize: 12, color: "#999" },
 });

@@ -21,7 +21,7 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
 	go.mongodb.org/mongo-driver v1.17.9
 	golang.org/x/crypto v0.55.0
-	golang.org/x/time v0.14.0
+	golang.org/x/time v0.15.0
 	gorm.io/driver/postgres v1.6.2
 	gorm.io/gorm v1.31.2
 )

@@ -301,6 +301,31 @@ jobs:
       - name: Build
         run: npm run build
 
+  frontend-webadmin:
+    name: Frontend — WebAdmin
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Frontend/WebAdmin
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: Frontend/WebAdmin/package-lock.json
+
+      - name: Install dependencies
+        # legacy-peer-deps: mesmo padrão do buildCommand do render.yaml
+        run: npm install --legacy-peer-deps
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
   # ──────────────────────────────────────────────
   # NPM Audit — all frontends
   # ──────────────────────────────────────────────

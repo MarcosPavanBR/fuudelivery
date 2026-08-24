@@ -4,9 +4,11 @@
 //
 // Sobem containers reais (MongoDB + Postgres) via testcontainers-go e exercitam
 // o fluxo completo: CreateOrder -> UpdateOrderStatus -> EarnPointsForOrder.
-// Não usam mocks de banco — só a chamada HTTP para o auth_api (GetEstablishment /
-// checkEstablishmentOpen) é substituída por um httptest.Server, porque esse é
-// outro serviço, fora do escopo deste teste.
+// Não usam mocks de banco — só a checagem de "estabelecimento aberto"
+// (checkEstablishmentOpen) é substituída por um httptest.Server, porque esse
+// endpoint pertence ao auth_api, fora do escopo deste teste. GetEstablishment
+// já consulta o Postgres direto (mesma base), então basta semear a tabela
+// establishments aqui.
 //
 // Rodar com:
 //
@@ -29,6 +31,7 @@ import (
 	"os"
 	"testing"
 
+	authModels "github.com/carloshomar/fuudelivery/auth_api/app/models"
 	"github.com/carloshomar/fuudelivery/orders_api/app/dto"
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
@@ -92,8 +95,18 @@ func setupIntegrationEnv(t *testing.T) func() {
 		// Corte 5: pedidos agora vivem primariamente em Postgres.
 		&models.OrderDocument{},
 		&models.PushToken{},
+		// GetEstablishment consulta a tabela establishments direto no PG
+		// (mesma base do auth_api no monólito).
+		&authModels.Establishment{},
 	))
 	models.DB = gormDB
+	authModels.DB = gormDB
+
+	// Estabelecimento usado pelos pedidos do caminho feliz (ID 1).
+	require.NoError(t, gormDB.Create(&authModels.Establishment{
+		ID:   1,
+		Name: "Restaurante Teste",
+	}).Error)
 
 	return func() {
 		_ = mongoClient.Disconnect(ctx)
@@ -102,10 +115,9 @@ func setupIntegrationEnv(t *testing.T) func() {
 	}
 }
 
-// fakeAuthAPI substitui o auth_api real: responde sempre "estabelecimento
-// aberto" e devolve um dto.Establishment fixo. CreateOrder chama esses dois
-// endpoints via http.Get usando as env vars URL_CHECK_ESTABLISHMENT_OPEN e
-// URL_GET_ESTABLISHMENT_ID (ambas com um "%d" para o ID).
+// fakeAuthAPI substitui apenas o endpoint de "estabelecimento aberto" do
+// auth_api (checkEstablishmentOpen via URL_CHECK_ESTABLISHMENT_OPEN, com "%d").
+// GetEstablishment já vai direto ao Postgres semeado no setup.
 func fakeAuthAPI(t *testing.T) *httptest.Server {
 	t.Helper()
 	mux := http.NewServeMux()
@@ -113,16 +125,9 @@ func fakeAuthAPI(t *testing.T) *httptest.Server {
 	mux.HandleFunc("/is-open", func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]bool{"is_open": true})
 	})
-	mux.HandleFunc("/establishment", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(dto.Establishment{
-			Id:   1,
-			Name: "Restaurante Teste",
-		})
-	})
 
 	srv := httptest.NewServer(mux)
 	os.Setenv("URL_CHECK_ESTABLISHMENT_OPEN", srv.URL+"/is-open?id=%d")
-	os.Setenv("URL_GET_ESTABLISHMENT_ID", srv.URL+"/establishment?id=%d")
 	return srv
 }
 

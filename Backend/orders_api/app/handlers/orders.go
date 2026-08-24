@@ -9,6 +9,7 @@ package handlers
 // Quando o Atlas for desligado, remover os ramos *_legacy* — nada mais muda.
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -96,30 +97,36 @@ func CreateOrder(c *fiber.Ctx, sendMessageToClient func(clientID int64, message 
 	})
 }
 
+// GetEstablishment busca direto no Postgres (mesma base do auth_api, pool já
+// importado neste arquivo). Substitui a antiga self-call HTTP via
+// URL_GET_ESTABLISHMENT_ID, que pânica sem a env e adicionava um salto de rede
+// no caminho crítico da criação de pedidos.
 func GetEstablishment(establishmentID int64) (*dto.Establishment, error) {
-	urlEnv := os.Getenv("URL_GET_ESTABLISHMENT_ID")
-	if urlEnv == "" {
-		panic("URL_GET_ESTABLISHMENT_ID não configurado.")
+	if authModels.DB == nil {
+		return nil, fmt.Errorf("postgres indisponível")
 	}
 
-	url := fmt.Sprintf(urlEnv, establishmentID)
-	log.Println(url)
-	response, err := http.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	defer response.Body.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API retornou status não OK: %d", response.StatusCode)
-	}
-
-	var establishmentDTO dto.Establishment
-	if err := json.NewDecoder(response.Body).Decode(&establishmentDTO); err != nil {
+	var est authModels.Establishment
+	if err := authModels.DB.WithContext(ctx).First(&est, establishmentID).Error; err != nil {
 		return nil, err
 	}
 
-	return &establishmentDTO, nil
+	return &dto.Establishment{
+		HorarioFuncionamento: est.HorarioFuncionamento,
+		Id:                   int64(est.ID),
+		Image:                est.Image,
+		Latitude:             est.Lat,
+		Longitude:            est.Long,
+		MaxDistanceDelivery:  est.MaxDistanceDelivery,
+		Name:                 est.Name,
+		OwnerId:              int64(est.OwnerID),
+		PrimaryCollor:        est.PrimaryColor,
+		SecondaryCollor:      est.SecondaryColor,
+		LocationString:       est.LocationString,
+	}, nil
 }
 
 // clientHTTPCheck é o client HTTP usado para checagens internas entre domínios.

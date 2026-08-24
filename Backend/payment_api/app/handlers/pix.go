@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"log"
+	"math"
 	"time"
 
 	"github.com/carloshomar/fuudelivery/payment_api/app/dto"
@@ -10,6 +11,12 @@ import (
 	"github.com/carloshomar/fuudelivery/payment_api/app/services"
 	"github.com/gofiber/fiber/v2"
 )
+
+// toCents converte reais (float64) para centavos (int64) com arredondamento
+// seguro — evita truncamento de 99.99*100 = 9998.9999… → 9998.
+func toCents(amount float64) int64 {
+	return int64(math.Round(amount * 100))
+}
 
 // GeneratePIX cria uma cobrança PIX no gateway (AbacatePay) e persiste o
 // pagamento em Postgres (corte 4 — fonte da verdade), com dual-write
@@ -24,7 +31,10 @@ func GeneratePIX(c *fiber.Ctx) error {
 
 	client := services.NewAbacatePayClient()
 	chargeReq := services.PIXChargeRequest{}
-	chargeReq.Data.Amount = int64(req.Amount)
+	// req.Amount está em REAIS (unidade persistida no Postgres); o gateway
+	// AbacatePay espera CENTAVOS (int64). Sem esta conversão um pedido de
+	// R$100,00 gerava uma cobrança de R$1,00 (subcobrança).
+	chargeReq.Data.Amount = toCents(req.Amount)
 	chargeReq.Data.Description = description
 	chargeReq.Data.ExternalID = req.OrderID
 	// customer é opcional para PIX; se enviado, TODOS os campos (incl. taxId/CPF

@@ -33,7 +33,9 @@ services:
       - key: PORT
         value: "3000"
       - key: GO_VERSION
-        value: stable
+        # Pinado em 1.25.x: "stable" já resolveu Go 1.27 e quebrou pgx/govulncheck
+        # uma vez (ver ci.yml, que usa o mesmo pin por esse motivo).
+        value: "1.25.x"
       - key: GO_ENV
         value: production
 
@@ -61,6 +63,12 @@ services:
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+
+      # ── Bootstrap do primeiro admin ───────────────────────
+      # POST /admin/bootstrap exige este secret. Uso único: criar o admin,
+      # confirmar, e remover a variável do dashboard depois.
+      - key: ADMIN_BOOTSTRAP_SECRET
         sync: false
 
       # ── Observabilidade / rotas ───────────────────────────

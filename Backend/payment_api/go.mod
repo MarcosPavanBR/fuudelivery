@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/go-redis/redis/v8 v8.11.5 // indirect
-	github.com/gofiber/fiber/v2 v2.52.12
+	github.com/gofiber/fiber/v2 v2.52.15
 	go.mongodb.org/mongo-driver v1.17.9
 )
 
@@ -83,7 +83,6 @@ require (
 	go.opentelemetry.io/otel/trace v1.45.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.9.0 // indirect
 	golang.org/x/crypto v0.54.0 // indirect
-	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.40.0 // indirect

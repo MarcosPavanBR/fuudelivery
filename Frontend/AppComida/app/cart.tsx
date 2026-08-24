@@ -17,6 +17,7 @@ import {
   Platform,
   ActivityIndicator,
   Modal,
+  Alert,
 } from "react-native";
 import api from "@/services/api";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -32,7 +33,9 @@ const cart = () => {
   const [pixData, setPixData] = useState<{
     qrCodeBase64: string;
     copyPaste: string;
+    orderId: string;
   } | null>(null);
+  const [pixPaid, setPixPaid] = useState(false);
 
   const { getUserData } = useApi();
 
@@ -55,7 +58,7 @@ const cart = () => {
     }, 0);
   }
 
-  async function generatePix(orderId: string, user: any) {
+  async function generatePix(orderId: string, user: any): Promise<boolean> {
     const amount = calculateSubtotal(cart) + (deliveryValue || 0);
     try {
       const { data } = await api.post("/payments/pix/generate", {
@@ -70,14 +73,24 @@ const cart = () => {
         setPixData({
           qrCodeBase64: data.qr_code_base64 || "",
           copyPaste: data.pix_copy_paste || "",
+          orderId,
         });
         return true;
       }
-      return false;
     } catch (e) {
-      console.log("Erro ao gerar PIX:", e);
-      return false;
+      // Erro tratado pelo Alert abaixo — o usuário pode tentar novamente.
     }
+    // Falha visível: o pedido já existe — o cliente precisa saber que a
+    // cobrança não foi gerada e poder tentar de novo.
+    Alert.alert(
+      "Falha ao gerar o PIX",
+      "Seu pedido foi criado, mas não conseguimos gerar a cobrança. Tentar novamente?",
+      [
+        { text: "Continuar sem pagar", style: "cancel" },
+        { text: "Tentar novamente", onPress: () => generatePix(orderId, user) },
+      ]
+    );
+    return false;
   }
 
   async function handlerSubmit() {
@@ -97,29 +110,66 @@ const cart = () => {
         nav.navigate("orders");
       }
     } catch (e) {
-      console.log(e);
+      // Falha já sinalizada ao usuário pelo Alert de submitCart/generatePix.
     }
     setLoad(false);
   }
 
   function closePixAndContinue() {
     setPixData(null);
+    setPixPaid(false);
     nav.goBack();
     nav.navigate("orders");
   }
 
+  // Polling do status da cobrança enquanto o QR Code está aberto:
+  // confirma o pagamento sem o cliente precisar confiar no "já paguei".
   useEffect(() => {
-    setHiddenCart(true);
-    nav.addListener("blur", () => {
-      setHiddenCart(false);
-    });
-  }, [nav]);
+    if (!pixData?.orderId || pixPaid) return;
+    let cancelled = false;
+    let tries = 0;
+    const MAX_TRIES = 36; // ~3 min a cada 5s
+
+    const interval = setInterval(async () => {
+      if (cancelled) return;
+      tries += 1;
+      try {
+        const { data } = await api.get(`/payments/order/${pixData.orderId}`);
+        if (data?.status === "CONFIRMED") {
+          cancelled = true;
+          setPixPaid(true);
+          Alert.alert("Pagamento confirmado!", "Seu pedido segue para preparo.");
+          clearInterval(interval);
+        }
+      } catch {
+        // silencioso — tenta de novo no próximo tick
+      }
+      if (tries >= MAX_TRIES) {
+        cancelled = true;
+        clearInterval(interval);
+      }
+    }, 5000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [pixData?.orderId, pixPaid]);
 
   useEffect(() => {
-    if (cart.length <= 0) {
-      nav.goBack();
-    }
-  }, [cart]);
+    setHiddenCart(true);
+    // Subscription precisa ser removida no unmount — sem isso o listener
+    // acumulava a cada abertura do carrinho (leak).
+    const unsub = nav.addListener("blur", () => {
+      setHiddenCart(false);
+    });
+    return unsub;
+  }, [nav]);
+
+  // NÃO navega automaticamente quando o carrinho esvazia: o submitCart
+  // limpa o carrinho e, com o goBack automático, o modal do PIX era
+  // desmontado na mesma hora (corrida com handlerSubmit). Carrinho vazio
+  // agora renderiza um estado vazio explícito, abaixo.
 
   return (
     <View
@@ -131,35 +181,51 @@ const cart = () => {
       <ScrollView style={{ height: "95%" }}>
         <HeaderMain />
 
-        <OrderSummary data={cart} />
-
-        <OrderSummaryWithTotal data={cart} />
-        <PaymentComponent
-          title={(Texts as Record<string, string>)[paymentMethod.type]}
-          icon={paymentMethod.icon}
-        />
-      </ScrollView>
-      <TouchableOpacity
-        style={{ ...styles.btns, opacity: !distance || load ? 0.8 : 1 }}
-        onPress={() => handlerSubmit()}
-        disabled={!distance || load}
-      >
-        {!load ? (
-          <>
-            <Text style={styles.txtFinal}>{Texts.finalizar_pagamento}</Text>
-            <MaterialIcons name="check" size={20} color={Colors.light.white} />
-          </>
+        {cart.length === 0 && !pixData ? (
+          <View style={styles.emptyBox}>
+            <Text style={styles.emptyTitle}>Seu carrinho está vazio</Text>
+            <TouchableOpacity
+              style={styles.emptyBtn}
+              onPress={() => nav.navigate("(tabs)" as never)}
+            >
+              <Text style={styles.emptyBtnTxt}>Ver restaurantes</Text>
+            </TouchableOpacity>
+          </View>
         ) : (
           <>
-            <Text style={styles.txtFinal}>{Texts.finalizando_pedido}</Text>
-            <ActivityIndicator
-              size={20}
-              color={Colors.light.white}
-              style={{ alignSelf: "center" }}
+            <OrderSummary data={cart} />
+
+            <OrderSummaryWithTotal data={cart} />
+            <PaymentComponent
+              title={(Texts as Record<string, string>)[paymentMethod.type]}
+              icon={paymentMethod.icon}
             />
           </>
         )}
-      </TouchableOpacity>
+      </ScrollView>
+      {cart.length > 0 && (
+        <TouchableOpacity
+          style={{ ...styles.btns, opacity: !distance || load ? 0.8 : 1 }}
+          onPress={() => handlerSubmit()}
+          disabled={!distance || load}
+        >
+          {!load ? (
+            <>
+              <Text style={styles.txtFinal}>{Texts.finalizar_pagamento}</Text>
+              <MaterialIcons name="check" size={20} color={Colors.light.white} />
+            </>
+          ) : (
+            <>
+              <Text style={styles.txtFinal}>{Texts.finalizando_pedido}</Text>
+              <ActivityIndicator
+                size={20}
+                color={Colors.light.white}
+                style={{ alignSelf: "center" }}
+              />
+            </>
+          )}
+        </TouchableOpacity>
+      )}
 
       {/* Modal do QR Code PIX — exibido após criar a cobrança no gateway. */}
       <Modal visible={!!pixData} transparent animationType="fade">
@@ -202,9 +268,28 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   pixDoneTxt: {
-    color: Colors.dark.tint,
+    color: Colors.light.tint,
     fontWeight: "600",
     fontSize: 14,
+  },
+  emptyBox: {
+    alignItems: "center",
+    paddingVertical: 40,
+    gap: 12,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    color: Colors.light.secondaryText,
+  },
+  emptyBtn: {
+    backgroundColor: Colors.light.tint,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 3,
+  },
+  emptyBtnTxt: {
+    color: Colors.light.white,
+    fontWeight: "600",
   },
   txtFinal: {
     fontWeight: "500",
@@ -212,7 +297,7 @@ const styles = StyleSheet.create({
   },
   btns: {
     width: "95%",
-    backgroundColor: Colors.dark.tint,
+    backgroundColor: Colors.light.tint,
     paddingLeft: 10,
     paddingRight: 10,
     borderRadius: 3,

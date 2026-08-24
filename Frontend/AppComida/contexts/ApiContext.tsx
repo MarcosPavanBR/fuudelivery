@@ -14,11 +14,15 @@ import {
   setToken,
   getToken,
   clearToken,
+  getRefreshToken,
+  clearRefreshToken,
   setPhoneOverride,
   getPhoneOverride,
   clearPhoneOverride,
 } from "@/config/tokenStorage";
 import { setOnUnauthorized } from "@/services/api";
+import axios from "axios";
+import { getApiUrl } from "@/config/api";
 
 interface UserData {
   id?: number;
@@ -94,7 +98,19 @@ export const ApiProvider: React.FC<ApiProviderProps> = ({ children }) => {
   }, []);
 
   const logout = async () => {
+    // Revoga o refresh token no servidor antes de limpar o storage local.
+    try {
+      const refreshToken = await getRefreshToken();
+      if (refreshToken) {
+        await axios.post(`${getApiUrl()}/auth/logout`, {
+          refresh_token: refreshToken,
+        });
+      }
+    } catch {
+      // segue com logout local mesmo se o servidor falhar
+    }
     await clearToken();
+    await clearRefreshToken();
     await clearPhoneOverride();
     setToken(null);
     setUserData(null);

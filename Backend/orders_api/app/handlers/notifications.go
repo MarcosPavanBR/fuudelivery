@@ -73,6 +73,11 @@ func RegisterPushToken(c *fiber.Ctx) error {
 	if db == nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Postgres indisponível"})
 	}
+	// Normaliza o tipo: os apps enviam "customer", mas o envio de push de
+	// status consulta user_type = "client" (sendStatusPushNotification).
+	if req.UserType == "customer" {
+		req.UserType = "client"
+	}
 	pushToken := models.PushToken{
 		UserID:    req.UserID,
 		UserType:  req.UserType,

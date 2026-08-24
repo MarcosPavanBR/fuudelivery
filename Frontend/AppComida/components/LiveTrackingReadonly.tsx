@@ -46,6 +46,13 @@ export default function LiveTrackingReadonly({
   useEffect(() => {
     if (!orderId) return;
 
+    let attempts = 0;
+    const MAX_ATTEMPTS = 20;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    // Flag de descarte: sem ela, o close() do cleanup dispara onclose e
+    // agenda uma reconexão pós-unmount (WebSocket zombie acumulando).
+    let disposed = false;
+
     const connectWebSocket = async () => {
       try {
         if (!token) {
@@ -60,6 +67,7 @@ export default function LiveTrackingReadonly({
         ws.onopen = () => {
           setConnected(true);
           setError(null);
+          attempts = 0;
         };
 
         ws.onmessage = (event) => {
@@ -80,7 +88,15 @@ export default function LiveTrackingReadonly({
 
         ws.onclose = () => {
           setConnected(false);
-          setTimeout(() => connectWebSocket(), 5000);
+          if (disposed) return;
+          // Reconexão limitada: loop infinito a cada 5s drenava bateria
+          // quando o servidor ficava fora por muito tempo (free tier).
+          if (attempts < MAX_ATTEMPTS) {
+            attempts += 1;
+            reconnectTimer = setTimeout(() => connectWebSocket(), 5000);
+          } else {
+            setError("Conexão perdida. Reabra a tela para reconectar.");
+          }
         };
 
         wsRef.current = ws;
@@ -92,6 +108,8 @@ export default function LiveTrackingReadonly({
     connectWebSocket();
 
     return () => {
+      disposed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
       if (wsRef.current) {
         wsRef.current.close();
       }

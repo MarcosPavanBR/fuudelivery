@@ -10,7 +10,9 @@ import React, {
 import { Alert } from "react-native";
 import LoadingPage from "@/components/LoadingPage";
 import { jwtDecode } from "jwt-decode";
-import { setToken, getToken, clearToken } from "@/config/tokenStorage";
+import { setToken, getToken, clearToken, getRefreshToken, clearRefreshToken } from "@/config/tokenStorage";
+import axios from "axios";
+import { getApiUrl } from "@/config/api";
 import { setOnUnauthorized } from "@/services/api";
 
 interface UserData {
@@ -85,7 +87,19 @@ export const ApiProvider: React.FC<ApiProviderProps> = ({ children }) => {
   }, []);
 
   const logout = async () => {
+    // Revoga o refresh token no servidor antes de limpar o storage local.
+    try {
+      const refreshToken = await getRefreshToken();
+      if (refreshToken) {
+        await axios.post(`${getApiUrl()}/auth/logout`, {
+          refresh_token: refreshToken,
+        });
+      }
+    } catch {
+      // segue com logout local mesmo se o servidor falhar
+    }
     await clearToken();
+    await clearRefreshToken();
     setToken(null);
     setUserData(null);
     setIsLogged(false);
@@ -126,7 +140,7 @@ export const ApiProvider: React.FC<ApiProviderProps> = ({ children }) => {
         // Registra push token em background
         if (mergedData.id) {
           import("@/helpers/pushNotifications").then(({ registerForPushNotifications }) => {
-            registerForPushNotifications(mergedData.id!, "customer");
+            registerForPushNotifications(mergedData.id!, "restaurant");
           });
         }
       } catch (error) {

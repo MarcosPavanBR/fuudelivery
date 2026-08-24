@@ -180,9 +180,13 @@ function getMarkerClient(latitude: number, longitude: number) {
 }
 
 const formatLocationInfo = (locationInfo: any) => {
-  return `${locationInfo.logradouro}, ${locationInfo.numero}, ${
-    locationInfo.complemento + locationInfo.complemento ? "," : ""
-  } ${locationInfo.bairro}, ${locationInfo.localidade} - ${locationInfo.uf}`;
+  if (!locationInfo) return "";
+  // Antes: `complemento + complemento ? "," : ""` concatenava o complemento
+  // duas vezes e testava o resultado (bug de precedência).
+  const complemento = locationInfo.complemento ? `${locationInfo.complemento}, ` : "";
+  return `${locationInfo.logradouro ?? ""}, ${locationInfo.numero ?? ""}, ${complemento}${
+    locationInfo.bairro ?? ""
+  }, ${locationInfo.localidade ?? ""} - ${locationInfo.uf ?? ""}`;
 };
 
 const formatDay = (dateString: string) => {

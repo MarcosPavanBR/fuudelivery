@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
+import { Link } from "react-router-dom";
 import MenuLayout from "../../components/Menu";
 import { useAuth } from "../../context/AuthContext";
 import api from "../../services/api";
@@ -180,13 +181,11 @@ function Perfil() {
             </div>
           </div>
           <div className="mt-4">
-            <a
-              href="/#/alterar-senha"
-              className="btn btn-ghost"
-            >
+            {/* BrowserRouter: href="/#/..." navegava para a raiz — usar Link. */}
+            <Link to="/alterar-senha" className="btn btn-ghost">
               <FiLock className="h-4 w-4" />
               Alterar Senha
-            </a>
+            </Link>
           </div>
         </div>
 

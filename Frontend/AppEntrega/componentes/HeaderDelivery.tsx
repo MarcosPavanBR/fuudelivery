@@ -32,10 +32,10 @@ function HeaderDelivery({
           onPress={() => nav.navigate("perfil")}
           disabled={disabled}
         >
+          {/* Asset local: o hotlink freepik dependia de rede externa
+              (e licença duvidosa) para um ícone estático. */}
           <Image
-            source={{
-              uri: "https://cdn-icons-png.freepik.com/512/4140/4140048.png",
-            }}
+            source={require("../assets/images/deliveryman_happy.png")}
             style={styles.imagem}
           />
         </TouchableOpacity>
@@ -43,7 +43,7 @@ function HeaderDelivery({
         <TouchableOpacity
           style={{
             ...styles.btn,
-            backgroundColor: disponivel ? "green" : Colors.light.tint,
+            backgroundColor: disponivel ? Colors.light.success : Colors.light.tint,
           }}
           disabled={disabled}
           onPress={() => onDisponivel(!disponivel)}

@@ -67,21 +67,22 @@ export default function Home() {
   };
 
   async function getPermission() {
-    try {
-      let { status } = await Location.requestBackgroundPermissionsAsync();
-      if (status === "granted") return true;
-    } catch (e) {
-      console.log(e);
-    }
-
+    // Ordem correta: foreground primeiro (pré-requisito), background depois.
+    // Antes pedia background primeiro — em build de loja o fluxo quebrava.
     try {
       let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === "granted") return true;
-    } catch (e) {
-      console.log(e);
-    }
+      if (status !== "granted") return false;
 
-    return false;
+      try {
+        const bg = await Location.requestBackgroundPermissionsAsync();
+        if (bg.status === "granted") return true;
+      } catch (e) {
+        // Background negado: segue só com foreground (rastreio em 1º plano).
+      }
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 
   async function start() {
@@ -100,8 +101,20 @@ export default function Home() {
           longitude: location.coords.longitude,
         },
       });
+
+      // Registra a posição no dispatch engine — sem isso o entregador
+      // disponível nunca entra no matching por proximidade.
+      if (disponivel) {
+        api
+          .post("/dispatch/location", {
+            lat: location.coords.latitude,
+            lng: location.coords.longitude,
+            status: "available",
+          })
+          .catch(() => {});
+      }
     } catch (e) {
-      console.log(e);
+      // Silencioso: próxima iteração do polling tenta de novo.
     }
   }
 
@@ -112,9 +125,12 @@ export default function Home() {
         `/solicitation-orders?latitude=${mylocation.coords.latitude}&longitude=${mylocation.coords.longitude}&limitDistance=${Strings.distance_delivery_distance}`
       );
 
-      const marks = data.map((mak: any) => {
+      const marks = data.map((mak: any, idx: number) => {
         return {
-          id: mak.establishmentId,
+          // id único: o mesmo estabelecimento pode ter 2+ pedidos na fila —
+          // usar só establishmentId gerava ViewAnnotation duplicada.
+          id: `${mak.order_id ?? idx}`,
+          establishmentId: mak.establishmentId,
           name: mak.establishment.name,
           location_string: mak.establishment.location_string,
           coordinates: {
@@ -167,7 +183,9 @@ export default function Home() {
   }, [isFocused]);
 
   useEffect(() => {
-    setTimeout(() => {
+    // Timeout com cleanup: antes era recriado a cada mudança de mylocation
+    // sem limpar o anterior (acumulava timers).
+    const timer = setTimeout(() => {
       if (!hasStart && mylocation?.coords) {
         centerMapOnUser();
         setHasStart(true);
@@ -176,6 +194,7 @@ export default function Home() {
         disponify(false, false);
       }
     }, 500);
+    return () => clearTimeout(timer);
   }, [mylocation]);
 
   return (
@@ -258,7 +277,7 @@ export default function Home() {
       {formatView === "list" ? (
         <FlatList
           data={markers.filter((x: any) => x.name)}
-          keyExtractor={(item, index) => index.toString()}
+          keyExtractor={(item) => String(item.id)}
           renderItem={({ item }) => (
             <TouchableOpacity
               style={styles.containers}

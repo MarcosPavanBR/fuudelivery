@@ -28,6 +28,7 @@ export default function Establishment() {
   const [cadProdcts, setCadProdcts] = useState<any[]>([]);
   const [searchText, setSearchText] = useState("");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const { establishment } = useCartApi();
   const insets = useSafeAreaInsets();
@@ -55,12 +56,14 @@ export default function Establishment() {
         {
           Id: 9999,
           Name: Texts.todos,
-          EstablishmentId: establishment.Id,
+          EstablishmentId: establishment.id,
           Products: helpers.orderByImage(produtos),
         },
       ]);
+      setError(false);
     } catch (e) {
-      console.log(e);
+      // Antes: console.log e cardápio vazio sem explicação.
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -97,6 +100,11 @@ export default function Establishment() {
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.light.primary} />
+        </View>
+      ) : error && cadProdcts.length <= 1 ? (
+        <View style={styles.loadingContainer}>
+          <Text style={styles.errorTitle}>Não foi possível carregar o cardápio</Text>
+          <Text style={styles.errorText}>Verifique sua conexão e puxe para atualizar.</Text>
         </View>
       ) : (
         <ScrollView
@@ -184,5 +192,15 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "700",
     color: Colors.light.text,
+  },
+  errorTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: Colors.light.text,
+    marginBottom: 6,
+  },
+  errorText: {
+    fontSize: 14,
+    color: Colors.light.secondaryText,
   },
 });

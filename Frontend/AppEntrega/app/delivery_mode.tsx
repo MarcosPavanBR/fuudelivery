@@ -1,4 +1,4 @@
-import { Linking, Platform, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
+import { Linking, Platform, StyleSheet, TouchableOpacity, ScrollView, Alert } from "react-native";
 
 import { Text, View } from "@/components/Themed";
 import Colors from "@/constants/Colors";
@@ -75,7 +75,10 @@ export default function DeliveryMode({ showIcon }: any) {
       }
       await isActiveOrder();
     } catch (e) {
-      console.log(e);
+      Alert.alert(
+        "",
+        "Não foi possível atualizar o status da entrega. Tente novamente."
+      );
     }
     setLoading(false);
   };
@@ -196,7 +199,7 @@ export default function DeliveryMode({ showIcon }: any) {
           />
             <ViewAnnotation
               id={String(establishment.id)}
-              lngLat={[establishment.long | 0, establishment.lat | 0]}
+              lngLat={[establishment.long, establishment.lat]}
             >
               <View style={styles.pinDot} />
             </ViewAnnotation>

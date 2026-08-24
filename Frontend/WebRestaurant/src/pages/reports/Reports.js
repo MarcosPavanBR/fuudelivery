@@ -16,6 +16,7 @@ import MenuLayout from "../../components/Menu";
 const Reports = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [period, setPeriod] = useState("month");
   const [stats, setStats] = useState({
     totalRevenue: 0,
@@ -38,16 +39,10 @@ const Reports = () => {
         `/reports/establishment/${establishmentId}?period=${period}`
       );
       setStats(data);
+      setLoadError(false);
     } catch (err) {
-      console.error("Failed to load reports:", err);
-      setStats({
-        totalRevenue: 0,
-        totalOrders: 0,
-        avgTicket: 0,
-        deliveryRevenue: 0,
-        ordersByStatus: {},
-        revenueByDay: [],
-      });
+      // Antes zerava tudo em silêncio: R$ 0,00 aparecia como dado real.
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -115,6 +110,25 @@ const Reports = () => {
       <MenuLayout>
         <div className="flex items-center justify-center min-h-[400px]">
           <FiLoader className="animate-spin h-8 w-8" style={{ color: "#DC2626" }} />
+        </div>
+      </MenuLayout>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <MenuLayout>
+        <div className="flex flex-col items-center justify-center min-h-[400px] gap-3">
+          <FiBarChart2 className="h-8 w-8 text-gray-300" />
+          <p className="text-sm text-gray-500">
+            Não foi possível carregar os relatórios. Verifique sua conexão.
+          </p>
+          <button
+            onClick={fetchStats}
+            className="rounded-lg bg-[#DC2626] px-4 py-2 text-sm font-semibold text-white hover:bg-[#B91C1C]"
+          >
+            Tentar novamente
+          </button>
         </div>
       </MenuLayout>
     );

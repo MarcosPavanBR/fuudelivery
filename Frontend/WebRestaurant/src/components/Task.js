@@ -8,20 +8,20 @@ const Task = ({ task, index }) => {
   const [showItems, setShowItems] = useState(false);
 
   const calculateFinalPrice = ({ item, quantity, additionals = [] }) => {
-    const additionalPricesSum = additionals?.reduce((sum, additionalId) => {
-      const additional = item.additional.find((a) => a.ID === additionalId);
+    const additionalPricesSum = (additionals || []).reduce((sum, additionalId) => {
+      const additional = (item.additional || []).find((a) => a.ID === additionalId);
       return sum + (additional?.price || 0);
     }, 0);
-    return quantity * (item.price + (additionalPricesSum || 0));
+    return (quantity || 0) * ((item.price || 0) + (additionalPricesSum || 0));
   };
 
   const subTotal =
-    task.data.cart
+    (task.data.cart || [])
       .map((e) => calculateFinalPrice(e))
       .reduce((e, f) => e + f, 0) || 0;
 
   const paymentLabel =
-    Texts[task.data.paymentmethod.type] ?? task.data.paymentmethod.type;
+    Texts[task.data.paymentmethod?.type] ?? task.data.paymentmethod?.type ?? "—";
 
   return (
     <Draggable id={task.id} draggableId={task.id} index={index} type="TASK">
@@ -47,11 +47,11 @@ const Task = ({ task, index }) => {
               </div>
               <div>
                 <p className="font-bold text-sm text-gray-900">
-                  {task.data.user.nome}
+                  {task.data.user?.nome ?? "Cliente"}
                 </p>
                 <div className="flex items-center gap-1 text-gray-500">
                   <FiPhone className="h-3 w-3" />
-                  <span className="text-xs">{task.data.user.phone}</span>
+                  <span className="text-xs">{task.data.user?.phone ?? "—"}</span>
                 </div>
               </div>
             </div>

@@ -79,6 +79,6 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, fontWeight: "700", color: "#1A1A1A", marginBottom: 8 },
   message: { fontSize: 15, color: "#666", textAlign: "center", marginBottom: 24 },
   errorDetail: { fontSize: 11, color: "#999", textAlign: "center", marginBottom: 16, fontFamily: "monospace" },
-  button: { backgroundColor: "#EA1D2C", paddingHorizontal: 32, paddingVertical: 14, borderRadius: 12 },
+  button: { backgroundColor: "#DC2626", paddingHorizontal: 32, paddingVertical: 14, borderRadius: 12 },
   buttonText: { color: "#FFF", fontSize: 16, fontWeight: "600" },
 });

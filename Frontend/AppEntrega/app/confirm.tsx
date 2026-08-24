@@ -41,21 +41,27 @@ const ConfirmScreen = () => {
       await isActiveOrder();
 
       if (error.response) {
+        // O pedido pode ter sido aceito por outro entregador (corrida do
+        // polling) ou o entregador não ser mais elegível — mensagem sempre
+        // definida (antes podia exibir "undefined").
         Alert.alert(
           "",
-          error.response.data.error,
+          error.response.data?.error ||
+            "Não foi possível aceitar esta entrega. Ela pode ter sido aceita por outro entregador.",
           [
             {
               text: "OK",
-              onPress: () => nav.navigate("(tabs)"),
+              onPress: () => nav.navigate("(tabs)" as never),
             },
           ],
           { cancelable: false }
         );
-      } else if (error.request) {
-        console.log("Sem resposta do servidor:", error.request);
       } else {
-        console.log("Erro ao processar a solicitação:", error.message);
+        Alert.alert(
+          "",
+          "Sem conexão com o servidor. Verifique sua internet e tente novamente.",
+          [{ text: "OK" }]
+        );
       }
     }
     setLoading(false);

@@ -10,20 +10,31 @@ import {
   StyleSheet,
   SafeAreaView,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import RegisterScreen from "./cadastro";
 
 const LoginScreen = () => {
-  const [email, setEmail] = useState("admin@admin.com");
-  const [password, setPassword] = useState("admin123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const { login } = useAuthApi();
   const [register, setRegister] = useState(false);
   const [load, setLoad] = useState(false);
 
   const handleLogin = async () => {
+    if (!email.trim() || !password.trim()) return;
     setLoad(true);
-    login(email, password);
-    setLoad(false);
+    try {
+      await login(email, password);
+    } catch (e: any) {
+      Alert.alert(
+        "",
+        e?.response?.data?.error ||
+          "E-mail ou senha inválidos. Tente novamente."
+      );
+    } finally {
+      setLoad(false);
+    }
   };
   if (register) {
     return <RegisterScreen setRegister={setRegister} />;
@@ -31,12 +42,23 @@ const LoginScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Marca: wordmark FUUD ELIVERY (o app não exibia marca nenhuma). */}
+      <View style={styles.brandBlock}>
+        <Text style={styles.brandText}>
+          <Text style={styles.brandFuud}>FUUD</Text>
+          <Text style={styles.brandElivery}>ELIVERY</Text>
+        </Text>
+        <Text style={styles.brandTagline}>SABOR · RAPIDEZ · CONFIANÇA</Text>
+      </View>
       <View style={styles.formContainer}>
         <TextInput
           style={styles.input}
           onChangeText={setEmail}
           value={email}
           placeholder="Email"
+          autoCapitalize="none"
+          keyboardType="email-address"
+          placeholderTextColor={Colors.light.tabIconDefault}
         />
         <TextInput
           style={styles.input}
@@ -44,6 +66,8 @@ const LoginScreen = () => {
           value={password}
           placeholder="Senha"
           secureTextEntry={true}
+          autoCapitalize="none"
+          placeholderTextColor={Colors.light.tabIconDefault}
         />
         <TouchableOpacity
           disabled={load}
@@ -64,12 +88,14 @@ const LoginScreen = () => {
         <TouchableOpacity
           style={{
             ...styles.loginButton,
-            backgroundColor: "white",
-            marginTop: 30,
+            backgroundColor: Colors.light.white,
+            borderWidth: 1,
+            borderColor: Colors.light.tint,
+            marginTop: 20,
           }}
           onPress={() => setRegister(true)}
         >
-          <Text style={{ ...styles.loginButtonText, color: "red" }}>
+          <Text style={{ ...styles.loginButtonText, color: Colors.light.tint }}>
             Novo Entregador
           </Text>
         </TouchableOpacity>
@@ -85,13 +111,27 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: Colors.light.white,
   },
-  logo: {
-    width: 250,
-    height: 250,
-    marginBottom: 10,
-    marginTop: -200,
-    resizeMode: "contain",
-    alignSelf: "center",
+  brandBlock: {
+    alignItems: "center",
+    marginBottom: 28,
+  },
+  brandText: {
+    fontSize: 34,
+    letterSpacing: 0.5,
+  },
+  brandFuud: {
+    fontWeight: "900",
+    color: Colors.light.primary,
+  },
+  brandElivery: {
+    fontWeight: "700",
+    color: Colors.light.text,
+  },
+  brandTagline: {
+    fontSize: 11,
+    letterSpacing: 4,
+    color: Colors.light.secondaryText,
+    marginTop: 4,
   },
   formContainer: {
     width: "90%",

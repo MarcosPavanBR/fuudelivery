@@ -15,13 +15,21 @@ const Cardapio = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [load, setLoad] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
 
   async function start() {
     setLoad(true);
-    const products = await productsModel.getProducts(getUser().id);
-    setItems(products);
-    setLoad(false);
+    try {
+      const establishmentId = getUser()?.establishment?.id || getUser().id;
+      const products = await productsModel.getProducts(establishmentId);
+      setItems(products);
+      setLoadError(false);
+    } catch (e) {
+      setLoadError(true);
+    } finally {
+      setLoad(false);
+    }
   }
 
   async function onRefreshItens(item) {
@@ -65,6 +73,18 @@ const Cardapio = () => {
       {load ? (
         <div className="flex items-center justify-center h-32">
           <FiLoader className="animate-spin h-6 w-6" style={{ color: "#DC2626" }} />
+        </div>
+      ) : loadError ? (
+        <div className="flex flex-col items-center justify-center h-32 gap-3">
+          <p className="text-sm text-gray-500">
+            Não foi possível carregar o cardápio. Verifique sua conexão.
+          </p>
+          <button
+            onClick={start}
+            className="rounded-lg bg-[#DC2626] px-4 py-2 text-sm font-semibold text-white hover:bg-[#B91C1C]"
+          >
+            Tentar novamente
+          </button>
         </div>
       ) : (
         <CardapioList

@@ -7,7 +7,6 @@ import {
   TextInput,
   TouchableOpacity,
   Text,
-  Image,
   StyleSheet,
   SafeAreaView,
   Alert,
@@ -62,7 +61,15 @@ const LoginScreen = () => {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
       >
-        <Image source={{ uri: "" }} style={styles.logo} />
+        {/* Marca: wordmark FUUD ELIVERY (a Image com uri vazia reservava
+            250px em branco e não exibia marca nenhuma). */}
+        <View style={styles.brandBlock}>
+          <Text style={styles.brandText}>
+            <Text style={styles.brandFuud}>FUUD</Text>
+            <Text style={styles.brandElivery}>ELIVERY</Text>
+          </Text>
+          <Text style={styles.brandTagline}>SABOR · RAPIDEZ · CONFIANÇA</Text>
+        </View>
         <View style={styles.formContainer}>
           <Text style={styles.title}>
             {isRegister ? "Criar Conta" : "Entrar"}
@@ -154,13 +161,27 @@ const styles = StyleSheet.create({
     alignItems: "center",
     width: "100%",
   },
-  logo: {
-    width: 250,
-    height: 250,
-    marginBottom: 10,
-    marginTop: -200,
-    resizeMode: "contain",
-    alignSelf: "center",
+  brandBlock: {
+    alignItems: "center",
+    marginBottom: 28,
+  },
+  brandText: {
+    fontSize: 34,
+    letterSpacing: 0.5,
+  },
+  brandFuud: {
+    fontWeight: "900",
+    color: Colors.light.primary,
+  },
+  brandElivery: {
+    fontWeight: "700",
+    color: Colors.light.text,
+  },
+  brandTagline: {
+    fontSize: 11,
+    letterSpacing: 4,
+    color: Colors.light.secondaryText,
+    marginTop: 4,
   },
   formContainer: {
     width: "90%",

@@ -4,8 +4,7 @@ import api, { setOnUnauthorized } from "@/services/api";
 import { setToken, getToken, clearToken, getRefreshToken, clearRefreshToken } from "@/config/tokenStorage";
 import axios from "axios";
 import { getApiUrl } from "@/config/api";
-import { Buffer } from "buffer";
-import useWebSocket from "react-use-websocket";
+import { jwtDecode } from "jwt-decode";
 import { useNavigation } from "expo-router";
 import * as React from "react";
 import { Alert } from "react-native";
@@ -44,93 +43,52 @@ const AuthProvider = ({ children }: any) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isLogged, setIsLogged] = useState(false);
   const [disponivel, setDisponivel] = useState(false);
-  const [socketMessage, setSocketMessage] = useState<any>([]);
   const [mylocation, setMyLocation] = useState<any>(null);
 
   const [inWork, setInWork] = useState({ status: false, order: null });
 
   const nav = useNavigation();
 
-  // const { sendJsonMessage, lastMessage, lastJsonMessage } = useWebSocket(
-  //   api.getUri().replace("http", "ws") + "/ws/delivery/" + user?.id,
-  //   {
-  //     reconnectInterval: 1000,
-  //     retryOnError: true,
-  //   }
-  // );
-
-  useEffect(() => {
-    if (user) sendSocketMessage("connect", user);
-  }, [user]);
-
-  // useEffect(() => {
-  //   if (lastJsonMessage) {
-  //     setSocketMessage([...socketMessage, lastJsonMessage]);
-  //   }
-  // }, [lastJsonMessage]);
-
-  const sendSocketMessage = (type: string, data: any) => {
-    try {
-      // sendJsonMessage({
-      //   type,
-      //   data,
-      // });
-    } catch (e) {
-      console.log(e);
-    }
+  // Normaliza o payload de has-active: a API pode devolver null, [] ou
+  // objeto. Antes, `[]` virava status=true e derrubava a HomeDelivery
+  // com TypeError ao ler order[0].
+  const applyActiveOrder = (data: any) => {
+    const has = data != null && (!Array.isArray(data) || data.length > 0);
+    setInWork({ status: has, order: data ?? null });
+    setDisponivel((prev) => has || prev);
   };
 
   const isActiveOrder = async () => {
+    // Faltava o return: sem usuário, a chamava seguia e batia em
+    // /deliveryman/has-active/undefined a cada ciclo de polling.
     if (!user || !user.id) {
       setInWork({ status: false, order: null });
+      return;
     }
 
     try {
-      const { data } = await api.get(
-        "/deliveryman/has-active/" + user?.id
-      );
-      setInWork({ status: data !== null, order: data });
-
-      setDisponivel(data !== null || disponivel);
+      const { data } = await api.get("/deliveryman/has-active/" + user.id);
+      applyActiveOrder(data);
     } catch (e) {
-      console.log(e);
+      // Silencioso: o polling tenta de novo no próximo ciclo.
     }
   };
 
+  const decodeToken = (token: string): User => {
+    return jwtDecode(token) as unknown as User;
+  };
+
   const login = async (email: string, password: string) => {
-    try {
-      const response = await api.post("/delivery-man/login", {
-        email,
-        password,
-      });
-      const { token } = response.data;
+    const response = await api.post("/delivery-man/login", {
+      email,
+      password,
+    });
+    const { token } = response.data;
 
-      await setToken(token);
-
-      // Decodifica o token para obter os dados do usuário
-      const parts = token
-        .split(".")
-        .map((part: any) =>
-          Buffer.from(
-            part.replace(/-/g, "+").replace(/_/g, "/"),
-            "base64"
-          ).toString()
-        );
-
-      const decodedToken = JSON.parse(parts[1]) as {
-        email: string;
-        name: string;
-        id: number;
-        phone: string;
-      };
-
-      setUser(decodedToken);
-      nav.navigate("index");
-      setIsLoading(false);
-    } catch (error) {
-      console.error("Erro ao fazer login:", error);
-      throw error;
-    }
+    await setToken(token);
+    setUser(decodeToken(token));
+    nav.navigate("index" as never);
+    setIsLoading(false);
   };
 
   const register = async (
@@ -149,33 +107,14 @@ const AuthProvider = ({ children }: any) => {
       const { token } = response.data;
 
       await setToken(token);
-
-      // Decodifica o token para obter os dados do usuário
-      const parts = token
-        .split(".")
-        .map((part: any) =>
-          Buffer.from(
-            part.replace(/-/g, "+").replace(/_/g, "/"),
-            "base64"
-          ).toString()
-        );
-
-      const decodedToken = JSON.parse(parts[1]) as {
-        email: string;
-        name: string;
-        id: number;
-        phone: string;
-      };
-
-      setUser(decodedToken);
-      nav.navigate("index");
+      setUser(decodeToken(token));
+      nav.navigate("index" as never);
       setIsLoading(false);
     } catch (error) {
       Alert.alert(
         "",
         "Tivemos um problema ao fazer o cadastro, verifique se o e-mail já está cadastrado e tente novamente."
       );
-      console.error(error);
       throw error;
     }
   };
@@ -195,11 +134,11 @@ const AuthProvider = ({ children }: any) => {
       }
       await clearToken();
       await clearRefreshToken();
-      // Limpa o estado do usuário e finaliza o carregamento
       setUser(null);
+      setInWork({ status: false, order: null });
+      setDisponivel(false);
       setIsLoading(false);
     } catch (error) {
-      console.error("Erro ao fazer logout:", error);
       throw error;
     }
   };
@@ -216,32 +155,16 @@ const AuthProvider = ({ children }: any) => {
     return () => setOnUnauthorized(null);
   }, []);
 
-  const getUser = async () => {
+  const getUser = async (): Promise<User | null> => {
     try {
       const token = await getToken();
-      if (token) {
-        const parts = token
-          .split(".")
-          .map((part) =>
-            Buffer.from(
-              part.replace(/-/g, "+").replace(/_/g, "/"),
-              "base64"
-            ).toString()
-          );
-
-        const decodedToken = (await JSON.parse(parts[1])) as {
-          email: string;
-          name: string;
-          id: number;
-        };
-        return decodedToken;
-      }
-      return null;
+      if (!token) return null;
+      return decodeToken(token);
     } catch (e) {
-      console.log(e);
       return null;
     }
   };
+
   const checkAuth = async () => {
     const decodedToken = await getUser();
     setUser(decodedToken);
@@ -255,7 +178,7 @@ const AuthProvider = ({ children }: any) => {
   useEffect(() => {
     setIsLogged(user != null);
     isActiveOrder();
-  }, [user, socketMessage]);
+  }, [user]);
 
   return (
     <AuthContext.Provider
@@ -273,8 +196,6 @@ const AuthProvider = ({ children }: any) => {
           isActiveOrder,
           mylocation,
           setMyLocation,
-          sendSocketMessage,
-          socketMessage,
           register,
         } as any
       }

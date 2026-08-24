@@ -127,3 +127,29 @@ func TestPIXPaymentResponse_EmptyOptionalFields(t *testing.T) {
 		t.Error("PixCopyPaste should be empty by default")
 	}
 }
+
+// === Testes da conversao reais -> centavos ===
+// O gateway AbacatePay espera centavos (int64); o handler persiste reais.
+// Regressao: antes o valor em reais era enviado como centavos (R$100 -> R$1).
+
+func TestToCents(t *testing.T) {
+	tests := []struct {
+		name   string
+		reais  float64
+		centav int64
+	}{
+		{"valor inteiro", 100.0, 10000},
+		{"com centavos exatos", 25.90, 2590},
+		{"truncamento float", 99.99, 9999},
+		{"casa decimal binaria", 10.10, 1010},
+		{"um centavo", 0.01, 1},
+		{"zero", 0, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := toCents(tt.reais); got != tt.centav {
+				t.Errorf("toCents(%v) = %d; want %d", tt.reais, got, tt.centav)
+			}
+		})
+	}
+}

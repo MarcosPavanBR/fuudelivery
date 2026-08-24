@@ -1106,8 +1106,10 @@ func main() {
 	}))
 
 	// Health check — reuses the Redis client from the queue singleton
-	// HTTP 503 only when critical databases (Postgres/MongoDB) are down.
-	// Redis degradation returns HTTP 200 with status "degraded".
+	// HTTP 503 only when Postgres (fonte primária pós-corte 5) está down.
+	// MongoDB é informational: dual-write legado pode estar off (Atlas
+	// aposentado) sem que o serviço deixe de ser saudável. Redis degradation
+	// returns HTTP 200 with status "degraded".
 	app.Get("/health", func(c *fiber.Ctx) error {
 		redisClient := queue.GetClient()
 
@@ -1117,8 +1119,8 @@ func main() {
 		redisGeoCheck := health.RedisGeoCheck(redisClient)
 		batchesCheck := health.BatchCheck(ordersModels.DB)
 
-		// Critical checks: Postgres and MongoDB
-		criticalStatus := health.OverallStatus(postgresCheck, mongodbCheck)
+		// Critical check: apenas o Postgres (banco-único).
+		criticalStatus := health.OverallStatus(postgresCheck)
 		// All checks: includes Redis and batches
 		allStatus := health.OverallStatus(postgresCheck, mongodbCheck, redisCheck, redisGeoCheck, batchesCheck)
 

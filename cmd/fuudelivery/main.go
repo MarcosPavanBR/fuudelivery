@@ -865,10 +865,13 @@ func setupPaymentRoutes(app *fiber.App) {
 	app.Post("/payments/:id/reject", adminRequired, rateLimitMiddleware(20), paymentHandlers.RejectPayment)
 	// Rate limit 20/min nos endpoints de dinheiro (proteção contra abuso/custo)
 	app.Post("/payments/pix/generate", protectedRoute, rateLimitMiddleware(20), paymentHandlers.GeneratePIX)
-	app.Post("/payments/card/tokenize", protectedRoute, rateLimitMiddleware(20), paymentHandlers.TokenizeCard)
+	// Tokenização de cartão REMOVIDA: o endpoint recebia PAN/CVV crus e
+	// devolvia um "token" local sem valor no gateway (risco PCI puro). O
+	// cartão volta quando houver tokenização server-side do AbacatePay.
 	app.Post("/payments/card/charge", protectedRoute, rateLimitMiddleware(20), paymentHandlers.ChargeCard)
 	app.Post("/payments/process", protectedRoute, rateLimitMiddleware(20), paymentHandlers.ProcessPayment)
-	app.Post("/payments/split", protectedRoute, rateLimitMiddleware(20), paymentHandlers.ProcessSplit)
+	// Split rules definem como o dinheiro é dividido — só admin.
+	app.Post("/payments/split", adminRequired, rateLimitMiddleware(20), paymentHandlers.ProcessSplit)
 	app.Post("/payments/webhook", rateLimitMiddleware(100), paymentHandlers.HandlePaymentWebhook)
 	app.Get("/reports/establishment/:id", protectedRoute, paymentHandlers.GetEstablishmentReport)
 	app.Get("/wallet/balance/:user_id", protectedRoute, paymentHandlers.GetBalance)
@@ -974,15 +977,28 @@ func setupChatRoutes(app *fiber.App) {
 }
 
 // validateRequiredEnv verifica se as variaveis de ambiente essenciais estao presentes.
-// Em producao, falha rapidamente se algo estiver faltando.
+// Em producao, falha rapidamente (exit) se algo critico estiver faltando:
+// com JWT_SECRET vazio os tokens passam a ser assinados/validados com chave
+// HMAC vazia, o que permite forjar qualquer identidade — inclusive admin.
 func validateRequiredEnv() {
-	required := []string{"JWT_SECRET", "DB_CONNECTION_STRING", "MONGO_URI"}
+	critical := []string{"JWT_SECRET", "DB_CONNECTION_STRING"}
 	missing := false
-	for _, key := range required {
+	for _, key := range critical {
 		if os.Getenv(key) == "" {
 			log.Printf("[ENV] CRITICAL: %s nao configurado", key)
 			missing = true
 		}
+	}
+	if missing {
+		if os.Getenv("GO_ENV") == "production" {
+			log.Fatalf("[ENV] Encerrando: variaveis criticas ausentes em producao (%v)", critical)
+		}
+		log.Println("[ENV] Configuracao incompleta — seguindo em modo dev.")
+	}
+
+	// Mongo e opcional por design apos o corte 5 (dual-write legado desligavel).
+	if os.Getenv("MONGO_URI") == "" {
+		log.Println("[ENV] MONGO_URI ausente — dual-write legado desativado.")
 	}
 
 	// Em producao, valida tambem as de pagamento
@@ -993,11 +1009,6 @@ func validateRequiredEnv() {
 				log.Printf("[ENV] WARNING: %s nao configurado — funcionalidade limitada", key)
 			}
 		}
-	}
-
-	if missing {
-		log.Println("[ENV] Configuracao incompleta. Defina as variaveis no painel do Render (Environment > Secret Files).")
-		log.Println("[ENV] Variaveis necessarias para o monolith: DB_CONNECTION_STRING, MONGO_URI, JWT_SECRET")
 	}
 }
 

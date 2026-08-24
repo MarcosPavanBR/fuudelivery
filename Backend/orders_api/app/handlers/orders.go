@@ -21,6 +21,7 @@ import (
 	"time"
 
 	authModels "github.com/carloshomar/fuudelivery/auth_api/app/models"
+	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/orders_api/app/dto"
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
@@ -44,6 +45,17 @@ func CreateOrder(c *fiber.Ctx, sendMessageToClient func(clientID int64, message 
 		now := time.Now()
 		request.ScheduledAt = &now
 	}
+
+	// O total é SEMPRE recalculado no servidor a partir dos preços do banco.
+	// O valor enviado pelo cliente (itens do carrinho) nunca é usado — evita
+	// pedido de R$100,00 criado com payload de R$0,01.
+	serverTotal, totalErr := computeOrderTotal(request.Cart, request.DeliveryValue, request.EstablishmentId)
+	if totalErr != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": totalErr.Error(),
+		})
+	}
+	request.OrderTotal = serverTotal
 
 	if !request.IsScheduled {
 		isOpen, err := checkEstablishmentOpen(request.EstablishmentId)
@@ -95,6 +107,80 @@ func CreateOrder(c *fiber.Ctx, sendMessageToClient func(clientID int64, message 
 		"message": "Ordem criada com sucesso",
 		"orderId": orderID,
 	})
+}
+
+// computeOrderTotal recalcula o total do pedido no servidor: preço de cada
+// produto e adicional vem da tabela do banco (não do payload do cliente),
+// multiplicado pela quantidade, somado ao valor de entrega informado.
+func computeOrderTotal(cart []dto.CartItem, deliveryValue float64, establishmentID int64) (float64, error) {
+	if deliveryValue < 0 {
+		return 0, fmt.Errorf("valor de entrega inválido")
+	}
+	if len(cart) == 0 {
+		return 0, fmt.Errorf("carrinho vazio")
+	}
+	if authModels.DB == nil {
+		return 0, fmt.Errorf("postgres indisponível")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	total := deliveryValue
+	for _, ci := range cart {
+		if ci.Quantity <= 0 {
+			return 0, fmt.Errorf("quantidade inválida para o produto %s", ci.Item.Name)
+		}
+		var p models.Product
+		if err := authModels.DB.WithContext(ctx).First(&p, ci.Item.ID).Error; err != nil {
+			return 0, fmt.Errorf("produto %d não encontrado", ci.Item.ID)
+		}
+		if p.EstablishmentID != uint(establishmentID) {
+			return 0, fmt.Errorf("produto %d não pertence a este estabelecimento", p.ID)
+		}
+		total += p.Price * float64(ci.Quantity)
+
+		for _, addID := range ci.Additionals {
+			var a models.Additional
+			if err := authModels.DB.WithContext(ctx).First(&a, addID).Error; err != nil {
+				return 0, fmt.Errorf("adicional %d não encontrado", addID)
+			}
+			if a.EstablishmentID != uint(establishmentID) {
+				return 0, fmt.Errorf("adicional %d não pertence a este estabelecimento", a.ID)
+			}
+			total += a.Price
+		}
+	}
+	return total, nil
+}
+
+// canActOnEstablishment verifica se o chamador pode agir sobre recursos do
+// estabelecimento informado: admin sempre pode; role de estabelecimento só se
+// o establishment_id do token for o dono.
+func canActOnEstablishment(c *fiber.Ctx, establishmentID int64) bool {
+	role, rErr := middlewares.GetUserRoleFromToken(c)
+	if rErr != nil {
+		return false
+	}
+	if role == "admin" {
+		return true
+	}
+	tokenEstID, eErr := middlewares.GetEstablishmentIDFromToken(c)
+	if eErr != nil {
+		return false
+	}
+	return tokenEstID == establishmentID
+}
+
+// isValidOrderTransition limita os status aceitos em PUT /orders/status.
+// (REQUEST_APPROVE é o pedido do cliente reabrindo aprovação; os demais são
+// transições do restaurante.)
+func isValidOrderTransition(status string) bool {
+	switch status {
+	case "REQUEST_APPROVE", "APPROVED", "DENIED", "PREPARING", "DONE", "CANCELLED":
+		return true
+	}
+	return false
 }
 
 // GetEstablishment busca direto no Postgres (mesma base do auth_api, pool já
@@ -184,6 +270,21 @@ func UpdateOrderStatus(c *fiber.Ctx, sendMessageToClient func(clientID int64, me
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Pedido não encontrado",
+		})
+	}
+
+	// Autorização: quem muda status é o estabelecimento dono do pedido
+	// (claim establishment_id) ou um admin. Sem isso qualquer autenticado
+	// podia marcar pedidos alheios como DONE/CANCELLED (IDOR).
+	if !canActOnEstablishment(c, doc.EstablishmentID) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "Sem permissão para alterar este pedido",
+		})
+	}
+
+	if !isValidOrderTransition(requestBody.Status) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Status inválido",
 		})
 	}
 

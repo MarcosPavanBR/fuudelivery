@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"log"
 	"os"
 	"time"
@@ -304,20 +305,25 @@ func publishPaymentApproved(abacatepayID string) {
 		"confirmed_at": now,
 	}
 
-	// Credita a carteira do estabelecimento pelo share do split. O ledger é a
-	// fonte da verdade da idempotência: se já existe um crédito para este
-	// pagamento, reprocessar o webhook não credita de novo.
+	// Credita a carteira do estabelecimento pelo share do split. A idempotência
+	// é estrutural: o UNIQUE uq_wallet_txns_credit_ref (sql/11) faz o segundo
+	// crédito para o mesmo pagamento retornar ErrDuplicateCredit — reprocessar
+	// o webhook não credita de novo, mesmo com entregas concorrentes.
 	// (NÃO usar payment.Status == "PENDING" como guard: o webhook chama
 	// updateLocalPaymentStatus ANTES de publishPaymentApproved, então o
 	// pagamento já está CONFIRMED aqui e o guard nunca dispararia.)
 	if payment.EstablishmentCreditedAt == nil && payment.Status != "REFUNDED" {
 		// Usa as regras recém-calculadas (ainda não persistidas em payment).
 		credit := establishmentShare(models.SplitRules(splitRules))
-		if credit > 0 && !models.HasLedgerEntry(models.DB, abacatepayID, "credit") {
+		if credit > 0 {
 			wallet, wErr := adjustEstablishmentWallet(payment.EstablishmentID, credit, abacatepayID, payment.OrderID, now)
-			if wErr != nil {
+			switch {
+			case errors.Is(wErr, models.ErrDuplicateCredit):
+				log.Printf("[WALLET] Crédito já aplicado para %s — replay idempotente ignorado", abacatepayID)
+				setFields["establishment_credited_at"] = now
+			case wErr != nil:
 				log.Printf("[WALLET] WARNING: falha ao creditar carteira do estabelecimento %d: %v", payment.EstablishmentID, wErr)
-			} else {
+			default:
 				setFields["establishment_credited_at"] = now
 				dualWriteLedgerEntry(payment.EstablishmentID, "credit", "", credit, wallet.Balance, abacatepayID,
 					"Credito do split do pedido "+payment.OrderID, "") // DUAL-WRITE LEGADO

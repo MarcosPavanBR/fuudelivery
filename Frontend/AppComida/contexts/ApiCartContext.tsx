@@ -32,7 +32,7 @@ interface ApiContextProps {
   editCart(item: object): void;
   cleanCart(): void;
   setPaymentMethod(method: object): void;
-  submitCart(user: any): Promise<boolean>;
+  submitCart(user: any): Promise<{ ok: boolean; orderId?: string }>;
 
   validDelivery(): boolean;
   paymentMethod: any;
@@ -155,10 +155,10 @@ export const ApiCartProvider: React.FC<ApiCartProviderProps> = ({
     }
   }
 
-  async function submitCart(user: any) {
+  async function submitCart(user: any): Promise<{ ok: boolean; orderId?: string }> {
     if (!validDelivery()) {
       Alert.alert("", Texts.erroPedido);
-      return false;
+      return { ok: false };
     }
     const coords_location = await helpers.getLocationDistance();
     const body = {
@@ -180,10 +180,12 @@ export const ApiCartProvider: React.FC<ApiCartProviderProps> = ({
     try {
       const { data } = await api.post(`/orders`, body);
       setCart([]);
-      return true;
+      // A API responde { message, orderId } — o orderId é necessário para
+      // gerar a cobrança PIX (POST /payments/pix/generate) no carrinho.
+      return { ok: true, orderId: data?.orderId ? String(data.orderId) : undefined };
     } catch (e) {
       Alert.alert("", Texts.erroPedido);
-      return false;
+      return { ok: false };
     }
   }
 

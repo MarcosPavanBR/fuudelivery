@@ -38,6 +38,19 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
     GRANT USAGE, SELECT ON SEQUENCES TO app_backend;
 
+-- 1b) service_role (chave SUPABASE_SERVICE_ROLE_KEY usada pelo backend para
+--     REST/Storage do Supabase). Sem estes GRANTs, chamadas REST nas tabelas
+--     de domínio falham com 42501 "permission denied for table ..." — bug
+--     encontrado em produção ao validar o projeto via PostgREST.
+--     O service_role é server-side only e NUNCA deve chegar ao cliente.
+GRANT USAGE ON SCHEMA public TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO service_role;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+    GRANT USAGE, SELECT ON SEQUENCES TO service_role;
+
 -- 2) Controle de migrações (changelog de estrutura do banco)
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version     TEXT PRIMARY KEY,           -- nome do arquivo, ex: '01_dominio_pedidos'

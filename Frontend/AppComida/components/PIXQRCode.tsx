@@ -7,7 +7,8 @@ import Colors from "@/constants/Colors";
 interface PIXQRCodeProps {
   qrCodeBase64: string;
   copyPaste: string;
-  expiresIn: number;
+  /** Opcional: quando o gateway não devolve expiração, o contador é ocultado. */
+  expiresIn?: number;
 }
 
 const PIXQRCode: React.FC<PIXQRCodeProps> = ({ qrCodeBase64, copyPaste, expiresIn }) => {
@@ -36,9 +37,11 @@ const PIXQRCode: React.FC<PIXQRCodeProps> = ({ qrCodeBase64, copyPaste, expiresI
         <Text style={styles.copyText}>Copiar codigo PIX</Text>
       </TouchableOpacity>
 
-      <Text style={styles.expiry}>
-        Expira em {Math.floor(expiresIn / 60)} min
-      </Text>
+      {expiresIn != null && expiresIn > 0 && (
+        <Text style={styles.expiry}>
+          Expira em {Math.floor(expiresIn / 60)} min
+        </Text>
+      )}
     </View>
   );
 };

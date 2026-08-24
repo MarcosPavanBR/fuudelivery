@@ -60,6 +60,7 @@ run "04_dominio_chat.sql"
 run "05_audit_log.sql"
 run "06_rls_seguranca.sql"
 run "10_wallet_ledger_kind.sql"
+run "11_idempotencia_financeira.sql"
 run "07_auditoria_tabelas_orfas.sql"
 run "08_testes.sql"
 

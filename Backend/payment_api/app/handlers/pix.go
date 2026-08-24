@@ -29,6 +29,16 @@ func GeneratePIX(c *fiber.Ctx) error {
 
 	description := fmt.Sprintf("Pedido %s", req.OrderID)
 
+	// O valor cobrado é o total recalculado no servidor na criação do pedido —
+	// nunca o amount enviado pelo cliente (que poderia pagar R$0,01 por um
+	// pedido de R$100,00).
+	serverTotal, ok := validateChargeAmount(req.OrderID, req.Amount)
+	if !ok {
+		log.Printf("[PIX] Cobrança rejeitada: valor diverge do pedido %s (client=%.2f)", req.OrderID, req.Amount)
+		return c.Status(400).JSON(fiber.Map{"error": "Valor da cobrança não corresponde ao pedido"})
+	}
+	req.Amount = serverTotal
+
 	client := services.NewAbacatePayClient()
 	chargeReq := services.PIXChargeRequest{}
 	// req.Amount está em REAIS (unidade persistida no Postgres); o gateway

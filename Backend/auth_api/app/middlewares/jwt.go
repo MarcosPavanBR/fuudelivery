@@ -138,6 +138,27 @@ func GetUserRoleFromToken(c *fiber.Ctx) (string, error) {
 	return role, nil
 }
 
+// GetUserPhoneFromToken extrai o telefone do usuario autenticado do token JWT.
+// Usado para garantir que operações sensíveis (ex.: pontos de fidelidade)
+// usem a identidade do token e não um phone arbitrário do body.
+func GetUserPhoneFromToken(c *fiber.Ctx) (string, error) {
+	token, err := ValidateJWT(c)
+	if err != nil {
+		return "", err
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return "", fiber.NewError(fiber.StatusUnauthorized, "Invalid token claims")
+	}
+
+	phone, _ := claims["phone"].(string)
+	if phone == "" {
+		return "", fiber.NewError(fiber.StatusForbidden, "Phone not found in token")
+	}
+	return phone, nil
+}
+
 // ACCESS_TOKEN_DURATION é a validade do token de acesso (curta duração).
 const ACCESS_TOKEN_DURATION = 15 * time.Minute
 

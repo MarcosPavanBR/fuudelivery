@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/delivery_api/app/dto"
 	"github.com/carloshomar/fuudelivery/delivery_api/app/services"
 	"github.com/gofiber/fiber/v2"
@@ -34,19 +35,26 @@ func (h *DispatchHandler) UpdateLocation(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
-	if req.DeliverymanID == 0 || (req.Lat == 0 && req.Lng == 0) {
-		return c.Status(400).JSON(fiber.Map{"error": "deliveryman_id, lat, lng required"})
+	// Identidade do token: o body não define deliveryman_id — qualquer
+	// autenticado não injeta posição falsa de outro entregador.
+	courierID, aErr := middlewares.GetUserIDFromToken(c)
+	if aErr != nil {
+		return c.Status(401).JSON(fiber.Map{"error": "Invalid token"})
+	}
+
+	if req.Lat == 0 && req.Lng == 0 {
+		return c.Status(400).JSON(fiber.Map{"error": "lat, lng required"})
 	}
 
 	if req.Status == "" {
 		req.Status = "available"
 	}
 
-	h.CourierStore.UpdateLocation(req.DeliverymanID, req.Name, req.Lat, req.Lng, req.Status)
+	h.CourierStore.UpdateLocation(courierID, req.Name, req.Lat, req.Lng, req.Status)
 
 	return c.JSON(fiber.Map{
 		"message":        "Location updated",
-		"deliveryman_id": req.DeliverymanID,
+		"deliveryman_id": courierID,
 		"status":         req.Status,
 	})
 }
@@ -55,15 +63,15 @@ func (h *DispatchHandler) UpdateLocation(c *fiber.Ctx) error {
 // POST /dispatch/status
 func (h *DispatchHandler) SetCourierStatus(c *fiber.Ctx) error {
 	var req struct {
-		DeliverymanID int64  `json:"deliveryman_id"`
-		Status        string `json:"status"`
+		Status string `json:"status"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
-	if req.DeliverymanID == 0 {
-		return c.Status(400).JSON(fiber.Map{"error": "deliveryman_id required"})
+	courierID, aErr := middlewares.GetUserIDFromToken(c)
+	if aErr != nil {
+		return c.Status(401).JSON(fiber.Map{"error": "Invalid token"})
 	}
 
 	validStatuses := map[string]bool{"available": true, "busy": true, "offline": true}
@@ -74,11 +82,11 @@ func (h *DispatchHandler) SetCourierStatus(c *fiber.Ctx) error {
 		})
 	}
 
-	h.CourierStore.SetCourierStatus(req.DeliverymanID, req.Status)
+	h.CourierStore.SetCourierStatus(courierID, req.Status)
 
 	return c.JSON(fiber.Map{
 		"message":        "Status updated",
-		"deliveryman_id": req.DeliverymanID,
+		"deliveryman_id": courierID,
 		"status":         req.Status,
 	})
 }

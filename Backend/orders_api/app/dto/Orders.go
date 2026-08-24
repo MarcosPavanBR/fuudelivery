@@ -80,12 +80,16 @@ type DeliveryMan struct {
 }
 
 type RequestPayload struct {
-	Cart            []CartItem    `json:"cart"`
-	Distance        float64       `json:"distance"`
-	Location        Location      `json:"location"`
-	Status          string        `json:"status"`
-	PaymentMethod   PaymentMethod `json:"paymentMethod"`
-	DeliveryValue   float64       `json:"deliveryValue"`
+	Cart          []CartItem    `json:"cart"`
+	Distance      float64       `json:"distance"`
+	Location      Location      `json:"location"`
+	Status        string        `json:"status"`
+	PaymentMethod PaymentMethod `json:"paymentMethod"`
+	DeliveryValue float64       `json:"deliveryValue"`
+	// OrderTotal é SEMPRE recalculado no servidor (computeOrderTotal) a partir
+	// dos preços do banco; o valor do carrinho enviado pelo cliente é ignorado.
+	// Gravado no payload JSONB e usado pela cobrança PIX/card como fonte única.
+	OrderTotal      float64       `json:"order_total"`
 	User            User          `json:"user"`
 	EstablishmentId int64         `json:"establishmentId"`
 	Establishment   Establishment `json:"establishment"`

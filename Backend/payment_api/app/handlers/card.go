@@ -88,6 +88,15 @@ func ProcessPayment(c *fiber.Ctx) error {
 		email = "cliente@email.com"
 	}
 
+	// O valor cobrado é o total recalculado no servidor na criação do pedido —
+	// nunca o amount enviado pelo cliente.
+	serverTotal, ok := validateChargeAmount(req.OrderID, req.Amount)
+	if !ok {
+		log.Printf("[CARD] Cobrança rejeitada: valor diverge do pedido %s (client=%.2f)", req.OrderID, req.Amount)
+		return c.Status(400).JSON(fiber.Map{"error": "Valor da cobrança não corresponde ao pedido"})
+	}
+	req.Amount = serverTotal
+
 	client := services.NewAbacatePayClient()
 
 	if req.Method == "credit" || req.Method == "debit" {
@@ -124,6 +133,8 @@ func ProcessPayment(c *fiber.Ctx) error {
 		}
 
 		// ID é BIGSERIAL no Postgres — preenchido automaticamente pelo Create.
+		// CardToken NÃO é mais persistido: PAN/CVV não podem transitar pela
+		// nossa API (PCI). O campo fica no modelo apenas para histórico.
 		payment := models.Payment{
 			OrderID:         req.OrderID,
 			CustomerID:      req.CustomerID,
@@ -133,7 +144,6 @@ func ProcessPayment(c *fiber.Ctx) error {
 			DeliveryAmount:  req.DeliveryAmount,
 			Method:          req.Method,
 			Status:          paymentStatus,
-			CardToken:       req.CardToken,
 			Installments:    installments,
 			CardLastDigits:  apiResp.LastDigits,
 			AbacatePayID:    apiResp.ID,
@@ -160,7 +170,9 @@ func ProcessPayment(c *fiber.Ctx) error {
 
 	if req.Method == "pix" {
 		pixReq := services.PIXChargeRequest{}
-		pixReq.Data.Amount = int64(req.Amount)
+		// toCents com arredondamento: int64(req.Amount) truncava
+		// R$99,99 → 9999*100 falhando em 99.99*100=9998.999…
+		pixReq.Data.Amount = toCents(req.Amount)
 		pixReq.Data.Description = description
 		pixReq.Data.ExternalID = req.OrderID
 		// customer é opcional para PIX; sem CPF válido o gateway responde 422.

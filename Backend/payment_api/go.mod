@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/go-redis/redis/v8 v8.11.5 // indirect
-	github.com/gofiber/fiber/v2 v2.52.12
+	github.com/gofiber/fiber/v2 v2.52.15
 	go.mongodb.org/mongo-driver v1.17.9
 )
 

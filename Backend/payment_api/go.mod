@@ -83,7 +83,6 @@ require (
 	go.opentelemetry.io/otel/trace v1.45.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.9.0 // indirect
 	golang.org/x/crypto v0.54.0 // indirect
-	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
@@ -99,7 +98,7 @@ require github.com/carloshomar/fuudelivery/pkg/queue v0.0.0
 
 require (
 	github.com/carloshomar/fuudelivery/auth_api v0.0.0-00010101000000-000000000000
-	github.com/golang-jwt/jwt/v5 v5.2.2
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.38.0
 	gorm.io/driver/postgres v1.6.2

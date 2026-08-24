@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"strconv"
@@ -50,7 +51,8 @@ func GetBalance(c *fiber.Ctx) error {
 }
 
 // TopUp credita na carteira do cliente o valor de um pagamento CONFIRMADO.
-// Idempotente: wallet_credited_at no pagamento + checagem prévia no ledger.
+// Idempotente: claim atômico de wallet_credited_at + UNIQUE no ledger
+// (uq_wallet_txns_credit_ref) — replays concorrentes recebem 409.
 func TopUp(c *fiber.Ctx) error {
 	tokenUserID, err := middlewares.GetUserIDFromToken(c)
 	if err != nil {
@@ -91,14 +93,19 @@ func TopUp(c *fiber.Ctx) error {
 		return c.Status(403).JSON(fiber.Map{"error": "Payment does not belong to this user"})
 	}
 
-	if payment.WalletCreditedAt != nil || models.HasLedgerEntry(models.DB, req.PaymentID, "credit") {
+	// Claim atômico: só UMA requisição consegue marcar wallet_credited_at
+	// (UPDATE ... WHERE IS NULL). Replays concorrentes do mesmo pagamento
+	// caem no RowsAffected == 0 abaixo, sem depender de checagem prévia.
+	res := models.DB.Model(payment).
+		Where("id = ? AND wallet_credited_at IS NULL", payment.ID).
+		Update("wallet_credited_at", time.Now())
+	if res.Error != nil {
+		log.Printf("[WALLET] TopUp failed: claim de %s: %v", req.PaymentID, res.Error)
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to top up wallet"})
+	}
+	if res.RowsAffected == 0 {
 		log.Printf("[WALLET] TopUp rejected: payment %s already used for wallet credit", req.PaymentID)
 		return c.Status(409).JSON(fiber.Map{"error": "Payment already used for wallet top-up"})
-	}
-
-	wallet, tErr := ensureWalletSeeded(models.DB, req.UserID, "customer")
-	if tErr != nil {
-		return c.Status(500).JSON(fiber.Map{"error": "Failed to top up wallet"})
 	}
 
 	newWallet, aErr := models.AdjustWalletBalance(
@@ -108,19 +115,18 @@ func TopUp(c *fiber.Ctx) error {
 		"Wallet top-up via confirmed payment",
 		"",
 	)
+	if errors.Is(aErr, models.ErrDuplicateCredit) {
+		return c.Status(409).JSON(fiber.Map{"error": "Payment already used for wallet top-up"})
+	}
 	if aErr != nil {
 		log.Printf("[WALLET] TopUp failed: user=%d payment=%s: %v", req.UserID, req.PaymentID, aErr)
+		// Libera o claim para permitir nova tentativa (o crédito não entrou).
+		models.DB.Model(payment).Where("id = ?", payment.ID).Update("wallet_credited_at", nil)
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to top up wallet"})
 	}
-	wallet = newWallet
+	wallet := newWallet
 
-	// Marca o pagamento como já usado para crédito (idempotência).
-	now := time.Now()
-	if uErr := models.DB.Model(payment).Update("wallet_credited_at", now).Error; uErr != nil {
-		log.Printf("[WALLET] WARNING: falha ao marcar wallet_credited_at do pagamento %s: %v", req.PaymentID, uErr)
-	} else {
-		dualWritePaymentUpsert(payment) // DUAL-WRITE LEGADO
-	}
+	dualWritePaymentUpsert(payment) // DUAL-WRITE LEGADO
 
 	dualWriteLedgerEntry(req.UserID, "credit", "", payment.Amount, wallet.Balance, req.PaymentID,
 		"Wallet top-up via confirmed payment", "") // DUAL-WRITE LEGADO

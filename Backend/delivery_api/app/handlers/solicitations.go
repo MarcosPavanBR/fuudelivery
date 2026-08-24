@@ -7,6 +7,7 @@ import (
 	"math"
 	"strconv"
 
+	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/delivery_api/app/dto"
 	"github.com/carloshomar/fuudelivery/delivery_api/app/models"
 	"github.com/gofiber/fiber/v2"
@@ -112,22 +113,37 @@ func HandShakeDeliveryman(c *fiber.Ctx) error {
 		})
 	}
 
-	// Um entregador só pode assumir um pedido ainda sem atribuição.
-	if existing.DeliveryManID != 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "O deliveryman já foi atribuído a este pedido",
+	// Um entregador só pode assumir um pedido ainda sem atribuição, e a
+	// atribuição usa SEMPRE a identidade do token (não do body) — evita que
+	// um autenticado qualquer assuma entregas em nome de outro.
+	tokenCourierID, tErr := middlewares.GetUserIDFromToken(c)
+	if tErr != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "Token inválido",
 		})
 	}
 
-	existing.DeliveryManID = orderDTO.DeliveryMan.Id
-	existing.DeliveryManName = orderDTO.DeliveryMan.Name
-	existing.DeliveryManStatus = "IN_ROUTE_COLECT"
-
-	if err := models.DB.Save(&existing).Error; err != nil {
+	// Claim atômico: UPDATE condicional garante que só UM handshake vence
+	// quando dois entregadores aceitam ao mesmo tempo (TOCTOU do read-then-save).
+	res := models.DB.Model(&existing).
+		Where("id = ? AND delivery_man_id = 0", existing.ID).
+		Updates(map[string]interface{}{
+			"delivery_man_id":     tokenCourierID,
+			"delivery_man_name":   orderDTO.DeliveryMan.Name,
+			"delivery_man_status": "IN_ROUTE_COLECT",
+		})
+	if res.Error != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Erro ao atualizar a solicitação",
 		})
 	}
+	if res.RowsAffected == 0 {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+			"error": "O deliveryman já foi atribuído a este pedido",
+		})
+	}
+	existing.DeliveryManID = tokenCourierID
+	existing.DeliveryManStatus = "IN_ROUTE_COLECT"
 
 	dualWriteMongo(existing.ToDTO()) // DUAL-WRITE LEGADO
 

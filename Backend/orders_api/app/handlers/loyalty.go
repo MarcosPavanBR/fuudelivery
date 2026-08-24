@@ -8,9 +8,43 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
 )
+
+// lookupServerOrderTotal lê o total recalculado no servidor no momento da
+// criação do pedido (payload JSONB em order_documents). Fonte única para
+// pontos de fidelidade — o valor vindo do cliente nunca é usado.
+func lookupServerOrderTotal(orderID string) (float64, bool) {
+	if models.DB == nil || orderID == "" {
+		return 0, false
+	}
+	var row struct {
+		Total *float64
+	}
+	err := models.DB.Raw(
+		`SELECT NULLIF(payload->>'order_total', '')::float8 AS total
+		 FROM order_documents WHERE legacy_id = ? LIMIT 1`, orderID).Scan(&row).Error
+	if err != nil {
+		log.Printf("[LOYALTY] lookupServerOrderTotal(%s): %v", orderID, err)
+		return 0, false
+	}
+	if row.Total == nil || *row.Total <= 0 {
+		return 0, false
+	}
+	return *row.Total, true
+}
+
+// hasLoyaltyEarnForOrder evita crédito duplicado de pontos para o mesmo
+// pedido (webhook + chamada manual concorrentes).
+func hasLoyaltyEarnForOrder(orderID string) bool {
+	var count int64
+	models.DB.Model(&models.LoyaltyTransaction{}).
+		Where("order_id = ? AND type = ?", orderID, "earn").
+		Count(&count)
+	return count > 0
+}
 
 func getTier(points int) string {
 	switch {
@@ -46,14 +80,36 @@ func generateCashbackCode() (string, error) {
 }
 
 func EarnPoints(c *fiber.Ctx) error {
-	var req struct {
-		UserPhone  string  `json:"user_phone"`
-		OrderID    string  `json:"order_id"`
-		OrderValue float64 `json:"order_value"`
+	// Identidade e valor vêm do servidor: o phone do token JWT identifica o
+	// beneficiário e o order_total é o recalculado no banco na criação do
+	// pedido. O body não pode mintar pontos para outro telefone nem com
+	// valor inventado.
+	tokenPhone, err := middlewares.GetUserPhoneFromToken(c)
+	if err != nil {
+		return c.Status(401).JSON(fiber.Map{"error": "Invalid token"})
 	}
 
+	var req struct {
+		UserPhone string `json:"user_phone"`
+		OrderID   string `json:"order_id"`
+	}
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
+	}
+
+	if req.UserPhone == "" {
+		req.UserPhone = tokenPhone
+	}
+	if req.UserPhone != tokenPhone {
+		return c.Status(403).JSON(fiber.Map{"error": "Cannot earn points for another user"})
+	}
+
+	orderValue, ok := lookupServerOrderTotal(req.OrderID)
+	if !ok {
+		return c.Status(400).JSON(fiber.Map{"error": "Pedido inválido ou sem total calculado"})
+	}
+	if alreadyEarned := hasLoyaltyEarnForOrder(req.OrderID); alreadyEarned {
+		return c.Status(409).JSON(fiber.Map{"error": "Pontos já creditados para este pedido"})
 	}
 
 	var loyalty models.LoyaltyPoints
@@ -69,11 +125,11 @@ func EarnPoints(c *fiber.Ctx) error {
 	}
 
 	multiplier := getPointsMultiplier(loyalty.Tier)
-	pointsEarned := int(math.Floor(req.OrderValue)) * multiplier
+	pointsEarned := int(math.Floor(orderValue)) * multiplier
 
 	loyalty.Points += pointsEarned
 	loyalty.TotalOrders++
-	loyalty.TotalSpent += req.OrderValue
+	loyalty.TotalSpent += orderValue
 	loyalty.Tier = getTier(loyalty.Points)
 	loyalty.UpdatedAt = time.Now()
 

@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -82,6 +83,21 @@ func GetOrCreateWallet(db *gorm.DB, userID int64, userType string) (*Wallet, err
 // abre transação, trava a linha da carteira (SELECT ... FOR UPDATE),
 // valida saldo no débito, atualiza e insere o lançamento no ledger.
 // Toda movimentação de dinheiro DEVE passar por aqui — nunca atualize
+// ErrDuplicateCredit indica que já existe lançamento de crédito para a
+// referência (violacao de uq_wallet_txns_credit_ref) — o crédito já foi
+// aplicado antes e a operação atual é um replay idempotente.
+var ErrDuplicateCredit = errors.New("lançamento de crédito duplicado para a referência")
+
+// isUniqueViolation detecta erro 23505 do Postgres, opcionalmente filtrando
+// pelo nome da constraint.
+func isUniqueViolation(err error, constraint string) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == "23505" && (constraint == "" || pgErr.ConstraintName == constraint)
+	}
+	return false
+}
+
 // balance direto com UPDATE solto.
 //
 // referenceID identifica a origem (payment_id ou order_id) e é usado como
@@ -138,6 +154,11 @@ func AdjustWalletBalance(db *gorm.DB, userID int64, userType, txnType, kind stri
 			Destination:   destination,
 		}
 		if err := tx.Create(&entry).Error; err != nil {
+			// Crédito duplicado = replay de webhook/top-up concorrente. A tx
+			// inteira (incluindo o UPDATE do saldo) é desfeita pelo rollback.
+			if txnType == "credit" && isUniqueViolation(err, "uq_wallet_txns_credit_ref") {
+				return ErrDuplicateCredit
+			}
 			return err
 		}
 

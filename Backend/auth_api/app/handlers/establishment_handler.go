@@ -343,6 +343,20 @@ func UpdateEstablishmentWallet(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Establishment not found"})
 	}
 
+	// Ownership: a carteira de saque (Asaas) define PARA ONDE vai o dinheiro —
+	// só o dono do estabelecimento ou um admin pode apontá-la. Sem este check,
+	// qualquer autenticado redirecionava saques de qualquer restaurante.
+	role, rErr := middlewares.GetUserRoleFromToken(c)
+	if rErr != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+	}
+	if role != "admin" {
+		tokenEstID, eErr := middlewares.GetEstablishmentIDFromToken(c)
+		if eErr != nil || tokenEstID != int64(establishment.ID) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Sem permissão para esta carteira"})
+		}
+	}
+
 	establishment.PaymentWalletID = req.PaymentWalletID
 	if err := models.DB.Save(&establishment).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update wallet"})

@@ -31,7 +31,7 @@ jobs:
       run:
         working-directory: ${{ matrix.module }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v7
         with:
@@ -63,7 +63,7 @@ jobs:
       run:
         working-directory: cmd/fuudelivery
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v7
         with:
@@ -136,7 +136,7 @@ jobs:
       run:
         working-directory: Backend/payment_api
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v7
         with:
@@ -171,7 +171,7 @@ jobs:
     name: Lint — gofmt (all modules)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v7
         with:
@@ -213,7 +213,7 @@ jobs:
       run:
         working-directory: ${{ matrix.module }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v7
         with:
@@ -235,7 +235,7 @@ jobs:
     name: Check mobile API URL consistency
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Run URL consistency check
         run: bash scripts/check-mobile-urls.sh
@@ -250,7 +250,7 @@ jobs:
     name: Check CSS @layer (no unlayered rules)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Run checker unit test
         run: node scripts/check-unlayered-css.test.cjs
@@ -265,7 +265,7 @@ jobs:
     name: Check workflow YAML + bash syntax
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Run checker self-test
         run: python3 scripts/check-workflows.py --self-test
@@ -283,7 +283,7 @@ jobs:
       run:
         working-directory: Frontend/WebRestaurant
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v5
         with:
@@ -320,7 +320,7 @@ jobs:
       run:
         working-directory: ${{ matrix.dir }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v5
         with:
@@ -343,7 +343,7 @@ jobs:
     name: ShellCheck — scripts .sh
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Run ShellCheck on all .sh scripts
         # -S warning: bloqueia warnings e errors, ignora style/info.
@@ -365,7 +365,7 @@ jobs:
     name: E2E — Delivery (dual-write)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       # FIXADO em 1.25.x, igual aos demais jobs (ver comentário na matriz go-modules).
       - uses: actions/setup-go@v7

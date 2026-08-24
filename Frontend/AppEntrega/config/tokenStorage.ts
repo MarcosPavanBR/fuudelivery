@@ -27,4 +27,31 @@ export async function clearToken(): Promise<void> {
   await SecureStore.deleteItemAsync(Strings.token_jwt);
 }
 
-export default { setToken, getToken, clearToken };
+// ── Refresh token (sessão longa) ──────────────────────────────────────
+// Access token dura 15 min; o refresh (30 dias) renova a sessão sem novo
+// login. Mesmo storage cifrado do access token.
+const REFRESH_KEY = "REFRESH_TOKEN";
+
+/** Grava o refresh token no SecureStore (cifrado). */
+export async function setRefreshToken(token: string): Promise<void> {
+  await SecureStore.setItemAsync(REFRESH_KEY, token);
+}
+
+/** Lê o refresh token. Retorna null se ausente. */
+export async function getRefreshToken(): Promise<string | null> {
+  return SecureStore.getItemAsync(REFRESH_KEY);
+}
+
+/** Remove o refresh token (logout ou falha de renovação). */
+export async function clearRefreshToken(): Promise<void> {
+  await SecureStore.deleteItemAsync(REFRESH_KEY);
+}
+
+export default {
+  setToken,
+  getToken,
+  clearToken,
+  setRefreshToken,
+  getRefreshToken,
+  clearRefreshToken,
+};

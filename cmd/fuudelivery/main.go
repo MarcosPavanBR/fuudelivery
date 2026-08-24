@@ -873,6 +873,8 @@ func setupPaymentRoutes(app *fiber.App) {
 	// Split rules definem como o dinheiro é dividido — só admin.
 	app.Post("/payments/split", adminRequired, rateLimitMiddleware(20), paymentHandlers.ProcessSplit)
 	app.Post("/payments/webhook", rateLimitMiddleware(100), paymentHandlers.HandlePaymentWebhook)
+	// Status da cobrança por pedido (polling do app do cliente pós-PIX).
+	app.Get("/payments/order/:order_id", protectedRoute, rateLimitMiddleware(30), paymentHandlers.GetPaymentByOrder)
 	app.Get("/reports/establishment/:id", protectedRoute, paymentHandlers.GetEstablishmentReport)
 	app.Get("/wallet/balance/:user_id", protectedRoute, paymentHandlers.GetBalance)
 	app.Post("/wallet/topup", protectedRoute, rateLimitMiddleware(20), paymentHandlers.TopUp)

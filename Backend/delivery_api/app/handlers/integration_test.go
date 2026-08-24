@@ -56,14 +56,18 @@ func sampleOrder(orderID string) (dto.OrderDTO, []byte) {
 	order := dto.OrderDTO{
 		OrderId: orderID,
 		Status:  "APPROVED",
-		Establishment: dto.Establishment{
-			ID:   1,
+		Establishment: dto.EstablishmentDTO{
+			Id:   1,
 			Name: "Restaurante Teste",
 			Lat:  -23.5505,
 			Long: -46.6333,
 		},
-		DeliveryValue: 8.50,
-		User:          dto.User{Phone: "+5511999999999", Nome: "Cliente Teste"},
+		Total: 8.50,
+		User: dto.UserDTO{
+			ID:    1,
+			Name:  "Cliente Teste",
+			Phone: "+5511999999999",
+		},
 	}
 	body, _ := json.Marshal(order)
 	return order, body
@@ -242,7 +246,8 @@ func TestUpdateOrderStatusByDeliverymanID_WrongDeliverymanID(t *testing.T) {
 	wrongResp, err := app.Test(wrongReq, -1)
 	require.NoError(t, err)
 
-	require.Equal(t, http.StatusOK, wrongResp.StatusCode)
+	// Entregador não autorizado: retorna 404 e NÃO altera o status
+	require.Equal(t, http.StatusNotFound, wrongResp.StatusCode)
 
 	collection := models.MongoDabase.Collection("solicitations")
 	var stillAssigned dto.OrderDTO

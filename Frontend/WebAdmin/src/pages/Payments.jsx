@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   FiCreditCard,
   FiDollarSign,
@@ -12,6 +12,7 @@ import {
 } from "react-icons/fi";
 import api from "../services/api";
 import { toast } from "react-toastify";
+import Pagination from "../components/Pagination";
 
 // Status reais do monolito (payments collection).
 // amount é armazenado em CENTAVOS — dividimos por 100 para exibir em reais.
@@ -49,23 +50,40 @@ export default function Payments() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const [stats, setStats] = useState({ total: 0, confirmed: 0, pending: 0, revenue: 0 });
+  const searchTimer = useRef(null);
 
-  useEffect(() => { loadPayments(); }, []);
-
-  const loadPayments = async () => {
+  const loadStats = async () => {
     try {
-      const { data } = await api.get("/payments/all");
-      const list = Array.isArray(data) ? data : [];
-      setPayments(list);
-      setStats({
-        total: list.length,
-        confirmed: list.filter(p => p.status === "CONFIRMED").length,
-        pending: list.filter(p => p.status === "PENDING").length,
-        revenue: list
-          .filter(p => p.status === "CONFIRMED")
-          .reduce((sum, p) => sum + (p.amount || 0), 0), // centavos
-      });
+      const { data } = await api.get("/payments/stats");
+      if (data) {
+        setStats({
+          total: data.total || 0,
+          confirmed: data.confirmed || data.status_counts?.CONFIRMED || 0,
+          pending: data.pending || data.status_counts?.PENDING || 0,
+          revenue: data.total_amount || 0, // centavos
+        });
+      }
+    } catch (e) {
+      console.error("Erro ao carregar stats:", e);
+    }
+  };
+
+  const loadPayments = async (opts = {}) => {
+    const params = new URLSearchParams();
+    params.set("page", opts.page ?? page);
+    params.set("limit", opts.pageSize ?? pageSize);
+    if (opts.status ?? statusFilter) params.set("status", opts.status ?? statusFilter);
+    if (opts.q ?? search) params.set("q", opts.q ?? search);
+    try {
+      const { data } = await api.get(`/payments/all?${params.toString()}`);
+      setPayments(data?.data || []);
+      setTotal(data?.total || 0);
+      setTotalPages(data?.total_pages || 0);
     } catch (e) {
       console.error(e);
       toast.error("Erro ao carregar pagamentos");
@@ -73,18 +91,23 @@ export default function Payments() {
     setLoading(false);
   };
 
-  const filtered = payments.filter(p => {
-    const idStr = (p._id || p.id || "").toString();
-    const q = search.toLowerCase();
-    const matchesSearch =
-      !search ||
-      idStr.toLowerCase().includes(q) ||
-      (p.user?.nome || "").toLowerCase().includes(q) ||
-      (p.user?.phone || p.customer_phone || "").toLowerCase().includes(q) ||
-      (p.order_id || "").toLowerCase().includes(q);
-    const matchesStatus = !statusFilter || p.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  useEffect(() => { loadStats(); }, []);
+  useEffect(() => { loadPayments(); }, [page, pageSize, statusFilter]);
+
+  // Busca com debounce (400ms) para nao disparar request a cada tecla.
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      setPage(1);
+      loadPayments({ q: search, page: 1 });
+    }, 400);
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
+
+  const refresh = () => { setLoading(true); loadStats(); loadPayments(); };
+
+  const changePageSize = (n) => { setPageSize(n); setPage(1); };
 
   if (loading) {
     return (
@@ -124,9 +147,9 @@ export default function Payments() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Pagamentos</h1>
-          <p className="text-gray-500 mt-1">{filtered.length} de {payments.length}</p>
+          <p className="text-gray-500 mt-1">{total} pagamento(s)</p>
         </div>
-        <button onClick={loadPayments} className="btn btn-ghost" title="Atualizar">
+        <button onClick={refresh} className="btn btn-ghost" title="Atualizar">
           <FiRefreshCw className="h-4 w-4" /> Atualizar
         </button>
       </div>
@@ -153,7 +176,7 @@ export default function Payments() {
             <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Buscar por ID, cliente, pedido..."
+              placeholder="Buscar por ID, pedido, telefone... (server-side)"
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="input pl-10"
@@ -163,7 +186,7 @@ export default function Payments() {
             <FiFilter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <select
               value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value)}
+              onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
               className="input w-44 pl-10"
             >
               {statusOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -188,9 +211,9 @@ export default function Payments() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filtered.length === 0 ? (
+              {payments.length === 0 ? (
                 <tr><td colSpan={8} className="px-6 py-16 text-center text-gray-400">Nenhum pagamento</td></tr>
-              ) : filtered.map(p => {
+              ) : payments.map(p => {
                 const sc = statusColors[p.status] || { bg: "#F3F4F6", text: "#4B5563", label: p.status || "-" };
                 return (
                   <tr key={(p._id || p.id || "").toString()} className="hover:bg-gray-50 transition-colors">
@@ -235,6 +258,14 @@ export default function Payments() {
             </tbody>
           </table>
         </div>
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          total={total}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={changePageSize}
+        />
       </div>
     </div>
   );

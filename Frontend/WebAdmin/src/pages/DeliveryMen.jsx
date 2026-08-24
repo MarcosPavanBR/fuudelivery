@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { FiTruck, FiPlus, FiSearch, FiFilter, FiEdit, FiTrash2, FiActivity, FiX } from "react-icons/fi";
 import api from "../services/api";
 import { toast } from "react-toastify";
+import Pagination from "../components/Pagination";
 
 const statusOptions = [
   { value: "online", label: "Online", color: "bg-green-100 text-green-800" },
@@ -22,25 +23,44 @@ export default function DeliveryMen() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [formData, setFormData] = useState({ name: "", email: "", phone: "", vehicle_type: "moto", vehicle_plate: "", cnh: "", cpf: "", status: "offline" });
+  const searchTimer = useRef(null);
 
-  useEffect(() => { loadDrivers(); }, []);
+  useEffect(() => { loadDrivers(); }, [page, pageSize, statusFilter]);
 
-  const loadDrivers = async () => {
+  // Busca com debounce (400ms) — filtro aplicado no servidor.
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      setPage(1);
+      loadDrivers({ q: search, page: 1 });
+    }, 400);
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
+
+  const loadDrivers = async (opts = {}) => {
+    const params = new URLSearchParams();
+    params.set("page", opts.page ?? page);
+    params.set("limit", opts.pageSize ?? pageSize);
+    if (opts.status ?? statusFilter) params.set("status", opts.status ?? statusFilter);
+    if (opts.q ?? search) params.set("q", opts.q ?? search);
     try {
-      const { data } = await api.get("/delivery-man");
-      setDrivers(data || []);
+      const { data } = await api.get(`/delivery-man?${params.toString()}`);
+      setDrivers(data?.data || []);
+      setTotal(data?.total || 0);
+      setTotalPages(data?.total_pages || 0);
     } catch (e) { console.error(e); toast.error("Erro ao carregar entregadores"); }
     setLoading(false);
   };
 
-  const filtered = drivers.filter(d => {
-    const matchesSearch = d.name?.toLowerCase().includes(search.toLowerCase()) || d.email?.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = !statusFilter || d.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const changePageSize = (n) => { setPageSize(n); setPage(1); };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -75,7 +95,7 @@ export default function DeliveryMen() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Entregadores</h1>
-          <p className="text-gray-500 mt-1">{filtered.length} de {drivers.length}</p>
+          <p className="text-gray-500 mt-1">{total} entregador(es)</p>
         </div>
         <button onClick={openNew} className="flex items-center gap-2 px-4 py-2 rounded-xl text-white font-semibold text-sm" style={{ background: "linear-gradient(135deg, #EA1D2C, #C41420)" }}>
           <FiPlus className="h-4 w-4" />Novo
@@ -90,7 +110,7 @@ export default function DeliveryMen() {
           </div>
           <div className="relative">
             <FiFilter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="w-44 pl-10 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:bg-white appearance-none">
+            <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }} className="w-44 pl-10 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:bg-white appearance-none">
               <option value="">Todos status</option>
               {statusOptions.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
@@ -111,9 +131,9 @@ export default function DeliveryMen() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filtered.length === 0 ? (
+              {drivers.length === 0 ? (
                 <tr><td colSpan={5} className="px-6 py-12 text-center text-gray-500">Nenhum entregador</td></tr>
-              ) : filtered.map(d => (
+              ) : drivers.map(d => (
                 <tr key={d.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
@@ -135,6 +155,14 @@ export default function DeliveryMen() {
             </tbody>
           </table>
         </div>
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          total={total}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={changePageSize}
+        />
       </div>
 
       {modalOpen && (

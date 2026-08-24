@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { FiUsers, FiPlus, FiSearch, FiEdit, FiTrash2, FiFilter, FiActivity, FiX } from "react-icons/fi";
 import api from "../services/api";
 import { toast } from "react-toastify";
+import Pagination from "../components/Pagination";
 
 const roleOptions = [
   { value: "admin", label: "Admin", color: "bg-red-100 text-red-800" },
@@ -22,22 +23,47 @@ export default function Users() {
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [formData, setFormData] = useState({ name: "", email: "", password: "", role: "client", status: "active", establishment_id: "" });
   const [establishments, setEstablishments] = useState([]);
+  const searchTimer = useRef(null);
 
+  useEffect(() => { loadEstablishments(); }, []);
+  useEffect(() => { loadUsers(); }, [page, pageSize, roleFilter, statusFilter]);
+
+  // Busca com debounce (400ms) — filtro aplicado no servidor.
   useEffect(() => {
-    Promise.all([loadUsers(), loadEstablishments()]);
-  }, []);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      setPage(1);
+      loadUsers({ q: search, page: 1 });
+    }, 400);
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
-  const loadUsers = async () => {
+  const loadUsers = async (opts = {}) => {
+    const params = new URLSearchParams();
+    params.set("page", opts.page ?? page);
+    params.set("limit", opts.pageSize ?? pageSize);
+    if (opts.q ?? search) params.set("q", opts.q ?? search);
+    if (opts.role ?? roleFilter) params.set("role", opts.role ?? roleFilter);
+    if (opts.status ?? statusFilter) params.set("status", opts.status ?? statusFilter);
     try {
-      const { data } = await api.get("/users");
-      setUsers(data || []);
+      const { data } = await api.get(`/users?${params.toString()}`);
+      setUsers(data?.data || []);
+      setTotal(data?.total || 0);
+      setTotalPages(data?.total_pages || 0);
     } catch (e) { console.error(e); toast.error("Erro ao carregar usuarios"); }
     setLoading(false);
   };
+
+  const changePageSize = (n) => { setPageSize(n); setPage(1); };
 
   const loadEstablishments = async () => {
     try {
@@ -45,13 +71,6 @@ export default function Users() {
       setEstablishments(data || []);
     } catch (e) { console.error(e); }
   };
-
-  const filtered = users.filter((u) => {
-    const matchesSearch = u.name?.toLowerCase().includes(search.toLowerCase()) || u.email?.toLowerCase().includes(search.toLowerCase());
-    const matchesRole = !roleFilter || u.role === roleFilter;
-    const matchesStatus = !statusFilter || u.status === statusFilter;
-    return matchesSearch && matchesRole && matchesStatus;
-  });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -92,7 +111,7 @@ export default function Users() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Usuarios</h1>
-          <p className="text-gray-500 mt-1">{filtered.length} de {users.length} usuarios</p>
+          <p className="text-gray-500 mt-1">{total} usuario(s)</p>
         </div>
         <button onClick={openNew} className="flex items-center gap-2 px-4 py-2 rounded-xl text-white font-semibold text-sm" style={{ background: "linear-gradient(135deg, #EA1D2C, #C41420)" }}>
           <FiPlus className="h-4 w-4" /> Novo
@@ -136,9 +155,9 @@ export default function Users() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filtered.length === 0 ? (
+              {users.length === 0 ? (
                 <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-500">Nenhum usuario encontrado</td></tr>
-              ) : filtered.map(u => (
+              ) : users.map(u => (
                 <tr key={u.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4"><p className="font-medium text-gray-900">{u.name}</p><p className="text-xs text-gray-500">{u.email}</p></td>
                   <td className="px-6 py-4"><span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${roleOptions.find(r => r.value === u.role)?.color || "bg-gray-100 text-gray-800"}`}>{roleOptions.find(r => r.value === u.role)?.label || u.role}</span></td>
@@ -156,6 +175,14 @@ export default function Users() {
             </tbody>
           </table>
         </div>
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          total={total}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={changePageSize}
+        />
       </div>
 
       {modalOpen && (

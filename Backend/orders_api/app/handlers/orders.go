@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -345,11 +346,49 @@ func ListOrdersByEstablishmentIDAndPhone(c *fiber.Ctx) error {
 	return c.JSON(orders)
 }
 
+// ListAllOrders lista pedidos com paginacao server-side (admin).
+//
+//	GET /orders/all?page=1&limit=20&status=delivered&q=id
+//
+// Resposta: {data, total, page, limit, total_pages}. Filtros aplicados no
+// Mongo — o painel nao puxa mais tudo para filtrar em memoria.
 func ListAllOrders(c *fiber.Ctx) error {
 	collection := models.MongoDabase.Collection("orders")
 
-	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}}).SetLimit(500)
-	cursor, err := collection.Find(mongoCtx(), bson.M{}, opts)
+	query := bson.M{}
+	if s := c.Query("status"); s != "" {
+		query["status"] = s
+	}
+	if q := c.Query("q"); q != "" {
+		query["$or"] = []bson.M{
+			{"id": primitive.Regex{Pattern: regexp.QuoteMeta(q), Options: "i"}},
+			{"user.phone": primitive.Regex{Pattern: regexp.QuoteMeta(q), Options: "i"}},
+			{"user.nome": primitive.Regex{Pattern: regexp.QuoteMeta(q), Options: "i"}},
+		}
+	}
+
+	total, err := collection.CountDocuments(mongoCtx(), query)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao contar pedidos"})
+	}
+
+	page := c.QueryInt("page", 1)
+	if page < 1 {
+		page = 1
+	}
+	limit := c.QueryInt("limit", 20)
+	if limit < 1 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	opts := options.Find().
+		SetSort(bson.D{{Key: "created_at", Value: -1}}).
+		SetSkip(int64((page - 1) * limit)).
+		SetLimit(int64(limit))
+	cursor, err := collection.Find(mongoCtx(), query, opts)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao buscar pedidos"})
 	}
@@ -369,7 +408,14 @@ func ListAllOrders(c *fiber.Ctx) error {
 	// phone (os pedidos nao guardam user_id). Batch, sem N+1, fallback silencioso.
 	enrichOrdersWithUsers(orders)
 
-	return c.JSON(orders)
+	totalPages := (total + int64(limit) - 1) / int64(limit)
+	return c.JSON(fiber.Map{
+		"data":        orders,
+		"total":       total,
+		"page":        page,
+		"limit":       limit,
+		"total_pages": totalPages,
+	})
 }
 
 // enrichOrdersWithUsers preenche user.nome dos pedidos que vieram sem nome,

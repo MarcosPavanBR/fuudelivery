@@ -1,18 +1,22 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"math"
 	"strconv"
 	"time"
 
+	"github.com/gofiber/fiber/v2"
+
 	"github.com/carloshomar/fuudelivery/delivery_api/app/dto"
 	"github.com/carloshomar/fuudelivery/delivery_api/app/models"
-	"github.com/gofiber/fiber/v2"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
 )
+
+func solicitationCtx() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), 5*time.Second)
+}
 
 func CreateSolicitation(msg string, sendMessageToClient func(clientID int64, message []byte) error) error {
 	var orderDTO dto.OrderDTO
@@ -23,43 +27,26 @@ func CreateSolicitation(msg string, sendMessageToClient func(clientID int64, mes
 		return nil
 	}
 
-	collection := models.MongoDabase.Collection("solicitations")
+	ctx, cancel := solicitationCtx()
+	defer cancel()
 
-	filter := bson.M{"orderid": orderDTO.OrderId}
+	stored, existed, err := models.UpsertSolicitation(ctx, orderDTO)
+	if err != nil {
+		log.Printf("[SOLICITATION] Failed to upsert %s: %v", orderDTO.OrderId, err)
+		return err
+	}
 
-	existingSolicitation := collection.FindOne(mongoCtx(), filter)
-	if existingSolicitation.Err() != nil {
-		if existingSolicitation.Err() != mongo.ErrNoDocuments {
-			log.Printf("Erro ao buscar a solicitação existente: %s", existingSolicitation.Err())
-			return nil
-		}
-	} else {
-		update := bson.M{"$set": bson.M{"status": orderDTO.Status, "operationDate": time.Now()}}
+	if existed {
+		// Preserva o entregador já atribuído e notifica o app dele
+		orderDTO.DeliveryMan = stored.DeliveryMan
 
 		log.Printf("Atualizando pedido %s", orderDTO.OrderId)
 		log.Printf("Para Status: %s", orderDTO.Status)
 
-		_, err := collection.UpdateOne(mongoCtx(), filter, update)
-		if err != nil {
-			log.Printf("Erro ao atualizar a solicitação: %s", err)
-			return nil
-		}
-
-		var solicitationExistent dto.OrderDTO
-		existingSolicitation.Decode(&solicitationExistent)
-		orderDTO.DeliveryMan = solicitationExistent.DeliveryMan
-
 		jsonData, _ := json.Marshal(&orderDTO)
 		sendMessageToClient(orderDTO.DeliveryMan.Id, jsonData)
-
-		return nil
 	}
 
-	_, err = collection.InsertOne(mongoCtx(), &orderDTO)
-	if err != nil {
-		log.Printf("[SOLICITATION] Failed to insert: %v", err)
-		return err
-	}
 	return nil
 }
 
@@ -71,20 +58,13 @@ func HandShakeDeliveryman(c *fiber.Ctx) error {
 		})
 	}
 
-	collection := models.MongoDabase.Collection("solicitations")
+	ctx, cancel := solicitationCtx()
+	defer cancel()
 
-	filter := bson.M{"orderid": orderDTO.OrderId}
-
-	var existingOrder dto.OrderDTO
-	err := collection.FindOne(mongoCtx(), filter).Decode(&existingOrder)
+	existingOrder, err := models.GetSolicitationByOrderID(ctx, orderDTO.OrderId)
 	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-				"error": "Pedido não encontrado",
-			})
-		}
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Erro ao consultar o pedido",
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Pedido não encontrado",
 		})
 	}
 
@@ -95,12 +75,7 @@ func HandShakeDeliveryman(c *fiber.Ctx) error {
 	}
 
 	orderDTO.DeliveryMan.Status = "IN_ROUTE_COLECT"
-	existingOrder.DeliveryMan = orderDTO.DeliveryMan
-
-	update := bson.M{"$set": bson.M{"deliveryman": existingOrder.DeliveryMan}}
-
-	_, err = collection.UpdateOne(mongoCtx(), filter, update)
-	if err != nil {
+	if err := models.UpdateSolicitationDeliveryMan(ctx, orderDTO.OrderId, orderDTO.DeliveryMan); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Erro ao atualizar a solicitação",
 		})
@@ -140,41 +115,25 @@ func GetApprovedSolicitations(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid limitDistance parameter"})
 	}
 
-	var approvedSolicitations []dto.OrderDTO
+	ctx, cancel := solicitationCtx()
+	defer cancel()
 
-	collection := models.MongoDabase.Collection("solicitations")
-
-	filter := bson.M{
-		"status": bson.M{"$in": []string{"APPROVED", "DONE"}},
-		"$or": []bson.M{
-			{"deliveryman": nil},
-			{"deliveryman.id": 0},
-		},
-	}
-
-	cur, err := collection.Find(mongoCtx(), filter)
+	approvedSolicitations, err := models.FindApprovedSolicitations(ctx)
 	if err != nil {
-		return err
+		log.Printf("[SOLICITATION] GetApprovedSolicitations: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Erro ao consultar solicitações"})
 	}
-	defer cur.Close(mongoCtx())
 
-	for cur.Next(mongoCtx()) {
-		var orderDTO dto.OrderDTO
-		err := cur.Decode(&orderDTO)
-		if err != nil {
-			return err
-		}
-
-		// Calcular a distância entre o estabelecimento e as coordenadas fornecidas
-		distance := calculateDistance(latitude, longitude, orderDTO.Establishment.Lat, orderDTO.Establishment.Long)
-
-		// Se a distância for menor ou igual ao limite de distância, adiciona a solicitação à lista
+	// Filtra pela distância entre o estabelecimento e as coordenadas fornecidas
+	result := make([]dto.OrderDTO, 0, len(approvedSolicitations))
+	for _, order := range approvedSolicitations {
+		distance := calculateDistance(latitude, longitude, order.Establishment.Lat, order.Establishment.Long)
 		if distance <= limitDist {
-			approvedSolicitations = append(approvedSolicitations, orderDTO)
+			result = append(result, order)
 		}
 	}
 
-	return c.JSON(approvedSolicitations)
+	return c.JSON(result)
 }
 
 // Função para calcular a distância entre dois pontos usando a fórmula de Haversine (https://pt.wikipedia.org/wiki/F%C3%B3rmula_de_haversine)

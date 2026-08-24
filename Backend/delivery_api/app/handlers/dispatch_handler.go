@@ -1,30 +1,29 @@
 package handlers
 
 import (
+	"context"
 	"math"
 	"strconv"
 	"time"
 
 	"github.com/carloshomar/fuudelivery/delivery_api/app/dto"
+	"github.com/carloshomar/fuudelivery/delivery_api/app/models"
 	"github.com/carloshomar/fuudelivery/delivery_api/app/services"
 	"github.com/gofiber/fiber/v2"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // DispatchHandler expoe os endpoints do motor de matching.
 type DispatchHandler struct {
-	CourierStore     *services.CourierStore
-	Matching         *services.MatchingEngine
-	SolicitationColl *mongo.Collection
+	CourierStore *services.CourierStore
+	Matching     *services.MatchingEngine
 }
 
 // NewDispatchHandler cria um novo handler de dispatch.
-func NewDispatchHandler(courierStore *services.CourierStore, matching *services.MatchingEngine, db *mongo.Database) *DispatchHandler {
+// As solicitações são lidas via models (Postgres primário + Mongo espelho).
+func NewDispatchHandler(courierStore *services.CourierStore, matching *services.MatchingEngine) *DispatchHandler {
 	return &DispatchHandler{
-		CourierStore:     courierStore,
-		Matching:         matching,
-		SolicitationColl: db.Collection("solicitations"),
+		CourierStore: courierStore,
+		Matching:     matching,
 	}
 }
 
@@ -97,10 +96,14 @@ func (h *DispatchHandler) TriggerDispatch(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "order_id required"})
 	}
 
-	// Busca o pedido no MongoDB para obter coordenadas do estabelecimento
+	// Busca o pedido (Postgres primário, Mongo como espelho durante o corte)
+	// para obter as coordenadas do estabelecimento
+	ctx, cancel := context.WithTimeout(c.Context(), 3*time.Second)
+	defer cancel()
+
 	var solicitation dto.OrderDTO
-	err := h.SolicitationColl.FindOne(c.Context(), bson.M{"orderid": req.OrderID}).Decode(&solicitation)
-	if err != nil {
+	solPtr, err := models.GetSolicitationByOrderID(ctx, req.OrderID)
+	if err != nil || solPtr == nil {
 		if req.Lat == 0 && req.Lng == 0 {
 			return c.Status(404).JSON(fiber.Map{"error": "Order not found and no coordinates provided"})
 		}
@@ -111,6 +114,8 @@ func (h *DispatchHandler) TriggerDispatch(c *fiber.Ctx) error {
 				Long: req.Lng,
 			},
 		}
+	} else {
+		solicitation = *solPtr
 	}
 
 	if req.Force {

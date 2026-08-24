@@ -4,10 +4,12 @@ package handlers
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/carloshomar/fuudelivery/auth_api/app/audit"
 	"github.com/carloshomar/fuudelivery/auth_api/app/dto"
 	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/auth_api/app/models"
@@ -163,17 +165,79 @@ func CreateUserAdmin(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
+	audit.Record(c, models.DB, "USER_CREATED", "user", fmt.Sprintf("%d", user.ID), map[string]interface{}{
+		"name":  request.Name,
+		"email": request.Email,
+		"role":  user.Role,
+	})
+
 	request.Password = ""
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"user": request, "id": user.ID})
 }
 
+type userListRow struct {
+	ID              uint      `json:"id"`
+	Name            string    `json:"name"`
+	Email           string    `json:"email"`
+	EstablishmentID uint      `json:"establishment_id"`
+	Role            string    `json:"role"`
+	Status          string    `json:"status"`
+	CreatedAt       time.Time `json:"createdAt"`
+}
+
+// ListAllUsers lista usuarios com paginacao server-side (admin).
+//
+//	GET /users?page=1&limit=20&q=nome&role=admin&status=active
+//
+// Resposta: {data, total, page, limit, total_pages}. Filtros aplicados no
+// Postgres — o painel nao puxa mais a tabela inteira para filtrar em memoria.
 func ListAllUsers(c *fiber.Ctx) error {
-	var results []map[string]interface{}
-	result := models.DB.Raw("SELECT id, name, email, establishment_id, COALESCE(role, 'user') as role, COALESCE(status, 'active') as status, \"createdAt\" FROM users").Scan(&results)
-	if result.Error != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to query users: " + result.Error.Error()})
+	tx := models.DB.Table("users").
+		Select("id, name, email, establishment_id, COALESCE(role, 'user') as role, COALESCE(status, 'active') as status, \"createdAt\"")
+	if q := c.Query("q"); q != "" {
+		like := "%" + q + "%"
+		tx = tx.Where("(name ILIKE ? OR email ILIKE ?)", like, like)
 	}
-	return c.JSON(results)
+	if r := c.Query("role"); r != "" {
+		tx = tx.Where("COALESCE(role, 'user') = ?", r)
+	}
+	if s := c.Query("status"); s != "" {
+		tx = tx.Where("COALESCE(status, 'active') = ?", s)
+	}
+
+	var total int64
+	if err := tx.Count(&total).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to count users"})
+	}
+
+	page := c.QueryInt("page", 1)
+	if page < 1 {
+		page = 1
+	}
+	limit := c.QueryInt("limit", 20)
+	if limit < 1 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	var rows []userListRow
+	if err := tx.Order("\"createdAt\" DESC").Offset((page - 1) * limit).Limit(limit).Scan(&rows).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to query users: " + err.Error()})
+	}
+	if rows == nil {
+		rows = []userListRow{}
+	}
+
+	totalPages := (total + int64(limit) - 1) / int64(limit)
+	return c.JSON(fiber.Map{
+		"data":        rows,
+		"total":       total,
+		"page":        page,
+		"limit":       limit,
+		"total_pages": totalPages,
+	})
 }
 
 // Login autentica um usuario existente.
@@ -400,6 +464,11 @@ func DeleteUser(c *fiber.Ctx) error {
 	if err := models.DB.Delete(&user).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete user"})
 	}
+
+	audit.Record(c, models.DB, "USER_DELETED", "user", fmt.Sprintf("%d", reqUserID), map[string]interface{}{
+		"name":  user.Name,
+		"email": user.Email,
+	})
 
 	return c.JSON(fiber.Map{"message": "Account deleted successfully"})
 }

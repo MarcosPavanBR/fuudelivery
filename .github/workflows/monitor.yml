@@ -50,3 +50,34 @@ jobs:
           echo "::error::One or more production services are unhealthy (exit code ${{ steps.verify.outputs.failures }})"
           cat verify-output.txt
           exit 1
+
+  # Notificacao de falha: o monitor roda agendado, entao ninguem ve o
+  # run vermelho — avisa Slack/Discord/e-mail quando algum servico
+  # ficar unhealthy. Canais opcionais via secrets (SLACK_WEBHOOK_URL /
+  # DISCORD_WEBHOOK_URL / SMTP_*); sem nenhum, apenas loga warning.
+  notify-failure:
+    name: Notifica falha de saude
+    if: failure()
+    needs: [health]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (para scripts/notify-failure.sh)
+        uses: actions/checkout@v5
+
+      - name: Envia notificacao de falha
+        continue-on-error: true
+        env:
+          NOTIFY_TITLE: "🔴 Servico unhealthy — fuudelivery (run #${{ github.run_number }})"
+          NOTIFY_TEXT: "${{ github.workflow }} — health check falhou (servicos fora do ar ou degradados)."
+          NOTIFY_RUN_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          NOTIFY_SHA: "${{ github.sha }}"
+          NOTIFY_REF: "${{ github.ref }}"
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_TO: ${{ secrets.SMTP_TO }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+        run: bash scripts/notify-failure.sh

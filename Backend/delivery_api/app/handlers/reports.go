@@ -4,11 +4,9 @@ import (
 	"log"
 	"strconv"
 
-	"github.com/carloshomar/fuudelivery/delivery_api/app/dto"
-	"github.com/carloshomar/fuudelivery/delivery_api/app/models"
 	"github.com/gofiber/fiber/v2"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo/options"
+
+	"github.com/carloshomar/fuudelivery/delivery_api/app/models"
 )
 
 func GetExtrato(c *fiber.Ctx) error {
@@ -20,39 +18,12 @@ func GetExtrato(c *fiber.Ctx) error {
 		})
 	}
 
-	collection := models.MongoDabase.Collection("solicitations")
+	ctx, cancel := deliverymanCtx()
+	defer cancel()
 
-	// Definir o filtro para encontrar os pedidos com base no ID do deliveryman, status e deliveryman.status igual a "FINISHED"
-	filter := bson.M{
-		"deliveryman.id":     deliverymanID,
-		"status":             "FINISHED",
-		"deliveryman.status": "FINISHED",
-	}
-
-	options := options.Find()
-	options.SetSort(bson.D{{Key: "operationDate", Value: -1}})
-
-	cursor, err := collection.Find(mongoCtx(), filter, options)
+	orders, err := models.FindFinishedOrdersByDeliveryman(ctx, deliverymanID)
 	if err != nil {
 		log.Printf("Erro ao consultar os pedidos: %s", err)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Erro ao consultar os pedidos",
-		})
-	}
-	defer cursor.Close(mongoCtx())
-
-	var orders []dto.OrderDTO
-	for cursor.Next(mongoCtx()) {
-		var order dto.OrderDTO
-		if err := cursor.Decode(&order); err != nil {
-			log.Printf("Erro ao decodificar o pedido: %s", err)
-			continue
-		}
-		orders = append(orders, order)
-	}
-
-	if err := cursor.Err(); err != nil {
-		log.Printf("Erro ao iterar sobre os resultados: %s", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Erro ao consultar os pedidos",
 		})

@@ -21,11 +21,11 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/joho/godotenv"
-	"go.mongodb.org/mongo-driver/bson"
 	"golang.org/x/time/rate"
 	"gorm.io/gorm"
 
 	// Models (database initialization)
+	"github.com/carloshomar/fuudelivery/auth_api/app/audit"
 	"github.com/carloshomar/fuudelivery/auth_api/app/models"
 	chatModels "github.com/carloshomar/fuudelivery/chat_api/app/models"
 	deliveryModels "github.com/carloshomar/fuudelivery/delivery_api/app/models"
@@ -130,6 +130,25 @@ func adminRequired(c *fiber.Ctx) error {
 	return c.Next()
 }
 
+// debugIPHandler expoe o que o servidor enxerga sobre a origem do IP do
+// cliente: o valor resolvido por c.IP() (que respeita TrustedProxies +
+// ProxyHeader do Fiber) e os headers crus de proxy. Serve para confirmar em
+// producao (Render) de onde vem o IP usado pelo rate limit Redis.
+func debugIPHandler(c *fiber.Ctx) error {
+	return c.JSON(fiber.Map{
+		"c_ip":              c.IP(),
+		"x_forwarded_for":   c.Get("X-Forwarded-For"),
+		"x_real_ip":         c.Get("X-Real-IP"),
+		"remote_addr":       c.Context().RemoteAddr().String(),
+		"proxy_header":      "X-Forwarded-For",
+		"trusted_proxies":   []string{"0.0.0.0/0", "::/0"},
+		"x_forwarded_host":  c.Get("X-Forwarded-Host"),
+		"x_forwarded_proto": c.Get("X-Forwarded-Proto"),
+		"cf_connecting_ip":  c.Get("CF-Connecting-IP"),
+		"true_client_ip":    c.Get("True-Client-IP"),
+	})
+}
+
 // === DISPATCH ENGINE (global instances) ===
 var (
 	courierStore    *dispatchServices.CourierStore
@@ -182,8 +201,8 @@ func initDispatchEngine(db *gorm.DB) {
 		}
 	}()
 
-	// Cria handler HTTP
-	dispatchHandler = deliveryHandlers.NewDispatchHandler(courierStore, matchingEngine, deliveryModels.MongoDabase)
+	// Cria handler HTTP (solicitações lidas via Postgres + espelho Mongo)
+	dispatchHandler = deliveryHandlers.NewDispatchHandler(courierStore, matchingEngine)
 
 	// === Job de calibracao automatica ===
 	calConfig := dispatchServices.DefaultCalibrationConfig()
@@ -675,13 +694,8 @@ func setupWebSocketRoutes(app *fiber.App) {
 
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		var solicitation struct {
-			DeliveryMan struct {
-				Id int64 `bson:"id"`
-			} `bson:"deliveryman"`
-		}
-		err = deliveryModels.MongoDabase.Collection("solicitations").FindOne(ctx, bson.M{"order_id": req.OrderID}).Decode(&solicitation)
-		if err != nil || solicitation.DeliveryMan.Id != tokenUserID {
+		assignedDM, err := deliveryModels.GetDeliveryManIDByOrderID(ctx, req.OrderID)
+		if err != nil || assignedDM != tokenUserID {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Not the assigned deliveryman for this order"})
 		}
 
@@ -713,6 +727,10 @@ func setupAuthRoutes(app *fiber.App) {
 	app.Post("/users", adminRequired, authHandlers.CreateUserAdmin)
 	app.Post("/admin/bootstrap", rateLimitMiddleware(3), authHandlers.BootstrapAdmin)
 	app.Get("/users", adminRequired, authHandlers.ListAllUsers)
+
+	// Diagnostico de proxy/IP — confirma como o Render encaminha o IP real do
+	// cliente para o Fiber (X-Forwarded-For vs X-Real-IP) e o que c.IP() resolve.
+	app.Get("/debug-ip", adminRequired, debugIPHandler)
 	app.Get("/users/:id", protectedRoute, authHandlers.GetUser)
 	app.Put("/users/:id", protectedRoute, authHandlers.UpdateUser)
 	app.Delete("/users/:id", protectedRoute, authHandlers.DeleteUser)
@@ -736,6 +754,7 @@ func setupAuthRoutes(app *fiber.App) {
 	app.Post("/delivery-man/login", rateLimitMiddleware(10), authHandlers.LoginDeliveryMan)
 	app.Post("/delivery-man/register", rateLimitMiddleware(5), authHandlers.CreateDeliveryMan)
 	app.Get("/delivery-man", adminRequired, authHandlers.ListAllDeliveryMen)
+	app.Get("/audit-log", adminRequired, authHandlers.ListAdminAuditLog)
 	app.Put("/delivery-man/:id", adminRequired, authHandlers.UpdateDeliveryMan)
 	app.Delete("/delivery-man/:id", adminRequired, authHandlers.DeleteDeliveryMan)
 	app.Put("/delivery-man/:id/wallet", protectedRoute, authHandlers.UpdateDeliveryManWallet)
@@ -943,13 +962,8 @@ func setupChatRoutes(app *fiber.App) {
 
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		var solicitation struct {
-			DeliveryMan struct {
-				Id int64 `bson:"id"`
-			} `bson:"deliveryman"`
-		}
-		_ = deliveryModels.MongoDabase.Collection("solicitations").FindOne(ctx, bson.M{"order_id": orderID}).Decode(&solicitation)
-		if solicitation.DeliveryMan.Id != 0 && solicitation.DeliveryMan.Id == tokenUserID {
+		assignedDM, _ := deliveryModels.GetDeliveryManIDByOrderID(ctx, orderID)
+		if assignedDM != 0 && assignedDM == tokenUserID {
 			return chatHandlers.GetMessages(c)
 		}
 
@@ -1018,8 +1032,14 @@ func main() {
 	ordersModels.ConnectPostgresDatabase()
 	ordersModels.ConnectMongoDatabase()
 	deliveryModels.ConnectMongoDatabase()
+	// delivery_api: Postgres primário (delivery_solicitations) + Mongo espelho
+	// durante o corte (dual-write). Nil-safe: sem PG, degrada para Mongo.
+	deliveryModels.InitPostgres(models.DB)
 	paymentModels.ConnectMongoDatabase()
 	chatModels.ConnectMongoDatabase()
+
+	// Log de auditoria de acoes administrativas (tabela admin_audit_log)
+	audit.Init(models.DB)
 
 	// Initialize message queue
 	queue.Init()

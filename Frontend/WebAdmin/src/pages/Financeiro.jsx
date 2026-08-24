@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { FiCreditCard, FiDollarSign, FiClock, FiCheck, FiAlertTriangle } from "react-icons/fi";
 import { toast } from "react-toastify";
 import paymentApi from "../services/paymentApi";
+import Pagination from "../components/Pagination";
 
 function StatCard({ icon: Icon, label, value, color, bg }) {
   return (
@@ -36,6 +37,9 @@ export default function Financeiro() {
   const [chargebacks, setChargebacks] = useState([]);
   const [cbSummary, setCbSummary] = useState({ credit_total: 0, debit_total: 0, net: 0 });
   const [cbFilters, setCbFilters] = useState({ type: "", user_id: "", payment_id: "" });
+  const [cbPage, setCbPage] = useState(1);
+  const [cbTotal, setCbTotal] = useState(0);
+  const [cbTotalPages, setCbTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("stats");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -47,34 +51,41 @@ export default function Financeiro() {
     try {
       const [s, p, w, c] = await Promise.all([
         paymentApi.get("/payments/stats").then(r => r.data).catch(() => ({})),
-        paymentApi.get("/payments/").then(r => r.data).catch(() => []),
+        paymentApi.get("/payments/?page=1&limit=20").then(r => r.data).catch(() => ({})),
         paymentApi.get("/wallets").then(r => r.data).catch(() => []),
-        paymentApi.get("/chargebacks").then(r => r.data).catch(() => ({})),
+        paymentApi.get("/chargebacks?page=1&limit=20").then(r => r.data).catch(() => ({})),
       ]);
       setStats(s);
-      setPayments(Array.isArray(p) ? p : []);
+      setPayments(Array.isArray(p?.data) ? p.data : []);
       setWallets(Array.isArray(w) ? w : []);
       setChargebacks(Array.isArray(c?.chargebacks) ? c.chargebacks : []);
       setCbSummary(c?.summary || { credit_total: 0, debit_total: 0, net: 0 });
+      setCbTotal(c?.total || 0);
+      setCbTotalPages(c?.total_pages || 0);
     } catch (e) { toast.error("Erro ao carregar dados: " + e.message); }
     setLoading(false);
   }
 
-  // Carrega o ledger com os filtros atuais da aba Chargebacks.
-  async function loadChargebacks(filters = cbFilters) {
+  // Carrega o ledger com os filtros atuais da aba Chargebacks (paginado).
+  async function loadChargebacks(filters = cbFilters, pg = cbPage) {
     const params = new URLSearchParams();
+    params.set("page", pg);
+    params.set("limit", 20);
     if (filters.type) params.append("type", filters.type);
     if (filters.user_id) params.append("user_id", filters.user_id);
     if (filters.payment_id) params.append("payment_id", filters.payment_id);
     const qs = params.toString();
     try {
-      const { data } = await paymentApi.get("/chargebacks" + (qs ? "?" + qs : ""));
+      const { data } = await paymentApi.get("/chargebacks?" + qs);
       setChargebacks(Array.isArray(data?.chargebacks) ? data.chargebacks : []);
       setCbSummary(data?.summary || { credit_total: 0, debit_total: 0, net: 0 });
+      setCbTotal(data?.total || 0);
+      setCbTotalPages(data?.total_pages || 0);
     } catch (e) { toast.error("Erro ao buscar chargebacks: " + e.message); }
   }
 
-  function applyCbFilters() { loadChargebacks(cbFilters); }
+  function applyCbFilters() { setCbPage(1); loadChargebacks(cbFilters, 1); }
+  function changeCbPage(n) { setCbPage(n); loadChargebacks(cbFilters, n); }
 
   function resetCbFilters() {
     setCbFilters({ type: "", user_id: "", payment_id: "" });
@@ -309,6 +320,14 @@ export default function Financeiro() {
                 </tbody>
               </table>
             </div>
+            <Pagination
+              page={cbPage}
+              totalPages={cbTotalPages}
+              total={cbTotal}
+              pageSize={20}
+              onPageChange={changeCbPage}
+              onPageSizeChange={() => {}}
+            />
           </div>
         </div>
       )}

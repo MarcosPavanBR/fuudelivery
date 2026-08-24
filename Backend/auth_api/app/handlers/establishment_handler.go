@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/carloshomar/fuudelivery/auth_api/app/audit"
 	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/auth_api/app/models"
 	"github.com/gofiber/fiber/v2"
@@ -351,6 +352,10 @@ func DeleteEstablishment(c *fiber.Ctx) error {
 	if err := models.DB.Delete(&establishment).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete establishment"})
 	}
+
+	audit.Record(c, models.DB, "ESTABLISHMENT_DELETED", "establishment", id, map[string]interface{}{
+		"name": establishment.Name,
+	})
 
 	return c.JSON(fiber.Map{"message": "Establishment deleted successfully"})
 }

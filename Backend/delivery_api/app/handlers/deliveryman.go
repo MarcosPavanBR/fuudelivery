@@ -7,20 +7,16 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"go.mongodb.org/mongo-driver/bson"
 
 	"github.com/carloshomar/fuudelivery/delivery_api/app/dto"
 	"github.com/carloshomar/fuudelivery/delivery_api/app/models"
 )
 
-func mongoCtx() context.Context {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	_ = cancel
-	return ctx
+func deliverymanCtx() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), 5*time.Second)
 }
 
 func GetOrdersByDeliverymanID(c *fiber.Ctx) error {
-
 	deliverymanIDStr := c.Params("id")
 	deliverymanID, err := strconv.ParseInt(deliverymanIDStr, 10, 64)
 	if err != nil {
@@ -29,40 +25,12 @@ func GetOrdersByDeliverymanID(c *fiber.Ctx) error {
 		})
 	}
 
-	collection := models.MongoDabase.Collection("solicitations")
+	ctx, cancel := deliverymanCtx()
+	defer cancel()
 
-	// Definir o filtro para encontrar os pedidos com base no ID do deliveryman e no status diferente de "FINISHED"
-	filter := bson.M{
-		"deliveryman.id": deliverymanID,
-		"status": bson.M{
-			"$ne": "FINISHED",
-		},
-		"deliveryman.status": bson.M{
-			"$ne": "FINISHED",
-		},
-	}
-
-	cursor, err := collection.Find(mongoCtx(), filter)
+	orders, err := models.FindActiveOrdersByDeliveryman(ctx, deliverymanID)
 	if err != nil {
 		log.Printf("Erro ao consultar os pedidos: %s", err)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Erro ao consultar os pedidos",
-		})
-	}
-	defer cursor.Close(mongoCtx())
-
-	var orders []dto.OrderDTO
-	for cursor.Next(mongoCtx()) {
-		var order dto.OrderDTO
-		if err := cursor.Decode(&order); err != nil {
-			log.Printf("Erro ao decodificar o pedido: %s", err)
-			continue
-		}
-		orders = append(orders, order)
-	}
-
-	if err := cursor.Err(); err != nil {
-		log.Printf("Erro ao iterar sobre os resultados: %s", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Erro ao consultar os pedidos",
 		})
@@ -72,18 +40,9 @@ func GetOrdersByDeliverymanID(c *fiber.Ctx) error {
 }
 
 func GetOrderByID(orderID string) (*dto.OrderDTO, error) {
-	collection := models.MongoDabase.Collection("solicitations")
-
-	filter := bson.M{"orderid": orderID}
-
-	var order dto.OrderDTO
-	err := collection.FindOne(mongoCtx(), filter).Decode(&order)
-	if err != nil {
-		log.Printf("Erro ao consultar o pedido: %s", err)
-		return nil, err
-	}
-
-	return &order, nil
+	ctx, cancel := deliverymanCtx()
+	defer cancel()
+	return models.GetSolicitationByOrderID(ctx, orderID)
 }
 
 func UpdateOrderStatusByDeliverymanID(c *fiber.Ctx, sendMessageToClient func(clientID int64, message []byte) error) error {
@@ -102,23 +61,17 @@ func UpdateOrderStatusByDeliverymanID(c *fiber.Ctx, sendMessageToClient func(cli
 		})
 	}
 
-	collection := models.MongoDabase.Collection("solicitations")
+	ctx, cancel := deliverymanCtx()
+	defer cancel()
 
-	filter := bson.M{
-		"orderid":        request.OrderID,
-		"deliveryman.id": request.Deliveryman.Id,
-	}
-
-	update := bson.M{"$set": bson.M{"deliveryman.status": request.Deliveryman.Status}}
-
-	updateResult, err := collection.UpdateOne(mongoCtx(), filter, update)
+	found, err := models.UpdateSolicitationDeliveryManStatus(ctx, request.OrderID, request.Deliveryman.Id, request.Deliveryman.Status)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Erro ao atualizar o status do pedido",
 		})
 	}
 
-	if updateResult.ModifiedCount == 0 {
+	if !found {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Pedido nao encontrado ou entregador nao autorizado",
 		})

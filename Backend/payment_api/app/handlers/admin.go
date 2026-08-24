@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"regexp"
 	"strconv"
 	"time"
 
+	"github.com/carloshomar/fuudelivery/auth_api/app/audit"
 	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	authModels "github.com/carloshomar/fuudelivery/auth_api/app/models"
 	"github.com/carloshomar/fuudelivery/payment_api/app/models"
@@ -22,11 +24,53 @@ func mongoCtx() context.Context {
 	return ctx
 }
 
+// ListAllPayments lista pagamentos com paginacao server-side (admin).
+//
+//	GET /payments/all?page=1&limit=20&status=PENDING&q=<id|pedido|telefone>
+//
+// Resposta: {data, total, page, limit, total_pages}. Filtros (status, q) sao
+// aplicados no Mongo — o cliente nao puxa mais tudo para filtrar em memoria.
 func ListAllPayments(c *fiber.Ctx) error {
 	collection := models.MongoDabase.Collection("payments")
 
-	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}}).SetLimit(500)
-	cursor, err := collection.Find(mongoCtx(), bson.M{}, opts)
+	query := bson.M{}
+	if s := c.Query("status"); s != "" {
+		query["status"] = s
+	}
+	if q := c.Query("q"); q != "" {
+		regex := bson.M{"$regex": primitive.Regex{Pattern: regexp.QuoteMeta(q), Options: "i"}}
+		or := []bson.M{
+			{"order_id": regex},
+			{"customer_phone": regex},
+		}
+		if objID, err := primitive.ObjectIDFromHex(q); err == nil {
+			or = append([]bson.M{{"_id": objID}}, or...)
+		}
+		query["$or"] = or
+	}
+
+	total, err := collection.CountDocuments(mongoCtx(), query)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao contar pagamentos"})
+	}
+
+	page := c.QueryInt("page", 1)
+	if page < 1 {
+		page = 1
+	}
+	limit := c.QueryInt("limit", 20)
+	if limit < 1 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	opts := options.Find().
+		SetSort(bson.D{{Key: "created_at", Value: -1}}).
+		SetSkip(int64((page - 1) * limit)).
+		SetLimit(int64(limit))
+	cursor, err := collection.Find(mongoCtx(), query, opts)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao buscar pagamentos"})
 	}
@@ -46,7 +90,14 @@ func ListAllPayments(c *fiber.Ctx) error {
 	// guarda o nome do usuario. Consulta em lote para evitar N+1.
 	enrichPaymentsWithUsers(payments)
 
-	return c.JSON(payments)
+	totalPages := (total + int64(limit) - 1) / int64(limit)
+	return c.JSON(fiber.Map{
+		"data":        payments,
+		"total":       total,
+		"page":        page,
+		"limit":       limit,
+		"total_pages": totalPages,
+	})
 }
 
 // enrichPaymentsWithUsers anexa user: {id, nome, phone} a cada pagamento
@@ -200,6 +251,14 @@ func ApprovePayment(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to approve payment"})
 	}
 
+	audit.Record(c, authModels.DB, "PAYMENT_APPROVED", "payment", id, map[string]interface{}{
+		"order_id":       payment.OrderID,
+		"amount":         payment.Amount,
+		"method":         payment.Method,
+		"customer_id":    payment.CustomerID,
+		"customer_phone": payment.CustomerPhone,
+	})
+
 	return c.JSON(fiber.Map{"message": "Payment approved", "payment_id": id, "status": "CONFIRMED"})
 }
 
@@ -248,6 +307,14 @@ func RejectPayment(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to reject payment"})
 	}
+
+	audit.Record(c, authModels.DB, "PAYMENT_REJECTED", "payment", id, map[string]interface{}{
+		"order_id":       payment.OrderID,
+		"amount":         payment.Amount,
+		"method":         payment.Method,
+		"reason":         body.Reason,
+		"customer_phone": payment.CustomerPhone,
+	})
 
 	return c.JSON(fiber.Map{"message": "Payment rejected", "payment_id": id, "status": "REJECTED"})
 }
@@ -308,12 +375,24 @@ func ListChargebacks(c *fiber.Ctx) error {
 		query["payment_id"] = pid
 	}
 
-	limit := 100
-	if l := c.QueryInt("limit"); l > 0 && l <= 500 {
+	limit := 20
+	if l := c.QueryInt("limit"); l > 0 && l <= 100 {
 		limit = l
 	}
+	page := c.QueryInt("page", 1)
+	if page < 1 {
+		page = 1
+	}
 
-	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}}).SetLimit(int64(limit))
+	total, err := models.MongoDabase.Collection("wallet_ledger").CountDocuments(mongoCtx(), query)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao contar lançamentos do ledger"})
+	}
+
+	opts := options.Find().
+		SetSort(bson.D{{Key: "created_at", Value: -1}}).
+		SetSkip(int64((page - 1) * limit)).
+		SetLimit(int64(limit))
 	cursor, err := models.MongoDabase.Collection("wallet_ledger").Find(mongoCtx(), query, opts)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao listar lançamentos do ledger"})
@@ -347,9 +426,14 @@ func ListChargebacks(c *fiber.Ctx) error {
 	// total geral, não apenas os primeiros N lançamentos).
 	summary := computeLedgerSummary(query)
 
+	totalPages := (total + int64(limit) - 1) / int64(limit)
 	return c.JSON(fiber.Map{
 		"chargebacks": entries,
 		"count":       len(entries),
+		"total":       total,
+		"page":        page,
+		"limit":       limit,
+		"total_pages": totalPages,
 		"summary":     summary,
 	})
 }

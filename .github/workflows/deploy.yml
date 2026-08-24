@@ -107,13 +107,15 @@ jobs:
             echo "::error::DEPLOY_ID vazio - deploy nao iniciado"
             exit 1
           fi
-          # Estaticos (web/admin) buildam em minutos; a API (Go) demora mais.
-          # Timeout menor para os estaticos acelera o feedback do pipeline
-          # sem cortar a API no meio do build.
+          # Estaticos (web/admin) buildam rapido; a API (Go) demora mais.
+          # Dados dos ultimos 3 deploys (ago/2026): web/admin ficaram "live"
+          # sempre no poll 3/16 (~45s), nunca passaram disso. 12 polls (3min)
+          # dao ~4x de folga sobre o pior caso observado, acelerando o
+          # feedback sem cortar a API no meio do build.
           if [ "${{ matrix.service.name }}" = "api" ]; then
             MAX_ATTEMPTS=40
           else
-            MAX_ATTEMPTS=16
+            MAX_ATTEMPTS=12
           fi
           for i in $(seq 1 ${MAX_ATTEMPTS}); do
             STATUS=$(curl -sS "https://api.render.com/v1/services/${SERVICE_ID}/deploys/${DEPLOY_ID}" \
@@ -147,43 +149,67 @@ jobs:
     steps:
       - name: API /health (HTTP 200)
         run: |
+          # Mesmo padrao do POST /deploys: captura corpo + HTTP code com
+          # "|| true" (curl pode falhar em cold start) e exibe o codigo em
+          # cada tentativa. Falha de conexao vira "000" para ficar visivel.
           ok=0
+          LAST=""
           for i in $(seq 1 12); do
-            code=$(curl -s -m 20 -o /dev/null -w "%{http_code}" "https://fuudelivery-api-8y6l.onrender.com/health")
-            echo "[$i/12] API /health -> HTTP $code"
-            if [ "$code" = "200" ]; then ok=1; break; fi
+            OUT=$(curl -sS -m 20 -o /dev/null -w "\n%{http_code}" "https://fuudelivery-api-8y6l.onrender.com/health" 2>&1 || true)
+            HTTP_CODE=$(echo "$OUT" | tail -1)
+            case "$HTTP_CODE" in
+              [0-9][0-9][0-9]) ;;
+              *) HTTP_CODE="000" ;;
+            esac
+            LAST="$HTTP_CODE"
+            echo "[$i/12] API /health -> HTTP $HTTP_CODE"
+            if [ "$HTTP_CODE" = "200" ]; then ok=1; break; fi
             sleep 15
           done
           if [ "$ok" != "1" ]; then
-            echo "::error::API /health nao respondeu 200 apos o deploy"
+            echo "::error::API /health nao respondeu 200 apos o deploy (ultimo HTTP $LAST)"
             exit 1
           fi
 
       - name: WebAdmin (HTTP 200)
         run: |
           ok=0
+          LAST=""
           for i in $(seq 1 12); do
-            code=$(curl -s -m 20 -o /dev/null -w "%{http_code}" "https://fuudelivery-admin-lv7f.onrender.com/")
-            echo "[$i/12] WebAdmin / -> HTTP $code"
-            if [ "$code" = "200" ]; then ok=1; break; fi
+            OUT=$(curl -sS -m 20 -o /dev/null -w "\n%{http_code}" "https://fuudelivery-admin-lv7f.onrender.com/" 2>&1 || true)
+            HTTP_CODE=$(echo "$OUT" | tail -1)
+            case "$HTTP_CODE" in
+              [0-9][0-9][0-9]) ;;
+              *) HTTP_CODE="000" ;;
+            esac
+            LAST="$HTTP_CODE"
+            echo "[$i/12] WebAdmin / -> HTTP $HTTP_CODE"
+            if [ "$HTTP_CODE" = "200" ]; then ok=1; break; fi
             sleep 15
           done
           if [ "$ok" != "1" ]; then
-            echo "::error::WebAdmin nao respondeu 200 apos o deploy"
+            echo "::error::WebAdmin nao respondeu 200 apos o deploy (ultimo HTTP $LAST)"
             exit 1
           fi
 
       - name: WebRestaurant (HTTP 200)
         run: |
           ok=0
+          LAST=""
           for i in $(seq 1 12); do
-            code=$(curl -s -m 20 -o /dev/null -w "%{http_code}" "https://fuudelivery-web.onrender.com/")
-            echo "[$i/12] WebRestaurant / -> HTTP $code"
-            if [ "$code" = "200" ]; then ok=1; break; fi
+            OUT=$(curl -sS -m 20 -o /dev/null -w "\n%{http_code}" "https://fuudelivery-web.onrender.com/" 2>&1 || true)
+            HTTP_CODE=$(echo "$OUT" | tail -1)
+            case "$HTTP_CODE" in
+              [0-9][0-9][0-9]) ;;
+              *) HTTP_CODE="000" ;;
+            esac
+            LAST="$HTTP_CODE"
+            echo "[$i/12] WebRestaurant / -> HTTP $HTTP_CODE"
+            if [ "$HTTP_CODE" = "200" ]; then ok=1; break; fi
             sleep 15
           done
           if [ "$ok" != "1" ]; then
-            echo "::error::WebRestaurant nao respondeu 200 apos o deploy"
+            echo "::error::WebRestaurant nao respondeu 200 apos o deploy (ultimo HTTP $LAST)"
             exit 1
           fi
   # --------------------------------------------------------------
@@ -215,3 +241,38 @@ jobs:
             -H "Authorization: Bearer ${RENDER_API_KEY}" 2>&1 || true)
           echo "GET /routes (${{ matrix.service.name }}) -> $ROUTES"
           echo "$ROUTES" | python3 scripts/check_spa_routes.py "${{ matrix.service.name }}"
+
+  # --------------------------------------------------------------
+  # Notificacao de falha: avisa Slack/Discord/e-mail quando QUALQUER
+  # etapa do deploy falhar (gate do CI, polling do deploy-all,
+  # health-check pos-deploy ou verificacao das rotas SPA), para nao
+  # depender de alguem olhando o GitHub. Canais opcionais via secrets
+  # (SLACK_WEBHOOK_URL / DISCORD_WEBHOOK_URL / SMTP_*); sem nenhum
+  # configurado, o script apenas loga um warning.
+  # --------------------------------------------------------------
+  notify-failure:
+    name: Notifica falha do deploy
+    if: failure()
+    needs: [check-ci-status, deploy-all, health-check, verify-spa-routes]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (para scripts/notify-failure.sh)
+        uses: actions/checkout@v5
+
+      - name: Envia notificacao de falha
+        continue-on-error: true
+        env:
+          NOTIFY_TITLE: "🔴 Deploy FALHOU — fuudelivery (run #${{ github.run_number }})"
+          NOTIFY_TEXT: "${{ github.workflow }} — commit ${{ github.sha }}\ncheck-ci-status=${{ needs.check-ci-status.result }} | deploy-all=${{ needs.deploy-all.result }} | health-check=${{ needs.health-check.result }} | verify-spa-routes=${{ needs.verify-spa-routes.result }}"
+          NOTIFY_RUN_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          NOTIFY_SHA: "${{ github.sha }}"
+          NOTIFY_REF: "${{ github.ref }}"
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_TO: ${{ secrets.SMTP_TO }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+        run: bash scripts/notify-failure.sh

@@ -1,6 +1,9 @@
 package handlers
 
 import (
+	"fmt"
+
+	"github.com/carloshomar/fuudelivery/auth_api/app/audit"
 	"github.com/carloshomar/fuudelivery/auth_api/app/dto"
 	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/auth_api/app/models"
@@ -8,12 +11,51 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// ListAllDeliveryMen lista entregadores com paginacao server-side (admin).
+//
+//	GET /delivery-man?page=1&limit=20&q=nome
+//
+// Resposta: {data, total, page, limit, total_pages}.
 func ListAllDeliveryMen(c *fiber.Ctx) error {
+	tx := models.DB.Model(&models.DeliveryMan{})
+	if q := c.Query("q"); q != "" {
+		like := "%" + q + "%"
+		tx = tx.Where("(name ILIKE ? OR email ILIKE ? OR phone ILIKE ?)", like, like, like)
+	}
+
+	var total int64
+	if err := tx.Count(&total).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to count delivery men"})
+	}
+
+	page := c.QueryInt("page", 1)
+	if page < 1 {
+		page = 1
+	}
+	limit := c.QueryInt("limit", 20)
+	if limit < 1 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
 	var deliveryMen []models.DeliveryMan
-	if err := models.DB.Find(&deliveryMen).Error; err != nil {
+	if err := tx.Order("id DESC").Offset((page - 1) * limit).Limit(limit).Find(&deliveryMen).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to query delivery men"})
 	}
-	return c.JSON(deliveryMen)
+	if deliveryMen == nil {
+		deliveryMen = []models.DeliveryMan{}
+	}
+
+	totalPages := (total + int64(limit) - 1) / int64(limit)
+	return c.JSON(fiber.Map{
+		"data":        deliveryMen,
+		"total":       total,
+		"page":        page,
+		"limit":       limit,
+		"total_pages": totalPages,
+	})
 }
 
 func LoginDeliveryMan(c *fiber.Ctx) error {
@@ -173,6 +215,11 @@ func DeleteDeliveryMan(c *fiber.Ctx) error {
 	if err := models.DB.Delete(&deliveryMan).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete delivery man"})
 	}
+
+	audit.Record(c, models.DB, "DELIVERY_MAN_DELETED", "delivery_man", fmt.Sprintf("%d", deliveryMan.ID), map[string]interface{}{
+		"name":  deliveryMan.Name,
+		"email": deliveryMan.Email,
+	})
 
 	return c.JSON(fiber.Map{"message": "Delivery man deleted successfully", "id": deliveryMan.ID})
 }

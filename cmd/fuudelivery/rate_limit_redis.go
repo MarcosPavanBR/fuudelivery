@@ -2,8 +2,12 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log"
+	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -27,7 +31,8 @@ import (
 // ---------------------------------------------------------------------------
 
 // rateLimitKeyPrefix identifica as chaves deste limiter no Redis.
-const rateLimitKeyPrefix = "fuudelivery:ratelimit:v1:"
+// v2: chave composta (IP+User-Agent) — ver clientRateLimitID.
+const rateLimitKeyPrefix = "fuudelivery:ratelimit:v2:"
 
 // rateLimitRedisTimeout limita o tempo de cada operacao no Redis.
 // Se o Redis estiver lento/fora, fail-open (deixa passar) e o fallback
@@ -63,18 +68,79 @@ func resetRedisLimiterClient() {
 	redisLimiterOnce = sync.Once{}
 }
 
-// rateLimitKey monta a chave Redis para (ip, maxPerMinute).
+// clientRateLimitID devolve a identidade usada como chave do rate limit:
+// o IP real do cliente (PRIMEIRO endereco do X-Forwarded-For — a convencao
+// que o Render segue: o primeiro elemento e o cliente original) combinado
+// com o User-Agent normalizado.
+//
+// Por que IP+UA em vez de c.IP() sozinho:
+//  1. Com TrustedProxies aberto, c.IP() devolve o XFF CRU (a cadeia inteira,
+//     ex.: "203.0.113.42, 10.0.0.1") — se o Render anexa IPs a cadeia varia
+//     por request e a chave Redis muda, nunca disparando o limite.
+//  2. O primeiro elemento do XFF e estavel (e o cliente original), entao
+//     extrai-lo normaliza a chave independente do tamanho da cadeia.
+//  3. User-Agent adiciona entropia: usuarios distintos atras do mesmo proxy
+//     (mesmo IP de saida) nao colidem no mesmo bucket; e burlar o limite
+//     passaria a exigir variar IP E UA ao mesmo tempo.
+//
+// Fallback: sem XFF valido, usa o IP do socket (RemoteIP) — quem chega
+// direto (sem proxy) continua sendo identificado de forma estavel.
+func clientRateLimitID(c *fiber.Ctx) string {
+	ip := firstForwardedIP(c)
+	if ip == "" {
+		ip = c.Context().RemoteIP().String()
+	}
+	ua := normalizeUserAgent(c.Get("User-Agent"))
+	return ip + "|" + ua
+}
+
+// firstForwardedIP extrai o PRIMEIRO endereco IP valido do X-Forwarded-For.
+// A cadeia vem como "cliente, proxy1, proxy2" — o primeiro e o cliente
+// original (convencao XFF, seguida pelo Render). Retorna "" se nao houver
+// header ou nenhum elemento parseavel.
+func firstForwardedIP(c *fiber.Ctx) string {
+	xff := c.Get("X-Forwarded-For")
+	if xff == "" {
+		return ""
+	}
+	for _, part := range strings.Split(xff, ",") {
+		ip := strings.TrimSpace(part)
+		if host, _, err := net.SplitHostPort(ip); err == nil {
+			ip = host
+		}
+		if net.ParseIP(ip) != nil {
+			return ip
+		}
+	}
+	return ""
+}
+
+// normalizeUserAgent limita o User-Agent a um identificador estavel e curto
+// para a chave: trim, lowercase e truncado em 48 chars (evita chaves Redis
+// gigantes com UAs longos; case/whitespace diferentes nao criam buckets novos).
+func normalizeUserAgent(ua string) string {
+	ua = strings.ToLower(strings.TrimSpace(ua))
+	if len(ua) > 48 {
+		ua = ua[:48]
+	}
+	return ua
+}
+
+// rateLimitKey monta a chave Redis para (identidade, maxPerMinute).
 // Incluir maxPerMinute evita colisao entre rotas com limites diferentes
-// usando o mesmo IP.
-func rateLimitKey(ip string, maxPerMinute int) string {
-	return fmt.Sprintf("%s%d:%s", rateLimitKeyPrefix, maxPerMinute, ip)
+// usando a mesma identidade. A identidade (IP+UA) e hasheada com SHA-256
+// para a chave caber no Redis sem caracteres estranhos do User-Agent.
+func rateLimitKey(id string, maxPerMinute int) string {
+	sum := sha256.Sum256([]byte(id))
+	hash := hex.EncodeToString(sum[:])[:16]
+	return fmt.Sprintf("%s%d:%s", rateLimitKeyPrefix, maxPerMinute, hash)
 }
 
 // redisAllow registra a requisicao no Redis e retorna (permitido, usouRedis).
 // Sem Redis configurado ou com erro de conexao, usouRedis=false para o
 // chamador cair no fallback em memoria (nunca derruba o login por culpa
 // do Redis, mas tambem nao abre a guarda quando o Redis falha).
-func redisAllow(ip string, maxPerMinute int) (allowed, usedRedis bool) {
+func redisAllow(id string, maxPerMinute int) (allowed, usedRedis bool) {
 	client := getRedisLimiterClient()
 	if client == nil {
 		return true, false // sem Redis -> fallback em memoria
@@ -83,10 +149,10 @@ func redisAllow(ip string, maxPerMinute int) (allowed, usedRedis bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), rateLimitRedisTimeout)
 	defer cancel()
 
-	key := rateLimitKey(ip, maxPerMinute)
+	key := rateLimitKey(id, maxPerMinute)
 	count, err := client.Incr(ctx, key).Result()
 	if err != nil {
-		log.Printf("[RATELIMIT] redis INCR falhou (ip=%s): %v", ip, err)
+		log.Printf("[RATELIMIT] redis INCR falhou (id=%s): %v", id, err)
 		return true, false // erro -> fallback em memoria
 	}
 
@@ -103,11 +169,12 @@ func redisAllow(ip string, maxPerMinute int) (allowed, usedRedis bool) {
 func rateLimitMiddleware(maxPerMinute int) fiber.Handler {
 	rps := rate.Limit(float64(maxPerMinute) / 60.0)
 	return func(c *fiber.Ctx) error {
-		// Usa c.IP() que respeita a configuracao de TrustedProxies do Fiber,
-		// evitando que o cliente forje X-Forwarded-For para burlar o rate limit.
-		ip := c.IP()
+		// Chave composta IP+User-Agent (primeiro IP do XFF, nao a cadeia crua
+		// que c.IP() devolveria) — estavel mesmo com proxy variavel e mais
+		// dificil de burlar (exige variar IP e UA ao mesmo tempo).
+		id := clientRateLimitID(c)
 
-		allowed, usedRedis := redisAllow(ip, maxPerMinute)
+		allowed, usedRedis := redisAllow(id, maxPerMinute)
 		if !allowed {
 			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
 				"error": "Muitas requisicoes. Tente novamente mais tarde.",
@@ -120,7 +187,7 @@ func rateLimitMiddleware(maxPerMinute int) fiber.Handler {
 		}
 
 		// Sem Redis (ou erro de conexao): fallback no token bucket em memoria.
-		limiter := getIPLimiter(ip, rps, maxPerMinute)
+		limiter := getIPLimiter(id, rps, maxPerMinute)
 		if !limiter.Allow() {
 			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
 				"error": "Muitas requisicoes. Tente novamente mais tarde.",

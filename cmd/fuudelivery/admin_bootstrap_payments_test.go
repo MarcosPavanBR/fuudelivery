@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/carloshomar/fuudelivery/auth_api/app/audit"
 	authMiddleware "github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	authModels "github.com/carloshomar/fuudelivery/auth_api/app/models"
 	paymentModels "github.com/carloshomar/fuudelivery/payment_api/app/models"
@@ -111,6 +112,9 @@ func TestAdminBootstrapPaymentsAll(t *testing.T) {
 	require.NotPanics(t, func() { paymentModels.ConnectMongoDatabase() }, "conectar paymentModels (Mongo)")
 	require.NotNil(t, authModels.DB, "authModels.DB deve estar conectado")
 	require.NotNil(t, paymentModels.MongoDabase, "paymentModels.MongoDabase deve estar conectado")
+
+	// Cria a tabela do log de auditoria (mesmo Init do startup do monolito).
+	audit.Init(authModels.DB)
 
 	// ---- Setup: app Fiber com as rotas REAIS do monolith ----
 	app := fiber.New()
@@ -239,12 +243,20 @@ func TestAdminBootstrapPaymentsAll(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 200, resp.StatusCode, "listagem admin")
 
-		var payments []map[string]interface{}
-		json.NewDecoder(resp.Body).Decode(&payments)
-		require.Len(t, payments, 2, "dois pagamentos semeados")
+		// O endpoint agora devolve envelope paginado: {data, total, page, limit,
+		// total_pages} — paginacao server-side (GET /payments/all?page&limit).
+		var payload struct {
+			Data  []map[string]interface{} `json:"data"`
+			Total int64                    `json:"total"`
+			Page  int                      `json:"page"`
+		}
+		json.NewDecoder(resp.Body).Decode(&payload)
+		require.Len(t, payload.Data, 2, "dois pagamentos semeados")
+		require.Equal(t, int64(2), payload.Total, "total no envelope paginado")
+		require.Equal(t, 1, payload.Page, "page padrao = 1")
 
 		var withUser, withoutUser map[string]interface{}
-		for _, p := range payments {
+		for _, p := range payload.Data {
 			if p["order_id"] == "order-staging-001" {
 				withUser = p
 			} else {
@@ -287,5 +299,42 @@ func TestAdminBootstrapPaymentsAll(t *testing.T) {
 		require.Equal(t, 403, allResp.StatusCode, "usuario comum nao acessa /payments/all")
 	})
 
-	t.Log("=== Fluxo de admin (bootstrap local + /payments/all enriquecido) validado no staging ===")
+	// ---- 9. Aprovar pagamento pendente -> audit.log registra QUEM aprovou ----
+	t.Run("ApproveAndAudit", func(t *testing.T) {
+		var pending paymentModels.Payment
+		err := paymentsCol.FindOne(ctx, bson.M{"order_id": "order-staging-002"}).Decode(&pending)
+		require.NoError(t, err, "achar pagamento pendente")
+		require.Equal(t, "PENDING", pending.Status)
+
+		req := httptest.NewRequest(http.MethodPost, "/payments/"+pending.ID.Hex()+"/approve", nil)
+		req.Header.Set("Authorization", "Bearer "+adminToken)
+		resp, err := app.Test(req, -1)
+		require.NoError(t, err)
+		require.Equal(t, 200, resp.StatusCode, "aprovar pagamento pendente")
+
+		// O registro de auditoria deve existir com a identidade do admin (JWT).
+		var entry audit.AdminAuditLog
+		err = authModels.DB.Where("action = ? AND resource_id = ?", "PAYMENT_APPROVED", pending.ID.Hex()).
+			Order("id DESC").First(&entry).Error
+		require.NoError(t, err, "linha PAYMENT_APPROVED no admin_audit_log")
+		require.Equal(t, uint(userID), entry.AdminUserID, "admin_user_id = id do admin logado")
+		require.Equal(t, "Cliente Staging", entry.AdminName, "admin_name lido do Postgres")
+		require.Equal(t, "payment", entry.ResourceType, "resource_type")
+		require.Contains(t, entry.Details, "order-staging-002", "detalhes com o pedido")
+
+		// GET /audit-log (admin) lista a entrada com filtro por action.
+		req2 := httptest.NewRequest(http.MethodGet, "/audit-log?action=PAYMENT_APPROVED", nil)
+		req2.Header.Set("Authorization", "Bearer "+adminToken)
+		resp2, err := app.Test(req2, -1)
+		require.NoError(t, err)
+		require.Equal(t, 200, resp2.StatusCode)
+		var list struct {
+			Data  []audit.AdminAuditLog `json:"data"`
+			Total int64                 `json:"total"`
+		}
+		json.NewDecoder(resp2.Body).Decode(&list)
+		require.GreaterOrEqual(t, list.Total, int64(1), "audit-log lista entradas")
+	})
+
+	t.Log("=== Fluxo de admin (bootstrap local + /payments/all enriquecido + auditoria) validado no staging ===")
 }

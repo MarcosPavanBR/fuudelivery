@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"github.com/carloshomar/fuudelivery/payment_api/app/models"
+	"github.com/gofiber/fiber/v2"
 )
 
 // lookupOrderTotal devolve o total recalculado pelo servidor no momento da
@@ -49,4 +50,28 @@ func validateChargeAmount(orderID string, clientAmount float64) (float64, bool) 
 		return serverTotal, false
 	}
 	return serverTotal, true
+}
+
+// GetPaymentByOrder devolve o status da cobrança mais recente de um pedido.
+// Usado pelo app do cliente para confirmar o pagamento do PIX (polling) sem
+// confiar num botão "já paguei".
+// GET /payments/order/:order_id (protegido)
+func GetPaymentByOrder(c *fiber.Ctx) error {
+	orderID := c.Params("order_id")
+	if orderID == "" {
+		return c.Status(400).JSON(fiber.Map{"error": "order_id obrigatório"})
+	}
+
+	var payment models.Payment
+	if err := models.DB.Where("order_id = ?", orderID).
+		Order("created_at DESC").First(&payment).Error; err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": "Nenhuma cobrança encontrada para este pedido"})
+	}
+
+	return c.JSON(fiber.Map{
+		"order_id":       payment.OrderID,
+		"status":         payment.Status,
+		"amount":         payment.Amount,
+		"payment_method": payment.Method,
+	})
 }

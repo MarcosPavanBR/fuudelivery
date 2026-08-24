@@ -1,7 +1,9 @@
 import { createContext, useState, useEffect, useContext, useRef } from "react";
 
 import api, { setOnUnauthorized } from "@/services/api";
-import { setToken, getToken, clearToken } from "@/config/tokenStorage";
+import { setToken, getToken, clearToken, getRefreshToken, clearRefreshToken } from "@/config/tokenStorage";
+import axios from "axios";
+import { getApiUrl } from "@/config/api";
 import { Buffer } from "buffer";
 import useWebSocket from "react-use-websocket";
 import { useNavigation } from "expo-router";
@@ -180,7 +182,19 @@ const AuthProvider = ({ children }: any) => {
 
   const logout = async () => {
     try {
+      // Revoga o refresh token no servidor antes de limpar o storage local.
+      try {
+        const refreshToken = await getRefreshToken();
+        if (refreshToken) {
+          await axios.post(`${getApiUrl()}/auth/logout`, {
+            refresh_token: refreshToken,
+          });
+        }
+      } catch {
+        // segue com logout local mesmo se o servidor falhar
+      }
       await clearToken();
+      await clearRefreshToken();
       // Limpa o estado do usuário e finaliza o carregamento
       setUser(null);
       setIsLoading(false);

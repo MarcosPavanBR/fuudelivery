@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -21,6 +21,8 @@ const Location = () => {
   const nav = useNavigation();
   const { setMyLocation, location } = useCartApi();
   const [endereco, setEndereco] = useState(location);
+  const [cepError, setCepError] = useState(false);
+  const lastQueriedCep = useRef<string>("");
 
   const handleSave = () => {
     setMyLocation(endereco);
@@ -32,24 +34,35 @@ const Location = () => {
   };
 
   const consultarCEP = async (cep: string) => {
-    if (cep.length === 8) {
-      try {
-        const response = await axios.get(
-          `http://viacep.com.br/ws/${cep}/json/`
-        );
-
-        if (response.status === 200 && response.data.logradouro) {
-          setEndereco({
-            ...response?.data,
-            complemento: null,
-            numero: null,
-          });
-        }
-      } catch (error) {
-        console.error("Erro ao consultar CEP:", error);
+    try {
+      const response = await axios.get(`https://viacep.com.br/ws/${cep}/json/`);
+      if (response.status === 200 && response.data.logradouro) {
+        setCepError(false);
+        setEndereco({
+          ...response?.data,
+          complemento: null,
+          numero: null,
+        });
+      } else {
+        // ViaCEP responde 200 com { erro: true } para CEP inexistente.
+        setCepError(true);
       }
+    } catch (error) {
+      setCepError(true);
     }
   };
+
+  // Debounce: consulta o CEP 600ms após o usuário parar de digitar — antes,
+  // disparava uma request a cada dígito quando chegava a 8 posições.
+  useEffect(() => {
+    const digits = (endereco?.cep || "").toString().replace(/\D/g, "");
+    if (digits.length !== 8 || digits === lastQueriedCep.current) return;
+    const timer = setTimeout(() => {
+      lastQueriedCep.current = digits;
+      consultarCEP(digits);
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [endereco?.cep]);
 
   const handlerInput = (key: string, text: string) => {
     setEndereco({
@@ -89,11 +102,13 @@ const Location = () => {
           keyboardType="numeric"
           placeholder="Digite seu CEP"
           value={endereco?.cep}
-          onChangeText={(text) => {
-            consultarCEP(text);
-            handlerInput("cep", text);
-          }}
+          onChangeText={(text) => handlerInput("cep", text.replace(/\D/g, ""))}
         />
+        {cepError && (
+          <Text style={styles.cepError}>
+            CEP não encontrado. Verifique e tente novamente.
+          </Text>
+        )}
 
         <View style={styles.addressContainer}>
           {renderAddressInput("UF", endereco?.uf, null, "uf")}
@@ -153,7 +168,7 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     width: "47.5%",
-    backgroundColor: Colors.dark.tint,
+    backgroundColor: Colors.light.tint,
     paddingLeft: 10,
     paddingRight: 10,
     borderRadius: 3,
@@ -177,6 +192,11 @@ const styles = StyleSheet.create({
   addressLabel: {
     fontSize: 16,
     paddingBottom: 5,
+  },
+  cepError: {
+    color: Colors.light.tint,
+    fontSize: 13,
+    marginTop: 2,
   },
 });
 

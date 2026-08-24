@@ -31,6 +31,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_payments_abacatepay_id
 -- auditoria: SELECT reference_id, COUNT(*) FROM wallet_transactions WHERE
 -- type='credit' GROUP BY reference_id HAVING COUNT(*) > 1;
 
-INSERT INTO schema_migrations (version, name, applied_at)
-VALUES (11, 'idempotencia_financeira', NOW())
+INSERT INTO schema_migrations (version, description)
+VALUES ('11', 'idempotencia_financeira')
 ON CONFLICT DO NOTHING;

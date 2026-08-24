@@ -77,7 +77,7 @@ export default function LiveTrackingReadonly({
               setDeliveryLocation(data.payload);
             }
           } catch (e) {
-            console.log("Error parsing WS message:", e);
+            // Payload não-JSON (keepalive etc.) — ignora.
           }
         };
 

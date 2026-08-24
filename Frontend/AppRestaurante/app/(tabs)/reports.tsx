@@ -73,7 +73,7 @@ export default function ReportsScreen() {
     >
       <View style={styles.card}>
         <Text style={styles.cardLabel}>Pedidos Hoje</Text>
-        <Text style={[styles.cardValue, { color: "#EA1D2C" }]}>{stats.todayOrders}</Text>
+        <Text style={[styles.cardValue, { color: "#DC2626" }]}>{stats.todayOrders}</Text>
       </View>
 
       <View style={styles.card}>

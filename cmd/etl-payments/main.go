@@ -276,7 +276,8 @@ func paymentFromDoc(doc bson.M) *models.Payment {
 	p.TicketURL = getStr("ticket_url")
 	p.AbacatePayID = getStr("abacatepay_id")
 	p.CardLastDigits = getStr("card_last_digits")
-	p.CardToken = getStr("card_token")
+	// CardToken NÃO é migrado: PAN/dados sensíveis de cartão não podem ser
+	// copiados para o novo banco (PCI). Mantém apenas os últimos dígitos.
 	if n := toI64(doc["installments"]); n > 0 {
 		p.Installments = int(n)
 	}

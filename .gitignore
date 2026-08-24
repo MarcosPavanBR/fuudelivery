@@ -469,3 +469,8 @@ etl-orders
 backups/
 *.sql.gz
 *db_backup*.json
+
+# Diretorios locais de ferramentas
+.opencode/
+.pg-embed/
+tmp/

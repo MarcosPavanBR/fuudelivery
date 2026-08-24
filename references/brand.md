@@ -1,5 +1,10 @@
 # FuuDelivery — Identidade Visual
 
+> **⚠️ OBSOLETO (2026-08-24):** este documento descreve a paleta antiga (`#EA1D2C`).
+> A identidade oficial vigente está em **`brand/README.md`** + **`brand/tokens.ts`** +
+> **`brand/logos/`** (vermelho `#DC2626`, wordmark "FUUD ELIVERY" com scooter).
+> Use aquele diretório como fonte única da verdade.
+
 ## Marca
 
 ### Logomarca (Icone)

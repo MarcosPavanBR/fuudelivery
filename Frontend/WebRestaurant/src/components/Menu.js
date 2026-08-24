@@ -27,11 +27,13 @@ const TopMenu = ({ toggleMenu, isOpen }) => {
     try {
       await api.put("/establishments/status/handler/" + (user?.establishment_id || user?.id));
       await refreshOpen();
+      // Decisão pelo valor clicado (res): usar openEstablishment do closure
+      // mostrava toast invertido (estado stale antes do refresh).
+      if (res) toast.success(Texts.establishment_open);
+      else toast.error("Seu estabelecimento foi fechado.");
     } catch (e) {
-      console.error(e);
+      toast.error("Não foi possível alterar o status agora.");
     }
-    if (res && openEstablishment) toast.success(Texts.establishment_open);
-    else toast.error("Seu estabelecimento foi fechado.");
   };
 
   return (

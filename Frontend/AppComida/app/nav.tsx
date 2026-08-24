@@ -60,7 +60,7 @@ export default function NavStack() {
       <Stack.Screen
         name="location"
         options={{
-          title: Texts.metodos_pagamentos,
+          title: "Endereço de Entrega",
           presentation: "modal",
         }}
       />

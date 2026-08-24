@@ -11,18 +11,29 @@
     "splash": {
       "image": "./assets/images/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#DC2626"
     },
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.fuudelivery.entrega"
+      "bundleIdentifier": "com.fuudelivery.entrega",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "O FuuDelivery usa sua localização para encontrar entregas próximas e navegar até o restaurante e o cliente.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "O FuuDelivery usa sua localização em segundo plano para rastrear a entrega em andamento e manter o cliente informado.",
+        "UIBackgroundModes": ["location"]
+      }
     },
     "android": {
       "package": "com.fuudelivery.entrega",
       "versionCode": 2,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#DC2626"

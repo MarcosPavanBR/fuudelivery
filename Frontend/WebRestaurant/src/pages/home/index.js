@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { toast } from "react-toastify";
 import Board from "../../components/Board";
 import DashboardCharts from "../../components/DashboardCharts";
 import MenuLayout from "../../components/Menu";
@@ -14,6 +15,7 @@ const columns = [
 
 const Home = () => {
   const [tasks, setTasks] = useState([]);
+  const [loadError, setLoadError] = useState(false);
   const { getUser, socketMessage, fmode } = useAuth();
   const user = getUser();
 
@@ -21,9 +23,13 @@ const Home = () => {
     if (!user) return;
     try {
       if (verifyFmode && !fmode) return;
-      setTasks(await ordersModels.getOrders(getUser().id));
+      // Mesma chave do DashboardCharts: establishment.id quando existir —
+      // antes o Kanban usava user.id e divergia do dashboard.
+      const establishmentId = getUser()?.establishment?.id || getUser().id;
+      setTasks(await ordersModels.getOrders(establishmentId));
+      setLoadError(false);
     } catch (e) {
-      console.error(e);
+      setLoadError(true);
     }
   }
 
@@ -42,13 +48,23 @@ const Home = () => {
   const onDragEnd = async (result) => {
     const { destination, source, draggableId } = result;
     if (!destination) return;
+    // Reordenação dentro da mesma coluna não muda status — não chama a API.
+    if (destination.droppableId === source.droppableId) return;
+
+    const previous = tasks;
+    // Update otimista + rollback: se a API falhar, o card volta para a
+    // coluna original (antes ficava preso na coluna errada em silêncio).
     setTasks(
       tasks.map((e) => {
         if (e.id === draggableId) return { ...e, column: destination.droppableId };
         return e;
       })
     );
-    await ordersModels.alterStatus(destination.droppableId, draggableId);
+    const ok = await ordersModels.alterStatus(destination.droppableId, draggableId);
+    if (!ok) {
+      setTasks(previous);
+      toast.error("Não foi possível mover o pedido. Tente novamente.");
+    }
   };
 
   return (
@@ -60,6 +76,19 @@ const Home = () => {
           <h2 className="text-xl font-bold text-gray-900">{Texts.meus_pedidos}</h2>
         </div>
       </div>
+      {loadError && (
+        <div className="mb-4 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+          <span className="text-sm text-red-700">
+            Não foi possível carregar os pedidos. Verifique sua conexão.
+          </span>
+          <button
+            onClick={() => init()}
+            className="rounded-md bg-[#DC2626] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#B91C1C]"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      )}
       <Board tasks={tasks} columns={columns} onDragEnd={onDragEnd} />
     </MenuLayout>
   );

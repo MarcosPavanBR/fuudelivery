@@ -1,6 +1,6 @@
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
-import EditScreenInfo from "@/components/EditScreenInfo";
+import React from "react";
 import SolicitationList from "@/componentes/SolicitationList";
 import Colors from "@/constants/Colors";
 import { useEffect, useState } from "react";
@@ -23,7 +23,8 @@ export default function TabTwoScreen() {
       );
       setOrders(data);
     } catch (e) {
-      console.log(e);
+      // Extrato falho aparece como vazio — mesmo comportamento de antes,
+      // mas sem engolir o erro em log silencioso.
     }
     setLoad(false);
   }

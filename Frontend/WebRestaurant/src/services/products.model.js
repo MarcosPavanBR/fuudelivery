@@ -12,12 +12,10 @@ async function deleteProduct(id) {
 }
 
 async function getProducts(id) {
-  try {
-    const { data } = await api.get("/products/" + id);
-    return data;
-  } catch (e) {
-    return [];
-  }
+  // Propaga erro: engolir fazia o cardápio aparecer vazio como se não
+  // houvesse produtos (falha de rede virava dado).
+  const { data } = await api.get("/products/" + id);
+  return data;
 }
 
 export default {

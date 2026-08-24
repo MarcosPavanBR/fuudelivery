@@ -1,29 +1,27 @@
 import api from "./api";
 
 async function getOrders(id) {
-  try {
-    const { data } = await api.get("/orders/" + id);
+  // Propaga o erro: engolir aqui fazia o Kanban mostrar "Nenhum pedido"
+  // quando a API estava fora (falha silenciosa virava dado).
+  const { data } = await api.get("/orders/" + id);
 
-    return data
-      .filter((e) => {
-        // Exclui pedidos finalizados pelo entregador (já saiu do Kanban)
-        if (e.deliveryman && e.deliveryman.status === "FINISHED") {
-          return false;
-        }
-        return true;
-      })
-      .map((e) => {
-        return {
-          id: e._id,
-          column: e.status,
-          data: {
-            ...e,
-          },
-        };
-      });
-  } catch (e) {
-    return [];
-  }
+  return data
+    .filter((e) => {
+      // Exclui pedidos finalizados pelo entregador (já saiu do Kanban)
+      if (e.deliveryman && e.deliveryman.status === "FINISHED") {
+        return false;
+      }
+      return true;
+    })
+    .map((e) => {
+      return {
+        id: e._id,
+        column: e.status,
+        data: {
+          ...e,
+        },
+      };
+    });
 }
 
 async function alterStatus(droppableId, draggableId) {
@@ -34,7 +32,6 @@ async function alterStatus(droppableId, draggableId) {
     });
     return true;
   } catch (e) {
-    console.error(e);
     return false;
   }
 }

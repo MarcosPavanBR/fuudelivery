@@ -10,20 +10,30 @@ import {
   StyleSheet,
   SafeAreaView,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 
 const RegisterScreen = ({ setRegister }: any) => {
-  const [email, setEmail] = useState("admin@admin.com");
-  const [password, setPassword] = useState("admin123");
-  const [name, setName] = useState("Delivery man");
-  const [phone, setPhone] = useState("31982442222");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
   const [load, setLoad] = useState(false);
   const { register } = useAuthApi();
 
   const handleLogin = async () => {
+    if (!email.trim() || !password.trim() || !name.trim() || !phone.trim()) {
+      Alert.alert("", "Preencha todos os campos para se cadastrar.");
+      return;
+    }
     setLoad(true);
-    register(email, password, name, phone);
-    setLoad(false);
+    try {
+      await register(email, password, name, phone);
+    } catch (e) {
+      // Mensagem já exibida pelo Alert no AuthContext.
+    } finally {
+      setLoad(false);
+    }
   };
 
   return (

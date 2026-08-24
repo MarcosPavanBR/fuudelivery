@@ -8,7 +8,7 @@ import {
 import { Text, View } from "@/components/Themed";
 import Colors from "@/constants/Colors";
 import OrderSummary from "@/components/OrderSummary";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useApi } from "@/contexts/ApiContext";
 import { useIsFocused } from "@react-navigation/native";
 import Texts from "@/constants/Texts";
@@ -26,7 +26,7 @@ export default function TabTwoScreen() {
   const navigation = useNavigation();
   const [myOrders, setMyOrders] = useState([]);
   const isFocused = useIsFocused();
-  const [intervalId, setIntervalId] = useState<any>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
   const [userHasPhone, setUserHasPhone] = useState<boolean | null>(null);
 
@@ -58,6 +58,17 @@ export default function TabTwoScreen() {
     navigation.navigate("cart");
   };
 
+  // Total real do pedido = soma dos itens + taxa de entrega.
+  // Antes exibia apenas a taxa de entrega como se fosse o total.
+  const orderTotal = (e: any) => {
+    const items = (e.cart || []).reduce(
+      (sum: number, item: any) =>
+        sum + (item.item?.Price || item.item?.price || 0) * (item.quantity || 1),
+      0
+    );
+    return items + (e.deliveryValue || 0);
+  };
+
   const toggleExpand = (orderId: string) => {
     setExpandedOrder(expandedOrder === orderId ? null : orderId);
   };
@@ -65,16 +76,17 @@ export default function TabTwoScreen() {
   useEffect(() => {
     if (isFocused) {
       getMyOrders();
-      const idinterval = setInterval(() => {
+      intervalRef.current = setInterval(() => {
         getMyOrders();
       }, Strings.wait_interval);
-
-      setIntervalId(idinterval);
     }
 
     return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
+      // useRef garante o ID atual no cleanup (useState guardava valor stale
+      // e o intervalo continuava rodando com a aba fora de foco).
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
     };
   }, [isFocused]);
@@ -198,7 +210,7 @@ export default function TabTwoScreen() {
 
                   <Text style={[styles.sectionTitle, { marginTop: 10 }]}>Total</Text>
                   <Text style={styles.totalText}>
-                    {helpers.formatCurrency(e.deliveryValue || 0)}
+                    {helpers.formatCurrency(orderTotal(e))}
                   </Text>
 
                   {e.status === "FINISHED" && (

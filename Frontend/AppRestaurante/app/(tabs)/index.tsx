@@ -154,7 +154,7 @@ export default function OrdersScreen() {
     <View style={styles.container}>
       {loading ? (
         <View style={styles.center}>
-          <Feather name="refresh-cw" size={32} color="#EA1D2C" />
+          <Feather name="refresh-cw" size={32} color="#DC2626" />
           <Text style={styles.loadingText}>Carregando pedidos...</Text>
         </View>
       ) : orders.length === 0 ? (
@@ -202,7 +202,7 @@ const styles = StyleSheet.create({
   statusText: { fontSize: 12, fontWeight: "600" },
   customerName: { fontSize: 14, color: "#374151", marginBottom: 4 },
   orderTime: { fontSize: 13, color: "#6B7280", marginBottom: 4 },
-  orderTotal: { fontSize: 18, fontWeight: "700", color: "#EA1D2C", marginBottom: 12 },
+  orderTotal: { fontSize: 18, fontWeight: "700", color: "#DC2626", marginBottom: 12 },
   actions: { flexDirection: "row", gap: 8, justifyContent: "flex-end" },
   rejectBtn: {
     flexDirection: "row",
@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 10,
-    backgroundColor: "#EA1D2C",
+    backgroundColor: "#DC2626",
   },
   acceptText: { fontSize: 14, fontWeight: "600", color: "#FFF" },
   readyBtn: {

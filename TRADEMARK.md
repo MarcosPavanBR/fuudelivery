@@ -1,5 +1,10 @@
 # FuuDelivery - Marcas e Logotipos
 
+> **⚠️ NOTA (2026-08-24):** os arquivos `assets/logos/fuudelivery-*.png` citados
+> abaixo não existem no repositório. Os logotipos oficiais vivem em
+> **`brand/logos/`** (SVG) — ver `brand/README.md` para a identidade vigente
+> (vermelho `#DC2626`).
+
 ## Sobre
 
 Este documento descreve as marcas registradas, logotipos e identidade visual do FuuDelivery.

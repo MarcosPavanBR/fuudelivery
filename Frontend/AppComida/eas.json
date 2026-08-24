@@ -19,8 +19,7 @@
     },
     "production": {
       "android": {
-        "buildType": "app-bundle",
-        "withoutCredentials": true
+        "buildType": "app-bundle"
       },
       "prebuildCommand": "npx expo prebuild --clean --platform android",
       "channel": "production"

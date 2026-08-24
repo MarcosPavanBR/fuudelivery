@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from "react";
-import api from "../services/api";
+import api, { getApiBaseUrl } from "../services/api";
 
 import Strings from "../constants/Strings";
 import { jwtDecode } from "jwt-decode";
@@ -36,7 +36,8 @@ export const AuthProvider = ({ children }) => {
 
   // Só conecta WebSocket após login válido
   const getWsBaseUrl = () => {
-    const apiUrl = api.defaults.baseURL || "https://fuudelivery-api-8y6l.onrender.com";
+    // Fonte única: services/api.js (lê VITE_API_URL do .env).
+    const apiUrl = api.defaults.baseURL || getApiBaseUrl();
     return apiUrl.replace(/^http/, "ws").replace(/\/+$/, "");
   };
 

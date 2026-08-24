@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import MenuLayout from "../../components/Menu";
 import {
@@ -78,13 +79,13 @@ const ChangePasswordPage = () => {
     <MenuLayout>
       <div className="max-w-lg mx-auto">
         <div className="mb-6">
-          <a
-            href="/#/perfil"
+          <Link
+            to="/perfil"
             className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 mb-4 transition-colors"
           >
             <FiArrowLeft className="h-4 w-4" />
             Voltar ao perfil
-          </a>
+          </Link>
           <h1
             className="text-2xl font-bold"
             style={{ color: "var(--text-primary, #1A1A1A)" }}

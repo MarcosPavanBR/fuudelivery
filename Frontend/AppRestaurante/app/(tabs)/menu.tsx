@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
   productInfo: { flex: 1, padding: 12 },
   productName: { fontSize: 15, fontWeight: "700", color: "#1A1A1A", marginBottom: 2 },
   productDescription: { fontSize: 12, color: "#6B7280", marginBottom: 4 },
-  productPrice: { fontSize: 16, fontWeight: "700", color: "#EA1D2C" },
+  productPrice: { fontSize: 16, fontWeight: "700", color: "#DC2626" },
   categoriesRow: { flexDirection: "row", gap: 6, marginTop: 6, flexWrap: "wrap" },
   categoryBadge: {
     backgroundColor: "#FEF2F2",
@@ -150,5 +150,5 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 8,
   },
-  categoryText: { fontSize: 11, color: "#EA1D2C", fontWeight: "600" },
+  categoryText: { fontSize: 11, color: "#DC2626", fontWeight: "600" },
 });

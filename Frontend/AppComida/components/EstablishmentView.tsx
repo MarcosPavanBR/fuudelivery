@@ -17,7 +17,7 @@ const EstablishmentView = ({
       const result = await helpers.calcularDistancia(item.lat, item.long);
       setDistance(result);
     } catch (e) {
-      console.log(e);
+      // Sem GPS/permissão: card aparece sem distância.
     }
   }
   useEffect(() => {

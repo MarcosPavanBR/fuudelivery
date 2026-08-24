@@ -17,7 +17,7 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: "#EA1D2C",
+        tabBarActiveTintColor: "#DC2626",
         headerShown: true,
         tabBarStyle: {
           paddingBottom: Platform.OS === "android" ? 5 : insets.bottom - 10,

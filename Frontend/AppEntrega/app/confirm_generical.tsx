@@ -34,7 +34,7 @@ export default function ConfirmGenerical() {
     if (hasCode === code) {
       handlerConfirm();
     } else {
-      console.log(code);
+      // NÃO logar o código digitado (dado sensível de confirmação).
       Alert.alert("", Texts.codigo_errado);
     }
   }
@@ -141,8 +141,7 @@ const styles = StyleSheet.create({
   },
   containermine: {
     borderBottomWidth: 3,
-    borderColor: "red",
-    borderBottomColor: "red",
+    borderBottomColor: Colors.light.tint,
     marginTop: 30,
   },
   textTwo: {

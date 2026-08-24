@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
   },
   btns: {
     width: "65%",
-    backgroundColor: Colors.dark.tint,
+    backgroundColor: Colors.light.tint,
     paddingLeft: 10,
     paddingRight: 10,
     borderRadius: 3,

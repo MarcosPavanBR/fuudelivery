@@ -12,8 +12,7 @@
     "react-modal": "^3.16.3",
     "react-router-dom": "^6.30.0",
     "react-toastify": "^11.0.5",
-    "react-use-websocket": "^4.8.1",
-    "web-vitals": "^2.1.4"
+    "react-use-websocket": "^4.8.1"
   },
   "scripts": {
     "dev": "vite",

@@ -39,6 +39,30 @@ export default function OnboardingScreen() {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
+  // Geocodifica o endereço via Nominatim/OpenStreetMap (gratuito, sem chave).
+  // Sem isso o restaurante era criado com lat/long 0,0 e o cálculo de
+  // distância/taxa de entrega quebrava para ele.
+  async function geocodeAddress(): Promise<{ lat: number; lng: number } | null> {
+    try {
+      const query = encodeURIComponent(
+        `${form.address.trim()}, ${form.city.trim()}, ${form.state.trim()}, Brasil`
+      );
+      const { data } = await api.get(
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${query}`,
+        { headers: { "User-Agent": "FuuDelivery/1.0" }, timeout: 8000 }
+      );
+      if (Array.isArray(data) && data.length > 0) {
+        return {
+          lat: parseFloat(data[0].lat),
+          lng: parseFloat(data[0].lon),
+        };
+      }
+    } catch (e) {
+      // Tratado pelo chamado (Alert).
+    }
+    return null;
+  }
+
   const handleSubmit = async () => {
     if (!form.name.trim()) {
       Alert.alert("Erro", "Nome do restaurante é obrigatório");
@@ -51,6 +75,15 @@ export default function OnboardingScreen() {
 
     setLoading(true);
     try {
+      const coords = await geocodeAddress();
+      if (!coords) {
+        Alert.alert(
+          "Endereço não localizado",
+          "Não conseguimos encontrar o endereço no mapa. Revise cidade/estado ou simplifique o endereço (ex.: \"Av. Paulista, 1000\")."
+        );
+        setLoading(false);
+        return;
+      }
       const user = getUserData();
       const res = await api.post("/establishments", {
         name: form.name.trim(),
@@ -59,8 +92,8 @@ export default function OnboardingScreen() {
         address: form.address.trim(),
         city: form.city.trim(),
         state: form.state.trim(),
-        latitude: 0,
-        longitude: 0,
+        latitude: coords.lat,
+        longitude: coords.lng,
         status: "open",
         delivery_fee: parseFloat(form.delivery_fee) || 5,
         min_order: parseFloat(form.min_order) || 20,

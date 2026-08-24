@@ -21,6 +21,13 @@ func generateSecureCode() string {
 	return string(code)
 }
 
+// canManagePickupCode restringe códigos de retirada a quem de fato participa
+// da entrega: dono do estabelecimento (gera/consulta) ou admin. Sem isso,
+// qualquer autenticado podia gerar/ler o código de pedidos alheios.
+func canManagePickupCode(c *fiber.Ctx, establishmentID int64) bool {
+	return canActOnEstablishment(c, establishmentID)
+}
+
 func GeneratePickupCode(c *fiber.Ctx) error {
 	var req struct {
 		OrderID string `json:"order_id"`
@@ -32,6 +39,10 @@ func GeneratePickupCode(c *fiber.Ctx) error {
 	doc, err := findOrderByLegacyID(req.OrderID)
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Order not found"})
+	}
+
+	if !canManagePickupCode(c, doc.EstablishmentID) {
+		return c.Status(403).JSON(fiber.Map{"error": "Sem permissão para este pedido"})
 	}
 
 	doc.PickupCode = generateSecureCode()
@@ -60,6 +71,10 @@ func ValidatePickupCode(c *fiber.Ctx) error {
 		return c.Status(404).JSON(fiber.Map{"error": "Order not found"})
 	}
 
+	if !canManagePickupCode(c, doc.EstablishmentID) {
+		return c.Status(403).JSON(fiber.Map{"error": "Sem permissão para este pedido"})
+	}
+
 	if doc.PickupCode == "" {
 		return c.Status(400).JSON(fiber.Map{"error": "Nenhum código de retirada gerado"})
 	}
@@ -84,6 +99,10 @@ func GetPickupCode(c *fiber.Ctx) error {
 	doc, err := findOrderByLegacyID(orderID)
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Order not found"})
+	}
+
+	if !canManagePickupCode(c, doc.EstablishmentID) {
+		return c.Status(403).JSON(fiber.Map{"error": "Sem permissão para este pedido"})
 	}
 
 	generatedAt := ""

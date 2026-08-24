@@ -85,17 +85,17 @@ export const ApiCartProvider: React.FC<ApiCartProviderProps> = ({
   };
 
   const addCart = (item: object) => {
-    setCart([...cart, { ...item, id: helpers.generateId(15) }]);
+    // Update funcional: evita closure stale ao adicionar vários itens em
+    // sequência (ex.: "repetir pedido"), que fazia apenas o último entrar.
+    setCart((prev) => [...prev, { ...item, id: helpers.generateId(15) }]);
   };
 
   const removeCart = (item: any) => {
-    const final = cart.filter((e: any) => e.id !== item.id);
-    setCart(final);
+    setCart((prev) => prev.filter((e: any) => e.id !== item.id));
   };
 
   const editCart = (item: any) => {
-    const final = cart.map((e: any) => (e.id === item.id ? item : e));
-    setCart(final);
+    setCart((prev) => prev.map((e: any) => (e.id === item.id ? item : e)));
   };
 
   const validDelivery = () => {
@@ -127,7 +127,7 @@ export const ApiCartProvider: React.FC<ApiCartProviderProps> = ({
       try {
         setLocation(JSON.parse(locs));
       } catch (e) {
-        console.log("[STORAGE] Falha ao ler localização salva", e);
+        // Localização salva corrompida — ignora e segue com default.
       }
     }
   }
@@ -149,9 +149,11 @@ export const ApiCartProvider: React.FC<ApiCartProviderProps> = ({
       if (dist) {
         const distVal = await getValueDelivery(dist, establishment.id);
         setDeliveryValue(distVal);
+      } else {
+        setDeliveryValue(null);
       }
     } catch (e) {
-      console.log(e);
+      setDeliveryValue(null);
     }
   }
 
@@ -191,7 +193,10 @@ export const ApiCartProvider: React.FC<ApiCartProviderProps> = ({
 
   useEffect(() => {
     init();
-  }, []);
+    // Recalcula distância/taxa sempre que o estabelecimento mudar — antes,
+    // o valor de entrega do restaurante selecionado anteriormente (ou do
+    // default) era enviado no pedido.
+  }, [establishment]);
 
   return (
     <ApiContext.Provider

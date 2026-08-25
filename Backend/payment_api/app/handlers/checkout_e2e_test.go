@@ -438,10 +438,11 @@ func TestCheckoutE2E_AdminEndpoints(t *testing.T) {
 
 	// O approve agora dispara publishPaymentApproved em goroutine (split +
 	// crédito da carteira). Aguarda o crédito assíncrono chegar para o resto
-	// do teste ser determinístico.
+	// do teste ser determinístico. Split default 85% sobre Amount 10000
+	// (centavos) => crédito de 8500 na carteira seedada com 8500.
 	require.Eventually(t, func() bool {
 		w := getWalletByUser(t, 42)
-		return w.Balance >= 8585.0 // seed 8500 + split 85.00
+		return w.Balance >= 17000.0 // seed 8500 + split 8500
 	}, 5*time.Second, 50*time.Millisecond, "split deve ser creditado após aprovação")
 
 	// Reaprovar um pagamento ja confirmado deve dar 409
@@ -499,8 +500,8 @@ func TestCheckoutE2E_AdminEndpoints(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&wallets))
 	require.Len(t, wallets, 1)
 	require.Equal(t, "establishment", wallets[0]["owner_type"])
-	// 8500 (seed) + 85.00 do split creditado no approve
-	require.Equal(t, float64(8585), wallets[0]["balance"])
+	// 8500 (seed) + 8500 do split (85% sobre Amount 10000) creditado no approve
+	require.Equal(t, float64(17000), wallets[0]["balance"])
 
 	// --- GET /chargebacks (ledger para o painel Financeiro) ---
 	// Seeds: carteiras + 1 credito (top-up do cliente) + 1 debito (chargeback).
@@ -530,17 +531,18 @@ func TestCheckoutE2E_AdminEndpoints(t *testing.T) {
 	first := entries[0].(map[string]interface{})
 	require.Equal(t, "credit", first["type"])
 	require.Equal(t, "charge-admin-001", first["payment_id"])
+	require.Equal(t, float64(8500), first["amount"], "split default 85% sobre 10000")
 
 	// owner_type enriquecido da carteira do estabelecimento 42
 	require.Equal(t, "establishment", first["owner_type"])
 
-	// Resumo agregado (sem filtro): creditos 85.0 (split) + 100.0 (topup),
+	// Resumo agregado (sem filtro): creditos 8500 (split) + 100.0 (topup),
 	// debitos 85.0
 	summary, hasSummary := chargebacks["summary"].(map[string]interface{})
 	require.True(t, hasSummary, "resposta deve incluir summary agregado")
-	require.InDelta(t, 185.0, summary["credit_total"], 0.01, "total de creditos do ledger")
+	require.InDelta(t, 8600.0, summary["credit_total"], 0.01, "total de creditos do ledger")
 	require.InDelta(t, 85.0, summary["debit_total"], 0.01, "total de debitos do ledger")
-	require.InDelta(t, 100.0, summary["net"], 0.01, "saldo liquido = creditos - debitos")
+	require.InDelta(t, 8515.0, summary["net"], 0.01, "saldo liquido = creditos - debitos")
 
 	// Resumo reflete os filtros: so debitos -> credit_total 0 e net negativo
 	req = httptest.NewRequest(http.MethodGet, "/chargebacks?type=debit", nil)

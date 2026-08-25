@@ -38,9 +38,13 @@ import (
 // mongoCtx devolve um contexto com timeout para as operações legadas de
 // dual-write no MongoDB. (Definição única — movida para cá no corte 4;
 // admin.go usa a mesma função.)
+//
+// O cancelamento é agendado via time.AfterFunc em vez de defer: o helper
+// retorna o contexto para o chamador, então o cancel precisa disparar
+// DEPOIS que a operação Mongo rodar — o timer de 5s cuida disso sozinho.
 func mongoCtx() context.Context {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	_ = cancel
+	ctx, cancel := context.WithCancel(context.Background())
+	time.AfterFunc(5*time.Second, cancel)
 	return ctx
 }
 

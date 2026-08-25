@@ -57,7 +57,12 @@ func ConnectDatabase() {
 		&Client{},
 		&RefreshToken{},
 	); err != nil {
-		log.Printf("[CRITICAL] Falha no AutoMigrate do auth_api: %v", err)
+		// FALHA FATAL: sem estas tabelas o login/registro quebram em produção
+		// com "Failed to generate tokens" (incidente 2026-08-24: refresh_tokens
+		// faltava e o erro passou despercebido porque só logava). É melhor o
+		// serviço não subir do que subir quebrado — o Render reinicia e o erro
+		// fica visível nos logs de deploy.
+		panic(fmt.Sprintf("[FATAL] AutoMigrate do auth_api falhou: %v", err))
 	}
 
 	// Atualiza DeliveryMan com campos do motor de despacho se nao existirem

@@ -16,7 +16,6 @@ import {
 } from "react-native";
 
 const LoginScreen = () => {
-  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isRegister, setIsRegister] = useState(false);
@@ -25,17 +24,26 @@ const LoginScreen = () => {
   const { login } = useApi();
 
   const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      Alert.alert("", "Preencha e-mail e senha.");
+    // Auth do cliente é por TELEFONE + senha (endpoints /clients/*).
+    // NÃO usar /users/* — esses são para donos de restaurante.
+    if (!phone.trim() || !password.trim()) {
+      Alert.alert("", "Preencha telefone e senha.");
+      return;
+    }
+    if (isRegister && !name.trim()) {
+      Alert.alert("", "Preencha seu nome.");
       return;
     }
 
     setIsLoading(true);
     try {
-      const endpoint = isRegister ? "/users/register" : "/users/login";
+      // Normaliza o telefone para só dígitos — garante que o valor do
+      // login bata com o do registro independente da formatação digitada.
+      const normalizedPhone = phone.replace(/\D/g, "");
+      const endpoint = isRegister ? "/clients/register" : "/clients/login";
       const body = isRegister
-        ? { email: email.trim(), password, name: name.trim(), phone: phone.trim() }
-        : { email: email.trim(), password };
+        ? { name: name.trim(), phone: normalizedPhone, password }
+        : { phone: normalizedPhone, password };
 
       const response = await api.post(endpoint, body);
       const { token } = response.data;
@@ -86,26 +94,13 @@ const LoginScreen = () => {
             />
           )}
 
-          {isRegister && (
-            <TextInput
-              style={styles.input}
-              placeholder="Telefone (ex.: 11 99999-9999)"
-              placeholderTextColor={Colors.light.tabIconDefault}
-              onChangeText={setPhone}
-              value={phone}
-              keyboardType="phone-pad"
-            />
-          )}
-
           <TextInput
             style={styles.input}
-            placeholder="E-mail"
+            placeholder="Telefone (ex.: 11 99999-9999)"
             placeholderTextColor={Colors.light.tabIconDefault}
-            onChangeText={setEmail}
-            value={email}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoComplete="email"
+            onChangeText={setPhone}
+            value={phone}
+            keyboardType="phone-pad"
           />
 
           <TextInput

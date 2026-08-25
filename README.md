@@ -1,8 +1,37 @@
 # FuuDelivery
 
-Plataforma de delivery completa com pagamento integrado, split, carteira digital, cashback, cupons, chat, rastreio e painel de pagamentos.
+![CI Gate](https://github.com/MarcosPavanBR/fuudelivery/actions/workflows/ci.yml/badge.svg)
 
-Fork do [vercardapio/appdelivery](https://github.com/carloshomar/appdelivery) estendido com sistema de pagamentos e infra de producao no Render.
+Plataforma de delivery completa: pedidos, pagamento integrado (PIX/Cartão) com split, carteira digital, cashback, cupons, chat em tempo real, rastreio de entrega com dispatch engine e painéis web + apps mobile.
+
+Fork do [vercardapio/appdelivery](https://github.com/carloshomar/appdelivery) estendido com sistema de pagamentos próprio, estratégia de banco único PostgreSQL e infraestrutura de produção (Render + Docker/VPS).
+
+## Funcionalidades
+
+### Pedidos e catálogo
+- Cardápio com categorias, produtos e adicionais (relacionamento N:N)
+- Pedidos agendados, repetição de pedido, cupons e programa de fidelidade
+- Reviews e batches (pedidos em lote para o restaurante)
+- Busca full-text (`/search`) sobre produtos e estabelecimentos
+- Horário de funcionamento, destaques e checagem de estabelecimento aberto
+
+### Pagamentos
+- PIX e Cartão via [AbacatePay](https://abacatepay.com), com webhook HMAC-validado
+- Split de pagamento no approve: 5% plataforma, 85% estabelecimento, taxa de entrega
+- Score de risco (4 fatores: valor, frequência, histórico, horário) → aprovação automática ou manual
+- Carteira digital com operações atômicas e ledger imutável (`wallet_transactions`)
+- Idempotência financeira (migration `11_idempotencia_financeira.sql`), chargebacks com evidência e payout requests
+- Cashback, cupons e saque via PIX
+
+### Dispatch Engine (entregas)
+- Matching engine com score de proximidade e densidade de entregadores
+- Calibração automática de raios de zona (job 24h)
+- Decay de split baseado em métricas de zona
+- Dead-letter queue (DLQ) para pedidos não matchados + batch de pedidos
+
+### Comunicação
+- WebSocket nativo (não socket.io): atualizações de pedidos/entregas em tempo real e chat por pedido
+- Fila Redis Streams (`XADD`/`XREADGROUP`, consumer groups, retry, DLQ) com fallback in-memory via Go channels quando `REDIS_URL` não está configurado
 
 ## Arquitetura
 
@@ -10,51 +39,54 @@ Fork do [vercardapio/appdelivery](https://github.com/carloshomar/appdelivery) es
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        FRONTENDS                                    │
 ├─────────────────┬─────────────────┬─────────────────────────────────┤
-│ AppComida       │ AppEntrega      │ WebRestaurant                   │
-│ React Native    │ React Native    │ React + Tailwind                │
-│ (Expo)          │ (Expo)          │ (Webpack)                       │
-│ App do Cliente  │ App Entregador  │ Kanban + Cardápio + Carteira    │
-├─────────────────┴─────────────────┴─────────────────────────────────┤
-│ WebAdmin                │ PaymentPanel                              │
-│ React                   │ HTML/JS standalone                        │
-│ Painel Administrativo   │ Painel de Aprovação de Pagamentos         │
-└─────────────────────────┴───────────────────────────────────────────┘
+│ AppComida       │ AppEntrega      │ AppRestaurante                  │
+│ React Native    │ React Native    │ React Native                    │
+│ (Expo SDK 54)   │ (Expo SDK 54)   │ (Expo SDK 54)                   │
+│ App do Cliente  │ App Entregador  │ App do Restaurante              │
+├─────────────────┴─────────────────┼─────────────────────────────────┤
+│ WebRestaurant                     │ WebAdmin                        │
+│ React 19 + Vite 6 + Tailwind 4    │ React 19 + Vite 6 + Tailwind 4  │
+│ Kanban + Cardápio + PWA           │ Dashboard + Financeiro          │
+└───────────────────────────────────┴─────────────────────────────────┘
                               │
-                              │ HTTP / WebSocket
+                              │ HTTP / WebSocket nativo
                               ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    MONOLITH (cmd/fuudelivery)                       │
-│                    Go 1.23 + Fiber v2                               │
+│                    Go 1.25 + Fiber v2                               │
 │                                                                     │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ │
-│  │  Auth    │ │ Orders   │ │ Delivery │ │ Payment  │ │  Chat    │ │
-│  │  API     │ │ API      │ │ API      │ │ API      │ │  API     │ │
+│  │ Auth API │ │ Orders   │ │ Delivery │ │ Payment  │ │  Chat    │ │
+│  │          │ │ API      │ │ API      │ │ API      │ │  API     │ │
 │  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘ │
 │                                                                     │
 │  ┌──────────────────────────────────────────────────────────────┐  │
 │  │  Dispatch Engine (matching + calibração + split decay)       │  │
-│  └──────────────────────────────────────────────────────────────┘  │
-│                                                                     │
-│  ┌──────────────────────────────────────────────────────────────┐  │
+│  ├──────────────────────────────────────────────────────────────┤  │
 │  │  Queue (Redis Streams + consumer groups + DLQ + fallback)    │  │
+│  ├──────────────────────────────────────────────────────────────┤  │
+│  │  pkg/health (health checks) · /metrics (Prometheus)          │  │
 │  └──────────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────────┘
                               │
-                    ┌─────────┴─────────┐
-                    │                   │
-                    ▼                   ▼
-┌───────────────────────┐  ┌───────────────────────────────────────────┐
-│   PAGAMENTOS          │  │           INFRAESTRUTURA                   │
-│   (payment_api —      │  │                                           │
-│   embutido no         │  │  PostgreSQL (Supabase) — auth, pedidos    │
-│   monolito)           │  │  MongoDB (Atlas) — pagamentos, chat,      │
-│                       │  │               entregas, pedidos          │
-│   • PIX/Cartão        │  │  Redis (externo) — fila + cache           │
-│   • Carteiras         │  │  AbacatePay — gateway PIX/Cartão          │
-│   • Chargebacks       │  │  OSRM — rotas e cálculo de entrega        │
-│   • Aprovações        │  │  Supabase Storage — upload de imagens     │
-└───────────────────────┘  └───────────────────────────────────────────┘
+                     ┌────────┴─────────┐
+                     ▼                  ▼
+┌───────────────────────────┐  ┌─────────────────────────────────────┐
+│      INTEGRAÇÕES          │  │         INFRAESTRUTURA              │
+│                           │  │                                     │
+│  • AbacatePay — PIX/      │  │  PostgreSQL único (Supabase) —      │
+│    Cartão + webhook       │  │  TODOS os domínios (auth, pedidos,  │
+│  • OSRM — rotas/distância │  │  entregas, pagamentos, chat)        │
+│  • Supabase Storage —     │  │  MongoDB Atlas (opcional — apenas   │
+│    upload de imagens      │  │  dual-write legado até aposentar)   │
+│  • Asaas — wallet         │  │  Redis externo — fila + cache       │
+│                           │  │  + rate limit                       │
+└───────────────────────────┘  └─────────────────────────────────────┘
 ```
+
+**Banco único:** o PostgreSQL (Supabase) é o banco primário de todos os domínios. O MongoDB Atlas sobrevive apenas como *dual-write* legado opcional — basta não definir `MONGO_URI` para desligá-lo. A migração é feita pelos ETLs idempotentes `cmd/etl-orders` e `cmd/etl-payments`. Detalhes em [`docs/ARQUITETURA-BANCO-UNICO.md`](docs/ARQUITETURA-BANCO-UNICO.md).
+
+> Os serviços isolados `fuudelivery-payment` e `fuudelivery-payment-panel` foram **removidos do Render (2026-08)**: todas as rotas de pagamento vivem no monolito. O painel standalone foi arquivado em `legacy/PaymentPanel/` e substituído pela aba **Financeiro** do WebAdmin.
 
 ## Stack Tecnológica
 
@@ -62,419 +94,316 @@ Fork do [vercardapio/appdelivery](https://github.com/carloshomar/appdelivery) es
 
 | Tecnologia | Versão | Uso |
 |---|---|---|
-| **Go** | 1.23.0 | Linguagem principal do backend |
-| **Fiber** | v2 | Framework HTTP (inspirado em Express) |
-| **MongoDB** | Atlas | Banco para pagamentos, chat, entregas, pedidos |
-| **PostgreSQL** | Supabase | Banco para auth, usuários, estabelecimentos, zonas |
-| **Redis** | Provedor externo (`*.db.redis.io`) | Fila de mensagens (Streams + consumer groups) + cache |
-| **GORM** | v2 | ORM para PostgreSQL |
-| **go-redis** | v8 | Cliente Redis |
-| **golang-jwt** | v5 | Autenticação JWT |
-| **AbacatePay** | API | Gateway de pagamento (PIX + Cartão) |
+| **Go** | 1.25.0 | Linguagem principal (todos os go.mod do workspace) |
+| **Fiber** | v2 | Framework HTTP (+ contrib/websocket v1.3.4 para WS nativo) |
+| **PostgreSQL** | Supabase (pooler PgBouncer :6543) | Banco único primário |
+| **GORM** | v2 (v1.31.2 + driver/postgres v1.6.2) | ORM PostgreSQL com AutoMigrate no startup |
+| **go-redis** | v8 (v8.11.5) | Fila Redis Streams + cache + rate limit |
+| **golang-jwt** | v5 (v5.3.1, HS256) | Autenticação JWT + refresh tokens |
+| **mongo-driver** | v1.17.9 | Dual-write legado (opcional) |
+| **AbacatePay** | API REST | Gateway de pagamento (PIX + Cartão) |
+| **Asaas** | API REST | Wallet |
 | **OSRM** | API | Cálculo de rotas e distâncias |
-| **bcrypt** | - | Hash de senhas |
-| **testcontainers** | - | Testes de integração com MongoDB real |
+| **bcrypt** (golang.org/x/crypto) | - | Hash de senhas |
+| **testify + testcontainers-go** | v0.44 | Testes de integração com Postgres/Mongo reais |
+| **miniredis** | v2.38 | Redis em memória para testes da fila |
 
 ### Frontend
 
 | Tecnologia | Versão | Uso |
 |---|---|---|
-| **React** | 18.2 | WebRestaurant + WebAdmin + PaymentPanel |
-| **React Native** | Expo | AppComida + AppEntrega |
-| **Tailwind CSS** | 3.4 | Estilização dos web apps |
-| **Webpack** | 5.91 | Bundler dos web apps |
-| **Axios** | 1.6 | Cliente HTTP |
-| **react-router-dom** | 6.22 | Roteamento SPA |
-| **@hello-pangea/dnd** | 18.0 | Drag-and-drop (Kanban) |
-| **socket.io-client** | 4.7 | WebSocket (chat) |
-| **react-toastify** | 10.0 | Notificações toast |
-| **jwt-decode** | 4.0 | Decodificação de tokens JWT |
+| **React Native** | 0.81.5 + Expo SDK ~54 | AppComida, AppEntrega, AppRestaurante |
+| **expo-router** | ~6.0 | Navegação dos apps mobile |
+| **NativeWind** | 4.1 (+ Tailwind 3.4) | Estilização dos apps mobile |
+| **@maplibre/maplibre-react-native** | 11.3 | Mapas nos apps mobile |
+| **React** | ^19.1 | WebRestaurant + WebAdmin |
+| **Vite** | ^6.0 | Bundler/dev server dos web apps |
+| **Tailwind CSS** | ^4.1 (@tailwindcss/vite) | Estilização dos web apps |
+| **react-router-dom** | ^6.30 | Roteamento SPA |
+| **@hello-pangea/dnd** | ^18 | Drag-and-drop (Kanban) |
+| **react-use-websocket** | ^4.8 | WebSocket nativo (chat/tempo real) |
+| **axios** | ^1.6 | Cliente HTTP |
+| **Vitest** | ^4 (WebRestaurant) / ^3 (WebAdmin) | Testes unitários + Testing Library |
 
 ### Infra & CI/CD
 
 | Tecnologia | Uso |
 |---|---|
-| **Render** | Hosting (API monolito + 2 sites estáticos) |
-| **GitHub Actions** | CI/CD (build, test, lint, deploy) |
-| **Docker** | Containerização (desenvolvimento local) |
-| **EAS (Expo)** | Build de APKs Android |
-| **govulncheck** | Scan de vulnerabilidades Go |
-| **npm audit** | Scan de vulnerabilidades npm |
+| **Render** | Hosting (API Go + 2 sites estáticos) |
+| **Docker** | Multi-stage build + compose para VPS |
+| **GitHub Actions** | 7 workflows (CI, deploy, monitoramento, releases) |
+| **EAS (Expo)** | Build de APKs Android na nuvem |
+| **govulncheck + npm audit** | Scan de vulnerabilidades no CI |
+| **Dependabot** | Atualização semanal agrupada (gomod + npm) |
 
-## Serviços (Render)
+## Serviços em produção (Render)
 
 | Serviço | Tipo | URL |
 |---|---|---|
 | fuudelivery-api | Go web service (monolito) | https://fuudelivery-api-8y6l.onrender.com |
-| fuudelivery-web | Static site | https://fuudelivery-web.onrender.com |
-| fuudelivery-admin | Static site | https://fuudelivery-admin-lv7f.onrender.com |
+| fuudelivery-web | Static site (WebRestaurant) | https://fuudelivery-web.onrender.com |
+| fuudelivery-admin | Static site (WebAdmin) | https://fuudelivery-admin-lv7f.onrender.com |
 
-> Os serviços isolados `fuudelivery-payment` e `fuudelivery-payment-panel` foram
-> removidos (2026-08): todas as rotas de pagamento vivem no monolito.
-
-> **📌 Referência de URLs:** todos os links de produção (serviços, health checks,
-> CORS, apps mobile) estão organizados em [`references/URLS.md`](references/URLS.md).
-> O Redis NÃO é serviço Render — `REDIS_URL` aponta para provedor externo
+> **Referência canônica de URLs:** todos os links de produção (serviços, health checks,
+> CORS, apps mobile compilados) estão em [`references/URLS.md`](references/URLS.md).
+> Renomear serviços quebra clientes compilados — não renomeie.
+>
+> O Redis **não** é serviço Render — `REDIS_URL` aponta para provedor externo
 > (`*.db.redis.io`). Não há bloco `type: redis` no render.yaml.
-
-## Features
-
-### Pagamento
-- PIX e Cartão via AbacatePay
-- Split de pagamento: 5% plataforma, 85% restaurante, taxa de entrega
-- Score de risco: 4 fatores (valor, frequência, histórico, horário)
-- Aprovação automática (baixo risco) ou manual (alto risco)
-- Carteira digital com operações atômicas ($inc no MongoDB)
-- Cashback e cupons de desconto
-- Saque via PIX
-
-### Comunicação
-- Redis: fila via Streams (XAdd/XReadGroup) entre monolito e Payment Service, com retry e DLQ
-- WebSocket: atualizações em tempo real (pedidos, entregas, chat)
-- Go channels: fallback in-memory quando Redis não configurado
-
-### Dispatch Engine
-- Matching engine com score de proximidade e densidade de entregadores
-- Calibração automática de raios de zona (24h)
-- Decay de split baseado em métricas de zona
-- Dead-letter queue para pedidos não matchados
-- Batch de pedidos (batching)
-
-### Frontend
-- **AppComida** (React Native/Expo): app do cliente
-- **AppEntrega** (React Native/Expo): app do entregador
-- **WebRestaurant** (React + Tailwind): kanban, cardápio, carteira, relatórios, cadastro
-- **WebAdmin** (React): painel administrativo
-- **PaymentPanel** (HTML/JS): painel standalone de aprovação de pagamentos — conecta ao MONOLITO (o serviço isolado de pagamentos foi removido em 2026-08; não é deployado pelo render.yaml)
-
-### Segurança
-- JWT com validação de SigningMethod
-- Rate limiting: login 5req/min, pagamento 10req/min, carteira 20req/min
-- CORS restrito a domínios conhecidos
-- Senhas hasheadas com bcrypt
-- Wallet com operações atômicas (eliminação de race conditions)
-- CI com govulncheck e npm audit
 
 ## Estrutura do Projeto
 
 ```
 fuudelivery/
 ├── Backend/
-│   ├── Payment/              # Microserviço de pagamentos (aprovação, carteiras, chargebacks)
-│   │   ├── config/           # Configuração e variáveis de ambiente
-│   │   ├── consumers/        # Consumer Redis (Streams/XReadGroup)
-│   │   ├── handlers/         # Handlers HTTP (pagamentos, carteiras, chargebacks, relatórios)
-│   │   ├── middleware/       # JWT auth + rate limiting
-│   │   ├── models/          # Modelos de dados (Payment, Wallet, Chargeback, etc.)
-│   │   ├── queue/           # Fila Redis (Streams + retry + DLQ)
-│   │   ├── repository/      # Acesso a dados (MongoDB)
-│   │   └── services/        # Lógica de negócio (aprovação, risco, carteiras)
-│   ├── auth_api/            # Autenticação JWT, CRUD de usuários e estabelecimentos
-│   ├── payment_api/         # Gateway de pagamento (AbacatePay/PIX/Cartão)
-│   ├── orders_api/          # Pedidos, produtos, categorias, cupons, fidelidade
-│   ├── delivery_api/        # Rastreio de entregadores, matching engine
-│   ├── chat_api/            # Chat em tempo real
-│   └── storage/             # Upload de imagens (Supabase Storage)
+│   ├── auth_api/             # Usuários, clientes, estabelecimentos, entregadores, zonas, assinaturas, refresh tokens
+│   ├── orders_api/           # Pedidos, produtos, categorias, adicionais, cupons, fidelidade, reviews, pickup-code
+│   ├── delivery_api/         # Solicitações de entrega, extrato; Dispatch Engine (matching, auto-calibração, split decay)
+│   ├── payment_api/          # PIX/Cartão (AbacatePay), carteiras, chargebacks, split, webhook, Asaas wallet
+│   ├── chat_api/             # Chat por pedido via WebSocket
+│   └── storage/supabase.go   # Upload de imagens (Supabase Storage)
 ├── cmd/
-│   └── fuudelivery/         # Monolith principal (API Gateway)
-│       └── pkg/
-│           ├── health/      # Health checks (Postgres, MongoDB, Redis)
-│           ├── queue/       # Fila Redis Streams + fallback + DLQ
-│           ├── storage/     # Conexão MongoDB
-│           └── upload/      # Upload de imagens
+│   ├── fuudelivery/          # Monolito principal (aglutina os 5 APIs) + pkg interno:
+│   │                         #   health/ · queue/ · storage/ · upload/ · metrics/ · search/
+│   ├── etl-orders/           # ETL one-shot Mongo → Postgres (orders → order_documents)
+│   └── etl-payments/         # ETL one-shot Mongo → Postgres (payments/wallets/ledger)
+├── pkg/
+│   ├── health/               # Health checks compartilháveis (Postgres, Mongo, Redis)
+│   └── queue/                # Fila Redis Streams + DLQ + fallback in-memory (compartilhável)
 ├── Frontend/
-│   ├── AppComida/           # React Native/Expo — app do cliente
-│   ├── AppEntrega/          # React Native/Expo — app do entregador
-│   ├── WebRestaurant/       # React + Tailwind — kanban, cardápio, carteira
-│   ├── WebAdmin/            # React — painel administrativo
-│   └── PaymentPanel/        # HTML/JS — painel de pagamentos
-├── scripts/                 # Scripts auxiliares (keepalive, migração, seed)
-├── references/              # Documentação (segurança, gaps, testes, deploy)
-├── .github/workflows/       # CI/CD (ci.yml, deploy.yml, build-apps)
-├── Arquitetura/             # Diagramas (draw.io)
-├── brand/                   # Identidade visual e materiais comerciais
-├── render.yaml              # Configuração de deploy no Render
-├── docker-compose.yml       # Docker (desenvolvimento local)
-├── go.work                  # Go workspace (7 módulos)
-├── MANIFEST.md              # Manifesto do projeto
-└── README.md                # Este arquivo
+│   ├── AppComida/            # React Native/Expo — app do cliente (mapas MapLibre)
+│   ├── AppEntrega/           # React Native/Expo — app do entregador (i18n)
+│   ├── AppRestaurante/       # React Native/Expo — app do restaurante
+│   ├── WebRestaurant/        # React 19 + Vite 6 + Tailwind 4 — kanban, cardápio, carteira, PWA
+│   └── WebAdmin/             # React 19 + Vite 6 + Tailwind 4 — dashboard, pedidos, financeiro
+├── legacy/PaymentPanel/      # Painel standalone arquivado (substituído pelo Financeiro do WebAdmin)
+├── sql/                      # 13 migrações SQL versionadas + run_all.sh (ver seção Banco de Dados)
+├── scripts/                  # Build APKs, deploy VPS, seeds, migrações, checks de CI (28 itens)
+├── docs/                     # Arquitetura, banco de dados, deploy, segurança, FAQ, changelog
+├── references/               # Docs internos (URLs, roadmap, gaps, testes, release notes)
+├── .github/workflows/        # 7 workflows de CI/CD (ver seção CI/CD)
+├── .pg-embed/                # Binários PostgreSQL 18.3 locais (dev/testes sem Docker)
+├── Arquitetura/              # Diagramas (draw.io) e materiais visuais
+├── brand/                    # Identidade visual e materiais comerciais
+├── skills/fuudelivery-banco-unico/  # Regras obrigatórias p/ IA tocar no banco
+├── Dockerfile                # Multi-stage (builder Go + runtime alpine, usuário não-root)
+├── docker-compose.vps.yml    # Stack VPS: api + web-restaurant + web-admin + redis:7
+├── render.yaml               # Blueprint Render (3 serviços)
+├── Procfile                  # web: ./server
+├── go.work                   # Go workspace com 10 módulos
+└── MANIFEST.md · PRODUCTION.md · CONTRIBUTING.md · SECURITY.md · TRADEMARK.md
 ```
+
+Os módulos Go individuais seguem a convenção `app/{handlers,models,routes,dto,services}` (ex.: `Backend/payment_api/app/handlers/`).
+
+## Banco de Dados
+
+- **PostgreSQL único (Supabase)** com GORM AutoMigrate no startup + 13 migrações SQL versionadas em `sql/` aplicadas via `sql/run_all.sh` (controle pela tabela `schema_migrations`):
+  - `00_role_e_controle_migracoes` — role `app_backend` com least privilege + controle de migrações
+  - `01–04` — domínios: pedidos, entrega, pagamentos (carteiras, ledger, chargebacks, payout), chat
+  - `05_audit_log` + `06_rls_seguranca` — trilha de auditoria e Row Level Security
+  - `07–11` — tabelas órfãs, reparos legado, ledger kinds, idempotência financeira, refresh tokens
+- Dicionário completo de tabelas: [`docs/banco-de-dados.md`](docs/banco-de-dados.md)
+- Regras para alterar o schema (obrigatórias): [`skills/fuudelivery-banco-unico/SKILL.md`](skills/fuudelivery-banco-unico/SKILL.md)
+- Migração Mongo → Postgres: rode os binários `cmd/etl-orders` e `cmd/etl-payments` (idempotentes)
 
 ## Como Rodar
 
 ### Pré-requisitos
-- Go 1.23+
+- Go 1.25+
 - Node.js 20+
-- Docker (para MongoDB local)
-- variáveis de ambiente configuradas (ver abaixo)
+- Docker (para testes de integração) — ou `.pg-embed` para Postgres local sem Docker
+- Variáveis de ambiente (ver [`.env.example`](.env.example))
 
-### Backend (Docker — todos os serviços)
-
-```bash
-cd Backend
-docker compose up --build
-```
-
-### Backend (serviço individual — Monolith)
+### Backend (monolito)
 
 ```bash
+cp .env.example .env   # preencha JWT_SECRET e DB_CONNECTION_STRING (obrigatórios)
 cd cmd/fuudelivery
 go mod tidy
-go run main.go
+go run main.go          # porta 3000 (configurável via PORT)
 ```
 
-### Frontend (WebRestaurant)
+> Em `GO_ENV=production` o processo aborta o startup se `JWT_SECRET` ou `DB_CONNECTION_STRING` estiverem ausentes. Graceful shutdown de 10s.
+
+Health check: `GET /health` (Postgres/Mongo/Redis) · Métricas: `GET /metrics` (protegido por `METRICS_TOKEN`).
+
+### Frontends web
 
 ```bash
+# WebRestaurant (http://localhost:3000)
 cd Frontend/WebRestaurant
-npm install
-npm start
-```
-
-### Frontend (PaymentPanel) — arquivado
-
-O painel standalone foi **arquivado em `legacy/PaymentPanel/`** (2026-08).
-A funcionalidade equivalente está na aba **Financeiro** do WebAdmin.
-
-### Apps Mobile
-
-```bash
-cd Frontend/AppComida
-npm install
-npx expo start
-
-cd Frontend/AppEntrega
-npm install
-npx expo start
-```
-
-## Building APKs
-
-Os APKs são gerados via **EAS Build** (Expo Application Services), que compila na nuvem.
-
-### Pré-requisitos
-
-```bash
-# Instalar EAS CLI globalmente
-npm install -g eas-cli
-
-# Login na sua conta Expo
-eas login
-
-# Verificar que está logado
-eas whoami
-```
-
-### AppComida (App do Cliente)
-
-```bash
-cd Frontend/AppComida
-npx eas build --platform android --profile preview
-```
-
-O `preview` profile gera um **APK** (não AAB), pronto para instalar diretamente no Android.
-
-### AppEntrega (App do Entregador)
-
-```bash
-cd Frontend/AppEntrega
-npx eas build --platform android --profile preview
-```
-
-### Monitorar Builds
-
-```bash
-# Listar builds recentes
-eas build:list --platform android --limit 5
-```
-
-Ou acesse: https://expo.dev/accounts/pavanbr/projects/my-app/builds
-
-### Download do APK
-
-Após o build completar, o link de download aparece no terminal e no dashboard do Expo. O APK fica disponível por 30 dias.
-
-### Erros Comuns e Soluções
-
-#### ❌ `Plugin [id: 'expo-module-gradle-plugin'] was not found`
-
-**Causa:** O `expo prebuild` não gera o `settings.gradle` com autolinking correto porque:
-- Versões do `expo`, `expo-secure-store` e `expo-modules-core` estão desalinhadas no `package.json`
-- Um config plugin (como `withGradleWorkaround`) interfere no autolinking
-- Um patch do `patch-package` modifica arquivos Gradle que conflitam com o plugin
-
-**Solução:**
-```bash
-# 1. Alinhar versões com Expo
-npx expo install --check
-
-# 2. Regenerar a pasta android/ do zero
-npx expo prebuild --clean
-
-# 3. Remover config plugins desnecessários do app.json
-#    Mantenha apenas: ["expo-router"]
-#    Remova: ["./plugins/withGradleWorkaround"]
-
-# 4. Remover patches que modificam Gradle
-rm -f patches/expo-modules-core+*.patch
-
-# 5. Remover patch-package se não houver mais patches
-#    Remova "postinstall": "patch-package" do package.json
-
-# 6. Build novamente
-eas build --platform android --profile preview
-```
-
-> **Regra de ouro:** Se AppComida builda e AppEntrega não, verifique se o `app.json` de ambos
-> tem os mesmos plugins e nenhuma patch que modifique Gradle. O problema quase sempre é um
-> config plugin ou patch interferindo no autolinking do `expo-module-gradle-plugin`.
-
-#### ❌ `npm install` ou `yarn install` trava / timeout
-
-**Causa:** Cache corrompido, proxy corporativo, ou Windows Defender escaneando `node_modules`.
-
-**Solução:**
-```bash
-# Limpar cache
-rm -rf node_modules package-lock.json
-npm cache clean --force
-
-# Instalar com flags de compatibilidade
 npm install --legacy-peer-deps
+npm run dev
 
-# Ou usar yarn
-yarn install
-```
-
-#### ❌ `expo-router` plugin not found during EAS build
-
-**Causa:** `node_modules` incompleto — o EAS CLI precisa resolver plugins localmente antes de enviar para a nuvem.
-
-**Solução:**
-```bash
-rm -rf node_modules
+# WebAdmin
+cd Frontend/WebAdmin
 npm install --legacy-peer-deps
-eas build --platform android --profile preview
+npm run dev
 ```
 
-#### ❌ Build funciona local mas falha no EAS
-
-**Causa:** O EAS Cloud pode ter versões diferentes de Node.js ou Expo CLI.
-
-**Solução:** Verifique o `eas.json` e adicione:
-```json
-{
-  "cli": {
-    "version": ">= 7.3.0"
-  },
-  "build": {
-    "preview": {
-      "android": {
-        "buildType": "apk"
-      }
-    }
-  }
-}
-```
-
-### Gerar APKs Localmente (alternativa)
+### Apps mobile (Expo)
 
 ```bash
-# Requer Android SDK instalado localmente
-cd Frontend/AppComida
-npx expo prebuild --clean
-cd android && ./gradlew assembleRelease
-
-# APK gerado em:
-# android/app/build/outputs/apk/release/app-release.apk
+cd Frontend/AppComida && npm install && npx expo start
+cd Frontend/AppEntrega && npm install && npx expo start
 ```
 
-> **Nota:** Certifique-se de que `ANDROID_HOME` está configurado apontando para o Android SDK.
-> Exemplo: `export ANDROID_HOME=$HOME/Library/Android/sdk` (macOS/Linux) ou
-> `set ANDROID_HOME=%LOCALAPPDATA%\Android\Sdk` (Windows).
+A URL da API dos apps fica centralizada em `Frontend/<app>/config/api.ts`.
 
-Ou use o script automatizado:
+### Deploy local via Docker (estilo VPS)
+
+O [`docker-compose.vps.yml`](docker-compose.vps.yml) sobe a stack completa presa em `127.0.0.1`
+(api :3000, web :3002, admin :3003, Redis :6379 com AOF) — o nginx do host faz o TLS:
+
 ```bash
-bash scripts/build-apks.sh
+docker compose -f docker-compose.vps.yml up --build
 ```
+
+Guia completo de VPS: [`scripts/deploy-vps.md`](scripts/deploy-vps.md).
 
 ## Variáveis de Ambiente
 
-### Monolith (fuudelivery-api)
+Referência completa: [`.env.example`](.env.example). Principais:
+
+### Monolito (fuudelivery-api)
 
 | Variável | Descrição | Obrigatória |
 |---|---|---|
-| `JWT_SECRET` | Secret para tokens JWT | Sim |
-| `DB_CONNECTION_STRING` | PostgreSQL (Supabase) | Sim |
-| `MONGO_URI` | MongoDB Atlas | Sim |
-| `MONGO_DATABASE` | Nome do banco MongoDB | Sim |
-| `REDIS_URL` | Redis (Render) | Não (fallback Go channels) |
-| `ABACATE_PAY_API_KEY` | API key do AbacatePay | Sim (pagamentos) |
-| `ABACATE_PAY_WEBHOOK_SECRET` | Webhook secret do AbacatePay | Sim (pagamentos) |
-| `METRICS_TOKEN` | Token para proteger `GET /metrics` (header Bearer ou ?token=) | Recomendado em produção |
-| `OSRM_BASE_URL` | Base do servidor OSRM (rotas). Default: demo público — configure instância própria em produção | Não |
-| `URL_CHECK_ESTABLISHMENT_OPEN` | Template da checagem de estabelecimento aberto (`%d` = ID). Default: localhost:PORT | Não |
-| `ALLOWED_ORIGINS` | Domínios permitidos (CORS) | Não (usa defaults) |
+| `JWT_SECRET` | Secret dos tokens JWT (64 chars aleatórios recomendado) | **Sim** |
+| `DB_CONNECTION_STRING` | PostgreSQL Supabase — pooler `:6543` (PgBouncer transaction mode) | **Sim** |
+| `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | Upload de imagens (sem isso o endpoint responde 503) | Sim (upload) |
+| `ADMIN_BOOTSTRAP_SECRET` | Bootstrap único do primeiro admin via `POST /admin/bootstrap`. Remover após uso | Recomendado |
+| `REDIS_URL` | Redis gerenciado (fila financeira + cache + rate limit; prefira política `noeviction`) | Não (fallback Go channels) |
+| `MONGO_URI` + `MONGO_DATABASE` | MongoDB Atlas — dual-write legado. Omitir = desligado | Não |
+| `ABACATE_PAY_API_KEY` + `ABACATE_PAY_WEBHOOK_SECRET` | Gateway PIX/Cartão | Sim (pagamentos) |
+| `METRICS_TOKEN` | Protege `GET /metrics` (Bearer token). Vazio = endpoint público | Recomendado em produção |
+| `ALLOWED_ORIGINS` | Domínios permitidos (CORS), separados por vírgula | Não (usa defaults) |
+| `OSRM_BASE_URL` | Servidor OSRM próprio. Vazio = demo público (só dev) | Não |
 | `PORT` | Porta do servidor | Não (default: 3000) |
-| `GO_ENV` | Ambiente (production/development) | Não |
-
-> **⚠️ O Payment Service isolado (`fuudelivery-payment`) foi removido (2026-08).**
-> Todas as rotas de pagamento vivem no monolito — as variáveis abaixo são do
-> monolito `fuudelivery-api` (ver tabela anterior).
+| `GO_ENV` | `production` / `development` | Não |
 
 ### Frontends
 
-| Variável | Descrição |
-|---|---|
-| `REACT_APP_API_URL` | URL base da API Go (monolito) |
+| Variável | Onde | Descrição |
+|---|---|---|
+| `REACT_APP_API_URL` | WebRestaurant/WebAdmin (Render/compose) | URL base do monolito |
+| `VITE_API_URL` | WebRestaurant (dev local) | URL base do monolito |
+| `API_URL` | Apps mobile (`config/api.ts`) | URL base do monolito (compilada no build) |
 
 ## Testes
 
 ```bash
-# Todos os módulos Go (via go.work)
+# Todos os módulos Go (via go.work) — testify + miniredis, sem Docker
 go test ./...
 
-# Módulos individuais
-cd Backend/payment_api && go test ./...
-cd Backend/orders_api && go test ./...
-cd Backend/auth_api && go test ./...
-cd Backend/delivery_api && go test ./...
-cd Backend/chat_api && go test ./...
+# Módulo individual
 cd cmd/fuudelivery && go test ./...
+cd Backend/payment_api && go test ./...
 
-# Testes de integração (requer Docker — sobe MongoDB em container)
+# Integração (build tag integration; requer Docker — sobe containers reais)
 cd cmd/fuudelivery && go test -tags=integration -v -run 'TestFullFlow|TestErrorScenarios|TestAdminBootstrap' ./
 cd Backend/payment_api && go test -tags=integration -v -run 'TestCheckoutE2E' ./app/handlers/
 
-# Frontend
+# Frontends web (Vitest)
 cd Frontend/WebRestaurant && npm test
+cd Frontend/WebAdmin && npm test
 ```
+
+- **35 arquivos de teste Go** distribuídos em Backend (26), cmd (6) e pkg (3), incluindo E2E de checkout, webhook HMAC, rate limiting com Redis e fluxo completo de pedido.
+- Integração usa **testcontainers-go** (postgres/mongodb) localmente; no CI, containers `mongo:7` e `postgres:16-alpine` via variáveis `MONGO_TEST_URI`/`POSTGRES_TEST_URI`.
+- Mobile usa jest-expo com `--passWithNoTests`.
+- Cobertura planejada e status: [`references/testes-ci.md`](references/testes-ci.md).
 
 ## CI/CD
 
-Push para `master` triggers deploy automático via GitHub Actions + Render.
+7 workflows em `.github/workflows/`:
 
-### Pipelines
+| Workflow | Trigger | O que faz |
+|---|---|---|
+| `ci.yml` (**CI Gate**) | push/PR em master | Matriz dos 10 módulos Go (tidy/build/vet/test), integração PG+Mongo, checkout E2E, gofmt, govulncheck, shellcheck, vitest+build dos webs, npm audit (critical), validação de workflows, consistência de URLs mobile e guarda de regressão CSS (Tailwind v4 @layer), e2e dual-write |
+| `deploy.yml` | `workflow_run` após CI verde (ou manual) | Deploy matriz api/web/admin na API do Render com retry 3x + polling até `live` + health-check pós-deploy + verificação das rotas SPA |
+| `monitor.yml` | cron `*/30` | `scripts/verify-deploy.sh` contra os 3 serviços; falha o job se algum cair; log salvo como artefato |
+| `release.yml` | tag `v*` | EAS Build dos APKs AppComida/AppEntrega → anexa em GitHub Release |
+| `build-appcomida.yml` / `build-appentrega.yml` / `build-apprestaurante.yml` | push na pasta do app | `expo prebuild` + `gradlew assembleRelease` (Java 17) → artefato APK |
 
-1. **CI Gate** (`ci.yml`): Build, vet, test, gofmt, govulncheck para todos os módulos Go; npm test + build para WebRestaurant; npm audit para todos os frontends
-2. **Deploy** (`deploy.yml`): Deploy automático para Render (só se CI passar)
-3. **Build AppComida** (`build-appcomida.yml`): Build APK Android via EAS
-4. **Build AppEntrega** (`build-appentrega.yml`): Build APK Android via EAS
+Deploy em produção: push direto na `master` (CI Gate → Deploy automático).
+
+## Build dos APKs (Android)
+
+Via **EAS Build** (nuvem):
 
 ```bash
-git push origin master
+npm install -g eas-cli
+eas login
+
+cd Frontend/AppComida
+npx eas build --platform android --profile preview   # gera APK instalável
 ```
+
+Mesmo comando para `AppEntrega` (e `AppRestaurante`). Alternativa automatizada: `bash scripts/build-apks.sh`. Alternativa 100% local (requer Android SDK + `ANDROID_HOME` configurado):
+
+```bash
+cd Frontend/AppComida
+npx expo prebuild --clean
+cd android && ./gradlew assembleRelease
+# APK em android/app/build/outputs/apk/release/app-release.apk
+```
+
+### Erros comuns
+
+<details>
+<summary><b>Plugin <code>expo-module-gradle-plugin</code> was not found</b></summary>
+
+Causa: autolinking quebrado por versões desalinhadas de `expo`/`expo-secure-store`/`expo-modules-core`, config plugin interferindo ou patch do patch-package modificando Gradle.
+
+```bash
+npx expo install --check        # alinhar versões
+npx expo prebuild --clean       # regenerar android/
+# Remover config plugins extras do app.json (manter só expo-router)
+# Remover patches que mexem em Gradle e o postinstall patch-package
+eas build --platform android --profile preview
+```
+
+> Se um app builda e outro não, compare os `app.json` — quase sempre é plugin/patch interferindo no autolinking.
+</details>
+
+<details>
+<summary><b>npm install trava / timeout</b></summary>
+
+```bash
+rm -rf node_modules package-lock.json
+npm cache clean --force
+npm install --legacy-peer-deps
+```
+</details>
+
+<details>
+<summary><b>Build funciona local mas falha no EAS</b></summary>
+
+Fixe a versão do CLI no `eas.json`:
+
+```json
+{ "cli": { "version": ">= 7.3.0" }, "build": { "preview": { "android": { "buildType": "apk" } } } }
+```
+</details>
 
 ## Documentação
 
-- `references/seguranca.md` — Procedimento de rotação de credenciais
-- `references/testes-ci.md` — Plano de cobertura de testes
-- `references/confiabilidade-deploy.md` — Checklist de deploy e fila
-- `references/gaps-funcionais.md` — TODOs e decisões de arquitetura
-- `references/avaliacao-modelo-negocio` — Avaliação do modelo de negócio
-- `references/brand.md` — Identidade visual
-- `.fuudelivery-config/DOCUMENTATION.md` — Documentação completa do sistema
+| Documento | Conteúdo |
+|---|---|
+| [`PRODUCTION.md`](PRODUCTION.md) | Checklist e configuração de produção |
+| [`docs/arquitetura.md`](docs/arquitetura.md) | Visão arquitetural detalhada |
+| [`docs/banco-de-dados.md`](docs/banco-de-dados.md) | Dicionário de dados completo |
+| [`docs/ARQUITETURA-BANCO-UNICO.md`](docs/ARQUITETURA-BANCO-UNICO.md) | Estratégia e cortes do banco único |
+| [`docs/guia-deploy.md`](docs/guia-deploy.md) + [`scripts/deploy-vps.md`](scripts/deploy-vps.md) | Deploy Render e VPS |
+| [`docs/runbook-rotacao-credenciais.md`](docs/runbook-rotacao-credenciais.md) | Rotação de credenciais |
+| [`docs/seguranca.md`](docs/seguranca.md) + [`SECURITY.md`](SECURITY.md) | Práticas de segurança e reporte de vulnerabilidades |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Guia de contribuição |
+| [`references/URLS.md`](references/URLS.md) | Mapa canônico de URLs de produção |
+| [`references/gaps-funcionais.md`](references/gaps-funcionais.md) | TODOs e decisões de arquitetura |
+| [`MANIFEST.md`](MANIFEST.md) | Manifesto do projeto |
 
 ## Licença
 
-MIT
+Apache License 2.0 — ver [LICENSE](LICENSE).

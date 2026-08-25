@@ -86,15 +86,15 @@ func CreateUser(c *fiber.Ctx) error {
 		if roleVal == "" {
 			roleVal = "user"
 		}
-_, err = tx.Exec("INSERT INTO users (id, name, email, password, phone, role, \"createdAt\", \"updatedAt\") VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())", userID, user.Name, user.Email, user.Password, user.Phone, roleVal)
-	if err != nil {
-		tx.Rollback()
-		// Check for unique constraint violation on email
-		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") && strings.Contains(err.Error(), "users_email_key") {
-			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Email already registered"})
+		_, err = tx.Exec("INSERT INTO users (id, name, email, password, phone, role, \"createdAt\", \"updatedAt\") VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())", userID, user.Name, user.Email, user.Password, user.Phone, roleVal)
+		if err != nil {
+			tx.Rollback()
+			// Check for unique constraint violation on email
+			if strings.Contains(err.Error(), "duplicate key value violates unique constraint") && strings.Contains(err.Error(), "users_email_key") {
+				return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Email already registered"})
+			}
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-	}
 		user.ID = userID
 		establishment.OwnerID = userID
 		tx.Exec("CREATE SEQUENCE IF NOT EXISTS establishments_id_seq OWNED BY establishments.id")

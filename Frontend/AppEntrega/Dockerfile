@@ -1,32 +1,17 @@
-FROM node:latest
+# FuuDelivery AppEntrega — container de desenvolvimento Expo
+FROM node:20-alpine
 
-ARG EXPO_USERNAME
-ARG EXPO_PASSWORD
-
-# Criação do diretório de trabalho
 RUN mkdir -p /usr/src/app
 WORKDIR /usr/src/app
- 
-# Copia do package.json e package-lock.json (se existir) para o diretório de trabalho
+
+# Dependências primeiro (cache de camadas)
 COPY package*.json /usr/src/app/
+RUN npm ci --legacy-peer-deps || npm install --legacy-peer-deps
 
-# Listagem de arquivos após copiar o package.json
-RUN ls -l /usr/src/app/
-
-# Instalação global do qrcode-terminal
-RUN npm install -g qrcode-terminal
-
-# Copia do app.json para o diretório de trabalho e instalação de dependências
 COPY app.json /usr/src/app/
-RUN npm install
-RUN yarn
 
-# Instalação global do expo-cli
-RUN yarn global add expo-cli
+EXPOSE 19000 19001 19002
 
-# Exposição de portas utilizadas pelo Expo
-EXPOSE 19002
-
-# Faz Login no expo &&
-# Comando padrão para iniciar o serviço com geração do QR Code
-CMD npx expo login -u $EXPO_USERNAME -p $EXPO_PASSWORD && yarn run start:qrcode
+# Login NÃO é necessário para `expo start` — credenciais via CLI expunham
+# a senha no process list. Para EAS builds use EXPO_TOKEN (env) no CI.
+CMD ["npx", "expo", "start"]

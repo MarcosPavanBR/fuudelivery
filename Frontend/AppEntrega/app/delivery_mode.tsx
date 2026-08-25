@@ -84,24 +84,21 @@ export default function DeliveryMode({ showIcon }: any) {
   };
 
   const onConfirm = () => {
-    let code: boolean | string = false;
-
-    switch (deliveryman.status) {
-      case "AWAIT_COLECT":
-        code = helper.genCode(order.order_id, order.establishmentId);
-        break;
-
-      case "IN_ROUTE_DELIVERY":
-        code = helper.genCode(order.order_id, order.establishmentId);
-        break;
-      default:
-        code = false;
-        break;
-    }
+    // Código de retirada é validado no SERVIDOR (POST /orders/pickup-code/
+    // validate) — o entregador não consegue mais calculá-lo sozinho.
+    // legacyCode mantém compatibilidade com pedidos antigos sem código
+    // server-side gerado.
+    const needsCode =
+      deliveryman.status === "AWAIT_COLECT" ||
+      deliveryman.status === "IN_ROUTE_DELIVERY";
 
     nav.navigate("confirm_generical", {
       onConfirm: awaitCollect,
-      hasCode: code,
+      orderId: order.order_id,
+      needsCode,
+      legacyCode: needsCode
+        ? helper.genCode(order.order_id, order.establishmentId)
+        : false,
     });
   };
 

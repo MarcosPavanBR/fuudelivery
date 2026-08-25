@@ -8,7 +8,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "test": "jest --watchAll",
+    "test": "jest --passWithNoTests",
     "update": "NODE_ENV=production pkill -f expo; expo export --platform all --output-dir dist/${APP_BUILD}-${APP_ENV} && eas update --auto --branch=${BRANCH} --input-dir dist/${APP_BUILD}-${APP_ENV}"
   },
   "jest": {

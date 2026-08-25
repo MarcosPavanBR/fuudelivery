@@ -17,7 +17,6 @@ import { toast } from "react-toastify";
 import Texts from "../constants/Texts";
 import api from "../services/api";
 import Logo from "./Logo";
-import ThemeToggle from "./ThemeToggle";
 
 const TopMenu = ({ toggleMenu, isOpen }) => {
   const { getUser, openEstablishment, refreshOpen } = useAuth();
@@ -82,7 +81,6 @@ const TopMenu = ({ toggleMenu, isOpen }) => {
             </span>
             <ToggleSwitch checked={openEstablishment} onChange={handlerBnt} />
           </div>
-          <ThemeToggle />
         </div>
       </div>
     </div>

@@ -20,7 +20,7 @@ import {
 import Colors from "@/constants/Colors";
 import HeaderMain from "@/components/HeaderMain";
 import { useCartApi } from "@/contexts/ApiCartContext";
-import ProductCategory from "./pages/porducts/ProductCategory";
+import ProductCategory from "./pages/products/ProductCategory";
 import helpers from "@/helpers/helpers";
 import Texts from "@/constants/Texts";
 

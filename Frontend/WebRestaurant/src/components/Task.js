@@ -75,7 +75,10 @@ const Task = ({ task, index }) => {
                   Código
                 </span>
                 <span className="font-bold text-yellow-800">
-                  {helper.genCode(task.data._id, task.data.establishment.id)}
+                  {/* Código gerado pelo servidor (coluna pickup_code);
+                      fallback local só para pedidos legados sem código. */}
+                  {task.data.pickup_code ??
+                    helper.genCode(task.data._id, task.data.establishment.id)}
                 </span>
               </div>
               <div className="flex items-center justify-between mt-1">

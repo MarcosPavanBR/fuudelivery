@@ -167,6 +167,7 @@ export default {
   generateId,
   genCode,
   calcularDistancia,
+  haversineDistancia,
   orderByImage,
   getLocationDistance,
   getApiUrl,

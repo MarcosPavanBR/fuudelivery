@@ -13,34 +13,64 @@ import Texts from "@/constants/Texts";
 import { useNavigation } from "expo-router";
 import { useRoute } from "@react-navigation/native";
 import { useEffect, useState } from "react";
+import api from "@/services/api";
 
 export default function ConfirmGenerical() {
   const nav = useNavigation();
   const route = useRoute();
 
-  const { onConfirm, hasCode = false } = route.params as any;
+  const { onConfirm, orderId, needsCode = false, legacyCode = false } =
+    route.params as any;
   const [code, setCode] = useState("");
+  const [checking, setChecking] = useState(false);
 
-  function handlerConfirm() {
-    if (hasCode && hasCode !== code) {
-      return;
-    }
-
+  function proceed() {
     if (onConfirm) onConfirm();
     nav.goBack();
   }
 
-  function verify() {
-    if (hasCode === code) {
-      handlerConfirm();
-    } else {
-      // NÃO logar o código digitado (dado sensível de confirmação).
+  // Validação server-side do código de retirada. Fallback local apenas para
+  // pedidos legados sem código gerado no servidor (400).
+  async function verify() {
+    if (!needsCode) {
+      proceed();
+      return;
+    }
+    if (legacyCode && code === legacyCode) {
+      proceed();
+      return;
+    }
+    setChecking(true);
+    try {
+      const { data } = await api.post("/orders/pickup-code/validate", {
+        order_id: orderId,
+        pickup_code: code,
+      });
+      if (data?.valid) {
+        proceed();
+        return;
+      }
       Alert.alert("", Texts.codigo_errado);
+    } catch (e: any) {
+      if (e?.response?.status === 400) {
+        // Pedido legado sem código server-side: mantém comparação local.
+        Alert.alert("", Texts.codigo_errado);
+      } else if (e?.response?.status === 401) {
+        Alert.alert("", Texts.codigo_errado);
+      } else {
+        Alert.alert(
+          "",
+          "Não foi possível validar o código agora. Verifique sua conexão."
+        );
+      }
+    } finally {
+      setChecking(false);
     }
   }
 
   useEffect(() => {
-    if (code.length >= 4) verify();
+    if (code.length >= 4 && !checking) verify();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code]);
   useEffect(() => {
     setCode("");
@@ -49,7 +79,7 @@ export default function ConfirmGenerical() {
   return (
     <View style={styles.containers}>
       <View></View>
-      {!hasCode ? (
+      {!needsCode ? (
         <View style={styles.imageContainer}>
           <Image source={DeliveryHappy} style={styles.images} />
           <Text style={styles.textTwo}>{Texts.continue_duvida}</Text>
@@ -85,18 +115,17 @@ export default function ConfirmGenerical() {
 
       <View style={styles.buttons}>
         <TouchableOpacity
-          disabled={hasCode && hasCode !== code}
+          disabled={(needsCode && code.length < 4) || checking}
           onPress={() => {
-            handlerConfirm();
+            verify();
           }}
           style={{
             ...styles.button,
             ...styles.acceptButton,
-            ...(hasCode && hasCode !== code
+            ...((needsCode && code.length < 4) || checking
               ? {
                   backgroundColor: Colors.light.tabIconDefault,
                   borderColor: Colors.light.secondaryText,
-                  color: Colors.light.secondaryText,
                 }
               : {}),
           }}
@@ -105,12 +134,12 @@ export default function ConfirmGenerical() {
             style={{
               ...styles.buttonText,
               color:
-                hasCode && hasCode !== code
+                (needsCode && code.length < 4) || checking
                   ? Colors.light.secondaryText
                   : Colors.light.tint,
             }}
           >
-            {Texts.confirmar}
+            {checking ? "Validando..." : Texts.confirmar}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity

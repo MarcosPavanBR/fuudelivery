@@ -1,8 +1,10 @@
 import React from "react";
-import { FlatList, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { FlatList, Linking, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/Colors";
 import { useAuthApi } from "@/contexts/AuthContext";
+
+const SUPPORT_EMAIL = "suporte@fuudelivery.com.br";
 
 export default function Help() {
   const { logout, inWork } = useAuthApi();
@@ -11,7 +13,15 @@ export default function Help() {
       id: "2",
       title: "Solicitar Ajuda",
       iconName: "help-buoy",
-      onPress: () => {},
+      onPress: () => {
+        // Abre o e-mail de suporte com contexto básico — ação real em vez
+        // do botão morto.
+        Linking.openURL(
+          `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(
+            "FuuDelivery Entregas — Suporte"
+          )}`
+        ).catch(() => {});
+      },
     },
     { id: "3", title: "Sair da conta", iconName: "exit", onPress: logout },
   ];

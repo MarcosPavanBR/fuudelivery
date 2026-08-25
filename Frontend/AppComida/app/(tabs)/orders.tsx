@@ -138,7 +138,10 @@ export default function TabTwoScreen() {
                   <View style={styles.fins}>
                     <Text style={styles.codtexts}>Código</Text>
                     <Text style={{ fontSize: 20, fontWeight: "bold" }}>
-                      {helpers.genCode(e._id, null) ?? ""}
+                      {/* Código gerado pelo SERVIDOR quando o pedido fica
+                          pronto (DONE). Sem código server-side ainda (pedidos
+                          antigos), mostra aviso em vez do código previsível. */}
+                      {e.pickup_code ?? "gera quando pronto"}
                     </Text>
                   </View>
                 ) : null}

@@ -13,26 +13,22 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [openEstablishment, setOpenEstablishment] = useState(false);
   const [fmode, setFMode] = useState(false);
-  const [theme, setTheme] = useState(() => {
-    return localStorage.getItem("theme") || "light";
-  });
+  const [theme] = useState("light");
 
   // Máximo de mensagens WebSocket em memória para evitar memory leak.
   // Acima disso, as mais antigas são descartadas.
   const MAX_SOCKET_MESSAGES = 100;
   const [socketMessage, setSocketMessage] = useState([]);
 
-  const toggleTheme = () => {
-    setTheme(prev => {
-      const next = prev === "light" ? "dark" : "light";
-      localStorage.setItem("theme", next);
-      return next;
-    });
-  };
+  // Tema fixo light (decisão 2026-08: dark mode removido — estava parcial
+  // e páginas hardcodavam bg-white). toggleTheme mantido como no-op para
+  // não quebrar consumidores.
+  const toggleTheme = () => {};
 
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-  }, [theme]);
+    document.documentElement.setAttribute("data-theme", "light");
+    localStorage.setItem("theme", "light");
+  }, []);
 
   // Só conecta WebSocket após login válido
   const getWsBaseUrl = () => {

@@ -62,6 +62,14 @@ func ConnectPostgresDatabase() {
 		panic(fmt.Sprintf("Falha ao conectar ao PostgreSQL após %d tentativas", pgMaxRetries))
 	}
 
+	// Limites de pool (ver database.go do auth_api): 5 módulos compartilham
+	// o mesmo Supabase — cada pool precisa de teto.
+	if sqlDB, sErr := database.DB(); sErr == nil {
+		sqlDB.SetMaxOpenConns(10)
+		sqlDB.SetMaxIdleConns(5)
+		sqlDB.SetConnMaxLifetime(5 * time.Minute)
+	}
+
 	// O schema oficial vive nos scripts SQL (sql/03_dominio_pagamentos.sql e
 	// sql/10_wallet_ledger_kind.sql). O AutoMigrate é rede de segurança para
 	// ambientes novos/dev — em produção quem manda é o run_all.sh.

@@ -53,6 +53,14 @@ func ConnectPostgresDatabase() {
 		panic(fmt.Sprintf("Falha ao conectar ao banco de dados PostgreSQL após %d tentativas", maxRetries))
 	}
 
+	// Limites de pool (ver database.go do auth_api): 5 módulos compartilham
+	// o mesmo Supabase — cada pool precisa de teto.
+	if sqlDB, sErr := database.DB(); sErr == nil {
+		sqlDB.SetMaxOpenConns(10)
+		sqlDB.SetMaxIdleConns(5)
+		sqlDB.SetConnMaxLifetime(5 * time.Minute)
+	}
+
 	if err := database.AutoMigrate(
 		&Category{},
 		&CategoryProducts{},

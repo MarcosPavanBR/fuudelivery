@@ -65,6 +65,14 @@ func ConnectPostgresDatabase() {
 		return
 	}
 
+	// Limites de pool (ver database.go do auth_api): 5 módulos compartilham
+	// o mesmo Supabase — cada pool precisa de teto.
+	if sqlDB, sErr := database.DB(); sErr == nil {
+		sqlDB.SetMaxOpenConns(10)
+		sqlDB.SetMaxIdleConns(5)
+		sqlDB.SetConnMaxLifetime(5 * time.Minute)
+	}
+
 	DB = database
 
 	// AutoMigrate garante a tabela mesmo se sql/04 ainda não rodou no banco.

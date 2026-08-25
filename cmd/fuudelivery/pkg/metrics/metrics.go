@@ -130,6 +130,10 @@ func writeQueueMetrics(b *strings.Builder) {
 	fmt.Fprintf(b, "# TYPE fuudelivery_queue_published_total counter\n")
 	fmt.Fprintf(b, "fuudelivery_queue_published_total %d\n", qm.Published)
 
+	fmt.Fprintf(b, "# HELP fuudelivery_queue_publish_errors_total Falhas ao publicar (Redis down, fallback cheio).\n")
+	fmt.Fprintf(b, "# TYPE fuudelivery_queue_publish_errors_total counter\n")
+	fmt.Fprintf(b, "fuudelivery_queue_publish_errors_total %d\n", qm.PublishErrors)
+
 	fmt.Fprintf(b, "# HELP fuudelivery_queue_delivered_total Mensagens entregues com sucesso (XAck).\n")
 	fmt.Fprintf(b, "# TYPE fuudelivery_queue_delivered_total counter\n")
 	fmt.Fprintf(b, "fuudelivery_queue_delivered_total %d\n", qm.Delivered)

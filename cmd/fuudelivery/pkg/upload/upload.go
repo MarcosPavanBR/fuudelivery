@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"log"
+	"net/http"
 	"strings"
 	"time"
 
@@ -87,11 +88,18 @@ func HandleImageUpload(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": "Erro ao ler arquivo"})
 	}
 
-	// Valida tipo e tamanho
-	contentType := file.Header.Get("Content-Type")
-	if !strings.HasPrefix(contentType, "image/") {
-		return c.Status(400).JSON(fiber.Map{"error": "Apenas imagens sao permitidas (image/*)"})
+	// Valida tipo por CONTEÚDO (magic bytes via http.DetectContentType) —
+	// o Content-Type do multipart é definido pelo cliente e pode ser forjado
+	// (ex.: HTML/SVG com JS mandado como "image/png").
+	sniffed := http.DetectContentType(data)
+	if !strings.HasPrefix(sniffed, "image/") {
+		return c.Status(400).JSON(fiber.Map{"error": "Conteúdo não é uma imagem válida"})
 	}
+	// SVG nunca passa: pode embutir <script> (XSS armazenado no domínio do storage).
+	if strings.Contains(sniffed, "image/svg") || strings.HasSuffix(strings.ToLower(file.Filename), ".svg") {
+		return c.Status(400).JSON(fiber.Map{"error": "SVG não permitido"})
+	}
+	contentType := sniffed
 
 	if len(data) > 5*1024*1024 {
 		return c.Status(400).JSON(fiber.Map{"error": "Arquivo muito grande. Maximo: 5MB"})

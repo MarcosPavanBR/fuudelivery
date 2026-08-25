@@ -41,10 +41,10 @@
 |-----|-----------|--------------------|
 | **AppComida** (cliente) | `https://fuudelivery-api-8y6l.onrender.com` | `config/api.ts` (`API_URL` — fonte única) → consumida por `services/api.tsx`, `helpers/helpers.ts` e `LiveTrackingReadonly.tsx` |
 | **AppEntrega** (entregador) | `https://fuudelivery-api-8y6l.onrender.com` | `config/api.ts` (`API_URL` — fonte única) → consumida por `services/api.tsx` e `helpers/helper.tsx` |
+| **AppRestaurante** (restaurante) | `https://fuudelivery-api-8y6l.onrender.com` | `config/api.ts` (`API_URL` — fonte única) → consumida por `services/api.tsx`, `helpers/helpers.ts` e `LiveTrackingReadonly.tsx` |
 | **WebRestaurant** | `https://fuudelivery-api-8y6l.onrender.com` | `src/services/api.js` + env `REACT_APP_API_URL` |
-| **WebAdmin** | `https://fuudelivery-api-8y6l.onrender.com` | `src/services/api.js` + env `REACT_APP_API_URL` |
-| **WebAdmin** (pagamentos) | `https://fuudelivery-api-8y6l.onrender.com` | `src/services/paymentApi.js` (fallback hardcoded; env `REACT_APP_PAYMENT_API_URL`) |
-| **PaymentPanel** | `https://fuudelivery-api-8y6l.onrender.com` | `index.html` (`API_URL`, switch por hostname — corrigido 2026-08-22 para o monolito) |
+| **WebAdmin** (incl. pagamentos) | `https://fuudelivery-api-8y6l.onrender.com` | `src/services/api.js` + `src/services/paymentApi.js` + env `REACT_APP_API_URL` |
+| ~~PaymentPanel~~ 💀 arquivado | — | movido para `legacy/PaymentPanel/` (serviço removido em 2026-08) |
 
 ---
 

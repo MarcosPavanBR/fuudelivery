@@ -413,12 +413,84 @@ func (z *zoneDBResolver) ResolveByLatLng(lat, lng float64) (uint, string, float6
 		return 0, "Default", 10.0, nil
 	}
 
-	var zone models.Zone
-	if err := z.DB.Where("is_active = ?", true).First(&zone).Error; err != nil {
+	var zones []models.Zone
+	if err := z.DB.Where("is_active = ?", true).Find(&zones).Error; err != nil || len(zones) == 0 {
 		return 0, "Default", 10.0, nil
 	}
 
-	return zone.ID, zone.Name, zone.RadiusKm, nil
+	// Zona única ativa = deployment simples; mantém comportamento anterior.
+	if len(zones) == 1 {
+		z0 := zones[0]
+		return z0.ID, z0.Name, z0.RadiusKm, nil
+	}
+
+	// Multi-zona: casa pelo prefixo geohash (match mais longo vence).
+	point := encodeGeohash(lat, lng, 8)
+	bestIdx, bestLen := -1, 0
+	for i, zn := range zones {
+		p := strings.ToLower(strings.TrimSpace(zn.GeohashPrefix))
+		if p == "" || len(p) > len(point) {
+			continue
+		}
+		if strings.HasPrefix(point, p) && len(p) > bestLen {
+			bestIdx, bestLen = i, len(p)
+		}
+	}
+	if bestIdx >= 0 {
+		zb := zones[bestIdx]
+		return zb.ID, zb.Name, zb.RadiusKm, nil
+	}
+
+	// Nenhuma zona casou geometricamente — cai na primeira ativa (comportamento
+	// antigo), mas agora VISÍVEL: sem este log o desvio passaria despercebido.
+	log.Printf("[ZONE] WARN: lat=%.5f,lng=%.5f não casou com geohash de zona alguma (%d ativas); usando %q",
+		lat, lng, len(zones), zones[0].Name)
+	zf := zones[0]
+	return zf.ID, zf.Name, zf.RadiusKm, nil
+}
+
+// encodeGeohash codifica (lat,lng) na string geohash padrão (base32) com a
+// precisão pedida. Implementação mínima sem dependência externa — suficiente
+// para casar prefixes de zona (precisão 5 ≈ 4.9km, 6 ≈ 1.2km, 8 ≈ 38m).
+func encodeGeohash(lat, lng float64, precision int) string {
+	const base32 = "0123456789bcdefghjkmnpqrstuvwxyz"
+	latMin, latMax := -90.0, 90.0
+	lngMin, lngMax := -180.0, 180.0
+
+	var hash []byte
+	even := true
+	bit := 0
+	chIdx := 0
+
+	for len(hash) < precision {
+		if even {
+			mid := (lngMin + lngMax) / 2
+			if lng >= mid {
+				chIdx = chIdx<<1 | 1
+				lngMin = mid
+			} else {
+				chIdx <<= 1
+				lngMax = mid
+			}
+		} else {
+			mid := (latMin + latMax) / 2
+			if lat >= mid {
+				chIdx = chIdx<<1 | 1
+				latMin = mid
+			} else {
+				chIdx <<= 1
+				latMax = mid
+			}
+		}
+		even = !even
+		bit++
+		if bit == 5 {
+			hash = append(hash, base32[chIdx])
+			bit = 0
+			chIdx = 0
+		}
+	}
+	return string(hash)
 }
 
 func (z *zoneDBResolver) GetDeliveryFee(zoneID uint, distanceKm float64) float64 {

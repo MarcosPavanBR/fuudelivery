@@ -11,9 +11,10 @@ pkg/ @marcospavanbr
 # Frontend applications
 Frontend/AppComida/ @marcospavanbr
 Frontend/AppEntrega/ @marcospavanbr
+Frontend/AppRestaurante/ @marcospavanbr
 Frontend/WebRestaurant/ @marcospavanbr
 Frontend/WebAdmin/ @marcospavanbr
-Frontend/PaymentPanel/ @marcospavanbr
+legacy/PaymentPanel/ @marcospavanbr
 
 # CI/CD and infrastructure
 .github/ @marcospavanbr

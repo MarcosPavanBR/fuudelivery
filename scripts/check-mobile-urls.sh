@@ -79,6 +79,7 @@ check_config() {
 
 check_config "AppComida"  "$ROOT_DIR/Frontend/AppComida/config/api.ts"
 check_config "AppEntrega" "$ROOT_DIR/Frontend/AppEntrega/config/api.ts"
+check_config "AppRestaurante" "$ROOT_DIR/Frontend/AppRestaurante/config/api.ts"
 
 # ─── 3. Varredura de URLs hardcoded divergentes ──────────────
 # Qualquer referência a onrender.com nos sources dos apps deve ser a
@@ -120,6 +121,7 @@ scan_app() {
 
 scan_app "AppComida"  "$ROOT_DIR/Frontend/AppComida"
 scan_app "AppEntrega" "$ROOT_DIR/Frontend/AppEntrega"
+scan_app "AppRestaurante" "$ROOT_DIR/Frontend/AppRestaurante"
 
 # ─── Resultado ───────────────────────────────────────────────
 echo ""

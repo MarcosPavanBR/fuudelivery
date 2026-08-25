@@ -43,12 +43,24 @@ func HandleImageUpload(c *fiber.Ctx) error {
 	entity := c.Params("entity")
 	entityID := c.Params("entityId")
 
-	// Verifica ownership: usuario so pode fazer upload para entidades do seu restaurante
+	// Verifica ownership. Regras por entidade:
+	//   products/categories/additionals: dono do estabelecimento da entidade
+	//     (entityID é OBRIGATÓRIO — sem ID não há a quem vincular o arquivo);
+	//   restaurants: dono do próprio estabelecimento;
+	//   reviews/avatars: qualquer autenticado (conteúdo do próprio usuário).
 	if entity == "products" || entity == "categories" || entity == "additionals" {
-		if entityID != "" {
-			if !checkOwnership(userID, entity, entityID) {
-				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "You can only upload images for your own establishment"})
-			}
+		if entityID == "" {
+			return c.Status(400).JSON(fiber.Map{"error": "entityId é obrigatório para " + entity})
+		}
+		if !checkOwnership(userID, entity, entityID) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "You can only upload images for your own establishment"})
+		}
+	}
+	if entity == "restaurants" {
+		role, _ := middlewares.GetUserRoleFromToken(c)
+		tokenEstID, estErr := middlewares.GetEstablishmentIDFromToken(c)
+		if role != "admin" && (estErr != nil || tokenEstID <= 0) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Sem estabelecimento vinculado ao token"})
 		}
 	}
 
@@ -163,8 +175,17 @@ func checkOwnership(userID int64, entity, entityID string) bool {
 			Where("additionals.id = ? AND products.establishment_id = ?", entityID, user.EstablishmentID).
 			Count(&count)
 		return count > 0
+	case "restaurants":
+		// Dono do estabelecimento (ou admin, tratado antes da chamada).
+		var est models.Establishment
+		if err := models.DB.WithContext(ctx).Select("id").
+			Where("id = ? AND owner_id = ?", entityID, user.ID).First(&est).Error; err != nil {
+			return false
+		}
+		return true
 	default:
-		return true // restaurants/reviews: sem check por enquanto
+		// reviews/avatars: conteúdo do próprio usuário autenticado.
+		return true
 	}
 }
 

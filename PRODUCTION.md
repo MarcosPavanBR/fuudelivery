@@ -50,10 +50,13 @@ O deploy e automatizado via GitHub Actions. Push para master dispara:
 | PORT | 3000 |
 | GO_ENV | production |
 | JWT_SECRET | Chave JWT (secret) |
+| ADMIN_BOOTSTRAP_SECRET | Bootstrap único do primeiro admin via `POST /admin/bootstrap` (secret). Remover após uso |
 | ABACATE_PAY_WEBHOOK_SECRET | Webhook secret (secret) |
-| REDIS_URL | Auto-linked pelo Render |
-| DB_CONNECTION_STRING | PostgreSQL Supabase (secret) |
-| MONGO_URI | MongoDB Atlas (secret) |
+| REDIS_URL | Redis EXTERNO gerenciado (Redis Cloud — valor real no dashboard, NÃO é auto-linked) |
+| DB_CONNECTION_STRING | PostgreSQL Supabase via pooler :6543 (secret) |
+| SUPABASE_URL | API do Supabase p/ Storage/REST upload de imagens (secret) |
+| SUPABASE_SERVICE_ROLE_KEY | Service role do Supabase (secret). Sem elas o upload responde 503 |
+| MONGO_URI | MongoDB Atlas — dual-write legado; opcional após aposentadoria do Atlas (secret) |
 | MONGO_DATABASE | fuudelivery |
 | PAYMENT_MONGO_DATABASE | fuudelivery_payments |
 | APP_URL | https://fuudelivery-web.onrender.com |

@@ -209,6 +209,53 @@ func ValidateRefreshToken(token string) (uint, error) {
 	return rt.UserID, nil
 }
 
+// ErrRefreshReuse indica uso de um refresh token já rotacionado/revogado —
+// padrão clássico de token roubado sendo reproduzido em paralelo ao dono.
+var ErrRefreshReuse = errors.New("refresh token reutilizado")
+
+// RotateRefreshToken faz a rotação ATÔMICA do par de sessão:
+//
+//  1. Claim único: UPDATE ... WHERE revoked = false — só UMA requisição
+//     consegue revogar o token; duas renovações concorrentes com o mesmo
+//     token não geram mais dois pares válidos.
+//  2. Reuse detection: se o claim não afetou linhas, o token já estava
+//     revogado (replay pós-rotação). Nesse caso REVOGA TODA a família do
+//     usuário, contendo o atacante que copiou o token antes do dono.
+//
+// Retorna o user_id e o NOVO refresh token já persistido.
+func RotateRefreshToken(token string) (uint, string, error) {
+	res := models.DB.Model(&models.RefreshToken{}).
+		Where("token = ? AND revoked = false", token).
+		Update("revoked", true)
+	if res.Error != nil {
+		return 0, "", res.Error
+	}
+	if res.RowsAffected == 0 {
+		var rt models.RefreshToken
+		if err := models.DB.Where("token = ?", token).First(&rt).Error; err == nil {
+			models.DB.Model(&models.RefreshToken{}).
+				Where("user_id = ? AND revoked = false", rt.UserID).
+				Update("revoked", true)
+			log.Printf("[AUTH] REFRESH REUSE detectado (user %d): família inteira revogada", rt.UserID)
+		}
+		return 0, "", ErrRefreshReuse
+	}
+
+	var rt models.RefreshToken
+	if err := models.DB.Where("token = ?", token).First(&rt).Error; err != nil {
+		return 0, "", err
+	}
+	if time.Now().UTC().After(rt.ExpiresAt) {
+		return 0, "", errors.New("refresh token expired")
+	}
+
+	newToken, err := CreateRefreshToken(rt.UserID)
+	if err != nil {
+		return 0, "", err
+	}
+	return rt.UserID, newToken, nil
+}
+
 // CleanupExpiredRefreshTokens remove refresh tokens expirados do banco.
 // Pode ser chamado periodicamente para manter a tabela limpa.
 func CleanupExpiredRefreshTokens() {

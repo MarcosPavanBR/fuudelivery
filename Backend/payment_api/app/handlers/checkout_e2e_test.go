@@ -436,6 +436,14 @@ func TestCheckoutE2E_AdminEndpoints(t *testing.T) {
 	require.Equal(t, "CONFIRMED", stored.Status)
 	require.NotNil(t, stored.ConfirmedAt)
 
+	// O approve agora dispara publishPaymentApproved em goroutine (split +
+	// crédito da carteira). Aguarda o crédito assíncrono chegar para o resto
+	// do teste ser determinístico.
+	require.Eventually(t, func() bool {
+		w := getWalletByUser(t, 42)
+		return w.Balance >= 8585.0 // seed 8500 + split 85.00
+	}, 5*time.Second, 50*time.Millisecond, "split deve ser creditado após aprovação")
+
 	// Reaprovar um pagamento ja confirmado deve dar 409
 	req = httptest.NewRequest(http.MethodPost, "/payments/"+pendingID+"/approve", nil)
 	resp, err = app.Test(req, -1)
@@ -491,10 +499,13 @@ func TestCheckoutE2E_AdminEndpoints(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&wallets))
 	require.Len(t, wallets, 1)
 	require.Equal(t, "establishment", wallets[0]["owner_type"])
-	require.Equal(t, float64(8500), wallets[0]["balance"])
+	// 8500 (seed) + 85.00 do split creditado no approve
+	require.Equal(t, float64(8585), wallets[0]["balance"])
 
 	// --- GET /chargebacks (ledger para o painel Financeiro) ---
-	// Seeds: carteiras + 1 credito (top-up do cliente) + 1 debito (chargeback)
+	// Seeds: carteiras + 1 credito (top-up do cliente) + 1 debito (chargeback).
+	// A aprovação manual de charge-admin-001 (feita acima) AGORA também credita
+	// o split do estabelecimento — 3º lançamento no ledger do user 42.
 	w5001 := seedWallet(t, 5001, "customer", 150.0)
 	w42 := getWalletByUser(t, 42)
 	now := time.Now()
@@ -513,22 +524,23 @@ func TestCheckoutE2E_AdminEndpoints(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&chargebacks))
 	entries, ok := chargebacks["chargebacks"].([]interface{})
 	require.True(t, ok, "resposta deve ter lista chargebacks")
-	require.Len(t, entries, 2, "ledger deve listar credito + debito")
+	require.Len(t, entries, 3, "ledger = split do approve + credito topup + debito chargeback")
 
-	// Ordenado por created_at desc: debito (mais recente) primeiro
+	// Ordenado por created_at desc: crédito do split (mais recente) primeiro
 	first := entries[0].(map[string]interface{})
-	require.Equal(t, "debit", first["type"])
-	require.Equal(t, "charge-e2e-refund-001", first["payment_id"])
+	require.Equal(t, "credit", first["type"])
+	require.Equal(t, "charge-admin-001", first["payment_id"])
 
 	// owner_type enriquecido da carteira do estabelecimento 42
 	require.Equal(t, "establishment", first["owner_type"])
 
-	// Resumo agregado (sem filtro): credito 100.0 (top-up) - debito 85.0
+	// Resumo agregado (sem filtro): creditos 85.0 (split) + 100.0 (topup),
+	// debitos 85.0
 	summary, hasSummary := chargebacks["summary"].(map[string]interface{})
 	require.True(t, hasSummary, "resposta deve incluir summary agregado")
-	require.InDelta(t, 100.0, summary["credit_total"], 0.01, "total de creditos do ledger")
+	require.InDelta(t, 185.0, summary["credit_total"], 0.01, "total de creditos do ledger")
 	require.InDelta(t, 85.0, summary["debit_total"], 0.01, "total de debitos do ledger")
-	require.InDelta(t, 15.0, summary["net"], 0.01, "saldo liquido = creditos - debitos")
+	require.InDelta(t, 100.0, summary["net"], 0.01, "saldo liquido = creditos - debitos")
 
 	// Resumo reflete os filtros: so debitos -> credit_total 0 e net negativo
 	req = httptest.NewRequest(http.MethodGet, "/chargebacks?type=debit", nil)

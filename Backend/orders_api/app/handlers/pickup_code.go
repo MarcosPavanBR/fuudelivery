@@ -6,8 +6,11 @@ package handlers
 
 import (
 	"crypto/rand"
+	"encoding/json"
 	"math/big"
 
+	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
+	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -26,6 +29,29 @@ func generateSecureCode() string {
 // qualquer autenticado podia gerar/ler o código de pedidos alheios.
 func canManagePickupCode(c *fiber.Ctx, establishmentID int64) bool {
 	return canActOnEstablishment(c, establishmentID)
+}
+
+// canValidatePickupCode permite além do estabelecimento/admin o ENTREGADOR
+// atribuído ao pedido — é ele quem confere o código ditado pelo cliente na
+// coleta/entrega. O entregador continua sem poder gerar ou LER o código
+// (só validar o que o cliente informou).
+func canValidatePickupCode(c *fiber.Ctx, doc *models.OrderDocument) bool {
+	if canManagePickupCode(c, doc.EstablishmentID) {
+		return true
+	}
+	tokenUserID, err := middlewares.GetUserIDFromToken(c)
+	if err != nil {
+		return false
+	}
+	var payload struct {
+		DeliveryMan struct {
+			Id int64 `json:"id"`
+		} `json:"deliveryman"`
+	}
+	if err := json.Unmarshal(doc.Payload, &payload); err != nil {
+		return false
+	}
+	return payload.DeliveryMan.Id != 0 && payload.DeliveryMan.Id == tokenUserID
 }
 
 func GeneratePickupCode(c *fiber.Ctx) error {
@@ -71,7 +97,7 @@ func ValidatePickupCode(c *fiber.Ctx) error {
 		return c.Status(404).JSON(fiber.Map{"error": "Order not found"})
 	}
 
-	if !canManagePickupCode(c, doc.EstablishmentID) {
+	if !canValidatePickupCode(c, doc) {
 		return c.Status(403).JSON(fiber.Map{"error": "Sem permissão para este pedido"})
 	}
 

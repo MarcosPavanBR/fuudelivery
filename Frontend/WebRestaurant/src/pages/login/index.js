@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
 import { useAuth } from "../../context/AuthContext";
 import Texts from "../../constants/Texts";
 import SignupPage from "./signup";
@@ -164,12 +165,18 @@ const LoginPage = () => {
                 />
                 <span className="text-sm text-gray-600">Lembrar-me</span>
               </label>
-              <a
-                href="#"
+              <button
+                type="button"
+                onClick={() =>
+                  toast.info(
+                    "Para redefinir sua senha, entre em contato com o suporte FuuDelivery.",
+                    { autoClose: 6000 }
+                  )
+                }
                 className="text-sm font-medium text-gray-500 hover:text-gray-700 hover:underline"
               >
                 {Texts.esqueceu_senha}
-              </a>
+              </button>
             </div>
 
             <button

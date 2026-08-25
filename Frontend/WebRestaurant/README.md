@@ -1,70 +1,48 @@
-# Getting Started with Create React App
+# FuuDelivery — Painel do Restaurante (WebRestaurant)
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Painel web do restaurante: Kanban de pedidos em tempo real, gestão de
+cardápio, carteira/saques e relatórios.
 
-## Available Scripts
+## Stack
 
-In the project directory, you can run:
+- React 19 + Vite 6 + Tailwind CSS 4
+- React Router 6 (BrowserRouter), react-toastify, @hello-pangea/dnd
+- WebSocket (`react-use-websocket`) com fallback para polling (15s)
+- Testes: Vitest + Testing Library
 
-### `npm start`
+## Desenvolvimento
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+```bash
+npm install
+npm run dev        # http://localhost:3000
+npm test           # vitest run
+npm run build      # gera dist/ (+ 404.html para SPA no Render)
+```
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+### Variáveis de ambiente
 
-### `npm test`
+O Vite só expõe variáveis com o prefixo `VITE_` (ver `vite.config.js`).
+Copie `.env.example` para `.env`:
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+```
+VITE_API_URL=https://fuudelivery-api-8y6l.onrender.com
+```
 
-### `npm run build`
+Em dev, aponte para uma API local se estiver rodando o monolito Go
+(`VITE_API_URL=http://localhost:3000`). **Sem essa variável o build cai no
+fallback de produção** (`src/services/api.js`).
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## PWA
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+O painel é instalável (Adicionar à tela inicial): `manifest.json` +
+`public/sw.js` (shell offline; chamadas de API nunca são cacheadas).
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+## Deploy
 
-### `npm run eject`
+Render (static site) via `render.yaml` na raiz do repo — build `npm run
+build`, publish `dist/`, rewrite `/* → /index.html`.
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+## Marca
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+Paleta e logotipos oficiais em `../../brand/` (fonte única da verdade).
+Vermelho primário `#DC2626`.

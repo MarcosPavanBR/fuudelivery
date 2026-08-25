@@ -1,6 +1,10 @@
 # Dependabot — PRs automáticos quando sair CVE nova ou atualização de
 # dependência. Complementa o govulncheck/npm audit do CI (que só rodam a cada
 # push): aqui o alerta chega sozinho.
+#
+# Taming da tempestade: groups colapsa minor/patch num único PR por ecossistema
+# (majors continuam individuais) e open-pull-requests-limit evita encher a fila
+# do CI com 30 branches simultâneos.
 version: 2
 
 updates:
@@ -9,32 +13,90 @@ updates:
     directory: /cmd/fuudelivery
     schedule:
       interval: weekly
+    groups:
+      go-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    open-pull-requests-limit: 5
   - package-ecosystem: gomod
     directory: /Backend/auth_api
     schedule:
       interval: weekly
+    groups:
+      go-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    open-pull-requests-limit: 5
   - package-ecosystem: gomod
     directory: /Backend/payment_api
     schedule:
       interval: weekly
+    groups:
+      go-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    open-pull-requests-limit: 5
   - package-ecosystem: gomod
     directory: /Backend/orders_api
     schedule:
       interval: weekly
+    groups:
+      go-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    open-pull-requests-limit: 5
   - package-ecosystem: gomod
     directory: /Backend/delivery_api
     schedule:
       interval: weekly
+    groups:
+      go-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    open-pull-requests-limit: 5
   - package-ecosystem: gomod
     directory: /Backend/chat_api
     schedule:
       interval: weekly
+    groups:
+      go-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    open-pull-requests-limit: 5
   - package-ecosystem: gomod
     directory: /cmd/etl-payments
     schedule:
       interval: weekly
+    groups:
+      go-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    open-pull-requests-limit: 3
   - package-ecosystem: gomod
     directory: /cmd/etl-orders
+    schedule:
+      interval: weekly
+    groups:
+      go-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    open-pull-requests-limit: 3
+
+  # Pacotes compartilhados (estavam fora — cegos para CVEs)
+  - package-ecosystem: gomod
+    directory: /pkg/health
+    schedule:
+      interval: weekly
+  - package-ecosystem: gomod
+    directory: /pkg/queue
     schedule:
       interval: weekly
 
@@ -43,27 +105,48 @@ updates:
     directory: /Frontend/WebRestaurant
     schedule:
       interval: weekly
+    groups:
+      npm-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    open-pull-requests-limit: 5
   - package-ecosystem: npm
     directory: /Frontend/WebAdmin
     schedule:
       interval: weekly
+    groups:
+      npm-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    open-pull-requests-limit: 5
 
   # Apps mobile (Expo)
   - package-ecosystem: npm
     directory: /Frontend/AppComida
     schedule:
       interval: weekly
+    open-pull-requests-limit: 3
   - package-ecosystem: npm
     directory: /Frontend/AppEntrega
     schedule:
       interval: weekly
+    open-pull-requests-limit: 3
   - package-ecosystem: npm
     directory: /Frontend/AppRestaurante
     schedule:
       interval: weekly
+    open-pull-requests-limit: 3
 
   # GitHub Actions
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    groups:
+      actions-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    open-pull-requests-limit: 3

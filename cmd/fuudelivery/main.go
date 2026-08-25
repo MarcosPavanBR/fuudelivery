@@ -173,7 +173,9 @@ func initDispatchEngine(db *gorm.DB) {
 			"courier_id": courierID,
 			"matched_at": time.Now().UTC(),
 		})
-		queue.Publish("delivery_updates", data)
+		if err := queue.Publish("delivery_updates", data); err != nil {
+			log.Printf("[QUEUE] ERRO ao publicar order_matched (%s): %v", orderID, err)
+		}
 	}
 
 	// Callback: fallback comunitario ativado
@@ -185,7 +187,9 @@ func initDispatchEngine(db *gorm.DB) {
 			"zone_name": zoneName,
 			"time":      time.Now().UTC(),
 		})
-		queue.Publish("delivery_updates", data)
+		if err := queue.Publish("delivery_updates", data); err != nil {
+			log.Printf("[QUEUE] ERRO ao publicar community_fallback (%s): %v", orderID, err)
+		}
 	}
 
 	// Inicia retry loop a cada 30s
@@ -565,6 +569,24 @@ func wsCanAccessOrder(claims jwt.MapClaims, orderID string) bool {
 	return false
 }
 
+// senderNameForChat resolve o nome de exibição do remetente direto do banco
+// (client → user → entregador). O nome enviado pelo cliente nunca é usado.
+func senderNameForChat(userID int64) string {
+	var client models.Client
+	if err := models.DB.Select("name").First(&client, userID).Error; err == nil && client.Name != "" {
+		return client.Name
+	}
+	var user models.User
+	if err := models.DB.Select("name").First(&user, userID).Error; err == nil && user.Name != "" {
+		return user.Name
+	}
+	var dm models.DeliveryMan
+	if err := models.DB.Select("name").First(&dm, userID).Error; err == nil {
+		return dm.Name
+	}
+	return ""
+}
+
 func setupWebSocketRoutes(app *fiber.App) {
 	// Orders WebSocket
 	app.Use("/ws", func(c *fiber.Ctx) error {
@@ -603,12 +625,22 @@ func setupWebSocketRoutes(app *fiber.App) {
 		}
 
 		wsClientsMu.Lock()
+		// Slot-steal: se outra conexão (aba antiga) já ocupa o slot, fecha-a
+		// antes de sobrescrever — senão a referência antiga vira lixo vivo
+		// (conn aberta que ninguém mais remove do mapa).
+		if old, ok := wsClients[clientID]; ok && old != c {
+			_ = old.Close()
+		}
 		wsClients[clientID] = c
 		wsClientsMu.Unlock()
 
 		defer func() {
 			wsClientsMu.Lock()
-			delete(wsClients, clientID)
+			// Só remove se ainda somos nós (evita apagar a conn de uma
+			// aba nova que assumiu o slot enquanto esta morria).
+			if cur, ok := wsClients[clientID]; ok && cur == c {
+				delete(wsClients, clientID)
+			}
 			wsClientsMu.Unlock()
 		}()
 
@@ -762,14 +794,29 @@ func setupWebSocketRoutes(app *fiber.App) {
 
 		deliveryLocsMu.Lock()
 		deliveryLocations[req.OrderID] = loc
+		// Poda: mantém no máximo 500 entradas — o mapa crescia indefinidamente
+		// (o único "cleanup" era o restart do processo).
+		if len(deliveryLocations) > 500 {
+			for k, v := range deliveryLocations {
+				if time.Since(time.UnixMilli(v.Timestamp)) > 2*time.Hour {
+					delete(deliveryLocations, k)
+					if len(deliveryLocations) <= 400 {
+						break
+					}
+				}
+			}
+		}
 		deliveryLocsMu.Unlock()
 
 		data, _ := json.Marshal(map[string]interface{}{"type": "location", "payload": loc})
 		deliveryLocsListenersMu.Lock()
-		for _, listener := range deliveryLocsListeners[req.OrderID] {
-			listener.WriteMessage(websocket.TextMessage, data)
-		}
+		listeners := append([]*websocket.Conn(nil), deliveryLocsListeners[req.OrderID]...)
 		deliveryLocsListenersMu.Unlock()
+		// Escreve FORA do lock: I/O sob mutex serializava todos os pushes
+		// de posição entre si.
+		for _, listener := range listeners {
+			_ = listener.WriteMessage(websocket.TextMessage, data)
+		}
 
 		return c.JSON(fiber.Map{"message": "Location updated", "order_id": req.OrderID})
 	})
@@ -779,7 +826,7 @@ func setupAuthRoutes(app *fiber.App) {
 	app.Post("/users/register", rateLimitMiddleware(5), authHandlers.CreateUser)
 	app.Post("/users/login", rateLimitMiddleware(10), authHandlers.Login)
 	app.Post("/auth/refresh", rateLimitMiddleware(30), authHandlers.RefreshToken)
-	app.Post("/auth/logout", authHandlers.Logout)
+	app.Post("/auth/logout", rateLimitMiddleware(10), authHandlers.Logout)
 	app.Post("/users", adminRequired, authHandlers.CreateUserAdmin)
 	app.Post("/admin/bootstrap", rateLimitMiddleware(3), authHandlers.BootstrapAdmin)
 	app.Get("/users", adminRequired, authHandlers.ListAllUsers)
@@ -841,7 +888,9 @@ func setupOrdersRoutes(app *fiber.App) {
 	app.Post("/delivery/calculate-delivery-value", protectedRoute, ordersHandlers.CalculateDeliveryValue)
 	app.Post("/delivery/calculate-route", protectedRoute, ordersHandlers.CalculateRoute)
 	app.Get("/delivery/value/:establishmentId", ordersHandlers.GetDeliveryByEstablishmentID)
-	app.Post("/orders", protectedRoute, func(c *fiber.Ctx) error {
+	// Rate limit 30/min na criação de pedidos: é a rota que grava, notifica
+	// e dispara dispatch — abuso direto impacta o banco e a fila.
+	app.Post("/orders", protectedRoute, rateLimitMiddleware(30), func(c *fiber.Ctx) error {
 		return ordersHandlers.CreateOrder(c, sendMessageToClient)
 	})
 	app.Put("/orders/status", protectedRoute, func(c *fiber.Ctx) error {
@@ -852,9 +901,9 @@ func setupOrdersRoutes(app *fiber.App) {
 	app.Get("/orders/list-phone/:phone", protectedRoute, ordersHandlers.ListOrdersByPhone)
 	app.Get("/orders/:establishmentId", protectedRoute, ordersHandlers.ListOrdersByEstablishmentID)
 	app.Get("/orders/:establishmentId/:phoneNumber", protectedRoute, ordersHandlers.ListOrdersByEstablishmentIDAndPhone)
-	app.Post("/coupons", protectedRoute, ordersHandlers.CreateCoupon)
-	app.Post("/coupons/validate", protectedRoute, ordersHandlers.ValidateCoupon)
-	app.Post("/coupons/apply", protectedRoute, ordersHandlers.ApplyCoupon)
+	app.Post("/coupons", protectedRoute, rateLimitMiddleware(20), ordersHandlers.CreateCoupon)
+	app.Post("/coupons/validate", protectedRoute, rateLimitMiddleware(30), ordersHandlers.ValidateCoupon)
+	app.Post("/coupons/apply", protectedRoute, rateLimitMiddleware(30), ordersHandlers.ApplyCoupon)
 	app.Get("/coupons", protectedRoute, ordersHandlers.ListCoupons)
 	app.Get("/coupons/:id", protectedRoute, ordersHandlers.GetCoupon)
 	app.Delete("/coupons/:id", protectedRoute, ordersHandlers.DeleteCoupon)
@@ -862,9 +911,9 @@ func setupOrdersRoutes(app *fiber.App) {
 	app.Post("/coupons/calculate", protectedRoute, ordersHandlers.CalculateDiscount)
 	app.Get("/qrcode/:establishmentId", ordersHandlers.GenerateTableQRCode)
 	app.Post("/orders/schedule", protectedRoute, ordersHandlers.ScheduleOrder)
-	app.Post("/notifications/register", protectedRoute, ordersHandlers.RegisterPushToken)
-	app.Post("/loyalty/earn", protectedRoute, ordersHandlers.EarnPoints)
-	app.Post("/loyalty/redeem", protectedRoute, ordersHandlers.RedeemPoints)
+	app.Post("/notifications/register", protectedRoute, rateLimitMiddleware(20), ordersHandlers.RegisterPushToken)
+	app.Post("/loyalty/earn", protectedRoute, rateLimitMiddleware(20), ordersHandlers.EarnPoints)
+	app.Post("/loyalty/redeem", protectedRoute, rateLimitMiddleware(20), ordersHandlers.RedeemPoints)
 	app.Get("/loyalty/balance/:phone", protectedRoute, ordersHandlers.GetLoyaltyBalance)
 	app.Get("/loyalty/history/:phone", protectedRoute, ordersHandlers.GetLoyaltyHistory)
 	app.Get("/loyalty/calculate", protectedRoute, ordersHandlers.CalculateLoyaltyDiscount)
@@ -913,8 +962,10 @@ func setupDispatchRoutes(app *fiber.App) {
 	dispatch := app.Group("/dispatch", protectedRoute)
 
 	// Localizacao do entregador
-	dispatch.Post("/location", dispatchHandler.UpdateLocation)
-	dispatch.Post("/status", dispatchHandler.SetCourierStatus)
+	// 120/min: chega a cada poucos segundos por courier em movimento, mas
+	// precisa de teto contra abuso.
+	dispatch.Post("/location", rateLimitMiddleware(120), dispatchHandler.UpdateLocation)
+	dispatch.Post("/status", rateLimitMiddleware(30), dispatchHandler.SetCourierStatus)
 
 	// Matching
 	dispatch.Post("/trigger", dispatchHandler.TriggerDispatch)
@@ -1035,7 +1086,7 @@ func setupChatRoutes(app *fiber.App) {
 	// como QUALQUER remetente em QUALQUER pedido (o handler confiava 100% no
 	// corpo da requisição). Agora: só participantes do pedido e o remetente é
 	// sempre quem o token diz que é.
-	app.Post("/chat/message", protectedRoute, func(c *fiber.Ctx) error {
+	app.Post("/chat/message", protectedRoute, rateLimitMiddleware(30), func(c *fiber.Ctx) error {
 		token, tErr := middlewares.ValidateJWT(c)
 		if tErr != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
@@ -1059,8 +1110,10 @@ func setupChatRoutes(app *fiber.App) {
 		if jErr := json.Unmarshal(c.Body(), &body); jErr != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid body"})
 		}
-		// Remetente vem SEMPRE do token — nunca do corpo.
+		// Remetente vem SEMPRE do token — nunca do corpo. Nome resolvido do
+		// banco para não exibir o nome forjado pelo cliente.
 		body["sender_id"] = tokenUserID
+		body["sender_name"] = senderNameForChat(tokenUserID)
 		if role, _ := middlewares.GetUserRoleFromToken(c); role != "" {
 			body["sender_type"] = role
 		}
@@ -1186,16 +1239,16 @@ func main() {
 	// Comportamento:
 	//   - ALLOWED_ORIGINS (env, render.yaml) SOMA com os defaults — nunca
 	//     remove os domínios de produção ao adicionar uma origem nova.
-	//   - "https://*.daytonaproxy01.net" libera qualquer preview do Freebuff
-	//     Cloud (formato <porta>-<workspace-uuid>.daytonaproxy01.net).
-	//   - AllowOriginsFunc libera localhost/127.0.0.1 (qualquer porta) para
-	//     desenvolvimento local, ecoando o origin na resposta (compatível
-	//     com AllowCredentials).
+	//   - Em desenvolvimento (GO_ENV != production) liberam-se também os
+	//     previews do Freebuff Cloud (*.daytonaproxy01.net) e localhost em
+	//     qualquer porta (isLocalDevOrigin). Em produção NENHUM dos dois
+	//     vale: wildcard de preview + credentials é superfície de ataque.
 	defaultOrigins := []string{
 		"https://fuudelivery-web.onrender.com",
 		"https://fuudelivery-admin-lv7f.onrender.com",
-		"https://fuudelivery-payment-panel.onrender.com",
-		"https://*.daytonaproxy01.net",
+	}
+	if os.Getenv("GO_ENV") != "production" {
+		defaultOrigins = append(defaultOrigins, "https://*.daytonaproxy01.net")
 	}
 	allowedOrigins := append([]string{}, defaultOrigins...)
 	if extra := os.Getenv("ALLOWED_ORIGINS"); extra != "" {
@@ -1400,7 +1453,9 @@ func processStatusUpdate(queueName string, msg []byte) error {
 // quando retorna true o middleware ecoa o origin na resposta
 // (compatível com AllowCredentials: true).
 func isLocalDevOrigin(origin string) bool {
-	if origin == "" {
+	// Em PRODUÇÃO devolve sempre false: localhost-any-port com credentials
+	// permitia qualquer app local do usuário autenticar contra a API.
+	if origin == "" || os.Getenv("GO_ENV") == "production" {
 		return false
 	}
 	u, err := url.Parse(origin)

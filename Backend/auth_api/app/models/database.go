@@ -46,6 +46,15 @@ func ConnectDatabase() {
 		panic(fmt.Sprintf("Falha ao conectar ao banco de dados após %d tentativas", maxRetries))
 	}
 
+	// Limites de pool: sem isso o módulo abria conexões ilimitadas; somados
+	// os 5 módulos do monólito contra o mesmo Supabase, uma rajada esgota
+	// o limite do pooler e derruba todas as rotas.
+	if sqlDB, sErr := database.DB(); sErr == nil {
+		sqlDB.SetMaxOpenConns(10)
+		sqlDB.SetMaxIdleConns(5)
+		sqlDB.SetConnMaxLifetime(5 * time.Minute)
+	}
+
 	if err := database.AutoMigrate(
 		&User{},
 		&Establishment{},

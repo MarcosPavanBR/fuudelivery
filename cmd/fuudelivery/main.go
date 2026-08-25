@@ -506,6 +506,65 @@ func (z *zoneDBResolver) GetZoneMetadata(zoneID uint) *dispatchServices.ZoneMeta
 	return meta
 }
 
+// wsCanAccessOrder autoriza um token JWT a acessar dados em tempo real de um
+// pedido (WebSocket de localização da entrega e de chat).
+//
+// Defesa contra IDOR: autenticar não basta — o usuário só pode acompanhar
+// pedidos dos quais PARTICIPA. Os participantes são resolvidos de
+// delivery_solicitations (corte 3); se o pedido ainda não foi despachado,
+// cai para order_documents (corte 5) validando estabelecimento e telefone do
+// cliente. Admin sempre passa, com log de auditoria em toda negação.
+func wsCanAccessOrder(claims jwt.MapClaims, orderID string) bool {
+	if role, _ := claims["role"].(string); role == "admin" {
+		return true
+	}
+
+	tokenUserID, _ := claims["id"].(float64)
+	uid := int64(tokenUserID)
+	phone, _ := claims["phone"].(string)
+	estID := int64(0)
+	if v, ok := claims["establishment_id"].(float64); ok {
+		estID = int64(v)
+	}
+
+	var s deliveryModels.DeliverySolicitation
+	err := deliveryModels.DB.
+		Select("user_id", "user_phone", "establishment_id", "delivery_man_id").
+		Where("order_id = ?", orderID).
+		First(&s).Error
+	if err == nil {
+		if uid != 0 && (uid == s.UserID || uid == s.EstablishmentID || (s.DeliveryManID != 0 && uid == s.DeliveryManID)) {
+			return true
+		}
+		if estID != 0 && estID == s.EstablishmentID {
+			return true
+		}
+		if phone != "" && phone == s.UserPhone {
+			return true
+		}
+	} else if err == gorm.ErrRecordNotFound {
+		// Pedido ainda sem solicitação de entrega (não despachado): valida
+		// estabelecimento e cliente direto do pedido.
+		var doc ordersModels.OrderDocument
+		if err2 := ordersModels.DB.
+			Select("establishment_id", "user_phone").
+			Where("legacy_id = ?", orderID).
+			First(&doc).Error; err2 == nil {
+			if estID != 0 && estID == doc.EstablishmentID {
+				return true
+			}
+			if phone != "" && phone == doc.UserPhone {
+				return true
+			}
+		}
+	} else {
+		log.Printf("[WS-AUTH] erro consultando participação do pedido %s: %v", orderID, err)
+	}
+
+	log.Printf("[WS-AUTH] acesso negado: user %d (est %d, role/phone verificados) tentou acessar pedido %s", uid, estID, orderID)
+	return false
+}
+
 func setupWebSocketRoutes(app *fiber.App) {
 	// Orders WebSocket
 	app.Use("/ws", func(c *fiber.Ctx) error {
@@ -589,6 +648,11 @@ func setupWebSocketRoutes(app *fiber.App) {
 			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"User ID mismatch"}}`))
 			return
 		}
+		// IDOR: autenticar não basta — o usuário precisa participar do pedido.
+		if !wsCanAccessOrder(claims, c.Params("orderId")) {
+			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Forbidden"}}`))
+			return
+		}
 		chatHandlers.HandleChatWebSocket(c)
 	}))
 
@@ -611,7 +675,7 @@ func setupWebSocketRoutes(app *fiber.App) {
 			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Authentication required"}}`))
 			return
 		}
-		_, err := parseWSToken(token)
+		claims, err := parseWSToken(token)
 		if err != nil {
 			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Invalid token"}}`))
 			return
@@ -620,6 +684,13 @@ func setupWebSocketRoutes(app *fiber.App) {
 		orderID := c.Params("orderId")
 		if orderID == "" {
 			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"orderId required"}}`))
+			return
+		}
+
+		// IDOR: autenticar não basta — só participantes do pedido (cliente,
+		// estabelecimento, entregador atribuído, admin) podem ver a localização.
+		if !wsCanAccessOrder(claims, orderID) {
+			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Forbidden"}}`))
 			return
 		}
 
@@ -960,7 +1031,43 @@ func setupChatRoutes(app *fiber.App) {
 		log.Printf("[CHAT IDOR] GetMessages denied: user=%d order=%s", tokenUserID, orderID)
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "You are not a participant of this order"})
 	})
-	app.Post("/chat/message", protectedRoute, chatHandlers.SendMessage)
+	// IDOR + anti-spoofing: antes qualquer usuário autenticado podia postar
+	// como QUALQUER remetente em QUALQUER pedido (o handler confiava 100% no
+	// corpo da requisição). Agora: só participantes do pedido e o remetente é
+	// sempre quem o token diz que é.
+	app.Post("/chat/message", protectedRoute, func(c *fiber.Ctx) error {
+		token, tErr := middlewares.ValidateJWT(c)
+		if tErr != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+		}
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token claims"})
+		}
+		var req struct {
+			OrderID string `json:"order_id"`
+		}
+		if pErr := json.Unmarshal(c.Body(), &req); pErr != nil || req.OrderID == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "order_id is required"})
+		}
+		if !wsCanAccessOrder(claims, req.OrderID) {
+			log.Printf("[CHAT IDOR] SendMessage denied: order=%s", req.OrderID)
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "You are not a participant of this order"})
+		}
+		tokenUserID, _ := middlewares.GetUserIDFromToken(c)
+		var body map[string]interface{}
+		if jErr := json.Unmarshal(c.Body(), &body); jErr != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid body"})
+		}
+		// Remetente vem SEMPRE do token — nunca do corpo.
+		body["sender_id"] = tokenUserID
+		if role, _ := middlewares.GetUserRoleFromToken(c); role != "" {
+			body["sender_type"] = role
+		}
+		fixedBody, _ := json.Marshal(body)
+		c.Request().SetBody(fixedBody)
+		return chatHandlers.SendMessage(c)
+	})
 	app.Put("/chat/read/:orderId/:userId", protectedRoute, func(c *fiber.Ctx) error {
 		tokenUserID, err := middlewares.GetUserIDFromToken(c)
 		if err != nil {

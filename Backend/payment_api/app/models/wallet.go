@@ -172,8 +172,9 @@ func AdjustWalletBalance(db *gorm.DB, userID int64, userType, txnType, kind stri
 }
 
 // HasLedgerEntry checa idempotência: já existe lançamento deste tipo para a
-// referência? Usado para o crédito de split não duplicar num reprocesso do
-// webhook (mesmo papel do CountDocuments antigo no wallet_ledger).
+// referência? Usado pelo webhook.go (crédito de split) para não duplicar num
+// reprocesso do webhook — segunda camada além da constraint única
+// uq_wallet_txns_credit_ref em AdjustWalletBalance.
 func HasLedgerEntry(db *gorm.DB, referenceID, txnType string) bool {
 	var count int64
 	err := db.Model(&WalletTxn{}).

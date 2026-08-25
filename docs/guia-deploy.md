@@ -21,15 +21,16 @@ REDIS_URL=redis://...
 
 # Autenticação
 JWT_SECRET=<gerar com: openssl rand -hex 32>
-ADMIN_PASSWORD=<senha forte>
+# Bootstrap único do primeiro admin (POST /admin/bootstrap). Remover após uso.
+ADMIN_BOOTSTRAP_SECRET=<senha forte>
 
 # Pagamentos
 ABACATE_PAY_API_KEY=abc_prod_...
 ABACATE_PAY_WEBHOOK_SECRET=whsec_...
 
-# Storage (opcional)
-SUPABASE_URL=https://...
-SUPABASE_KEY=...
+# Storage de imagens (obrigatório p/ upload — sem isso o endpoint responde 503)
+SUPABASE_URL=https://seu-projeto.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=...
 ```
 
 ### Configuração dos Serviços
@@ -37,12 +38,12 @@ SUPABASE_KEY=...
 #### 1. FuuDelivery API (Monolito)
 - **Build Command**: `cd cmd/fuudelivery && go build -o ../../server .`
 - **Start Command**: `./server`
-- **Port**: 10000
-- **Plan**: Starter (para produção)
+- **Port**: 3000 (definido em render.yaml; o Render roteia 443 → essa porta)
+- **Plan**: Free (1 serviço dinâmico ≈730h cabe nas 750h/mês) ou Starter
 
 #### 3. Frontend (WebAdmin + WebRestaurant)
-- **Build Command**: `cd Frontend/WebAdmin && npm install && npm run build`
-- **Publish Directory**: `Frontend/WebAdmin/dist`
+- **Build Command**: `cd Frontend/WebAdmin && npm install --legacy-peer-deps && npm run build`
+- **Publish Directory**: `Frontend/WebAdmin/build` (outDir do Vite)
 
 ### Deploy Automático
 

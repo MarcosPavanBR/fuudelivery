@@ -2,9 +2,11 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/crypto/bcrypt"
@@ -84,11 +86,15 @@ func CreateUser(c *fiber.Ctx) error {
 		if roleVal == "" {
 			roleVal = "user"
 		}
-		_, err = tx.Exec("INSERT INTO users (id, name, email, password, phone, role, \"createdAt\", \"updatedAt\") VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())", userID, user.Name, user.Email, user.Password, user.Phone, roleVal)
-		if err != nil {
-			tx.Rollback()
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+_, err = tx.Exec("INSERT INTO users (id, name, email, password, phone, role, \"createdAt\", \"updatedAt\") VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())", userID, user.Name, user.Email, user.Password, user.Phone, roleVal)
+	if err != nil {
+		tx.Rollback()
+		// Check for unique constraint violation on email
+		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") && strings.Contains(err.Error(), "users_email_key") {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Email already registered"})
 		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	}
 		user.ID = userID
 		establishment.OwnerID = userID
 		tx.Exec("CREATE SEQUENCE IF NOT EXISTS establishments_id_seq OWNED BY establishments.id")
@@ -454,7 +460,8 @@ func BootstrapAdmin(c *fiber.Ctx) error {
 }
 
 // RefreshToken renova um access token usando um refresh token valido.
-// O refresh token antigo é revogado (rotação) e um novo par é emitido.
+// Rotação ATÔMICA com reuse detection: o token antigo só pode ser consumido
+// uma vez; replay pós-rotação revoga toda a família do usuário.
 func RefreshToken(c *fiber.Ctx) error {
 	var req struct {
 		RefreshToken string `json:"refresh_token"`
@@ -467,16 +474,14 @@ func RefreshToken(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "refresh_token is required"})
 	}
 
-	// Valida o refresh token (existe, não expirado, não revogado)
-	userID, err := middlewares.ValidateRefreshToken(req.RefreshToken)
-	if err != nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid or expired refresh token"})
+	userID, newRefreshToken, rErr := middlewares.RotateRefreshToken(req.RefreshToken)
+	if errors.Is(rErr, middlewares.ErrRefreshReuse) {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "Sessão encerrada por segurança. Faça login novamente.",
+		})
 	}
-
-	// Rotação: revoga o refresh token antigo antes de gerar o novo
-	if err := middlewares.RevokeRefreshToken(req.RefreshToken); err != nil {
-		// Log mas não impede — pior caso fica com um token extra válido até expirar
-		log.Printf("[WARN] Failed to revoke old refresh token: %v", err)
+	if rErr != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid or expired refresh token"})
 	}
 
 	// Busca o usuário
@@ -494,14 +499,14 @@ func RefreshToken(c *fiber.Ctx) error {
 		}
 	}
 
-	accessToken, refreshToken, err := createTokenPair(&user, establishmentPtr)
+	accessToken, err := middlewares.GenerateJWT(&user, establishmentPtr)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to generate tokens"})
 	}
 
 	return c.JSON(fiber.Map{
 		"token":         accessToken,
-		"refresh_token": refreshToken,
+		"refresh_token": newRefreshToken,
 	})
 }
 

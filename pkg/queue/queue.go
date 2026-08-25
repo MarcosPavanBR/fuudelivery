@@ -85,11 +85,12 @@ type Queue struct {
 	// Contadores atômicos para observabilidade (/metrics).
 	// Accessíveis via Metrics(); incrementados em Publish/process/handleFailure.
 	metrics struct {
-		published int64
-		delivered int64
-		failed    int64
-		dlq       int64
-		reclaimed int64
+		published     int64
+		publishErrors int64
+		delivered     int64
+		failed        int64
+		dlq           int64
+		reclaimed     int64
 	}
 }
 
@@ -163,13 +164,18 @@ func retryHashKey(queueName string) string {
 func (q *Queue) Publish(queueName string, data []byte) error {
 	if q.useRedis && q.client != nil {
 		atomic.AddInt64(&q.metrics.published, 1)
-		return q.client.XAdd(q.ctx, &redis.XAddArgs{
+		if err := q.client.XAdd(q.ctx, &redis.XAddArgs{
 			Stream: streamKey(queueName),
 			Values: map[string]interface{}{"payload": data},
-		}).Err()
+		}).Err(); err != nil {
+			atomic.AddInt64(&q.metrics.publishErrors, 1)
+			return err
+		}
+		return nil
 	}
 
-	// Fallback: Go channel
+	// Fallback: Go channel. Fila cheia = perda silenciosa de evento financeiro
+	// se fingíssemos sucesso — agora propaga erro para o chamador decidir.
 	q.mu.Lock()
 	ch, ok := q.internalQueues[queueName]
 	if !ok {
@@ -180,8 +186,11 @@ func (q *Queue) Publish(queueName string, data []byte) error {
 
 	select {
 	case ch <- data:
+		atomic.AddInt64(&q.metrics.published, 1)
 	default:
 		log.Printf("[QUEUE] Fila %s cheia, mensagem descartada", queueName)
+		atomic.AddInt64(&q.metrics.publishErrors, 1)
+		return fmt.Errorf("fila %s cheia (fallback em memória)", queueName)
 	}
 	return nil
 }
@@ -476,6 +485,8 @@ func payloadOf(msg redis.XMessage) []byte {
 type Stats struct {
 	// Published total de mensagens publicadas (XAdd + fallback Go channel).
 	Published int64
+	// PublishErrors total de falhas ao publicar (Redis down, fallback cheio).
+	PublishErrors int64
 	// Delivered total de mensagens entregues com sucesso ao handler (XAck).
 	Delivered int64
 	// Failed total de falhas de handler (retry contabilizado).
@@ -489,11 +500,12 @@ type Stats struct {
 // Stats retorna um snapshot atomico dos contadores da fila.
 func (q *Queue) Stats() Stats {
 	return Stats{
-		Published: atomic.LoadInt64(&q.metrics.published),
-		Delivered: atomic.LoadInt64(&q.metrics.delivered),
-		Failed:    atomic.LoadInt64(&q.metrics.failed),
-		DLQ:       atomic.LoadInt64(&q.metrics.dlq),
-		Reclaimed: atomic.LoadInt64(&q.metrics.reclaimed),
+		Published:     atomic.LoadInt64(&q.metrics.published),
+		PublishErrors: atomic.LoadInt64(&q.metrics.publishErrors),
+		Delivered:     atomic.LoadInt64(&q.metrics.delivered),
+		Failed:        atomic.LoadInt64(&q.metrics.failed),
+		DLQ:           atomic.LoadInt64(&q.metrics.dlq),
+		Reclaimed:     atomic.LoadInt64(&q.metrics.reclaimed),
 	}
 }
 

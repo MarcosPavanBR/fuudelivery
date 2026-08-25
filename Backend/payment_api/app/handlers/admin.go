@@ -210,6 +210,17 @@ func ApprovePayment(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Payment is not pending"})
 	}
 
+	// Aprovação manual dispara o MESMO fluxo do webhook (split, crédito da
+	// carteira, loyalty, fila) — antes o admin aprovava e o estabelecimento
+	// nunca era creditado. publishPaymentApproved é idempotente: créditos
+	// duplicados são barrados pelo UNIQUE uq_wallet_txns_credit_ref.
+	var payment models.Payment
+	if err := models.DB.First(&payment, paymentID).Error; err == nil && payment.AbacatePayID != "" {
+		go publishPaymentApproved(payment.AbacatePayID)
+	} else if err != nil {
+		log.Printf("[ADMIN] Aprovado %s mas falha ao recarregar pagamento p/ split: %v", id, err)
+	}
+
 	return c.JSON(fiber.Map{"message": "Payment approved", "payment_id": id, "status": "CONFIRMED"})
 }
 

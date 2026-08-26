@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from "react";
-import api, { getApiBaseUrl } from "../services/api";
+import api, { getApiBaseUrl, requestWsTicket } from "../services/api";
 
 import Strings from "../constants/Strings";
 import { jwtDecode } from "jwt-decode";
@@ -39,15 +39,29 @@ export const AuthProvider = ({ children }) => {
 
   const [wsUrl, setWsUrl] = useState(null);
   useEffect(() => {
-    if (user?.sub) {
-      setWsUrl(
-        getWsBaseUrl() +
-          "/ws/" +
-          user.sub +
-          "?token=" +
-          localStorage.getItem(Strings.token_jwt)
-      );
+    let cancelled = false;
+    async function connectWs() {
+      if (!user?.sub) return;
+      try {
+        const ticket = await requestWsTicket();
+        if (!cancelled) {
+          setWsUrl(getWsBaseUrl() + "/ws/" + user.sub + "?ticket=" + ticket);
+        }
+      } catch {
+        // Fallback para JWT na query string (deprecated) se o ticket falhar
+        if (!cancelled) {
+          setWsUrl(
+            getWsBaseUrl() +
+              "/ws/" +
+              user.sub +
+              "?token=" +
+              localStorage.getItem(Strings.token_jwt)
+          );
+        }
+      }
     }
+    connectWs();
+    return () => { cancelled = true; };
   }, [user]);
   const { sendJsonMessage, lastMessage } = useWebSocket(wsUrl, {
     enabled: !!wsUrl && !!user?.sub,

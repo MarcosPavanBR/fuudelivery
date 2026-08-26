@@ -34,4 +34,22 @@ export const getApiUrl = (): string =>
 export const getWsUrl = (): string =>
   process.env.EXPO_PUBLIC_WS_URL || getApiUrl().replace(/^http/, "ws");
 
-export default { API_URL, getApiUrl, getWsUrl };
+/**
+ * Solicita um ticket de curta duração (60s) para conectar ao WebSocket.
+ * Em vez de passar o JWT na query string (que vaza em logs de proxy),
+ * o cliente troca o JWT por um ticket via HTTP e usa ?ticket=<ticket>.
+ */
+export async function requestWsTicket(jwt: string): Promise<string> {
+  const res = await fetch(`${getApiUrl()}/auth/ws-ticket`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${jwt}`,
+      "Content-Type": "application/json",
+    },
+  });
+  if (!res.ok) throw new Error(`WS ticket failed: ${res.status}`);
+  const data = await res.json();
+  return data.ticket;
+}
+
+export default { API_URL, getApiUrl, getWsUrl, requestWsTicket };

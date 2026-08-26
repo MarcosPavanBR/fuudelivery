@@ -137,4 +137,24 @@ api.interceptors.response.use(
   }
 );
 
+/**
+ * Solicita um ticket de curta duração (60s) para conectar ao WebSocket.
+ * Em vez de passar o JWT na query string (que vaza em logs de proxy),
+ * o cliente troca o JWT por um ticket via HTTP e usa ?ticket=<ticket>.
+ */
+export async function requestWsTicket() {
+  const toe = localStorage.getItem(Strings.token_jwt);
+  if (!toe) throw new Error("No JWT available");
+  const res = await fetch(`${API_BASE_URL}/auth/ws-ticket`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${toe}`,
+      "Content-Type": "application/json",
+    },
+  });
+  if (!res.ok) throw new Error(`WS ticket failed: ${res.status}`);
+  const data = await res.json();
+  return data.ticket;
+}
+
 export default api;

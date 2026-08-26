@@ -1,5 +1,11 @@
 # FuuDelivery — Análise Completa e Plano de Finalização para Produção
 
+> 📜 **DOCUMENTO HISTÓRICO** — auditoria pontual feita em 10/08/2026 sobre o estado
+> do repositório naquele momento (`master` em `cc2132c`, 213 commits). Os problemas
+> descritos abaixo (CI falhando, commits não pushados etc.) **já foram resolvidos**;
+> não use este documento como retrato do estado atual — consulte o README e o CI.
+> As menções históricas a `Backend/Payment` referem-se a código que foi arquivado e
+> removido do repositório — todo o código de pagamento ativo vive em `payment_api`.
 
 > ⚠️ **`Backend/Payment` foi arquivado e removido do repositório.** Todo o código
 > de pagamento ativo vive em `payment_api` (embutido no monolito `cmd/fuudelivery`).

@@ -115,7 +115,38 @@ func parseWSToken(tokenStr string) (jwt.MapClaims, error) {
 }
 
 // WebSocket client management (shared across services)
-var wsClients = make(map[int64]*websocket.Conn)
+// safeConn serializa escritas em UMA conexão WebSocket.
+// Por quê: gorilla/fasthttp ws não permite WriteMessage concorrente no mesmo
+// conn ("concurrent write to websocket connection"). Sem o wrapper, o push da
+// fila (sendMessageToClient) e o echo/read-loop do próprio handler escreviam
+// no mesmo conn de goroutines diferentes — janela rara de panic.
+// wsMessageWriter é o subconjunto de *websocket.Conn usado pelo safeConn —
+// existe para os testes injetarem um writer falso sob -race.
+type wsMessageWriter interface {
+	WriteMessage(messageType int, data []byte) error
+}
+
+type safeConn struct {
+	conn wsMessageWriter
+	mu   sync.Mutex
+}
+
+func (s *safeConn) WriteMessage(messageType int, data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.conn.WriteMessage(messageType, data)
+}
+
+func (s *safeConn) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if c, ok := s.conn.(interface{ Close() error }); ok {
+		return c.Close()
+	}
+	return nil
+}
+
+var wsClients = make(map[int64]*safeConn)
 var wsClientsMu sync.Mutex
 
 func sendMessageToClient(clientID int64, message []byte) error {
@@ -696,21 +727,22 @@ func setupWebSocketRoutes(app *fiber.App) {
 			}
 		}
 
+		sc := &safeConn{conn: c}
 		wsClientsMu.Lock()
 		// Slot-steal: se outra conexão (aba antiga) já ocupa o slot, fecha-a
 		// antes de sobrescrever — senão a referência antiga vira lixo vivo
 		// (conn aberta que ninguém mais remove do mapa).
-		if old, ok := wsClients[clientID]; ok && old != c {
+		if old, ok := wsClients[clientID]; ok && old != sc {
 			_ = old.Close()
 		}
-		wsClients[clientID] = c
+		wsClients[clientID] = sc
 		wsClientsMu.Unlock()
 
 		defer func() {
 			wsClientsMu.Lock()
 			// Só remove se ainda somos nós (evita apagar a conn de uma
 			// aba nova que assumiu o slot enquanto esta morria).
-			if cur, ok := wsClients[clientID]; ok && cur == c {
+			if cur, ok := wsClients[clientID]; ok && cur == sc {
 				delete(wsClients, clientID)
 			}
 			wsClientsMu.Unlock()
@@ -727,7 +759,7 @@ func setupWebSocketRoutes(app *fiber.App) {
 				break
 			}
 			log.Printf("recv: %s", msg)
-			if err2 = c.WriteMessage(mt, msg); err2 != nil {
+			if err2 = sc.WriteMessage(mt, msg); err2 != nil {
 				log.Println("write:", err2)
 				break
 			}
@@ -770,7 +802,7 @@ func setupWebSocketRoutes(app *fiber.App) {
 
 	var deliveryLocsMu sync.RWMutex
 	deliveryLocations := make(map[string]*DeliveryLocation)
-	deliveryLocsListeners := make(map[string][]*websocket.Conn)
+	deliveryLocsListeners := make(map[string][]*safeConn)
 	var deliveryLocsListenersMu sync.Mutex
 
 	app.Get("/ws/delivery/:orderId", websocket.New(func(c *websocket.Conn) {
@@ -798,17 +830,18 @@ func setupWebSocketRoutes(app *fiber.App) {
 			return
 		}
 
+		sc := &safeConn{conn: c}
 		c.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf(`{"type":"connected","payload":{"orderId":"%s"}}`, orderID)))
 
 		deliveryLocsListenersMu.Lock()
-		deliveryLocsListeners[orderID] = append(deliveryLocsListeners[orderID], c)
+		deliveryLocsListeners[orderID] = append(deliveryLocsListeners[orderID], sc)
 		deliveryLocsListenersMu.Unlock()
 
 		defer func() {
 			deliveryLocsListenersMu.Lock()
 			listeners := deliveryLocsListeners[orderID]
 			for i, l := range listeners {
-				if l == c {
+				if l == sc {
 					deliveryLocsListeners[orderID] = append(listeners[:i], listeners[i+1:]...)
 					break
 				}
@@ -819,7 +852,7 @@ func setupWebSocketRoutes(app *fiber.App) {
 		deliveryLocsMu.RLock()
 		if loc, ok := deliveryLocations[orderID]; ok {
 			data, _ := json.Marshal(map[string]interface{}{"type": "location", "payload": loc})
-			c.WriteMessage(websocket.TextMessage, data)
+			sc.WriteMessage(websocket.TextMessage, data)
 		}
 		deliveryLocsMu.RUnlock()
 
@@ -882,7 +915,7 @@ func setupWebSocketRoutes(app *fiber.App) {
 
 		data, _ := json.Marshal(map[string]interface{}{"type": "location", "payload": loc})
 		deliveryLocsListenersMu.Lock()
-		listeners := append([]*websocket.Conn(nil), deliveryLocsListeners[req.OrderID]...)
+		listeners := append([]*safeConn(nil), deliveryLocsListeners[req.OrderID]...)
 		deliveryLocsListenersMu.Unlock()
 		// Escreve FORA do lock: I/O sob mutex serializava todos os pushes
 		// de posição entre si.

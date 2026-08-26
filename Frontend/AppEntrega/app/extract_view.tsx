@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   shareButton: {
-    backgroundColor: Colors.dark.tint,
+    backgroundColor: Colors.light.tint,
     padding: 15,
     borderRadius: 3,
     flexDirection: "row",

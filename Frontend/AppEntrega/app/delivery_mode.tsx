@@ -241,8 +241,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignContent: "center",
     alignItems: "center",
-    backgroundColor: Colors.dark.tint,
-    borderColor: Colors.dark.tint,
+    backgroundColor: Colors.light.tint,
+    borderColor: Colors.light.tint,
     borderWidth: 1,
   },
 

@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"strings"
+
 	"github.com/carloshomar/fuudelivery/auth_api/app/dto"
 	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/auth_api/app/models"
@@ -78,6 +80,9 @@ func CreateDeliveryMan(c *fiber.Ctx) error {
 	}
 
 	if err := models.DB.Create(&user).Error; err != nil {
+		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Email already registered"})
+		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create user"})
 	}
 

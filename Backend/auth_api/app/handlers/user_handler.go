@@ -181,7 +181,10 @@ func CreateUserAdmin(c *fiber.Ctx) error {
 		EstablishmentID: request.EstablishmentID,
 	}
 	if err := models.DB.Create(&user).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Email already registered"})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create user"})
 	}
 
 	request.Password = ""

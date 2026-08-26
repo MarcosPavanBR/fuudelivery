@@ -57,6 +57,9 @@ func RegisterClient(c *fiber.Ctx) error {
 
 	if err := models.DB.Create(&client).Error; err != nil {
 		log.Printf("Failed to create client: %v", err)
+		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Phone number already registered"})
+		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create account"})
 	}
 

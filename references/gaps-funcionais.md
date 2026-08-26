@@ -144,7 +144,7 @@ O README.md foi atualizado em 2026-07-26 para refletir o FuuDelivery:
 - ✅ **CI gate no deploy**: Deploy agora depende do CI passar primeiro
 
 ### Documentacao
-- ✅ `docker-compose.yml`: Marcado como LEGADO com aviso
+- ✅ `docker-compose.yml`: Marcado como LEGADO com aviso (o arquivo foi removido do repositório desde então; o compose ativo hoje é o `docker-compose.vps.yml` da raiz)
 - ✅ `docker-compose.payment.yml`: Atualizado para Redis (removido RabbitMQ)
 - ✅ `render.yaml`: Variáveis RabbitMQ removidas, Redis adicionado ao Payment Service
 - ✅ `gaps-funcionais.md`: Atualizado (este arquivo)

@@ -24,6 +24,7 @@ Legenda de origem: **PG** = já era Postgres antes desta consolidação (gerido 
 | `zones` | Praça/região: split de pagamento, raio de entrega, algoritmo de match | `platform_fee_percentage`, `establishment_percentage`, `radius_km` |
 | `subscriptions` | Assinatura do cliente (frete grátis/cashback) | `user_id`, `plan` (basic/premium) |
 | `sponsored_listings` | Patrocínio de restaurante na busca | `establishment_id`, `zone_id`, `plan`, `priority` |
+| **`password_reset_tokens`** *(novo, script 13)* | Códigos de uso único para reset assistido de senha | `user_type` + `user_id`, `code_hash` (SHA-256, ⚠ sensível — redigido no audit_log), `expires_at`, `used_at` |
 
 ## Domínio: pedidos (`orders_api`) — PG (já existia) + MG→PG (push_tokens)
 
@@ -60,7 +61,7 @@ Este é o domínio que existia **duplicado em dois bancos Mongo**. As tabelas ab
 | **`payment_approval_rules`** | Regras globais de aprovação automática/manual (tabela de **1 linha só**) | `auto_approve_max_amount`, `manual_review_min_risk` |
 | **`payment_admin_users`** | Operadores/admins do painel de pagamentos | `email` (único), `role` (admin/operator), `password_hash` (⚠ sensível, bcrypt) |
 
-**Colunas sensíveis nesta seção** (nunca devolver em resposta de API, sempre redigidas no `audit_log`): `payments.card_token`, `payments.pix_copy_paste`, `payments.qr_code_base64`, `payment_admin_users.password_hash`.
+**Colunas sensíveis nesta seção** (nunca devolver em resposta de API, sempre redigidas no `audit_log`): `payments.card_token`, `payments.pix_copy_paste`, `payments.qr_code_base64`, `payment_admin_users.password_hash`, `password_reset_tokens.code_hash`.
 
 ## Domínio: chat (`chat_api`) — MG→PG
 

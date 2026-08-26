@@ -33,6 +33,10 @@ Fork do [vercardapio/appdelivery](https://github.com/carloshomar/appdelivery) es
 - WebSocket nativo (não socket.io): atualizações de pedidos/entregas em tempo real e chat por pedido
 - Fila Redis Streams (`XADD`/`XREADGROUP`, consumer groups, retry, DLQ) com fallback in-memory via Go channels quando `REDIS_URL` não está configurado
 
+### Segurança e contas
+- JWT HS256 com validação de algoritmo, rate limiting por IP, CORS com trusted proxies
+- **Reset de senha assistido** (`POST /admin/password-reset/code` + `POST /auth/reset-password`): o suporte gera um código de 8 caracteres no WebAdmin e informa por telefone/WhatsApp; o usuário define a nova senha na página pública `/resetar-senha` (WebRestaurant). Código com TTL de 15 min, uso único e teto de 5 tentativas.
+
 ## Arquitetura
 
 ```

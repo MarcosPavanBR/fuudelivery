@@ -24,6 +24,32 @@ type Room struct {
 type ClientInfo struct {
 	UserID   int64
 	UserType string
+	// conn é o wrapper com mutex de escrita: o broadcast (goroutine de OUTRO
+	// cliente) e o ack "message_sent" (read-loop do próprio dono) escrevem no
+	// mesmo *websocket.Conn a partir de goroutines diferentes — sem
+	// serialização dá "concurrent write to websocket connection".
+	conn *safeConn
+}
+
+// safeConn serializa escritas em UMA conexão WebSocket (espelho do wrapper de
+// cmd/fuudelivery/main.go; duplicado aqui para não criar dependência entre
+// módulos Go). gorilla/fasthttp ws não permite WriteMessage concorrente no
+// mesmo conn.
+type safeConn struct {
+	conn wsMessageWriter
+	mu   sync.Mutex
+}
+
+// wsMessageWriter é o subconjunto de *websocket.Conn usado pelo safeConn —
+// existe para os testes injetarem um writer falso sob -race.
+type wsMessageWriter interface {
+	WriteMessage(messageType int, data []byte) error
+}
+
+func (s *safeConn) WriteMessage(messageType int, data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.conn.WriteMessage(messageType, data)
 }
 
 var (
@@ -74,7 +100,7 @@ func broadcastToRoom(orderID string, sender *websocket.Conn, message []byte) {
 
 	for client := range room.Clients {
 		if client != sender {
-			if err := client.WriteMessage(websocket.TextMessage, message); err != nil {
+			if err := room.Clients[client].conn.WriteMessage(websocket.TextMessage, message); err != nil {
 				log.Printf("Erro ao enviar mensagem para cliente: %v", err)
 				client.Close()
 				delete(room.Clients, client)
@@ -96,10 +122,12 @@ func HandleChatWebSocket(c *websocket.Conn) {
 
 	room := getOrCreateRoom(orderID)
 
+	sc := &safeConn{conn: c}
 	room.Mu.Lock()
 	room.Clients[c] = &ClientInfo{
 		UserID:   userID,
 		UserType: userType,
+		conn:     sc,
 	}
 	room.Mu.Unlock()
 
@@ -150,7 +178,7 @@ func HandleChatWebSocket(c *websocket.Conn) {
 				"type":    "message_sent",
 				"payload": savedMsg,
 			})
-			c.WriteMessage(websocket.TextMessage, responseBytes)
+			sc.WriteMessage(websocket.TextMessage, responseBytes)
 
 		case "typing":
 			broadcastBytes, _ := json.Marshal(map[string]interface{}{

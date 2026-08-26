@@ -65,6 +65,7 @@ func ConnectDatabase() {
 		&SponsoredListing{},
 		&Client{},
 		&RefreshToken{},
+		&PasswordResetToken{},
 	); err != nil {
 		// FALHA FATAL: sem estas tabelas o login/registro quebram em produção
 		// com "Failed to generate tokens" (incidente 2026-08-24: refresh_tokens

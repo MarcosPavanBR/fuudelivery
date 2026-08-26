@@ -400,15 +400,18 @@ type splitMetricsProvider struct {
 }
 
 func (s *splitMetricsProvider) GetMonthlyOrders(zoneID uint) int {
-	// Conta pedidos para estabelecimentos vinculados a esta zona
+	// Conta pedidos dos Últimos 30 DIAS para estabelecimentos vinculados
+	// a esta zona. Usa order_documents (tabela ativa desde o corte 5) que
+	// possui created_at; a tabela legada "orders" não tem coluna temporal.
 	if s.DB == nil {
 		return 0
 	}
 	var count int64
 	err := s.DB.Raw(
-		"SELECT COUNT(*) FROM orders "+
-			"JOIN establishments ON establishments.id = orders.establishment_id "+
-			"WHERE establishments.zone_id = ?", zoneID,
+		"SELECT COUNT(*) FROM order_documents "+
+			"JOIN establishments ON establishments.id = order_documents.establishment_id "+
+			"WHERE establishments.zone_id = ? "+
+			"AND order_documents.created_at >= NOW() - INTERVAL '30 days'", zoneID,
 	).Scan(&count).Error
 	if err != nil {
 		// Coluna establishment_id pode nao existir ainda (migration pendente)

@@ -110,15 +110,7 @@
     --accent: #DC2626;
   }
 
-  [data-theme="dark"] {
-    --bg-primary: #0F0F0F;
-    --bg-secondary: #1A1A1A;
-    --bg-card: #1C1C1E;
-    --text-primary: #F0F0F0;
-    --text-secondary: #AAAAAA;
-    --border-color: #2C2C2E;
-    --accent: #F87171;
-  }
+  /* Tema único light (dark mode removido em 2026-08 — estava parcial). */
 
   body {
     background: var(--bg-primary);

@@ -3,6 +3,7 @@ package handlers
 import (
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
@@ -78,7 +79,10 @@ func RegisterEstablishment(c *fiber.Ctx) error {
 	if _, err := tx.Exec("INSERT INTO users (id, name, email, password, role, \"createdAt\", \"updatedAt\") VALUES ($1, $2, $3, $4, $5, NOW(), NOW())",
 		userID, req.OwnerName, req.Email, string(hashedPassword), roleVal); err != nil {
 		tx.Rollback()
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Email already registered"})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create account"})
 	}
 
 	locationString := req.Address

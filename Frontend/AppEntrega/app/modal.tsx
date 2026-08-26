@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   btns: {
-    backgroundColor: Colors.dark.tint,
+    backgroundColor: Colors.light.tint,
     padding: 15,
     borderRadius: 3,
     flexDirection: "row",

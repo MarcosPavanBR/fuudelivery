@@ -12,6 +12,7 @@ const DeliveryMen = lazy(() => import("./pages/DeliveryMen.jsx"));
 const Payments = lazy(() => import("./pages/Payments.jsx"));
 const Financeiro = lazy(() => import("./pages/Financeiro.jsx"));
 const Settings = lazy(() => import("./pages/Settings.jsx"));
+const PasswordResets = lazy(() => import("./pages/PasswordResets.jsx"));
 import Layout from "./components/Layout.jsx";
 import { FiLoader } from "react-icons/fi";
 import { ToastContainer } from "react-toastify";
@@ -91,6 +92,7 @@ function AppRoutes() {
         <Route path="/payments" element={<Payments />} />
         <Route path="/financeiro" element={<Financeiro />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/password-resets" element={<PasswordResets />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

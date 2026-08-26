@@ -16,6 +16,7 @@ const RegisterEstablishment = lazy(
   () => import("./pages/registration/RegisterEstablishment")
 );
 const Reports = lazy(() => import("./pages/reports/Reports"));
+const ResetarSenha = lazy(() => import("./pages/resetar-senha"));
 
 const RouteFallback = () => (
   <div className="flex h-screen w-full items-center justify-center">
@@ -28,7 +29,7 @@ export default function PrivateRoute() {
   const location = useLocation();
 
   // Rotas públicas (acessíveis sem login)
-  const publicRoutes = ["/cadastrar-restaurante"];
+  const publicRoutes = ["/cadastrar-restaurante", "/resetar-senha"];
 
   // Se não está autenticado e não é rota pública, mostra login
   if (!user && !publicRoutes.includes(location.pathname)) {
@@ -38,6 +39,14 @@ export default function PrivateRoute() {
   return (
     <ReactRoutes location={location}>
       {/* Rotas públicas */}
+      <Route
+        path="/resetar-senha"
+        element={
+          <Suspense fallback={<RouteFallback />}>
+            <ResetarSenha />
+          </Suspense>
+        }
+      />
       <Route
         path="/cadastrar-restaurante"
         element={

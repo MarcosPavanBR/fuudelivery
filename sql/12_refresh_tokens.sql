@@ -1,6 +1,6 @@
 -- ============================================================================
 -- FUUDELIVERY — Criação da tabela refresh_tokens
--- 11 — Tabela de refresh tokens (acesso +30d, renovação automática)
+-- 12 — Tabela de refresh tokens (acesso +30d, renovação automática)
 -- ============================================================================
 -- PROBLEMA: esta tabela faltava em produção (AutoMigrate falhou silenciosamente
 -- no startup do monolito). Sem ela, createTokenPair() retorna 500 em todo
@@ -35,3 +35,8 @@ COMMENT ON TABLE refresh_tokens IS
     'Refresh tokens JWT (30 dias). Criado em 2026-08-24 — tabela estava faltando '
     'em produção porque o AutoMigrate do monolito falhou silenciosamente no '
     'startup. Cada token é vinculado a um user_id e pode ser revogado no logout.';
+
+-- Registro no changelog de estrutura (convenção dos demais scripts deste pacote).
+INSERT INTO schema_migrations (version, description)
+VALUES ('12_refresh_tokens', 'Cria a tabela refresh_tokens (faltava em produção; AutoMigrate falhava em silêncio no startup)')
+ON CONFLICT (version) DO NOTHING;

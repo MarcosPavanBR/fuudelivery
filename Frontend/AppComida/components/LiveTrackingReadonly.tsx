@@ -7,7 +7,7 @@ import {
   type CameraRef,
 } from "@maplibre/maplibre-react-native";
 import Colors from "@/constants/Colors";
-import { getWsUrl } from "@/config/api";
+import { getWsUrl, requestWsTicket } from "@/config/api";
 import { MAP_STYLE_URL } from "@/config/config";
 import { useApi } from "@/contexts/ApiContext";
 
@@ -60,9 +60,17 @@ export default function LiveTrackingReadonly({
           return;
         }
 
-        const ws = new WebSocket(
-          `${getWsUrl()}/ws/delivery/${orderId}?token=${token}`
-        );
+        // Troca JWT por ticket de 60s antes de conectar ao WS
+        let wsUrl: string;
+        try {
+          const ticket = await requestWsTicket(token);
+          wsUrl = `${getWsUrl()}/ws/delivery/${orderId}?ticket=${ticket}`;
+        } catch {
+          // Fallback: JWT na query string (deprecated)
+          wsUrl = `${getWsUrl()}/ws/delivery/${orderId}?token=${token}`;
+        }
+
+        const ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
           setConnected(true);

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -114,7 +116,93 @@ func parseWSToken(tokenStr string) (jwt.MapClaims, error) {
 	return claims, nil
 }
 
+// === WS TICKET STORE ===
+// Em vez de passar o JWT na query string dos WebSockets (que vaza em logs de
+// proxy), o cliente primeiro chama POST /auth/ws-ticket com o JWT no header
+// Authorization, recebe um ticket de 60s, e conecta ao WS com ?ticket=<ticket>.
+type wsTicket struct {
+	Claims    jwt.MapClaims
+	ExpiresAt time.Time
+}
+
+var (
+	wsTickets   = make(map[string]*wsTicket)
+	wsTicketsMu sync.Mutex
+)
+
+// generateWSTicket cria um ticket aleatório de 32 bytes (hex = 64 chars).
+func generateWSTicket() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
+// IssueWSTicket valida um JWT via Authorization header e retorna um ticket
+// de 60s. Chamado pelo endpoint POST /auth/ws-ticket.
+func IssueWSTicket(jwtToken string) (string, error) {
+	claims, err := parseWSToken(jwtToken)
+	if err != nil {
+		return "", fmt.Errorf("invalid token")
+	}
+	ticket, err := generateWSTicket()
+	if err != nil {
+		return "", fmt.Errorf("failed to generate ticket")
+	}
+	wsTicketsMu.Lock()
+	wsTickets[ticket] = &wsTicket{
+		Claims:    claims,
+		ExpiresAt: time.Now().Add(60 * time.Second),
+	}
+	wsTicketsMu.Unlock()
+	return ticket, nil
+}
+
+// resolveWSTicket consome um ticket (uso único) e retorna os claims.
+// Suporta também ?token=<jwt> para backwards compat durante rolling deploy
+// (deprecated: será removido em versão futura).
+func resolveWSTicket(queryToken, queryTicket string) (jwt.MapClaims, error) {
+	// Caminho novo: ticket
+	if queryTicket != "" {
+		wsTicketsMu.Lock()
+		t, ok := wsTickets[queryTicket]
+		if ok {
+			delete(wsTickets, queryTicket) // uso único
+		}
+		wsTicketsMu.Unlock()
+		if !ok || time.Now().After(t.ExpiresAt) {
+			return nil, fmt.Errorf("invalid or expired ticket")
+		}
+		return t.Claims, nil
+	}
+	// Caminho legado: JWT na query string (deprecated)
+	if queryToken != "" {
+		log.Println("[WS] DEPRECATED: JWT in query string; use POST /auth/ws-ticket instead")
+		return parseWSToken(queryToken)
+	}
+	return nil, fmt.Errorf("authentication required: provide ?ticket= or ?token=")
+}
+
+// cleanupWSTickets remove tickets expirados periodicamente (1/min).
+func cleanupWSTickets() {
+	go func() {
+		for {
+			time.Sleep(time.Minute)
+			cutoff := time.Now()
+			wsTicketsMu.Lock()
+			for k, t := range wsTickets {
+				if t.ExpiresAt.Before(cutoff) {
+					delete(wsTickets, k)
+				}
+			}
+			wsTicketsMu.Unlock()
+		}
+	}()
+}
+
 // WebSocket client management (shared across services)
+
 // safeConn serializa escritas em UMA conexão WebSocket.
 // Por quê: gorilla/fasthttp ws não permite WriteMessage concorrente no mesmo
 // conn ("concurrent write to websocket connection"). Sem o wrapper, o push da
@@ -137,6 +225,8 @@ func (s *safeConn) WriteMessage(messageType int, data []byte) error {
 	return s.conn.WriteMessage(messageType, data)
 }
 
+// Close fecha a conexão subjacente (usado no slot-steal do /ws/:id).
+// A asserção mantém o campo como interface para os testes usarem fakes.
 func (s *safeConn) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -400,7 +490,7 @@ type splitMetricsProvider struct {
 }
 
 func (s *splitMetricsProvider) GetMonthlyOrders(zoneID uint) int {
-	// Conta pedidos dos Últimos 30 DIAS para estabelecimentos vinculados
+	// Conta pedidos dos ÚLTIMOS 30 DIAS para estabelecimentos vinculados
 	// a esta zona. Usa order_documents (tabela ativa desde o corte 5) que
 	// possui created_at; a tabela legada "orders" não tem coluna temporal.
 	if s.DB == nil {
@@ -704,14 +794,9 @@ func setupWebSocketRoutes(app *fiber.App) {
 	})
 
 	app.Get("/ws/:id", websocket.New(func(c *websocket.Conn) {
-		token := c.Query("token")
-		if token == "" {
-			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Authentication required"}}`))
-			return
-		}
-		claims, err := parseWSToken(token)
+		claims, err := resolveWSTicket(c.Query("token"), c.Query("ticket"))
 		if err != nil {
-			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Invalid token"}}`))
+			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Invalid or expired ticket"}}`))
 			return
 		}
 		tokenUserID, _ := claims["id"].(float64)
@@ -771,14 +856,9 @@ func setupWebSocketRoutes(app *fiber.App) {
 
 	// Chat WebSocket with JWT auth
 	app.Get("/ws/chat/:orderId/:userId/:userType", websocket.New(func(c *websocket.Conn) {
-		token := c.Query("token")
-		if token == "" {
-			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Authentication required"}}`))
-			return
-		}
-		claims, err := parseWSToken(token)
+		claims, err := resolveWSTicket(c.Query("token"), c.Query("ticket"))
 		if err != nil {
-			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Invalid token"}}`))
+			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Invalid or expired ticket"}}`))
 			return
 		}
 		tokenUserID, _ := claims["id"].(float64)
@@ -809,14 +889,9 @@ func setupWebSocketRoutes(app *fiber.App) {
 	var deliveryLocsListenersMu sync.Mutex
 
 	app.Get("/ws/delivery/:orderId", websocket.New(func(c *websocket.Conn) {
-		token := c.Query("token")
-		if token == "" {
-			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Authentication required"}}`))
-			return
-		}
-		claims, err := parseWSToken(token)
+		claims, err := resolveWSTicket(c.Query("token"), c.Query("ticket"))
 		if err != nil {
-			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Invalid token"}}`))
+			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Invalid or expired ticket"}}`))
 			return
 		}
 

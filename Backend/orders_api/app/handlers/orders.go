@@ -492,7 +492,7 @@ func ListAllOrders(c *fiber.Ctx) error {
 // ja presentes e ignora silenciosamente quando o DB esta indisponivel ou o
 // telefone nao casa com nenhum usuario.
 func enrichOrdersWithUsers(orders []map[string]interface{}) {
-	if db == nil {
+	if models.DB == nil {
 		return
 	}
 
@@ -519,7 +519,7 @@ func enrichOrdersWithUsers(orders []map[string]interface{}) {
 		Phone string
 		Name  string
 	}
-	if err := db.Table("users").Select("phone, name").Where("phone IN ?", phones).Find(&users).Error; err != nil {
+	if err := models.DB.Table("users").Select("phone, name").Where("phone IN ?", phones).Find(&users).Error; err != nil {
 		log.Printf("[ORDERS] Falha ao buscar nomes dos clientes: %v", err)
 		return
 	}

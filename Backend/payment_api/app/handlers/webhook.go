@@ -319,7 +319,8 @@ func publishPaymentApproved(abacatepayID string) {
 			case wErr != nil:
 				log.Printf("[WALLET] WARNING: falha ao creditar carteira do estabelecimento %d: %v", payment.EstablishmentID, wErr)
 			default:
-				setFields["establishment_credited_at"] = now				log.Printf("[WALLET] Carteira do estabelecimento %d creditada em %.2f (payment=%s)", payment.EstablishmentID, credit, abacatepayID)
+				setFields["establishment_credited_at"] = now
+				log.Printf("[WALLET] Carteira do estabelecimento %d creditada em %.2f (payment=%s)", payment.EstablishmentID, credit, abacatepayID)
 			}
 		}
 	}

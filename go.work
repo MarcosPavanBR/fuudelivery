@@ -9,6 +9,7 @@ use (
 	./cmd/etl-orders
 	./cmd/etl-payments
 	./cmd/fuudelivery
+	./pkg/gateway
 	./pkg/health
 	./pkg/queue
 )

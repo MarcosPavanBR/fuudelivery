@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ============================================================================
 # FUUDELIVERY — Consolidação para banco único
-# Runner: aplica os scripts 00-13 na ordem certa contra o Supabase/Postgres.
+# Runner: aplica os scripts 00-16 na ordem certa contra o Supabase/Postgres.
 #
 # USO:
 #   export DB_CONNECTION_STRING="postgresql://...."   # a mesma variável que
@@ -63,6 +63,9 @@ run "10_wallet_ledger_kind.sql"
 run "11_idempotencia_financeira.sql"
 run "12_refresh_tokens.sql"
 run "13_password_reset_tokens.sql"
+run "14_recipients.sql"
+run "15_split_rules.sql"
+run "16_payments_gateway_columns.sql"
 run "07_auditoria_tabelas_orfas.sql"
 run "08_testes.sql"
 

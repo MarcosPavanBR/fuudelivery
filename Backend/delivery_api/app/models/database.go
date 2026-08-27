@@ -65,7 +65,8 @@ func ConnectPostgresDatabase() {
 	// O AutoMigrate aqui é uma rede de segurança para ambientes novos/dev —
 	// em produção quem manda é o run_all.sh.
 	if err := database.AutoMigrate(&DeliverySolicitation{}); err != nil {
-		panic(fmt.Sprintf("Falha no AutoMigrate de delivery_solicitations: %v", err))
+		// Schema de produção é governado por sql/02 — drift do GORM não derruba.
+		log.Printf("[CRITICAL] AutoMigrate de delivery_solicitations falhou (seguindo): %v", err)
 	}
 
 	DB = database

@@ -67,12 +67,13 @@ func ConnectDatabase() {
 		&RefreshToken{},
 		&PasswordResetToken{},
 	); err != nil {
-		// FALHA FATAL: sem estas tabelas o login/registro quebram em produção
-		// com "Failed to generate tokens" (incidente 2026-08-24: refresh_tokens
-		// faltava e o erro passou despercebido porque só logava). É melhor o
-		// serviço não subir do que subir quebrado — o Render reinicia e o erro
-		// fica visível nos logs de deploy.
-		panic(fmt.Sprintf("[FATAL] AutoMigrate do auth_api falhou: %v", err))
+		// AutoMigrate é rede de segurança para DEV — em produção o schema é
+		// governado por sql/ + run_all.sh (fonte da verdade). Um drift do GORM
+		// (ex.: constraint "uni_clients_phone" não existe na base real) NÃO pode
+		// derrubar o serviço em loop. O erro fica LOUD no log; conexão com banco
+		// indisponível continua sendo fatal (abaixo). O incidente de 2026-08-24
+		// (refresh_tokens faltando) é coberto pelo script sql + run_all.sh.
+		log.Printf("[CRITICAL] AutoMigrate do auth_api falhou (schema gerenciado por sql/; seguindo): %v", err)
 	}
 
 	// Atualiza DeliveryMan com campos do motor de despacho se nao existirem

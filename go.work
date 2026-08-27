@@ -6,6 +6,8 @@ use (
 	./Backend/delivery_api
 	./Backend/orders_api
 	./Backend/payment_api
+	./cmd/etl-orders
+	./cmd/etl-payments
 	./cmd/fuudelivery
 	./pkg/health
 	./pkg/queue

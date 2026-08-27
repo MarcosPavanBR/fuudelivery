@@ -1,11 +1,9 @@
 package handlers
 
 import (
-	"context"
 	"errors"
 	"log"
 	"strconv"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -14,22 +12,9 @@ import (
 	"gorm.io/gorm"
 )
 
-// mongoCtx devolve um contexto com timeout para as operações legadas de
-// dual-write no Mongo. Será removida junto com o dual-write.
-//
-// O cancelamento é agendado via time.AfterFunc em vez de defer: um
-// `defer cancel()` aqui cancelaria o contexto ANTES de a operação Mongo
-// rodar (o helper retorna o ctx para o chamador), quebrando todo o
-// dual-write silenciosamente.
-func mongoCtx() context.Context {
-	ctx, cancel := context.WithCancel(context.Background())
-	time.AfterFunc(5*time.Second, cancel)
-	return ctx
-}
-
 // ============================================================================
-// Handlers do entregador — CORTE 3 banco-único: leitura/escrita 100% Postgres
-// (tabela delivery_solicitations, sql/02), com dual-write Mongo best-effort.
+// Handlers do entregador — 100% Postgres
+// (tabela delivery_solicitations, sql/02)
 // ============================================================================
 
 func GetOrdersByDeliverymanID(c *fiber.Ctx) error {
@@ -42,8 +27,6 @@ func GetOrdersByDeliverymanID(c *fiber.Ctx) error {
 	}
 
 	var rows []models.DeliverySolicitation
-	// Equivalente ao filtro Mongo antigo: nem o pedido nem a atribuição do
-	// entregador podem estar finalizados.
 	if err := models.DB.
 		Where("delivery_man_id = ?", deliverymanID).
 		Where("status <> ? OR status IS NULL", "FINISHED").
@@ -96,8 +79,7 @@ func UpdateOrderStatusByDeliverymanID(c *fiber.Ctx, sendMessageToClient func(cli
 		})
 	}
 
-	// Atualiza somente se o pedido pertence ao entregador informado —
-	// equivalente ao filtro composto {orderid, deliveryman.id} do Mongo.
+	// Atualiza somente se o pedido pertence ao entregador informado.
 	result := models.DB.Model(&models.DeliverySolicitation{}).
 		Where("order_id = ? AND delivery_man_id = ?", request.OrderID, request.Deliveryman.Id).
 		Updates(map[string]interface{}{
@@ -121,9 +103,6 @@ func UpdateOrderStatusByDeliverymanID(c *fiber.Ctx, sendMessageToClient func(cli
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Order not found"})
 	}
 
-	dualWriteMongo(*order) // DUAL-WRITE LEGADO
-
-	// RabbitMQ removido — fila gerenciada pelo monolito via Redis
 	log.Printf("[DELIVERY] Order %s status update published", order.OrderId)
 
 	return c.JSON(fiber.Map{

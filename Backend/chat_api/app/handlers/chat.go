@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -13,7 +12,6 @@ import (
 	"github.com/carloshomar/fuudelivery/chat_api/app/models"
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
-	"go.mongodb.org/mongo-driver/bson"
 )
 
 type Room struct {
@@ -217,28 +215,6 @@ func saveMessage(req dto.ChatMessageRequest) (*models.ChatMessage, error) {
 	}
 	if err := models.DB.Create(&msg).Error; err != nil {
 		return nil, err
-	}
-
-	// ── Escrita legada no Mongo (dual-write temporário, best-effort) ────
-	// Mantida até o ETL/desligamento do Mongo. Erro aqui NÃO falha a request.
-	if models.MongoDabase != nil {
-		legacy := bson.M{
-			"order_id":     msg.OrderID,
-			"sender_id":    msg.SenderID,
-			"sender_type":  msg.SenderType,
-			"sender_name":  msg.SenderName,
-			"message":      msg.Message,
-			"message_type": msg.MessageType,
-			"created_at":   msg.CreatedAt,
-		}
-		if msg.ImageURL != "" {
-			legacy["image_url"] = msg.ImageURL
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if _, err := models.MongoDabase.Collection("chat_messages").InsertOne(ctx, legacy); err != nil {
-			log.Printf("[CHAT] Dual-write Mongo falhou (não-crítico): %v", err)
-		}
 	}
 
 	return &msg, nil

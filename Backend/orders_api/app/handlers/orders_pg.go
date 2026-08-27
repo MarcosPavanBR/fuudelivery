@@ -1,49 +1,31 @@
 package handlers
 
-// orders_pg.go — camada de migração do corte 5 (banco-único).
+// orders_pg.go — camada de persistência Postgres para pedidos.
 //
 // Papel deste arquivo:
-//   - Centralizar TODA a lógica de transição Postgres ↔ Mongo para a collection
-//     "orders", para que os handlers fiquem limpos e o desligamento futuro do
-//     Atlas seja remover as funções *_legacy* daqui (e nada mais).
-//   - Pós-corte 5, o POSTGRES é a fonte da verdade:
-//       1. Escrita: grava em Postgres; tenta espelhar no Mongo (best-effort,
-//          erro é logado e não quebra a requisição).
-//       2. Leitura: consulta Postgres primeiro; se o pedido não existir lá mas
-//          existir no Mongo (dado legado pré-migração), importa na hora
-//          ("lazy import", mesmo padrão do corte 4 em payment_api).
+//   - Centralizar toda a lógica de persistência de pedidos em Postgres.
+//   - Conversão entre RequestPayload (JSON) e OrderDocument (linhas Postgres).
 
 import (
+	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/carloshomar/fuudelivery/orders_api/app/dto"
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// mongoFindOptions monta sort/limit opcionais para as queries fallback do
-// Mongo legado. sortField vazio = sem sort; limit 0 = sem limite.
-func mongoFindOptions(sortField string, limit int64) *options.FindOptions {
-	opts := options.Find()
-	if sortField != "" {
-		opts.SetSort(bson.D{{Key: sortField, Value: -1}})
-	}
-	if limit > 0 {
-		opts.SetLimit(limit)
-	}
-	return opts
-}
-
 // newLegacyOrderID gera um novo identificador público no MESMO formato que os
-// clientes já conhecem (ObjectID hex de 24 chars). Manter o formato evita
+// clientes já conhecem (hex de 24 chars). Manter o formato evita
 // tocar apps mobile, webs, delivery_api e reviews — para eles nada muda.
 func newLegacyOrderID() string {
-	return primitive.NewObjectID().Hex()
+	b := make([]byte, 12)
+	_, _ = rand.Read(b)
+	return fmt.Sprintf("%x", b)
 }
 
 // payloadToDoc converte um RequestPayload em linha do Postgres, extraindo as
@@ -51,7 +33,7 @@ func newLegacyOrderID() string {
 func payloadToDoc(legacyID string, p *dto.RequestPayload) (*models.OrderDocument, error) {
 	raw, err := json.Marshal(p)
 	if err != nil {
-		return nil, fmt.Errorf("serializando payload do pedido %s: %w", legacyID, err)
+		return nil, err
 	}
 
 	doc := &models.OrderDocument{
@@ -66,50 +48,16 @@ func payloadToDoc(legacyID string, p *dto.RequestPayload) (*models.OrderDocument
 	return doc, nil
 }
 
-// saveOrderPrimary grava o pedido no Postgres (upsert por legacy_id) e espelha
-// no Mongo best-effort. O payload é sempre re-serializado junto com as colunas,
-// garantindo que ambos fiquem consistentes.
+// saveOrderPrimary grava o pedido no Postgres (upsert por legacy_id).
 func saveOrderPrimary(doc *models.OrderDocument) error {
 	if err := models.DB.Where("legacy_id = ?", doc.LegacyID).
 		Assign(*doc).FirstOrCreate(doc).Error; err != nil {
 		return fmt.Errorf("persistindo pedido %s em Postgres: %w", doc.LegacyID, err)
 	}
-
-	dualWriteOrderToMongo(doc)
 	return nil
 }
 
-// dualWriteOrderToMongo espelha o documento no Mongo legado. Best-effort:
-// falha é logada e ignorada — o Atlas será desligado após o ETL completo.
-func dualWriteOrderToMongo(doc *models.OrderDocument) {
-	if models.MongoDabase == nil || doc == nil {
-		return // Mongo indisponível (ou desligado) — comportamento esperado
-	}
-
-	var p dto.RequestPayload
-	if err := json.Unmarshal(doc.Payload, &p); err != nil {
-		log.Printf("[ORDER-MIRROR] Payload inválido do pedido %s: %v", doc.LegacyID, err)
-		return
-	}
-
-	oid, err := primitive.ObjectIDFromHex(doc.LegacyID)
-	if err != nil {
-		log.Printf("[ORDER-MIRROR] legacy_id inválido %s: %v", doc.LegacyID, err)
-		return
-	}
-
-	collection := models.MongoDabase.Collection("orders")
-	_, err = collection.UpdateOne(mongoCtx(),
-		bson.M{"_id": oid},
-		bson.M{"$set": p},
-		options.Update().SetUpsert(true))
-	if err != nil {
-		log.Printf("[ORDER-MIRROR] Falha ao espelhar pedido %s no Mongo: %v", doc.LegacyID, err)
-	}
-}
-
-// findOrderByLegacyID busca o pedido: Postgres primeiro; se não houver e o
-// Mongo tiver (dado legado), importa para o Postgres na hora e devolve.
+// findOrderByLegacyID busca o pedido no Postgres.
 func findOrderByLegacyID(legacyID string) (*models.OrderDocument, error) {
 	if models.DB == nil {
 		return nil, fmt.Errorf("Postgres indisponível")
@@ -117,39 +65,14 @@ func findOrderByLegacyID(legacyID string) (*models.OrderDocument, error) {
 
 	var doc models.OrderDocument
 	err := models.DB.Where("legacy_id = ?", legacyID).First(&doc).Error
-	if err == nil {
-		return &doc, nil
+	if err != nil {
+		return nil, err
 	}
-
-	// Não achou no Postgres — tenta lazy import do Mongo (dado legado).
-	if models.MongoDabase != nil {
-		oid, convErr := primitive.ObjectIDFromHex(legacyID)
-		if convErr != nil {
-			return nil, convErr
-		}
-		var p dto.RequestPayload
-		if findErr := models.MongoDabase.Collection("orders").
-			FindOne(mongoCtx(), bson.M{"_id": oid}).Decode(&p); findErr != nil {
-			return nil, err // erro original do Postgres prevalece (provavelmente not found)
-		}
-		imported, buildErr := payloadToDoc(legacyID, &p)
-		if buildErr != nil {
-			return nil, buildErr
-		}
-		if saveErr := saveOrderPrimary(imported); saveErr != nil {
-			log.Printf("[ORDER-LAZY] Falha ao importar pedido %s para Postgres: %v", legacyID, saveErr)
-			// Mesmo assim devolvemos o dado importado — melhor servir do que falhar.
-			return imported, nil
-		}
-		log.Printf("[ORDER-LAZY] Pedido %s importado do Mongo para Postgres", legacyID)
-		return imported, nil
-	}
-
-	return nil, err
+	return &doc, nil
 }
 
-// patchOrderDoc aplica mutações no documento (colunas + payload espelhado),
-// persiste no Postgres e propaga ao Mongo best-effort.
+// patchOrderDoc aplica mutações no documento (colunas + payload espelhado)
+// e persiste no Postgres.
 func patchOrderDoc(doc *models.OrderDocument, mutate func(p *dto.RequestPayload)) error {
 	var p dto.RequestPayload
 	if err := json.Unmarshal(doc.Payload, &p); err != nil {
@@ -170,6 +93,26 @@ func patchOrderDoc(doc *models.OrderDocument, mutate func(p *dto.RequestPayload)
 	doc.Payload = raw
 
 	return saveOrderPrimary(doc)
+}
+
+// mongoCtx devolve um contexto com timeout para operações legadas no Mongo.
+// Usado apenas como fallback — o Postgres é a fonte da verdade.
+func mongoCtx() context.Context {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return ctx
+}
+
+// mongoFindOptions monta sort/limit opcionais para queries fallback do Mongo.
+func mongoFindOptions(sortField string, limit int64) *options.FindOptions {
+	opts := options.Find()
+	if sortField != "" {
+		opts.SetSort(bson.D{{Key: sortField, Value: -1}})
+	}
+	if limit > 0 {
+		opts.SetLimit(limit)
+	}
+	return opts
 }
 
 // docToResponseMap reconstrói o "documento" que os frontends consomem:

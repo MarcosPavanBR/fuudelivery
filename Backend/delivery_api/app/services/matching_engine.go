@@ -21,7 +21,16 @@ type UnmatchedOrder struct {
 	LastAttemptAt    int64   `json:"last_attempt_at"`
 }
 
-// DLQStore gerencia a dead-letter queue de pedidos nao casados.
+// DLQInterface define as operações da dead-letter queue.
+// Permite trocar entre implementação in-memory e Postgres.
+type DLQInterface interface {
+	Push(order *UnmatchedOrder)
+	PopNext() *UnmatchedOrder
+	Len() int
+	List() []*UnmatchedOrder
+}
+
+// DLQStore gerencia a dead-letter queue de pedidos nao casados (in-memory).
 type DLQStore struct {
 	mu      sync.Mutex
 	orders  []*UnmatchedOrder
@@ -174,7 +183,7 @@ type ZoneResolver interface {
 type MatchingEngine struct {
 	CourierStore *CourierStore
 	ZoneResolver ZoneResolver
-	DLQ          *DLQStore
+	DLQ          DLQInterface
 
 	// Callback para notificar fallback comunitario
 	OnFallback func(orderID string, zoneName string)
@@ -192,12 +201,23 @@ type MatchingEngine struct {
 	zoneMetricsMu sync.RWMutex
 }
 
-// NewMatchingEngine cria uma nova instancia do motor de matching.
+// NewMatchingEngine cria uma nova instancia do motor de matching com DLQ in-memory.
 func NewMatchingEngine(courierStore *CourierStore, zoneResolver ZoneResolver) *MatchingEngine {
 	return &MatchingEngine{
 		CourierStore: courierStore,
 		ZoneResolver: zoneResolver,
 		DLQ:          NewDLQStore(1000),
+		matchTimeMs:  make([]float64, 0, 1000),
+		zoneMetrics:  make(map[uint]*ZoneCalibrationMetrics),
+	}
+}
+
+// NewMatchingEngineWithDLQ cria uma nova instancia com DLQ customizada (ex: Postgres).
+func NewMatchingEngineWithDLQ(courierStore *CourierStore, zoneResolver ZoneResolver, dlq DLQInterface) *MatchingEngine {
+	return &MatchingEngine{
+		CourierStore: courierStore,
+		ZoneResolver: zoneResolver,
+		DLQ:          dlq,
 		matchTimeMs:  make([]float64, 0, 1000),
 		zoneMetrics:  make(map[uint]*ZoneCalibrationMetrics),
 	}

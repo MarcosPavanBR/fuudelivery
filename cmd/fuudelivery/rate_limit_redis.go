@@ -98,6 +98,56 @@ func redisAllow(ip string, maxPerMinute int) (allowed, usedRedis bool) {
 	return count <= int64(maxPerMinute), true
 }
 
+// rateLimitByIdentifier verifica o limite por identificador de conta
+// (user_type:identifier) usando Redis quando disponivel, com fallback
+// em memoria. Diferente do rateLimitMiddleware (que usa IP), este limiter
+// protege contra brute-force distribuido: um atacante com multiplos IPs
+// tentando a mesma conta atinge o teto rapido.
+//
+// Usado nos endpoints de password reset para limitar tentativas por CONTA
+// (nao por IP).
+var (
+	identifierLimitersMu sync.Mutex
+	identifierLimiters   = make(map[string]*rate.Limiter)
+)
+
+func getIdentifierLimiter(key string, maxPerMinute int) *rate.Limiter {
+	identifierLimitersMu.Lock()
+	defer identifierLimitersMu.Unlock()
+	if l, ok := identifierLimiters[key]; ok {
+		return l
+	}
+	rps := rate.Limit(float64(maxPerMinute) / 60.0)
+	l := rate.NewLimiter(rps, maxPerMinute)
+	identifierLimiters[key] = l
+	return l
+}
+
+func rateLimitByIdentifier(userType, identifier string, maxPerMinute int) bool {
+	key := userType + ":" + identifier
+
+	// Tenta Redis primeiro (global entre instancias)
+	client := getRedisLimiterClient()
+	if client != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), rateLimitRedisTimeout)
+		defer cancel()
+
+		redisKey := rateLimitKeyPrefix + "id:" + key
+		count, err := client.Incr(ctx, redisKey).Result()
+		if err == nil {
+			if count == 1 {
+				client.Expire(ctx, redisKey, time.Minute)
+			}
+			return count <= int64(maxPerMinute)
+		}
+		log.Printf("[RATELIMIT] redis INCR falhou (id=%s): %v", key, err)
+	}
+
+	// Fallback: token bucket em memoria
+	limiter := getIdentifierLimiter(key, maxPerMinute)
+	return limiter.Allow()
+}
+
 // rateLimitMiddleware devolve um middleware que respeita o limite
 // compartilhado via Redis quando disponivel, com fallback em memoria.
 func rateLimitMiddleware(maxPerMinute int) fiber.Handler {

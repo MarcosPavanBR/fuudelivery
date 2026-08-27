@@ -10,6 +10,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/time/rate"
 )
 
 // newRateLimitRedis sobe um miniredis e injeta o provider do limiter
@@ -157,4 +158,72 @@ func TestRedisAllow_RedisIndisponivelCaiNoFallback(t *testing.T) {
 	resp, err := app.Test(reqComIP("10.0.0.9"), 2000)
 	require.NoError(t, err)
 	require.Equal(t, fiber.StatusOK, resp.StatusCode, "com Redis fora, fallback em memoria assume e permite")
+}
+
+// ========================================================================
+// rateLimitByIdentifier — limite por conta (user_type:identifier)
+// ========================================================================
+
+func TestRateLimitByIdentifier_Redis_FixedWindow(t *testing.T) {
+	s, _ := newRateLimitRedis(t)
+
+	// Limite de 3 por minuto
+	for i := 1; i <= 3; i++ {
+		require.True(t, rateLimitByIdentifier("client", "+5511999990001", 3),
+			"requisicao %d deveria passar", i)
+	}
+
+	// 4a bloqueada
+	require.False(t, rateLimitByIdentifier("client", "+5511999990001", 3),
+		"4a requisicao deveria ser bloqueada")
+
+	// Identificador diferente tem janela propria
+	require.True(t, rateLimitByIdentifier("client", "+5511999990002", 3),
+		"identificador diferente nao deve ser afetado")
+
+	// User type diferente tem janela propria
+	require.True(t, rateLimitByIdentifier("user", "+5511999990001", 3),
+		"user_type diferente nao deve ser afetado")
+
+	// Apos 60s a janela reseta
+	s.FastForward(61 * time.Second)
+	require.True(t, rateLimitByIdentifier("client", "+5511999990001", 3),
+		"janela deveria ter resetado")
+}
+
+func TestRateLimitByIdentifier_FallbackMemoria(t *testing.T) {
+	// Limpa o Redis e os limiters em memoria
+	resetRedisLimiterClient()
+	identifierLimitersMu.Lock()
+	identifierLimiters = make(map[string]*rate.Limiter)
+	identifierLimitersMu.Unlock()
+	defer func() {
+		identifierLimitersMu.Lock()
+		identifierLimiters = make(map[string]*rate.Limiter)
+		identifierLimitersMu.Unlock()
+	}()
+
+	// Limite 2 por minuto
+	require.True(t, rateLimitByIdentifier("client", "fallback-test", 2))
+	require.True(t, rateLimitByIdentifier("client", "fallback-test", 2))
+	require.False(t, rateLimitByIdentifier("client", "fallback-test", 2),
+		"3a deveria bloquear no fallback em memoria")
+
+	// Identificador diferente funciona
+	require.True(t, rateLimitByIdentifier("client", "fallback-other", 2))
+}
+
+func TestRateLimitByIdentifier_RedisIndisponivel_FailOpen(t *testing.T) {
+	_, srv := newRateLimitRedis(t)
+
+	// Redis no ar: funciona normalmente
+	require.True(t, rateLimitByIdentifier("user", "redis-test", 1))
+	require.False(t, rateLimitByIdentifier("user", "redis-test", 1))
+
+	// Derruba o Redis: deve ser fail-open (permitir)
+	_ = srv.Close()
+	time.Sleep(50 * time.Millisecond)
+
+	require.True(t, rateLimitByIdentifier("user", "redis-test", 1),
+		"com Redis fora, rateLimitByIdentifier deve ser fail-open")
 }

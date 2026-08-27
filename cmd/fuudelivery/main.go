@@ -1005,6 +1005,44 @@ func setupWebSocketRoutes(app *fiber.App) {
 	})
 }
 
+// rateLimitByIdentifierMiddleware cria um middleware que limita requests
+// por identificador de conta (user_type:identifier), não por IP.
+//
+// Protege contra brute-force distribuído: um atacante com múltiplos IPs
+// tentando a mesma conta atinge o teto rápido. O body JSON é lido aqui
+// e armazenado em c.Locals("parsedBody") para o handler não precisar
+// parseá-lo duas vezes.
+//
+// maxPerMinute é o limite de requests por minuto por identificador.
+func rateLimitByIdentifierMiddleware(maxPerMinute int) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		// Lê o body para extrair user_type + identifier.
+		var body struct {
+			UserType   string `json:"user_type"`
+			Identifier string `json:"identifier"`
+		}
+		if err := c.BodyParser(&body); err != nil {
+			// Body malformado — deixa o handler retornar o erro 400.
+			return c.Next()
+		}
+
+		userType := strings.TrimSpace(body.UserType)
+		identifier := strings.TrimSpace(body.Identifier)
+		if userType == "" || identifier == "" {
+			// Campos faltando — handler vai retornar 400.
+			return c.Next()
+		}
+
+		if !rateLimitByIdentifier(userType, identifier, maxPerMinute) {
+			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
+				"error": "Muitas tentativas para esta conta. Aguarde alguns minutos e tente novamente.",
+			})
+		}
+
+		return c.Next()
+	}
+}
+
 func setupAuthRoutes(app *fiber.App) {
 	app.Post("/users/register", rateLimitMiddleware(5), authHandlers.CreateUser)
 	app.Post("/users/login", rateLimitMiddleware(10), authHandlers.Login)
@@ -1028,8 +1066,13 @@ func setupAuthRoutes(app *fiber.App) {
 	// Reset de senha assistido: o suporte gera o código no WebAdmin e informa
 	// por telefone/WhatsApp (não há serviço de email; clientes só têm phone).
 	// O usuário usa o código na página pública /resetar-senha do WebRestaurant.
-	app.Post("/admin/password-reset/code", adminRequired, rateLimitMiddleware(10), authHandlers.GenerateAdminResetCode)
-	app.Post("/auth/reset-password", rateLimitMiddleware(5), authHandlers.ResetPassword)
+	//
+	// Rate limit em DUAS camadas:
+	//   1. rateLimitMiddleware(N) — por IP (protege contra flooding de uma fonte)
+	//   2. rateLimitByIdentifier — por conta (protege contra brute-force
+	//      distribuído: múltiplos IPs tentando a mesma conta)
+	app.Post("/admin/password-reset/code", adminRequired, rateLimitMiddleware(10), rateLimitByIdentifierMiddleware(3), authHandlers.GenerateAdminResetCode)
+	app.Post("/auth/reset-password", rateLimitMiddleware(5), rateLimitByIdentifierMiddleware(10), authHandlers.ResetPassword)
 	app.Post("/users", adminRequired, authHandlers.CreateUserAdmin)
 	app.Post("/admin/bootstrap", rateLimitMiddleware(3), authHandlers.BootstrapAdmin)
 	app.Get("/users", adminRequired, authHandlers.ListAllUsers)

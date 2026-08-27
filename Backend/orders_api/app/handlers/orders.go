@@ -562,10 +562,7 @@ func ListOrdersByPhone(c *fiber.Ctx) error {
 
 	var orders []map[string]interface{}
 	for _, d := range docs {
-		orders = append(orders, docToResponseMap(&d))
-	}
-
-	}
+		orders = append(orders, docToResponseMap(&d))	}
 	if orders == nil {
 		orders = []map[string]interface{}{}
 	}

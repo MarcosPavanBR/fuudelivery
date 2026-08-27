@@ -5,6 +5,7 @@ go 1.25.0
 require (
 	github.com/carloshomar/fuudelivery/auth_api v0.0.0
 	github.com/gofiber/fiber/v2 v2.52.12
+	go.mongodb.org/mongo-driver v1.17.9
 	gorm.io/driver/postgres v1.6.2
 	gorm.io/gorm v1.31.2
 )
@@ -13,6 +14,7 @@ replace github.com/carloshomar/fuudelivery/auth_api => ../auth_api
 
 require (
 	github.com/stretchr/testify v1.12.1
+	github.com/testcontainers/testcontainers-go/modules/mongodb v0.38.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
 )
 

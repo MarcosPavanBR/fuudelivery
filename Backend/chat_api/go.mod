@@ -5,6 +5,7 @@ go 1.25.0
 require (
 	github.com/gofiber/contrib/websocket v1.3.4
 	github.com/gofiber/fiber/v2 v2.52.15
+	go.mongodb.org/mongo-driver v1.17.9
 	gorm.io/driver/postgres v1.6.2
 	gorm.io/gorm v1.31.2
 )

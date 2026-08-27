@@ -116,8 +116,12 @@ func maskIdentifier(s string) string {
 }
 
 // GenerateAdminResetCode — POST /admin/password-reset/code (adminRequired +
-// rate limit na rota). Invalida códigos ativos anteriores da mesma conta:
-// só o último código gerado vale.
+// rate limit por IP na rota). Invalida códigos ativos anteriores da mesma
+// conta: só o último código gerado vale.
+//
+// O rate limit por identificador (user_type:identifier) é aplicado pelo
+// middlewarerateLimitByIdentifierMiddleware no main.go, que protege contra
+// brute-force distribuído mesmo com múltiplos IPs.
 func GenerateAdminResetCode(c *fiber.Ctx) error {
 	var req dto.GeneratePasswordResetCodeRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -181,6 +185,10 @@ func GenerateAdminResetCode(c *fiber.Ctx) error {
 // No sucesso: troca a senha (bcrypt), marca o código como usado e revoga os
 // refresh tokens quando o tipo é "user" (clientes/entregadores usam JWT puro,
 // sem sessão server-side para revogar).
+//
+// O rate limit por identificador (user_type:identifier) é aplicado pelo
+// middleware rateLimitByIdentifierMiddleware no main.go, que protege contra
+// brute-force distribuído mesmo com múltiplos IPs.
 func ResetPassword(c *fiber.Ctx) error {
 	var req dto.PasswordResetRequest
 	if err := c.BodyParser(&req); err != nil {

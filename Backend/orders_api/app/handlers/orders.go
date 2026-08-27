@@ -383,7 +383,7 @@ func sendStatusPushNotification(order dto.RequestPayload, status string) {
 	}
 
 	for _, t := range tokens {
-		if err := SendPushNotification(t.PushToken, title, msg, map[string]interface{}{
+		if err := SendPushNotification(t.UserID, t.UserType, title, msg, map[string]interface{}{
 			"order_id": order.OrderId,
 			"status":   status,
 			"type":     "status_update",

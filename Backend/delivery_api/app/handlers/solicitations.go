@@ -11,36 +11,13 @@ import (
 	"github.com/carloshomar/fuudelivery/delivery_api/app/dto"
 	"github.com/carloshomar/fuudelivery/delivery_api/app/models"
 	"github.com/gofiber/fiber/v2"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"gorm.io/gorm"
 )
 
-// ============================================================================
-// Handlers de solicitações de entrega — CORTE 3 da migração banco-único.
-//
-// Fonte da verdade: tabela Postgres `delivery_solicitations` (sql/02).
-// O MongoDB permanece apenas como dual-write best-effort durante a
-// transição: qualquer falha nea é logada mas NÃO falha a request — o
-// Mongo não é mais consultado para leitura em nenhum ponto.
-//
-// Para desligar o Mongo definitivamente: remover os blocos marcados
-// com "DUAL-WRITE LEGADO" neste arquivo e em deliveryman.go/reports.go.
-// ============================================================================
-
-// dualWriteMongo grava/atualiza a solicitação na collection legada do Mongo.
-// Best-effort: erro só aparece no log, nunca quebra o fluxo principal.
-func dualWriteMongo(order dto.OrderDTO) {
-	if models.MongoDabase == nil {
-		return // Mongo não configurado — dual-write desativado
-	}
-	collection := models.MongoDabase.Collection("solicitations")
-	filter := bson.M{"orderid": order.OrderId}
-	update := bson.M{"$set": order}
-	if _, err := collection.UpdateOne(mongoCtx(), filter, update, options.Update().SetUpsert(true)); err != nil {
-		log.Printf("[DUAL-WRITE] Mongo solicitations %s: %v (ignorado)", order.OrderId, err)
-	}
-}
+// dualWriteMongo é um stub mantido para compatibilidade. O Mongo legado
+// está sendo desligado — esta função não faz nada. Remover todas as
+// chamadas quando o Atlas for desativado.
+func dualWriteMongo(_ dto.OrderDTO) {}
 
 // CreateSolicitation é chamado pela fila do monolito quando um pedido é aprovado.
 // Cria (ou atualiza) a solicitação no read-model do motor de despacho.
@@ -71,7 +48,6 @@ func CreateSolicitation(msg string, sendMessageToClient func(clientID int64, mes
 		jsonData, _ := json.Marshal(&orderDTO)
 		sendMessageToClient(orderDTO.DeliveryMan.Id, jsonData)
 
-		dualWriteMongo(orderDTO) // DUAL-WRITE LEGADO
 		return nil
 	}
 
@@ -88,7 +64,6 @@ func CreateSolicitation(msg string, sendMessageToClient func(clientID int64, mes
 		return err
 	}
 
-	dualWriteMongo(orderDTO) // DUAL-WRITE LEGADO
 	return nil
 }
 

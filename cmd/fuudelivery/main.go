@@ -1347,11 +1347,6 @@ func validateRequiredEnv() {
 		log.Println("[ENV] Configuracao incompleta — seguindo em modo dev.")
 	}
 
-	// Mongo e opcional por design apos o corte 5 (dual-write legado desligavel).
-	if os.Getenv("MONGO_URI") == "" {
-		log.Println("[ENV] MONGO_URI ausente — dual-write legado desativado.")
-	}
-
 	// Em producao, valida tambem as de pagamento
 	if os.Getenv("GO_ENV") == "production" {
 		prodRequired := []string{"ABACATE_PAY_API_KEY", "REDIS_URL"}
@@ -1372,13 +1367,9 @@ func main() {
 	// Initialize databases
 	models.ConnectDatabase()
 	ordersModels.ConnectPostgresDatabase()
-	ordersModels.ConnectMongoDatabase()      // dual-write legado (cortes 1-2)
-	deliveryModels.ConnectPostgresDatabase() // corte 3: entrega agora é Postgres
-	deliveryModels.ConnectMongoDatabase()    // dual-write legado (remover no desligamento do Mongo)
-	paymentModels.ConnectPostgresDatabase()  // corte 4: pagamentos agora é Postgres
-	paymentModels.ConnectMongoDatabase()     // dual-write legado (remover no desligamento do Mongo)
-	chatModels.ConnectPostgresDatabase()     // corte 2: chat agora é Postgres
-	chatModels.ConnectMongoDatabase()        // dual-write legado (remover no desligamento do Mongo)
+	deliveryModels.ConnectPostgresDatabase()
+	paymentModels.ConnectPostgresDatabase()
+	chatModels.ConnectPostgresDatabase()
 
 	// Initialize message queue
 	queue.Init()

@@ -65,7 +65,9 @@ func ConnectPostgresDatabase() {
 	// sql/10_wallet_ledger_kind.sql). O AutoMigrate é rede de segurança para
 	// ambientes novos/dev — em produção quem manda é o run_all.sh.
 	if err := database.AutoMigrate(&Payment{}, &Wallet{}, &WalletTxn{}); err != nil {
-		panic(fmt.Sprintf("Falha no AutoMigrate das tabelas de pagamento: %v", err))
+		// Schema de produção é governado por sql/03 + sql/10 — drift do GORM
+		// não pode derrubar o serviço em loop.
+		log.Printf("[CRITICAL] AutoMigrate das tabelas de pagamento falhou (seguindo): %v", err)
 	}
 
 	DB = database

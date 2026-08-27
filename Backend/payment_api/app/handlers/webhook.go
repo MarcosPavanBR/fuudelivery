@@ -125,7 +125,7 @@ func reverseWalletCredit(userID int64, amount float64, abacatepayID, description
 		return false
 	}
 
-	newBalance, dErr := models.AdjustWalletBalance(models.DB, userID, wallet.UserType, "debit", "", amount, abacatepayID, description, "")
+	_, dErr := models.AdjustWalletBalance(models.DB, userID, wallet.UserType, "debit", "", amount, abacatepayID, description, "")
 	if dErr != nil {
 		log.Printf("[REFUND] Carteira do usuário %d NAO debitada em %.2f (%v)", userID, amount, dErr)
 		return false
@@ -310,8 +310,7 @@ func publishPaymentApproved(abacatepayID string) {
 	if payment.EstablishmentCreditedAt == nil && payment.Status != "REFUNDED" {
 		// Usa as regras recém-calculadas (ainda não persistidas em payment).
 		credit := establishmentShare(models.SplitRules(splitRules))
-		if credit > 0 {
-			wallet, wErr := adjustEstablishmentWallet(payment.EstablishmentID, credit, abacatepayID, payment.OrderID, now)
+		if credit > 0 {				_, wErr := adjustEstablishmentWallet(payment.EstablishmentID, credit, abacatepayID, payment.OrderID, now)
 			switch {
 			case errors.Is(wErr, models.ErrDuplicateCredit):
 				log.Printf("[WALLET] Crédito já aplicado para %s — replay idempotente ignorado", abacatepayID)

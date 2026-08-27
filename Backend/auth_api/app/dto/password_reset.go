@@ -4,7 +4,7 @@ package dto
 // O admin informa o tipo de conta e o identificador (telefone ou email);
 // recebe o código de uso único EM CLARO uma única vez.
 type GeneratePasswordResetCodeRequest struct {
-	UserType   string `json:"user_type"`   // client | user | delivery_man
+	UserType   string `json:"user_type"`  // client | user | delivery_man
 	Identifier string `json:"identifier"` // telefone (client/delivery_man) ou email/telefone (user)
 }
 

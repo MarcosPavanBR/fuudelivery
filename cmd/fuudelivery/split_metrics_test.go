@@ -31,8 +31,8 @@ func (orderDocumentRow) TableName() string { return "order_documents" }
 
 // establishmentRow espelha a tabela establishments com o campo zone_id.
 type establishmentRow struct {
-	ID   uint   `gorm:"primaryKey"`
-	Name string
+	ID     uint `gorm:"primaryKey"`
+	Name   string
 	ZoneID uint
 }
 
@@ -40,7 +40,7 @@ func (establishmentRow) TableName() string { return "establishments" }
 
 // zoneRow espelha a tabela zones.
 type zoneRow struct {
-	ID   uint   `gorm:"primaryKey"`
+	ID   uint `gorm:"primaryKey"`
 	Name string
 }
 
@@ -116,8 +116,8 @@ func seedTestData(t *testing.T, db *gorm.DB) (zoneID uint) {
 			LegacyID:        fmt.Sprintf("old-%d", i),
 			EstablishmentID: int64(estab.ID),
 			Status:          "DELIVERED",
-			CreatedAt:       now.AddDate(0, 0, -(31+i*10)), // 31, 41, 51 dias atrás
-			UpdatedAt:       now.AddDate(0, 0, -(31+i*10)),
+			CreatedAt:       now.AddDate(0, 0, -(31 + i*10)), // 31, 41, 51 dias atrás
+			UpdatedAt:       now.AddDate(0, 0, -(31 + i*10)),
 		}
 		require.NoError(t, db.Create(&order).Error)
 	}

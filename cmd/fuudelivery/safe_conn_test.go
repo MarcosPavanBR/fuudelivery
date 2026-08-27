@@ -25,7 +25,7 @@ func (f *fakeWriter) WriteMessage(messageType int, data []byte) error {
 
 func TestSafeConn_ConcurrentWritesAreSerialized(t *testing.T) {
 	const (
-		goroutines = 8
+		goroutines   = 8
 		perGoroutine = 50
 	)
 

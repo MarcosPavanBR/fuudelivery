@@ -1010,6 +1010,20 @@ func setupAuthRoutes(app *fiber.App) {
 	app.Post("/users/login", rateLimitMiddleware(10), authHandlers.Login)
 	app.Post("/auth/refresh", rateLimitMiddleware(30), authHandlers.RefreshToken)
 	app.Post("/auth/logout", rateLimitMiddleware(10), authHandlers.Logout)
+	// Ticket de curta duração (60s) para WebSockets: o JWT fica SÓ no header
+	// Authorization desta chamada e o WS conecta com ?ticket= — nada de JWT
+	// na query string (vazava em logs de proxy). Ver resolveWSTicket.
+	app.Post("/auth/ws-ticket", protectedRoute, rateLimitMiddleware(20), func(c *fiber.Ctx) error {
+		auth := c.Get("Authorization")
+		if len(auth) > 7 && auth[:7] == "Bearer " {
+			auth = auth[7:]
+		}
+		ticket, tErr := IssueWSTicket(auth)
+		if tErr != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+		}
+		return c.JSON(fiber.Map{"ticket": ticket, "expires_in": 60})
+	})
 
 	// Reset de senha assistido: o suporte gera o código no WebAdmin e informa
 	// por telefone/WhatsApp (não há serviço de email; clientes só têm phone).

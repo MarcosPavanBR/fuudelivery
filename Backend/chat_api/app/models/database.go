@@ -72,5 +72,3 @@ func ConnectPostgresDatabase() {
 
 	fmt.Println("Conexão com o PostgreSQL (chat_api) estabelecida com sucesso!")
 }
-
-

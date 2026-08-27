@@ -52,8 +52,6 @@ func DatabaseCheck(db *gorm.DB) Check {
 	return Check{Name: "postgres", Status: "up", Latency: time.Since(start).String()}
 }
 
-
-
 // RedisCheck verifica a saude do Redis via ping.
 func RedisCheck(client *redis.Client) Check {
 	start := time.Now()

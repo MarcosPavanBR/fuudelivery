@@ -1,15 +1,12 @@
 package models
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"os"
 	"strings"
 	"time"
 
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -18,14 +15,6 @@ import (
 // CORTE 2 (banco-único): chat_messages migrou de Mongo para Postgres —
 // esta conexão é agora a fonte primária do chat_api.
 var DB *gorm.DB
-
-// MongoClient / MongoDabase permanecem apenas para o dual-write temporário
-// (escrita legada best-effort durante a transição). Remover quando o Mongo
-// for desligado.
-var (
-	MongoClient *mongo.Client
-	MongoDabase *mongo.Database
-)
 
 const maxRetries = 5
 const retryInterval = 5 * time.Second
@@ -84,30 +73,4 @@ func ConnectPostgresDatabase() {
 	fmt.Println("Conexão com o PostgreSQL (chat_api) estabelecida com sucesso!")
 }
 
-func ConnectMongoDatabase() {
-	mongoURI := os.Getenv("MONGO_URI")
-	mongoDB := os.Getenv("MONGO_DATABASE")
 
-	if mongoURI == "" {
-		log.Println("MONGO_URI não configurado, MongoDB indisponível")
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	clientOptions := options.Client().ApplyURI(mongoURI).SetServerSelectionTimeout(30 * time.Second)
-	client, err := mongo.Connect(ctx, clientOptions)
-	if err != nil {
-		log.Printf("Falha ao conectar ao MongoDB: %v", err)
-		return
-	}
-
-	if err := client.Ping(ctx, nil); err != nil {
-		log.Printf("Falha ao pingar MongoDB (server continuará): %v", err)
-	}
-
-	MongoClient = client
-	MongoDabase = client.Database(mongoDB)
-	log.Println("Conexão com o MongoDB estabelecida com sucesso!")
-}

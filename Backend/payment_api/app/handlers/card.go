@@ -156,8 +156,6 @@ func ProcessPayment(c *fiber.Ctx) error {
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to save payment"})
 		}
 
-		dualWritePaymentUpsert(&payment) // DUAL-WRITE LEGADO
-
 		response := dto.PaymentResponse{
 			PaymentID:    payment.IDString(),
 			Status:       paymentStatus,
@@ -203,8 +201,6 @@ func ProcessPayment(c *fiber.Ctx) error {
 			log.Printf("[PIX] Erro ao salvar pagamento no Postgres: %v", err)
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to save payment"})
 		}
-
-		dualWritePaymentUpsert(&payment) // DUAL-WRITE LEGADO
 
 		response := dto.PaymentResponse{
 			PaymentID:    payment.IDString(),

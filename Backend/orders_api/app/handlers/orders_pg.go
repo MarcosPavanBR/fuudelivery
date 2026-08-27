@@ -7,7 +7,6 @@ package handlers
 //   - Conversão entre RequestPayload (JSON) e OrderDocument (linhas Postgres).
 
 import (
-	"context"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
@@ -15,8 +14,6 @@ import (
 
 	"github.com/carloshomar/fuudelivery/orders_api/app/dto"
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // newLegacyOrderID gera um novo identificador público no MESMO formato que os
@@ -95,28 +92,6 @@ func patchOrderDoc(doc *models.OrderDocument, mutate func(p *dto.RequestPayload)
 	return saveOrderPrimary(doc)
 }
 
-// mongoCtx devolve um contexto com timeout para operações legadas no Mongo.
-// Usado apenas como fallback — o Postgres é a fonte da verdade.
-func mongoCtx() context.Context {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	return ctx
-}
-
-// mongoFindOptions monta sort/limit opcionais para queries fallback do Mongo.
-func mongoFindOptions(sortField string, limit int64) *options.FindOptions {
-	opts := options.Find()
-	if sortField != "" {
-		opts.SetSort(bson.D{{Key: sortField, Value: -1}})
-	}
-	if limit > 0 {
-		opts.SetLimit(limit)
-	}
-	return opts
-}
-
-// docToResponseMap reconstrói o "documento" que os frontends consomem:
-// payload completo + _id (hex legado) + campos de coluna como fonte da verdade.
 func docToResponseMap(doc *models.OrderDocument) map[string]interface{} {
 	out := make(map[string]interface{})
 	if len(doc.Payload) > 0 {

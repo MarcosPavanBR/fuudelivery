@@ -40,15 +40,9 @@ services:
         value: production
 
       # ── Banco de dados / cache ────────────────────────────
-      # Postgres (Supabase) e MongoDB (Atlas) via secrets.
+      # Postgres (Supabase) via secrets.
       - key: DB_CONNECTION_STRING
         sync: false
-      - key: MONGO_URI
-        sync: false
-      - key: MONGO_DATABASE
-        value: "fuudelivery"
-      - key: PAYMENT_MONGO_DATABASE
-        value: "fuudelivery_payments"
       # Redis EXTERNO (não é serviço Render). Valor real no dashboard.
       - key: REDIS_URL
         sync: false

@@ -1,15 +1,12 @@
 package models
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"os"
 	"strings"
 	"time"
 
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -18,12 +15,6 @@ var (
 	// DB é a conexão Postgres (GORM) — fonte da verdade desde o corte 4
 	// da migração banco-único (docs/ARQUITETURA-BANCO-UNICO.md).
 	DB *gorm.DB
-
-	// MongoClient/MongoDabase permanecem apenas para o dual-write legado
-	// (best-effort) durante a transição. Quando o Mongo for desligado,
-	// remover ConnectMongoDatabase e os blocos "DUAL-WRITE LEGADO".
-	MongoClient *mongo.Client
-	MongoDabase *mongo.Database
 )
 
 const pgMaxRetries = 5
@@ -81,38 +72,4 @@ func ConnectPostgresDatabase() {
 	log.Println("Conexão com o PostgreSQL estabelecida com sucesso!")
 }
 
-func ConnectMongoDatabase() {
-	mongoURI := os.Getenv("MONGO_URI")
-	mongoDB := os.Getenv("PAYMENT_MONGO_DATABASE")
-	if mongoDB == "" {
-		// Fallback para o nome padrão do banco de pagamentos.
-		mongoDB = "fuudelivery_payments"
-		log.Println("PAYMENT_MONGO_DATABASE não configurado, usando fallback 'fuudelivery_payments'")
-	}
 
-	if mongoURI == "" {
-		// LEGADO (dual-write): sem MONGO_URI o dual-write é simplesmente
-		// pulado — não é mais erro fatal desde o corte 4.
-		log.Println("MONGO_URI não configurado, dual-write MongoDB desativado")
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	clientOptions := options.Client().ApplyURI(mongoURI).SetServerSelectionTimeout(30 * time.Second)
-	client, err := mongo.Connect(ctx, clientOptions)
-	if err != nil {
-		log.Printf("Falha ao conectar ao MongoDB: %v", err)
-		return
-	}
-
-	err = client.Ping(ctx, nil)
-	if err != nil {
-		log.Printf("Falha ao pingar MongoDB (server continuará): %v", err)
-	}
-
-	MongoClient = client
-	MongoDabase = client.Database(mongoDB)
-	log.Println("Conexão com o MongoDB estabelecida com sucesso!")
-}

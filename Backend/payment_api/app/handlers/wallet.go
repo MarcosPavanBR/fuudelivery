@@ -126,12 +126,6 @@ func TopUp(c *fiber.Ctx) error {
 	}
 	wallet := newWallet
 
-	dualWritePaymentUpsert(payment) // DUAL-WRITE LEGADO
-
-	dualWriteLedgerEntry(req.UserID, "credit", "", payment.Amount, wallet.Balance, req.PaymentID,
-		"Wallet top-up via confirmed payment", "") // DUAL-WRITE LEGADO
-	dualWriteWallet(wallet) // DUAL-WRITE LEGADO
-
 	log.Printf("[WALLET] TopUp OK: user=%d amount=%.2f payment=%s new_balance=%.2f", req.UserID, payment.Amount, req.PaymentID, wallet.Balance)
 
 	return c.Status(200).JSON(fiber.Map{
@@ -183,10 +177,6 @@ func DeductFromWallet(c *fiber.Ctx) error {
 		log.Printf("[WALLET] Deduct failed: user=%d: %v", req.UserID, dErr)
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to deduct from wallet"})
 	}
-
-	dualWriteLedgerEntry(req.UserID, "debit", "", req.Amount, newWallet.Balance, req.OrderID,
-		"Wallet deduction", "") // DUAL-WRITE LEGADO
-	dualWriteWallet(newWallet) // DUAL-WRITE LEGADO
 
 	log.Printf("[WALLET] Deduct OK: user=%d amount=%.2f new_balance=%.2f", req.UserID, req.Amount, newWallet.Balance)
 
@@ -368,10 +358,6 @@ func EstablishmentWithdraw(c *fiber.Ctx) error {
 		log.Printf("[WALLET] Saque falhou: establishment=%d: %v", estID, dErr)
 		return c.Status(500).JSON(fiber.Map{"error": "Falha ao processar saque"})
 	}
-
-	dualWriteLedgerEntry(estID, "debit", "withdrawal", req.Amount, newWallet.Balance, "",
-		description, req.Destination) // DUAL-WRITE LEGADO
-	dualWriteWallet(newWallet) // DUAL-WRITE LEGADO
 
 	log.Printf("[WALLET] Saque OK: establishment=%d amount=%.2f method=%s novo_saldo=%.2f", estID, req.Amount, req.Method, newWallet.Balance)
 

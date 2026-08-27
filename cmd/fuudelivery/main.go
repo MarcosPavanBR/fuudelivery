@@ -1467,7 +1467,6 @@ func main() {
 		redisClient := queue.GetClient()
 
 		postgresCheck := health.DatabaseCheck(models.DB)
-		mongodbCheck := health.MongoCheck(ordersModels.MongoClient)
 		redisCheck := health.RedisCheck(redisClient)
 		redisGeoCheck := health.RedisGeoCheck(redisClient)
 		batchesCheck := health.BatchCheck(ordersModels.DB)
@@ -1475,7 +1474,7 @@ func main() {
 		// Critical check: apenas o Postgres (banco-único).
 		criticalStatus := health.OverallStatus(postgresCheck)
 		// All checks: includes Redis and batches
-		allStatus := health.OverallStatus(postgresCheck, mongodbCheck, redisCheck, redisGeoCheck, batchesCheck)
+		allStatus := health.OverallStatus(postgresCheck, redisCheck, redisGeoCheck, batchesCheck)
 
 		statusCode := 200
 		if criticalStatus != "up" {
@@ -1488,7 +1487,6 @@ func main() {
 			"version": "1.0.0",
 			"checks": fiber.Map{
 				"postgres":  postgresCheck,
-				"mongodb":   mongodbCheck,
 				"redis":     redisCheck,
 				"redis_geo": redisGeoCheck,
 				"batches":   batchesCheck,

@@ -25,7 +25,7 @@ services:
   - type: web
     name: fuudelivery-api
     env: go
-    buildCommand: cd cmd/fuudelivery && go build -o ../../server .
+    buildCommand: cd cmd/fuudelivery && GOWORK=off go mod tidy && go build -o ../../server .
     startCommand: ./server
     healthCheckPath: /health
     envVars:
@@ -40,15 +40,9 @@ services:
         value: production
 
       # ── Banco de dados / cache ────────────────────────────
-      # Postgres (Supabase) e MongoDB (Atlas) via secrets.
+      # Postgres (Supabase). MongoDB foi removido (2026-08-27).
       - key: DB_CONNECTION_STRING
         sync: false
-      - key: MONGO_URI
-        sync: false
-      - key: MONGO_DATABASE
-        value: "fuudelivery"
-      - key: PAYMENT_MONGO_DATABASE
-        value: "fuudelivery_payments"
       # Redis EXTERNO (não é serviço Render). Valor real no dashboard.
       - key: REDIS_URL
         sync: false

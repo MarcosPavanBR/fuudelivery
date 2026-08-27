@@ -10,6 +10,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 
 	"github.com/carloshomar/fuudelivery/auth_api/app/dto"
 	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
@@ -429,9 +430,9 @@ func DeleteUser(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "Account deleted successfully"})
 }
 
-// BootstrapAdmin promove um usuario existente para papel 'admin'.
-// Requer ADMIN_BOOTSTRAP_SECRET configurado no ambiente.
-// Usado apenas para o setup inicial do sistema.
+// BootstrapAdmin cria o primeiro admin (instalação nova) OU promove um usuário
+// existente para 'admin'. Requer ADMIN_BOOTSTRAP_SECRET no ambiente.
+// Uso único no setup inicial; remover a env após confirmar.
 func BootstrapAdmin(c *fiber.Ctx) error {
 	bootstrapSecret := os.Getenv("ADMIN_BOOTSTRAP_SECRET")
 	if bootstrapSecret == "" {
@@ -439,27 +440,56 @@ func BootstrapAdmin(c *fiber.Ctx) error {
 	}
 
 	var req struct {
-		Email  string `json:"email"`
-		Secret string `json:"secret"`
+		Email    string `json:"email"`
+		Secret   string `json:"secret"`
+		Password string `json:"password"`
+		Name     string `json:"name"`
+		Phone    string `json:"phone"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request"})
 	}
-
+	if req.Email == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "email é obrigatório"})
+	}
 	if req.Secret != bootstrapSecret {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Invalid secret"})
 	}
 
 	var user models.User
-	if err := models.DB.Where("email = ?", req.Email).First(&user).Error; err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
-	}
+	err := models.DB.Where("email = ?", req.Email).First(&user).Error
+	switch {
+	case err == nil:
+		// Usuário existe — promove a admin.
+		if uErr := models.DB.Model(&user).Update("role", "admin").Error; uErr != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to promote user"})
+		}
+		return c.JSON(fiber.Map{"message": fmt.Sprintf("User %s promoted to admin", req.Email)})
 
-	if err := models.DB.Model(&user).Update("role", "admin").Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to promote user"})
-	}
+	case errors.Is(err, gorm.ErrRecordNotFound):
+		// Instalação nova: cria o primeiro admin com os dados informados.
+		if req.Password == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "password é obrigatória para criar o primeiro admin"})
+		}
+		hash, hErr := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		if hErr != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to hash password"})
+		}
+		user = models.User{
+			Name:     req.Name,
+			Email:    req.Email,
+			Phone:    req.Phone,
+			Password: string(hash),
+			Role:     "admin",
+		}
+		if cErr := models.DB.Create(&user).Error; cErr != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create admin"})
+		}
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{"message": fmt.Sprintf("Admin %s created", req.Email)})
 
-	return c.JSON(fiber.Map{"message": fmt.Sprintf("User %s promoted to admin", req.Email)})
+	default:
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to look up user"})
+	}
 }
 
 // RefreshToken renova um access token usando um refresh token valido.

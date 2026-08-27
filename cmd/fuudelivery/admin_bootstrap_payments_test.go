@@ -26,7 +26,6 @@ import (
 	"testing"
 	"time"
 
-	authMiddleware "github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	authModels "github.com/carloshomar/fuudelivery/auth_api/app/models"
 	paymentModels "github.com/carloshomar/fuudelivery/payment_api/app/models"
 	"github.com/gofiber/fiber/v2"
@@ -225,7 +224,6 @@ func TestAdminBootstrapPaymentsAll(t *testing.T) {
 		paymentModels.DB.Unscoped().Where("order_id = ?", "staging-order-001").Delete(&paymentModels.Payment{})
 	})
 
-	// Suppress unused import warnings
-	_ = authMiddleware.GenerateToken
+	// Suppress unused variable warnings
 	_ = ctx
 }

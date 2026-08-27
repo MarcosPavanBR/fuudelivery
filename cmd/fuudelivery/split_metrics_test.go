@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -52,10 +52,10 @@ func setupTestDB(t *testing.T) *gorm.DB {
 
 	pgDSN := os.Getenv("POSTGRES_TEST_URI")
 	if pgDSN == "" {
-		pgContainer, err := postgres.Run(ctx, "postgres:16-alpine",
-			postgres.WithDatabase("fuudelivery_test_split"),
-			postgres.WithUsername("test"),
-			postgres.WithPassword("test"),
+		pgContainer, err := tcpostgres.Run(ctx, "postgres:16-alpine",
+			tcpostgres.WithDatabase("fuudelivery_test_split"),
+			tcpostgres.WithUsername("test"),
+			tcpostgres.WithPassword("test"),
 		)
 		require.NoError(t, err, "subir Postgres")
 		t.Cleanup(func() { _ = pgContainer.Terminate(ctx) })

@@ -1364,36 +1364,10 @@ func main() {
 	// Valida ambiente antes de inicializar
 	validateRequiredEnv()
 
-	// Initialize databases
-	models.ConnectDatabase()
-	ordersModels.ConnectPostgresDatabase()
-	deliveryModels.ConnectPostgresDatabase()
-	paymentModels.ConnectPostgresDatabase()
-	chatModels.ConnectPostgresDatabase()
-
-	// Initialize message queue
-	queue.Init()
-
-	// Initialize storage (Supabase Storage para upload de imagens)
-	upload.Init()
-
-	// Start batch expiry job
-	batchExpiryConfig := orderServices.DefaultBatchExpiryConfig()
-	batchExpiryManager := orderServices.NewBatchExpiryManager(ordersModels.DB, batchExpiryConfig)
-	batchExpiryManager.Start()
-
-	// Wire loyalty points
-	paymentHandlers.OnPaymentApproved = ordersHandlers.EarnPointsForOrder
-
-	// Wire zone-based split config
-	paymentHandlers.GetSplitConfigForEstablishment = func(establishmentID int64) (platformPct, establishmentPct float64) {
-		return models.GetZoneSplitConfig(uint(establishmentID))
-	}
-
-	// Initialize dispatch engine (courier store + matching engine + handler)
-	initDispatchEngine(models.DB)
-
-	// Create Fiber app
+	// Create Fiber app EARLY so /health is available before DB connections.
+	// Render health check has a 30s timeout; DB connections (5 modules × 5
+	// retries × 5s) can take up to 125s. Registering /health first lets the
+	// deploy succeed while DBs connect in the background.
 	app := fiber.New(fiber.Config{
 		Prefork:       false,
 		CaseSensitive: true,
@@ -1460,9 +1434,7 @@ func main() {
 
 	// Health check — reuses the Redis client from the queue singleton
 	// HTTP 503 only when Postgres (fonte primária pós-corte 5) está down.
-	// MongoDB é informational: dual-write legado pode estar off (Atlas
-	// aposentado) sem que o serviço deixe de ser saudável. Redis degradation
-	// returns HTTP 200 with status "degraded".
+	// Redis degradation returns HTTP 200 with status "degraded".
 	app.Get("/health", func(c *fiber.Ctx) error {
 		redisClient := queue.GetClient()
 
@@ -1530,6 +1502,39 @@ func main() {
 	// Upload de imagens (Supabase Storage)
 	app.Post("/upload/:entity", upload.HandleImageUpload)
 	app.Post("/upload/:entity/:entityId", upload.HandleImageUpload)
+
+	// Initialize databases in background goroutine so /health is available
+	// immediately. Render health check has a 30s timeout; DB connections
+	// (5 modules × 5 retries × 5s) can take up to 125s.
+	go func() {
+		models.ConnectDatabase()
+		ordersModels.ConnectPostgresDatabase()
+		deliveryModels.ConnectPostgresDatabase()
+		paymentModels.ConnectPostgresDatabase()
+		chatModels.ConnectPostgresDatabase()
+
+		// Initialize message queue
+		queue.Init()
+
+		// Initialize storage (Supabase Storage para upload de imagens)
+		upload.Init()
+
+		// Start batch expiry job
+		batchExpiryConfig := orderServices.DefaultBatchExpiryConfig()
+		batchExpiryManager := orderServices.NewBatchExpiryManager(ordersModels.DB, batchExpiryConfig)
+		batchExpiryManager.Start()
+
+		// Wire loyalty points
+		paymentHandlers.OnPaymentApproved = ordersHandlers.EarnPointsForOrder
+
+		// Wire zone-based split config
+		paymentHandlers.GetSplitConfigForEstablishment = func(establishmentID int64) (platformPct, establishmentPct float64) {
+			return models.GetZoneSplitConfig(uint(establishmentID))
+		}
+
+		// Initialize dispatch engine (courier store + matching engine + handler)
+		initDispatchEngine(models.DB)
+	}()
 
 	// Start background workers
 	go startQueueListeners()

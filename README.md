@@ -15,13 +15,19 @@ Fork do [vercardapio/appdelivery](https://github.com/carloshomar/appdelivery) es
 - Busca full-text (`/search`) sobre produtos e estabelecimentos
 - Horário de funcionamento, destaques e checagem de estabelecimento aberto
 
-### Pagamentos
-- PIX e Cartão via [AbacatePay](https://abacatepay.com), com webhook HMAC-validado
-- Split de pagamento no approve: 5% plataforma, 85% estabelecimento, taxa de entrega
-- Score de risco (4 fatores: valor, frequência, histórico, horário) → aprovação automática ou manual
-- Carteira digital com operações atômicas e ledger imutável (`wallet_transactions`)
-- Idempotência financeira (migration `11_idempotencia_financeira.sql`), chargebacks com evidência e payout requests
-- Cashback, cupons e saque via PIX
+### Pagamentos (Multi-Gateway)
+- **4 gateways**: Pagar.me (principal), Asaas (alternativo), AbacatePay (fallback PIX), Mercado Pago (reserva)
+- **Métodos**: PIX, Cartão de Crédito (com 3DS), Cartão de Débito (com 3DS)
+- **Split automático**: divisão instantânea entre plataforma, restaurante e entregador via sub-contas (recipients)
+- **Pré-autorização**: cartão de crédito autoriza na criação, captura na confirmação de entrega (PIN)
+- **3D Secure (3DS)**: autenticação obrigatória para débito e crédito > R$ 200
+- **Circuit breaker**: fallback automático se um gateway falhar 5 vezes em 1 minuto
+- **PIN de verificação**: motoboy confirma entrega com PIN de 4 dígitos (TTL 30min, máx 3 tentativas)
+- **Escrow (D+X)**: repasse D+1 entregador, D+7 restaurante (configurável por gateway)
+- **Idempotência**: constraints UNIQUE + idempotency_key (UUID v4) em duas camadas
+- **Score de risco**: 4 fatores (valor, frequência, histórico, horário) → aprovação automática ou manual
+- **Carteira digital**: operações atômicas, ledger imutável, saque via PIX
+- Detalhes: [`references/arquitetura-split-pagamentos.md`](references/arquitetura-split-pagamentos.md)
 
 ### Dispatch Engine (entregas)
 - Matching engine com score de proximidade e densidade de entregadores
@@ -62,7 +68,13 @@ Fork do [vercardapio/appdelivery](https://github.com/carloshomar/appdelivery) es
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ │
 │  │ Auth API │ │ Orders   │ │ Delivery │ │ Payment  │ │  Chat    │ │
 │  │          │ │ API      │ │ API      │ │ API      │ │  API     │ │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘ │
+│  └──────────┘ └──────────┘ └──────────┘ └─────┬────┘ └──────────┘ │
+│                                                │                    │
+│  ┌─────────────────────────────────────────────▼────────────────┐  │
+│  │  Payment Router (gateway selection + circuit breaker + retry)│  │
+│  │  Pagar.me (principal) · Asaas (alternativo)                 │  │
+│  │  AbacatePay (fallback PIX) · Mercado Pago (reserva)         │  │
+│  └─────────────────────────────────────────────────────────────┘  │
 │                                                                     │
 │  ┌──────────────────────────────────────────────────────────────┐  │
 │  │  Dispatch Engine (matching + calibração + split decay)       │  │
@@ -105,8 +117,10 @@ Fork do [vercardapio/appdelivery](https://github.com/carloshomar/appdelivery) es
 | **go-redis** | v8 (v8.11.5) | Fila Redis Streams + cache + rate limit |
 | **golang-jwt** | v5 (v5.3.1, HS256) | Autenticação JWT + refresh tokens |
 | **mongo-driver** | v1.17.9 | Dual-write legado (opcional) |
-| **AbacatePay** | API REST | Gateway de pagamento (PIX + Cartão) |
-| **Asaas** | API REST | Wallet |
+| **Pagar.me** | API REST v4 | Gateway principal (PIX + Cartão + Débito + Split + 3DS) |
+| **Asaas** | API REST | Gateway alternativo (PIX + Cartão + Débito + Split) |
+| **AbacatePay** | API REST | Gateway fallback PIX |
+| **Mercado Pago** | API REST | Gateway reserva (PIX + Cartão + Split 1:1) |
 | **OSRM** | API | Cálculo de rotas e distâncias |
 | **bcrypt** (golang.org/x/crypto) | - | Hash de senhas |
 | **testify + testcontainers-go** | v0.44 | Testes de integração com Postgres/Mongo reais |
@@ -172,7 +186,16 @@ fuudelivery/
 │   ├── etl-orders/           # ETL one-shot Mongo → Postgres (orders → order_documents)
 │   └── etl-payments/         # ETL one-shot Mongo → Postgres (payments/wallets/ledger)
 ├── pkg/
-│   ├── health/               # Health checks compartilháveis (Postgres, Mongo, Redis)
+│   ├── gateway/              # Camada de abstração multi-gateway (interface Gateway + Router + CircuitBreaker)
+│   │   ├── gateway.go        # Interface Gateway + tipos + enums (PaymentMethod, SplitRule, etc.)
+│   │   ├── router.go         # Router com fallback chain e circuit breaker
+│   │   ├── circuitbreaker.go # Circuit breaker (Closed → Open → HalfOpen)
+│   │   ├── registry.go       # Registro e discovery de gateways
+│   │   ├── pagarme/          # Adapter Pagar.me v4 (principal)
+│   │   ├── asaas/            # Adapter Asaas (alternativo)
+│   │   ├── abacatepay/       # Adapter AbacatePay (fallback PIX)
+│   │   └── mercadopago/      # Adapter Mercado Pago (reserva)
+│   ├── health/               # Health checks compartilháveis (Postgres, Redis)
 │   └── queue/                # Fila Redis Streams + DLQ + fallback in-memory (compartilhável)
 ├── Frontend/
 │   ├── AppComida/            # React Native/Expo — app do cliente (mapas MapLibre)
@@ -202,11 +225,12 @@ Os módulos Go individuais seguem a convenção `app/{handlers,models,routes,dto
 
 ## Banco de Dados
 
-- **PostgreSQL único (Supabase)** com GORM AutoMigrate no startup + 13 migrações SQL versionadas em `sql/` aplicadas via `sql/run_all.sh` (controle pela tabela `schema_migrations`):
+- **PostgreSQL único (Supabase)** com GORM AutoMigrate no startup + 16 migrações SQL versionadas em `sql/` aplicadas via `sql/run_all.sh` (controle pela tabela `schema_migrations`):
   - `00_role_e_controle_migracoes` — role `app_backend` com least privilege + controle de migrações
   - `01–04` — domínios: pedidos, entrega, pagamentos (carteiras, ledger, chargebacks, payout), chat
   - `05_audit_log` + `06_rls_seguranca` — trilha de auditoria e Row Level Security
   - `07–11` — tabelas órfãs, reparos legado, ledger kinds, idempotência financeira, refresh tokens
+  - `14–16` — **multi-gateway**: recipients (sub-contas), split_rules (divisão de valores), colunas gateway na tabela payments
 - Dicionário completo de tabelas: [`docs/banco-de-dados.md`](docs/banco-de-dados.md)
 - Regras para alterar o schema (obrigatórias): [`skills/fuudelivery-banco-unico/SKILL.md`](skills/fuudelivery-banco-unico/SKILL.md)
 - Migração Mongo → Postgres: rode os binários `cmd/etl-orders` e `cmd/etl-payments` (idempotentes)

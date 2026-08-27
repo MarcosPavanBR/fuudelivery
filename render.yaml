@@ -59,6 +59,40 @@ services:
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
 
+      # ── Gateways de pagamento ─────────────────────────────
+      # Gateway primário: pagarme | asaas | abacatepay | mercadopago
+      - key: PAYMENT_GATEWAY_PRIMARY
+        value: "pagarme"
+      # Gateway fallback (se primary falhar)
+      - key: PAYMENT_GATEWAY_FALLBACK
+        value: "asaas"
+      # Split automático habilitado
+      - key: PAYMENT_SPLIT_ENABLED
+        value: "true"
+      # PIN de verificação obrigatório
+      - key: PAYMENT_PIN_REQUIRED
+        value: "true"
+
+      # ── Pagar.me (gateway principal) ──────────────────────
+      - key: PAGARME_API_KEY
+        sync: false
+      - key: PAGARME_ENCRYPTION_KEY
+        sync: false
+      - key: PAGARME_WEBHOOK_SECRET
+        sync: false
+
+      # ── Asaas (gateway alternativo) ───────────────────────
+      - key: ASAAS_API_KEY
+        sync: false
+      - key: ASAAS_WEBHOOK_TOKEN
+        sync: false
+
+      # ── Mercado Pago (reserva) ────────────────────────────
+      - key: MERCADOPAGO_ACCESS_TOKEN
+        sync: false
+      - key: MERCADOPAGO_WEBHOOK_SECRET
+        sync: false
+
       # ── Bootstrap do primeiro admin ───────────────────────
       # POST /admin/bootstrap exige este secret. Uso único: criar o admin,
       # confirmar, e remover a variável do dashboard depois.

@@ -8,7 +8,6 @@ require (
 	github.com/gofiber/fiber/v2 v2.52.15
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go/modules/mongodb v0.38.0
-	go.mongodb.org/mongo-driver v1.17.9
 	gorm.io/driver/postgres v1.6.2
 	gorm.io/gorm v1.31.2
 )

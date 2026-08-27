@@ -130,10 +130,10 @@ func TestAdminBootstrapPaymentsAll(t *testing.T) {
 	var adminToken string
 	t.Run("BootstrapAdmin", func(t *testing.T) {
 		body, _ := json.Marshal(map[string]string{
-			"secret":  "local-dev-bootstrap-secret",
-			"email":   "admin.staging@fuudelivery.com",
-			"phone":   "+5511888888888",
-			"name":    "Admin Staging",
+			"secret":   "local-dev-bootstrap-secret",
+			"email":    "admin.staging@fuudelivery.com",
+			"phone":    "+5511888888888",
+			"name":     "Admin Staging",
 			"password": "admin123",
 		})
 		req := httptest.NewRequest(http.MethodPost, "/admin/bootstrap", bytes.NewReader(body))
@@ -166,14 +166,14 @@ func TestAdminBootstrapPaymentsAll(t *testing.T) {
 	// ---- 4. Criar pagamento de teste ----
 	t.Run("CreatePayment", func(t *testing.T) {
 		p := paymentModels.Payment{
-			OrderID:          "staging-order-001",
-			CustomerID:       int64(userID),
-			CustomerPhone:    "+5511999999999",
-			EstablishmentID:  1,
-			Amount:           42.50,
-			Method:           "pix",
-			Status:           "approved",
-			AbacatePayID:     "test-abacatepay-001",
+			OrderID:         "staging-order-001",
+			CustomerID:      int64(userID),
+			CustomerPhone:   "+5511999999999",
+			EstablishmentID: 1,
+			Amount:          42.50,
+			Method:          "pix",
+			Status:          "approved",
+			AbacatePayID:    "test-abacatepay-001",
 		}
 		require.NoError(t, paymentModels.DB.Create(&p).Error)
 	})
@@ -205,10 +205,10 @@ func TestAdminBootstrapPaymentsAll(t *testing.T) {
 
 	t.Run("WrongSecret_403", func(t *testing.T) {
 		body, _ := json.Marshal(map[string]string{
-			"secret":  "wrong-secret",
-			"email":   "another@fuudelivery.com",
-			"phone":   "+5511777777777",
-			"name":    "Wrong Admin",
+			"secret":   "wrong-secret",
+			"email":    "another@fuudelivery.com",
+			"phone":    "+5511777777777",
+			"name":     "Wrong Admin",
 			"password": "wrong123",
 		})
 		req := httptest.NewRequest(http.MethodPost, "/admin/bootstrap", bytes.NewReader(body))

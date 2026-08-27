@@ -53,8 +53,8 @@ func TestResolveWSTicket_ValidTicket(t *testing.T) {
 	t.Setenv("JWT_EXPIRATION_HOURS", "1")
 
 	jwtToken := createTestJWT(t, map[string]interface{}{
-		"id":   42,
-		"role": "client",
+		"id":    42,
+		"role":  "client",
 		"phone": "123456789",
 	})
 

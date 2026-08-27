@@ -85,5 +85,3 @@ func ConnectPostgresDatabase() {
 
 	DB = database
 }
-
-

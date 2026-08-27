@@ -71,5 +71,3 @@ func ConnectPostgresDatabase() {
 	DB = database
 	log.Println("Conexão com o PostgreSQL estabelecida com sucesso!")
 }
-
-

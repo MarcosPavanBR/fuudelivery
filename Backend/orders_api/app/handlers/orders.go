@@ -391,8 +391,6 @@ func sendStatusPushNotification(order dto.RequestPayload, status string) {
 	}
 }
 
-
-
 func ListOrdersByEstablishmentID(c *fiber.Ctx) error {
 	establishmentID := c.Params("establishmentId")
 
@@ -562,7 +560,8 @@ func ListOrdersByPhone(c *fiber.Ctx) error {
 
 	var orders []map[string]interface{}
 	for _, d := range docs {
-		orders = append(orders, docToResponseMap(&d))	}
+		orders = append(orders, docToResponseMap(&d))
+	}
 	if orders == nil {
 		orders = []map[string]interface{}{}
 	}

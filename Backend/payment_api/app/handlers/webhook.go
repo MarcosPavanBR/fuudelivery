@@ -310,7 +310,8 @@ func publishPaymentApproved(abacatepayID string) {
 	if payment.EstablishmentCreditedAt == nil && payment.Status != "REFUNDED" {
 		// Usa as regras recém-calculadas (ainda não persistidas em payment).
 		credit := establishmentShare(models.SplitRules(splitRules))
-		if credit > 0 {				_, wErr := adjustEstablishmentWallet(payment.EstablishmentID, credit, abacatepayID, payment.OrderID, now)
+		if credit > 0 {
+			_, wErr := adjustEstablishmentWallet(payment.EstablishmentID, credit, abacatepayID, payment.OrderID, now)
 			switch {
 			case errors.Is(wErr, models.ErrDuplicateCredit):
 				log.Printf("[WALLET] Crédito já aplicado para %s — replay idempotente ignorado", abacatepayID)

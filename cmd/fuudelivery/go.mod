@@ -19,7 +19,6 @@ require (
 	github.com/stretchr/testify v1.12.1
 	github.com/testcontainers/testcontainers-go/modules/mongodb v0.38.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
-	go.mongodb.org/mongo-driver v1.17.9
 	golang.org/x/crypto v0.55.0
 	golang.org/x/time v0.14.0
 	gorm.io/driver/postgres v1.6.2

@@ -49,7 +49,6 @@ func ProcessSplit(c *fiber.Ctx) error {
 	}).Error; err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to save split rules"})
 	}
-	dualWritePaymentUpsert(&payment) // DUAL-WRITE LEGADO
 
 	// NOTA: RabbitMQ removido. Notificacao de split e feita via Redis pelo monolito.
 	log.Printf("[SPLIT] Split processado: payment=%s order=%s rules=%d", req.PaymentID, payment.OrderID, len(rules))

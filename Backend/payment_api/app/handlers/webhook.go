@@ -72,7 +72,6 @@ func updateLocalPaymentStatus(abacatepayID string, status string) {
 		log.Printf("Failed to update payment %s: %v", abacatepayID, err)
 		return
 	}
-	dualWritePaymentUpsert(payment) // DUAL-WRITE LEGADO
 }
 
 // establishmentShare soma o valor destinado ao estabelecimento nas split
@@ -131,9 +130,6 @@ func reverseWalletCredit(userID int64, amount float64, abacatepayID, description
 		log.Printf("[REFUND] Carteira do usuário %d NAO debitada em %.2f (%v)", userID, amount, dErr)
 		return false
 	}
-
-	dualWriteLedgerEntry(userID, "debit", "", amount, newBalance.Balance, abacatepayID, description, "") // DUAL-WRITE LEGADO
-	dualWriteWallet(newBalance)                                                                          // DUAL-WRITE LEGADO
 	log.Printf("[REFUND] Carteira do usuário %d debitada em %.2f (payment=%s)", userID, amount, abacatepayID)
 	return true
 }
@@ -235,7 +231,6 @@ func processPaymentRefund(abacatepayID string) {
 		log.Printf("[REFUND] Falha ao marcar payment %s como REFUNDED: %v", abacatepayID, err)
 		return
 	}
-	dualWritePaymentUpsert(payment) // DUAL-WRITE LEGADO
 }
 
 // SplitConfigResolver e chamado para obter os percentuais de split
@@ -324,11 +319,7 @@ func publishPaymentApproved(abacatepayID string) {
 			case wErr != nil:
 				log.Printf("[WALLET] WARNING: falha ao creditar carteira do estabelecimento %d: %v", payment.EstablishmentID, wErr)
 			default:
-				setFields["establishment_credited_at"] = now
-				dualWriteLedgerEntry(payment.EstablishmentID, "credit", "", credit, wallet.Balance, abacatepayID,
-					"Credito do split do pedido "+payment.OrderID, "") // DUAL-WRITE LEGADO
-				dualWriteWallet(wallet) // DUAL-WRITE LEGADO
-				log.Printf("[WALLET] Carteira do estabelecimento %d creditada em %.2f (payment=%s)", payment.EstablishmentID, credit, abacatepayID)
+				setFields["establishment_credited_at"] = now				log.Printf("[WALLET] Carteira do estabelecimento %d creditada em %.2f (payment=%s)", payment.EstablishmentID, credit, abacatepayID)
 			}
 		}
 	}
@@ -337,8 +328,6 @@ func publishPaymentApproved(abacatepayID string) {
 		log.Printf("Failed to save split rules for AbacatePay ID %s: %v", abacatepayID, err)
 		return
 	}
-	dualWritePaymentUpsert(payment) // DUAL-WRITE LEGADO
-
 	if OnPaymentApproved != nil {
 		if err := OnPaymentApproved(payment.CustomerPhone, payment.OrderID, payment.Amount); err != nil {
 			log.Printf("[LOYALTY] Failed to award points for order %s: %v", payment.OrderID, err)

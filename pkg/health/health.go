@@ -6,7 +6,6 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/gofiber/fiber/v2"
-	"go.mongodb.org/mongo-driver/mongo"
 	"gorm.io/gorm"
 )
 
@@ -53,19 +52,7 @@ func DatabaseCheck(db *gorm.DB) Check {
 	return Check{Name: "postgres", Status: "up", Latency: time.Since(start).String()}
 }
 
-// MongoCheck verifica a saude do MongoDB via ping.
-func MongoCheck(client *mongo.Client) Check {
-	start := time.Now()
-	if client == nil {
-		return Check{Name: "mongodb", Status: "down", Error: "mongodb not configured"}
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	if err := client.Ping(ctx, nil); err != nil {
-		return Check{Name: "mongodb", Status: "down", Error: err.Error()}
-	}
-	return Check{Name: "mongodb", Status: "up", Latency: time.Since(start).String()}
-}
+
 
 // RedisCheck verifica a saude do Redis via ping.
 func RedisCheck(client *redis.Client) Check {
@@ -122,7 +109,6 @@ func BatchCheck(db *gorm.DB) Check {
 // Uso:
 //
 //	app.Get("/health", health.FiberHandler("delivery_api",
-//		health.MongoCheck(models.MongoClient),
 //	))
 func FiberHandler(service string, checks ...Check) fiber.Handler {
 	return func(c *fiber.Ctx) error {

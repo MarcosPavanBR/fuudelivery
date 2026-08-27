@@ -28,7 +28,7 @@ import (
 // Suíte E2E do checkout — CORTE 4 banco-único.
 //
 // Desde o corte 4 os handlers de pagamento usam APENAS Postgres (models.DB).
-// O Mongo legado saiu da suíte: o dual-write é no-op quando models.MongoDabase
+// O dual-write legado foi removido — Postgres é a única fonte.
 // é nil, então os testes sobem um container Postgres isolado por teste.
 //
 // Como rodar:
@@ -100,8 +100,6 @@ func setupCheckoutE2EEnv(t *testing.T) func() {
 	models.DB = gormDB
 
 	// Mongo desativado nos testes: dual-write vira no-op (helpers checam nil).
-	models.MongoClient = nil
-	models.MongoDabase = nil
 
 	return func() {
 		if sqlDB, err := gormDB.DB(); err == nil {

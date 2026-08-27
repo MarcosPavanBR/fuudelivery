@@ -6,7 +6,6 @@ package handlers
 //   - dual-write best-effort na escrita (orders_pg.go);
 //   - fallback de leitura em listagens enquanto o ETL não roda;
 //   - lazy import em buscas pontuais por ID.
-// Quando o Atlas for desligado, remover os ramos *_legacy* — nada mais muda.
 
 import (
 	"context"
@@ -25,7 +24,6 @@ import (
 	"github.com/carloshomar/fuudelivery/orders_api/app/dto"
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
-	"go.mongodb.org/mongo-driver/bson"
 )
 
 func CreateOrder(c *fiber.Ctx, sendMessageToClient func(clientID int64, message []byte) error) error {
@@ -393,29 +391,7 @@ func sendStatusPushNotification(order dto.RequestPayload, status string) {
 	}
 }
 
-// listOrdersFromMongoLegacy executa a mesma query que os handlers faziam antes
-// do corte 5. Serve de FALLBACK enquanto o ETL Mongo→Postgres não rodou:
-// se o Postgres ainda não tem pedidos daquele filtro, servimos do Atlas.
-func listOrdersFromMongoLegacy(filter bson.M, sortField string, limit int64) []map[string]interface{} {
-	if models.MongoDabase == nil {
-		return nil
-	}
-	collection := models.MongoDabase.Collection("orders")
 
-	findOpts := mongoFindOptions(sortField, limit)
-	cursor, err := collection.Find(mongoCtx(), filter, findOpts)
-	if err != nil {
-		log.Printf("[ORDER-LEGACY] Falha na consulta fallback ao Mongo: %v", err)
-		return nil
-	}
-	defer cursor.Close(mongoCtx())
-
-	var orders []map[string]interface{}
-	if err := cursor.All(mongoCtx(), &orders); err != nil {
-		return nil
-	}
-	return orders
-}
 
 func ListOrdersByEstablishmentID(c *fiber.Ctx) error {
 	establishmentID := c.Params("establishmentId")
@@ -445,14 +421,6 @@ func ListOrdersByEstablishmentID(c *fiber.Ctx) error {
 		formattedOrders = append(formattedOrders, docToResponseMap(&d))
 	}
 
-	// Fallback legado: nada migrado ainda para este estabelecimento.
-	if len(formattedOrders) == 0 {
-		legacy := listOrdersFromMongoLegacy(
-			bson.M{"establishmentid": establishmentIDInt}, "", 0)
-		if legacy != nil {
-			formattedOrders = legacy
-		}
-	}
 	if formattedOrders == nil {
 		formattedOrders = []map[string]interface{}{}
 	}
@@ -489,13 +457,6 @@ func ListOrdersByEstablishmentIDAndPhone(c *fiber.Ctx) error {
 		orders = append(orders, docToResponseMap(&d))
 	}
 
-	if len(orders) == 0 {
-		legacy := listOrdersFromMongoLegacy(
-			bson.M{"establishmentid": establishmentIDInt, "user.phone": phoneNumber}, "", 0)
-		if legacy != nil {
-			orders = legacy
-		}
-	}
 	if orders == nil {
 		orders = []map[string]interface{}{}
 	}
@@ -514,13 +475,6 @@ func ListAllOrders(c *fiber.Ctx) error {
 		orders = append(orders, docToResponseMap(&d))
 	}
 
-	// Fallback legado: banco Postgres ainda vazio (ETL pendente).
-	if len(orders) == 0 {
-		legacy := listOrdersFromMongoLegacy(bson.M{}, "created_at", 500)
-		if legacy != nil {
-			orders = legacy
-		}
-	}
 	if orders == nil {
 		orders = []map[string]interface{}{}
 	}
@@ -538,10 +492,6 @@ func ListAllOrders(c *fiber.Ctx) error {
 // ja presentes e ignora silenciosamente quando o DB esta indisponivel ou o
 // telefone nao casa com nenhum usuario.
 func enrichOrdersWithUsers(orders []map[string]interface{}) {
-	if len(orders) == 0 {
-		return
-	}
-	db := authModels.DB
 	if db == nil {
 		return
 	}
@@ -615,11 +565,6 @@ func ListOrdersByPhone(c *fiber.Ctx) error {
 		orders = append(orders, docToResponseMap(&d))
 	}
 
-	if len(orders) == 0 {
-		legacy := listOrdersFromMongoLegacy(bson.M{"user.phone": phoneNumber}, "lastModified", 0)
-		if legacy != nil {
-			orders = legacy
-		}
 	}
 	if orders == nil {
 		orders = []map[string]interface{}{}

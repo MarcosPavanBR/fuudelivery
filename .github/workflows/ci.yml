@@ -53,7 +53,7 @@ jobs:
 
   # ──────────────────────────────────────────────
   # Integration — fluxo completo de pagamento PIX
-  # (exige Docker: MongoDB + Postgres via "docker run"; AbacatePay mockado
+  # (exige Docker: Postgres via "docker run"; AbacatePay mockado
   #  por httptest.Server)
   # ──────────────────────────────────────────────
   integration-payments:
@@ -71,29 +71,11 @@ jobs:
           # (connection reset) + govulncheck v1.1.4. Alinhar com go.work/go.mod.
           go-version: "1.25.x"
 
-      - name: Start Docker services (Mongo + Postgres)
-        # Mesmo padrão do job e2e-delivery (que passa estável no runner
-        # atual): "docker run" cru + wait via mongosh/pg_isready. O teste
-        # detecta MONGO_TEST_URI/POSTGRES_TEST_URI e conecta direto,
-        # pulando o testcontainers.
+      - name: Start Docker services (Postgres)
         run: |
-          # Mongo com credenciais root test:test (o driver autentica via authSource=admin).
-          docker run -d --name mongo-it -p 27017:27017 \
-            -e MONGO_INITDB_ROOT_USERNAME=test -e MONGO_INITDB_ROOT_PASSWORD=test mongo:7
           docker run -d --name pg-it -p 5432:5432 \
             -e POSTGRES_USER=test -e POSTGRES_PASSWORD=test -e POSTGRES_DB=fuudelivery_staging postgres:16-alpine
-          for i in $(seq 1 30); do
-            if docker exec mongo-it mongosh --eval 'db.runCommand("ping")' --quiet >/dev/null 2>&1; then break; fi
-            sleep 1
-          done
-          # Espera o Postgres TERMINAR de vez o initdb com espera real (until +
-          # sleep 1): durante o setup ele reinicia e recusa conexões, e 30
-          # tentativas sem sleep passam em ~2s, antes do servidor estar pronto.
-          # `until`/`if` são imunes a errexit (bash -e do GitHub Actions).
           until docker exec pg-it psql -U test -d postgres -c 'SELECT 1' >/dev/null 2>&1; do sleep 1; done
-          # Uma database por suíte — antes cada teste tinha o próprio container,
-          # então rodar tudo na mesma database causaria interferência de dados.
-          # Retry: pode ainda pegar a cauda do reinício do initdb.
           for i in $(seq 1 30); do
             if docker exec pg-it psql -U test -d postgres \
               -c "CREATE DATABASE it_fullflow" -c "CREATE DATABASE it_err_scenarios" -c "CREATE DATABASE it_admin_bootstrap"; then break; fi
@@ -105,25 +87,22 @@ jobs:
       # que os containers individuais garantiam antes do escape hatch.
       - name: Run TestFullFlow
         env:
-          MONGO_TEST_URI: mongodb://test:test@localhost:27017/fuudelivery_test?directConnection=true&authSource=admin
           POSTGRES_TEST_URI: postgres://test:test@localhost:5432/it_fullflow?sslmode=disable
         run: go test -tags=integration -v -count=1 -timeout 10m -run 'TestFullFlow' ./
 
       - name: Run TestErrorScenarios
         env:
-          MONGO_TEST_URI: mongodb://test:test@localhost:27017/fuudelivery_err_test?directConnection=true&authSource=admin
           POSTGRES_TEST_URI: postgres://test:test@localhost:5432/it_err_scenarios?sslmode=disable
         run: go test -tags=integration -v -count=1 -timeout 10m -run 'TestErrorScenarios' ./
 
       - name: Run TestAdminBootstrap
         env:
-          MONGO_TEST_URI: mongodb://test:test@localhost:27017/fuudelivery_bootstrap?directConnection=true&authSource=admin
           POSTGRES_TEST_URI: postgres://test:test@localhost:5432/it_admin_bootstrap?sslmode=disable
         run: go test -tags=integration -v -count=1 -timeout 10m -run 'TestAdminBootstrap' ./
 
       - name: Cleanup Docker services
         if: always()
-        run: docker rm -f mongo-it pg-it 2>/dev/null || true
+        run: docker rm -f pg-it 2>/dev/null || true
 
   # ──────────────────────────────────────────────
   # Integration — payment_api (checkout E2E + admin Financeiro)
@@ -398,15 +377,9 @@ jobs:
           go-version: "1.25.x"
           cache-dependency-path: cmd/fuudelivery/go.sum
 
-      - name: Start Docker services (Mongo + Postgres)
+      - name: Start Docker services (Postgres)
         run: |
-          docker run -d --name mongo-e2e -p 27017:27017 mongo:7
           docker run -d --name pg-e2e -p 5432:5432 -e POSTGRES_USER=test -e POSTGRES_PASSWORD=test -e POSTGRES_DB=fuudelivery_delivery postgres:16-alpine
-          # Wait for both to be ready
-          for i in $(seq 1 30); do
-            docker exec mongo-e2e mongosh --eval 'db.runCommand("ping")' --quiet 2>/dev/null && break
-            sleep 1
-          done
           for i in $(seq 1 30); do
             docker exec pg-e2e pg_isready -U test 2>/dev/null && break
             sleep 1
@@ -422,4 +395,4 @@ jobs:
 
       - name: Cleanup Docker services
         if: always()
-        run: docker rm -f mongo-e2e pg-e2e 2>/dev/null || true
+        run: docker rm -f pg-e2e 2>/dev/null || true

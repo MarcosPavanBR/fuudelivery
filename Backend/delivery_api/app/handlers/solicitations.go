@@ -14,11 +14,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// dualWriteMongo é um stub mantido para compatibilidade. O Mongo legado
-// está sendo desligado — esta função não faz nada. Remover todas as
-// chamadas quando o Atlas for desativado.
-func dualWriteMongo(_ dto.OrderDTO) {}
-
 // CreateSolicitation é chamado pela fila do monolito quando um pedido é aprovado.
 // Cria (ou atualiza) a solicitação no read-model do motor de despacho.
 func CreateSolicitation(msg string, sendMessageToClient func(clientID int64, message []byte) error) error {
@@ -119,8 +114,6 @@ func HandShakeDeliveryman(c *fiber.Ctx) error {
 	}
 	existing.DeliveryManID = tokenCourierID
 	existing.DeliveryManStatus = "IN_ROUTE_COLECT"
-
-	dualWriteMongo(existing.ToDTO()) // DUAL-WRITE LEGADO
 
 	order := existing.ToDTO()
 	log.Printf("[DELIVERY] Order %s handshake published", order.OrderId)

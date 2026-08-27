@@ -90,17 +90,6 @@ func TestCheck_NilDatabase(t *testing.T) {
 	}
 }
 
-func TestCheck_NilMongo(t *testing.T) {
-	// MongoCheck with nil client should return down
-	check := MongoCheck(nil)
-	if check.Status != "down" {
-		t.Errorf("expected 'down' for nil client, got '%s'", check.Status)
-	}
-	if check.Error != "mongodb not configured" {
-		t.Errorf("expected 'mongodb not configured' error, got '%s'", check.Error)
-	}
-}
-
 func TestCheck_NilRedis(t *testing.T) {
 	// RedisCheck with nil client should return down
 	check := RedisCheck(nil)

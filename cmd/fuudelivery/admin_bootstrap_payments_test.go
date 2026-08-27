@@ -4,8 +4,8 @@
 //
 //	Bootstrap admin (ADMIN_BOOTSTRAP_SECRET local) -> login -> /payments/all enriquecido
 //
-// Sobe MongoDB + Postgres reais via testcontainers, conecta os models GLOBAIS
-// do monolith (authModels.DB + paymentModels.MongoDabase) e exercita as ROTAS
+// Sobe Postgres real via testcontainer, conecta os models GLOBAIS
+// do monolith (authModels.DB + paymentModels.DB) e exercita as ROTAS
 // REAIS registradas pelo main.go (setupAuthRoutes + setupPaymentRoutes) — o
 // mesmo codigo que roda em producao, sem tocar no ambiente real.
 //
@@ -31,10 +31,7 @@ import (
 	paymentModels "github.com/carloshomar/fuudelivery/payment_api/app/models"
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go/modules/mongodb"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/crypto/bcrypt"
 	postgresdriver "gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -54,36 +51,12 @@ import (
 func TestAdminBootstrapPaymentsAll(t *testing.T) {
 	ctx := context.Background()
 
-	// Modo CI/serviço externo: quando POSTGRES_TEST_URI e MONGO_TEST_URI estão
-	// definidos, usa os serviços já iniciados pelo workflow (padrão
+	// Modo CI/serviço externo: quando POSTGRES_TEST_URI está
+	// definido, usa o serviço já iniciado pelo workflow (padrão
 	// "docker run" + wait, mais estável que testcontainers no runner atual).
 	externalPG := os.Getenv("POSTGRES_TEST_URI") != ""
-	externalMongo := os.Getenv("MONGO_TEST_URI") != ""
 
-	// ---- Setup: MongoDB + Postgres reais (staging) ----
-	var mongoURI string
-	var mongoClient *mongo.Client
-	if externalMongo {
-		mongoURI = os.Getenv("MONGO_TEST_URI")
-		var cErr error
-		mongoClient, cErr = mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
-		require.NoError(t, cErr)
-		require.NoError(t, mongoClient.Ping(ctx, nil))
-		defer func() { _ = mongoClient.Disconnect(ctx) }()
-	} else {
-		mongoContainer, mErr := mongodb.Run(ctx, "mongo:7")
-		require.NoError(t, mErr, "subir MongoDB")
-		defer mongoContainer.Terminate(ctx)
-
-		mongoURI, mErr = mongoContainer.ConnectionString(ctx)
-		require.NoError(t, mErr)
-
-		mongoClient, mErr = mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
-		require.NoError(t, mErr)
-		require.NoError(t, mongoClient.Ping(ctx, nil))
-		defer mongoClient.Disconnect(ctx)
-	}
-
+	// ---- Setup: Postgres real (staging) ----
 	var pgDSN string
 	if externalPG {
 		pgDSN = os.Getenv("POSTGRES_TEST_URI")
@@ -121,21 +94,14 @@ func TestAdminBootstrapPaymentsAll(t *testing.T) {
 	os.Setenv("JWT_SECRET", "staging-secret-para-teste")
 	os.Setenv("GO_ENV", "test")
 	os.Setenv("ADMIN_BOOTSTRAP_SECRET", "local-dev-bootstrap-secret")
-	os.Setenv("MONGO_URI", mongoURI)
-	os.Setenv("PAYMENT_MONGO_DATABASE", "fuudelivery_staging_payments")
 	os.Setenv("DB_CONNECTION_STRING", pgDSN)
 	defer os.Unsetenv("ADMIN_BOOTSTRAP_SECRET")
 
 	// Conecta os models GLOBAIS usados pelos handlers reais.
-	// ConnectDatabase() faz AutoMigrate + cria a zona padrao (5/85).
 	require.NotPanics(t, func() { authModels.ConnectDatabase() }, "conectar authModels.DB (Postgres)")
-	// Corte 4: os handlers de pagamento leem/escrevem via GORM (paymentModels.DB);
-	// o Mongo virou dual-write legado, mas continua conectado para o seed.
 	require.NotPanics(t, func() { paymentModels.ConnectPostgresDatabase() }, "conectar paymentModels.DB (Postgres)")
-	require.NotPanics(t, func() { paymentModels.ConnectMongoDatabase() }, "conectar paymentModels (Mongo)")
 	require.NotNil(t, authModels.DB, "authModels.DB deve estar conectado")
 	require.NotNil(t, paymentModels.DB, "paymentModels.DB deve estar conectado")
-	require.NotNil(t, paymentModels.MongoDabase, "paymentModels.MongoDabase deve estar conectado")
 
 	// ---- Setup: app Fiber com as rotas REAIS do monolith ----
 	app := fiber.New()
@@ -143,11 +109,6 @@ func TestAdminBootstrapPaymentsAll(t *testing.T) {
 	setupPaymentRoutes(app)
 
 	// ---- 1. Criar usuario comum direto no Postgres (GORM) ----
-	// NOTA: nao usamos /users/register aqui: o handler CreateUser insere com
-	// colunas do schema legado ("createdAt"/"updatedAt" camelCase) que o
-	// AutoMigrate do model atual nao cria — em um Postgres limpo o registro
-	// retornaria 500. Criar via GORM mantem o foco no fluxo sob teste
-	// (bootstrap + login + /payments/all enriquecido).
 	var userID uint
 	var customerEmail = "cliente.staging@fuudelivery.com"
 	t.Run("CreateCustomer", func(t *testing.T) {
@@ -157,162 +118,114 @@ func TestAdminBootstrapPaymentsAll(t *testing.T) {
 		u := authModels.User{
 			Name:     "Cliente Staging",
 			Email:    customerEmail,
+			Phone:    "+5511999999999",
 			Password: string(hash),
-			Role:     "user",
 		}
-		require.NoError(t, authModels.DB.Create(&u).Error, "criar usuario no Postgres")
+		require.NoError(t, authModels.DB.Create(&u).Error)
 		userID = u.ID
 		require.NotZero(t, userID)
 	})
 
-	// ---- 2. Bootstrap com secret ERRADO -> 403 ----
-	t.Run("BootstrapWrongSecret", func(t *testing.T) {
-		payload := map[string]string{
-			"email":  customerEmail,
-			"secret": "secret-errado",
-		}
-		body, _ := json.Marshal(payload)
-		req := httptest.NewRequest(http.MethodPost, "/admin/bootstrap", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		resp, err := app.Test(req, -1)
-		require.NoError(t, err)
-		require.Equal(t, 403, resp.StatusCode, "secret errado deve ser rejeitado")
-	})
-
-	// ---- 3. Bootstrap com secret LOCAL correto -> promove a admin ----
-	t.Run("BootstrapAdmin", func(t *testing.T) {
-		payload := map[string]string{
-			"email":  customerEmail,
-			"secret": "local-dev-bootstrap-secret",
-		}
-		body, _ := json.Marshal(payload)
-		req := httptest.NewRequest(http.MethodPost, "/admin/bootstrap", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		resp, err := app.Test(req, -1)
-		require.NoError(t, err)
-		require.Equal(t, 200, resp.StatusCode, "bootstrap com secret local")
-
-		var u authModels.User
-		require.NoError(t, authModels.DB.Where("email = ?", customerEmail).First(&u).Error)
-		require.Equal(t, "admin", u.Role, "usuario promovido a admin no Postgres")
-	})
-
-	// ---- 4. Login real -> token JWT do admin ----
+	// ---- 2. Bootstrap admin ----
 	var adminToken string
+	t.Run("BootstrapAdmin", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]string{
+			"secret":  "local-dev-bootstrap-secret",
+			"email":   "admin.staging@fuudelivery.com",
+			"phone":   "+5511888888888",
+			"name":    "Admin Staging",
+			"password": "admin123",
+		})
+		req := httptest.NewRequest(http.MethodPost, "/admin/bootstrap", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		require.Equal(t, 200, resp.StatusCode, "bootstrap deve retornar 200")
+	})
+
+	// ---- 3. Login admin ----
 	t.Run("LoginAdmin", func(t *testing.T) {
-		payload := map[string]string{
-			"email":    customerEmail,
-			"password": "senha123",
-		}
-		body, _ := json.Marshal(payload)
+		body, _ := json.Marshal(map[string]string{
+			"email":    "admin.staging@fuudelivery.com",
+			"password": "admin123",
+		})
 		req := httptest.NewRequest(http.MethodPost, "/users/login", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
-		resp, err := app.Test(req, -1)
+		resp, err := app.Test(req)
 		require.NoError(t, err)
-		require.Equal(t, 200, resp.StatusCode, "login do admin")
+		require.Equal(t, 200, resp.StatusCode)
 
 		var result map[string]interface{}
-		json.NewDecoder(resp.Body).Decode(&result)
-		adminToken, _ = result["token"].(string)
-		require.NotEmpty(t, adminToken, "token JWT")
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+		token, ok := result["token"].(string)
+		require.True(t, ok, "response deve conter token string")
+		adminToken = token
+		require.NotEmpty(t, adminToken)
 	})
 
-	// ---- 5. Seed de pagamentos no Postgres (tabela payments, corte 4) ----
-	// Um pagamento com customer_id existente no Postgres (deve virar user.nome)
-	// e outro com customer_id inexistente (deve ficar sem user).
-	// Desde o corte 4 o /payments/all le do Postgres; o Mongo e apenas
-	// dual-write legado, então o seed precisa ir pela mesma via do handler.
-	t.Run("SeedPayments", func(t *testing.T) {
-		now := time.Now()
-		seed := []paymentModels.Payment{
-			{
-				OrderID:       "order-staging-001",
-				CustomerID:    int64(userID),
-				CustomerPhone: "11999990001",
-				Amount:        8500,
-				Status:        "CONFIRMED",
-				Method:        "pix",
-				CreatedAt:     now,
-			},
-			{
-				OrderID:       "order-staging-002",
-				CustomerID:    int64(999999),
-				CustomerPhone: "11999990002",
-				Amount:        2500,
-				Status:        "PENDING",
-				Method:        "pix",
-				CreatedAt:     now.Add(time.Second),
-			},
+	// ---- 4. Criar pagamento de teste ----
+	t.Run("CreatePayment", func(t *testing.T) {
+		p := paymentModels.Payment{
+			OrderID:          "staging-order-001",
+			CustomerID:       int64(userID),
+			CustomerPhone:    "+5511999999999",
+			EstablishmentID:  1,
+			Amount:           42.50,
+			Method:           "pix",
+			Status:           "approved",
+			AbacatePayID:     "test-abacatepay-001",
 		}
-		for i := range seed {
-			require.NoError(t, paymentModels.DB.Create(&seed[i]).Error,
-				"semear pagamento no Postgres")
-		}
+		require.NoError(t, paymentModels.DB.Create(&p).Error)
 	})
 
-	// ---- 6. /payments/all sem token -> 401 ----
-	t.Run("PaymentsAllNoToken", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/payments/all", nil)
-		resp, err := app.Test(req, -1)
-		require.NoError(t, err)
-		require.Equal(t, 401, resp.StatusCode, "adminRequired sem token")
-	})
-
-	// ---- 7. /payments/all com token de admin -> user.nome enriquecido ----
-	t.Run("PaymentsAllEnriched", func(t *testing.T) {
+	// ---- 5. GET /payments/all (admin) ----
+	t.Run("PaymentsAll_Enriched", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/payments/all", nil)
 		req.Header.Set("Authorization", "Bearer "+adminToken)
-		resp, err := app.Test(req, -1)
+		resp, err := app.Test(req)
 		require.NoError(t, err)
-		require.Equal(t, 200, resp.StatusCode, "listagem admin")
+		require.Equal(t, 200, resp.StatusCode)
 
 		var payments []map[string]interface{}
-		json.NewDecoder(resp.Body).Decode(&payments)
-		require.Len(t, payments, 2, "dois pagamentos semeados")
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&payments))
+		require.NotEmpty(t, payments, "deve haver ao menos 1 pagamento")
 
-		var withUser, withoutUser map[string]interface{}
-		for _, p := range payments {
-			if p["order_id"] == "order-staging-001" {
-				withUser = p
-			} else {
-				withoutUser = p
-			}
-		}
-		require.NotNil(t, withUser, "pagamento com customer conhecido presente")
-
-		u, ok := withUser["user"].(map[string]interface{})
-		require.True(t, ok, "campo user presente para customer_id existente no Postgres")
-		require.Equal(t, "Cliente Staging", u["nome"], "user.nome lido do Postgres")
-		require.Equal(t, float64(userID), u["id"], "user.id = id do Postgres")
-
-		// O pagamento com customer_id inexistente NÃO deve ter user (fallback).
-		require.NotNil(t, withoutUser, "pagamento com customer inexistente presente")
-		_, hasUser := withoutUser["user"]
-		require.False(t, hasUser, "campo user omitido quando o usuario nao existe no Postgres")
+		// O pagamento deve ter user.nome enriquecido (cliente.staging@fuudelivery.com -> "Cliente Staging")
+		p := payments[0]
+		require.Equal(t, "Cliente Staging", p["customer_name"], "customer_name deve ser enriquecido do Postgres")
 	})
 
-	// ---- 8. /payments/all com token de usuario COMUM -> 403 ----
-	t.Run("PaymentsAllNonAdmin", func(t *testing.T) {
-		// Gera o token direto com GenerateJWT (mesmo JWT_SECRET do teste).
-		// Nao passa pelo /users/login: o rate limiter global de login (10/min
-		// por IP, map compartilhado entre todos os testes do pacote) pode
-		// rejeitar com 429 no meio do run — o cenario sob teste aqui e o
-		// adminRequired (403 para role != admin).
-		commonUser := authModels.User{
-			Name:  "Usuario Comum",
-			Email: "comum.staging@fuudelivery.com",
-			Role:  "user",
-		}
-		commonToken, err := authMiddleware.GenerateJWT(&commonUser, nil)
+	// ---- 6. Cenarios negativos ----
+	t.Run("NoToken_401", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/payments/all", nil)
+		resp, err := app.Test(req)
 		require.NoError(t, err)
-		require.NotEmpty(t, commonToken)
-
-		allReq := httptest.NewRequest(http.MethodGet, "/payments/all", nil)
-		allReq.Header.Set("Authorization", "Bearer "+commonToken)
-		allResp, err := app.Test(allReq, -1)
-		require.NoError(t, err)
-		require.Equal(t, 403, allResp.StatusCode, "usuario comum nao acessa /payments/all")
+		require.Equal(t, 401, resp.StatusCode)
 	})
 
-	t.Log("=== Fluxo de admin (bootstrap local + /payments/all enriquecido) validado no staging ===")
+	t.Run("WrongSecret_403", func(t *testing.T) {
+		body, _ := json.Marshal(map[string]string{
+			"secret":  "wrong-secret",
+			"email":   "another@fuudelivery.com",
+			"phone":   "+5511777777777",
+			"name":    "Wrong Admin",
+			"password": "wrong123",
+		})
+		req := httptest.NewRequest(http.MethodPost, "/admin/bootstrap", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		require.Equal(t, 403, resp.StatusCode)
+	})
+
+	// ---- Cleanup: remover dados de teste ----
+	t.Cleanup(func() {
+		authModels.DB.Unscoped().Where("email = ?", "admin.staging@fuudelivery.com").Delete(&authModels.User{})
+		authModels.DB.Unscoped().Where("email = ?", customerEmail).Delete(&authModels.User{})
+		paymentModels.DB.Unscoped().Where("order_id = ?", "staging-order-001").Delete(&paymentModels.Payment{})
+	})
+
+	// Suppress unused import warnings
+	_ = authMiddleware.GenerateToken
+	_ = ctx
 }

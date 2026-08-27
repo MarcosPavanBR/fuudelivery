@@ -190,8 +190,11 @@ func TestAdminBootstrapPaymentsAll(t *testing.T) {
 		require.NotEmpty(t, payments, "deve haver ao menos 1 pagamento")
 
 		// O pagamento deve ter user.nome enriquecido (cliente.staging@fuudelivery.com -> "Cliente Staging")
+		// Contrato real do /payments/all: p.user.nome (consumido pelo WebAdmin Payments.jsx).
 		p := payments[0]
-		require.Equal(t, "Cliente Staging", p["customer_name"], "customer_name deve ser enriquecido do Postgres")
+		enriched, ok := p["user"].(map[string]interface{})
+		require.True(t, ok, "payment deve ter campo user enriquecido")
+		require.Equal(t, "Cliente Staging", enriched["nome"], "user.nome deve ser enriquecido do Postgres")
 	})
 
 	// ---- 6. Cenarios negativos ----

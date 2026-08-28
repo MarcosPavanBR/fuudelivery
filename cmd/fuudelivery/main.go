@@ -1513,6 +1513,10 @@ func main() {
 	app.Use(func(c *fiber.Ctx) error {
 		c.Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self' wss: https:; font-src 'self' data:")
 		c.Set("X-Content-Type-Options", "nosniff")
+		c.Set("X-Frame-Options", "DENY")
+		c.Set("X-XSS-Protection", "1; mode=block")
+		c.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		c.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		return c.Next()
 	})
 

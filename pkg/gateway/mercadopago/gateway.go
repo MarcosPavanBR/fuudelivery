@@ -100,7 +100,11 @@ func (g *MercadoPagoGateway) CreateTransaction(
 	}
 
 	// Enviar para a API
-	respBody, err := g.client.post("/payments", paymentReq)
+	headers := map[string]string{}
+	if req.IdempotencyKey != "" {
+		headers["X-Idempotency-Key"] = req.IdempotencyKey
+	}
+	respBody, err := g.client.postWithHeaders("/payments", paymentReq, headers)
 	if err != nil {
 		return nil, fmt.Errorf("create transaction: %w", err)
 	}

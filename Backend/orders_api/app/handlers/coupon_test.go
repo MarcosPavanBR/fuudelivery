@@ -242,3 +242,52 @@ func TestCouponValidation_Messages(t *testing.T) {
 		}
 	}
 }
+
+// === Testes de race condition ===
+
+func TestApplyCoupon_RaceCondition(t *testing.T) {
+	db := setupTestDB()
+	models.DB = db
+
+	coupon := models.Coupon{
+		Code:        "RACE10",
+		DiscountType: "PERCENTAGE",
+		DiscountValue: 10,
+		MaxUses:     2,
+		IsActive:     true,
+		StartDate:    time.Now().Add(-time.Hour),
+		ExpiryDate:   time.Now().Add(time.Hour),
+	}
+	models.DB.Create(&coupon)
+
+	successCount := 0
+	mu := sync.Mutex{}
+	var wg sync.WaitGroup
+
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			app := fiber.New()
+			app.Use(mock.Middleware())
+			app.Post("/coupons/apply", ApplyCoupon)
+
+			req := mock.CreateRequest("POST", "/coupons/apply")
+			req.Request().Header.Set("Content-Type", "application/json")
+			req.Request().Body = []byte(`{"code":"RACE10","user_phone":"+5511999900001","order_id":"order-1","order_value":100}`)
+			req.JSON()
+
+			_, err := app.Test(req)
+			if err == nil {
+				mu.Lock()
+				successCount++
+				mu.Unlock()
+			}
+		}()
+	}
+
+	wg.Wait()
+	if successCount != 2 {
+		t.Errorf("Expected 2 successful coupon uses, got %d", successCount)
+	}
+}

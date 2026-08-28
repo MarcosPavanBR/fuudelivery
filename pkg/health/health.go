@@ -2,6 +2,8 @@ package health
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -96,6 +98,36 @@ func BatchCheck(db *gorm.DB) Check {
 		return Check{Name: "batches", Status: "degraded", Error: err.Error()}
 	}
 	return Check{Name: "batches", Status: "up", Latency: time.Since(start).String()}
+}
+
+// GatewayCheck verifica se pelo menos um gateway de pagamento esta configurado.
+// Retorna "up" se pelo menos uma API key estiver presente, "down" caso contrario.
+func GatewayCheck() Check {
+	start := time.Now()
+	gateways := map[string]string{
+		"abacatepay":  os.Getenv("ABACATE_PAY_API_KEY"),
+		"pagarme":     os.Getenv("PAGARME_API_KEY"),
+		"asaas":       os.Getenv("ASAAS_API_KEY"),
+		"mercadopago": os.Getenv("MERCADOPAGO_ACCESS_TOKEN"),
+	}
+
+	available := make([]string, 0)
+	for name, key := range gateways {
+		if key != "" {
+			available = append(available, name)
+		}
+	}
+
+	if len(available) == 0 {
+		return Check{Name: "payment_gateways", Status: "down", Error: "no payment gateway configured"}
+	}
+
+	return Check{
+		Name:    "payment_gateways",
+		Status:  "up",
+		Latency: time.Since(start).String(),
+		Error:   fmt.Sprintf("available: %v", available),
+	}
 }
 
 // FiberHandler monta o handler HTTP (Fiber) padrao para o endpoint /health.

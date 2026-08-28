@@ -21,7 +21,16 @@ type Client struct {
 }
 
 // NewClient cria um novo cliente Pagar.me.
+<<<<<<< ours
 func NewClient(baseURL, apiKey string) *Client {
+=======
+func NewClient() *Client {
+	baseURL := os.Getenv("PAGARME_BASE_URL")
+	if baseURL == "" {
+		baseURL = "https://api.pagar.me/v4"
+	}
+	apiKey := os.Getenv("PAGARME_API_KEY")
+>>>>>>> theirs
 	return &Client{
 		baseURL: baseURL,
 		apiKey:  apiKey,
@@ -59,6 +68,10 @@ func (c *Client) put(path string, body interface{}) ([]byte, error) {
 
 // doRequest executa uma requisição HTTP com retry e backoff exponencial.
 func (c *Client) doRequest(method, path string, body interface{}, extraHeaders map[string]string) ([]byte, error) {
+	if c.apiKey == "" {
+		return nil, fmt.Errorf("pagarme: PAGARME_API_KEY not configured")
+	}
+
 	var bodyReader io.Reader
 
 	if body != nil {

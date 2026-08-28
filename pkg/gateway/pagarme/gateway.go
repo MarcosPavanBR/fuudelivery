@@ -99,8 +99,13 @@ func (g *PagarMeGateway) CreateTransaction(
 	// Construir payload do Pagar.me
 	pagarmeReq := g.buildTransactionRequest(req)
 
+	headers := map[string]string{}
+	if req.IdempotencyKey != "" {
+		headers["X-Idempotency-Key"] = req.IdempotencyKey
+	}
+
 	// Enviar para a API
-	respBody, err := g.client.post("/orders", pagarmeReq)
+	respBody, err := g.client.postWithHeaders("/orders", pagarmeReq, headers)
 	if err != nil {
 		return nil, fmt.Errorf("create transaction: %w", err)
 	}

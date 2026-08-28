@@ -292,7 +292,12 @@ func publishPaymentApproved(abacatepayID string) {
 		platformPct, establishmentPct = GetSplitConfigForEstablishment(payment.EstablishmentID)
 	}
 
-	splitRules := defaultSplitRules(payment, platformPct, establishmentPct)
+	splitResult, err := services.CalculateSplitRules(payment, platformPct, establishmentPct)
+	if err != nil {
+		log.Printf("[SPLIT] Erro ao calcular split para %s: %v", abacatepayID, err)
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid split configuration"})
+	}
+	splitRules := splitResult.Rules
 
 	setFields := map[string]interface{}{
 		"status":       "CONFIRMED",
@@ -461,66 +466,4 @@ func HandlePaymentWebhook(c *fiber.Ctx) error {
 		"status":  "processed",
 		"message": "Webhook processed successfully",
 	})
-}
-
-// defaultSplitRules calcula as regras de split de pagamento com base
-// nos percentuais configurados para a zona do estabelecimento.
-// Se platformPct + establishmentPct nao somarem 100%, o excedente
-// vai para customerCredit (cashback).
-func defaultSplitRules(payment *models.Payment, platformPct, establishmentPct float64) []models.SplitRule {
-	total := payment.Amount
-	platformFee := total * (platformPct / 100.0)
-	establishmentAmount := total * (establishmentPct / 100.0)
-	deliveryAmount := payment.DeliveryAmount
-	customerCredit := total - platformFee - establishmentAmount - deliveryAmount
-
-	if customerCredit < 0 {
-		overage := -customerCredit
-		customerCredit = 0
-		establishmentAmount -= overage
-		if establishmentAmount < 0 {
-			overage = -establishmentAmount
-			establishmentAmount = 0
-			platformFee -= overage
-			if platformFee < 0 {
-				platformFee = 0
-			}
-		}
-		log.Printf("[SPLIT] Warning: deliveryAmount=%.2f exceeds available%%, adjusted establishment=%.2f platform=%.2f", deliveryAmount, establishmentAmount, platformFee)
-	}
-
-	rules := []models.SplitRule{
-		{
-			ReceiverID:   0,
-			ReceiverType: "platform",
-			Amount:       platformFee,
-			Percentage:   platformPct,
-		},
-		{
-			ReceiverID:   payment.EstablishmentID,
-			ReceiverType: "establishment",
-			Amount:       establishmentAmount,
-			Percentage:   establishmentPct,
-		},
-	}
-
-	if deliveryAmount > 0 {
-		rules = append(rules, models.SplitRule{
-			ReceiverID:   0,
-			ReceiverType: "deliveryman",
-			Amount:       deliveryAmount,
-			Percentage:   0,
-		})
-	}
-
-	if customerCredit > 0 {
-		rules = append(rules, models.SplitRule{
-			ReceiverID:   payment.CustomerID,
-			ReceiverType: "customer",
-			Amount:       customerCredit,
-			Percentage:   0,
-		})
-	}
-
-	return rules
 }

@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"log"
@@ -71,6 +72,19 @@ type gatewayEntry struct {
 	gateway Gateway
 	cb      *CircuitBreaker
 	weight  int // Para ordenação (menor = mais prioritário)
+}
+
+// generateIdempotencyKey gera uma chave de idempotência única (UUID v4).
+func generateIdempotencyKey() string {
+	b := make([]byte, 16)
+	_, err := rand.Read(b)
+	if err != nil {
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		b[:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
 
 // NewRouter cria um novo router com a ordem de prioridade dos gateways.
@@ -188,9 +202,14 @@ func (r *Router) CreateTransactionWithFallback(
 			continue
 		}
 
+		// Garante idempotency key para evitar duplicatas em retries
+		if req.IdempotencyKey == "" {
+			req.IdempotencyKey = generateIdempotencyKey()
+		}
+
 		// Tenta criar transação com timeout
-		log.Printf("[ROUTER] Trying gateway %s for method=%s split=%v",
-			entry.gateway.Name(), req.PaymentMethod, requiresSplit)
+		log.Printf("[ROUTER] Trying gateway %s for method=%s split=%v idempotency=%s",
+			entry.gateway.Name(), req.PaymentMethod, requiresSplit, req.IdempotencyKey)
 
 		resp, err := entry.gateway.CreateTransaction(ctx, req)
 		if err != nil {
@@ -254,9 +273,9 @@ func (r *Router) CircuitBreakerState(name string) (CircuitState, int) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	for _, entry := range r.gateways {
-		if entry.gateway.Name() == name {
-			return entry.cb.State(), entry.cb.FailCount()
+	for i := range r.gateways {
+		if r.gateways[i].gateway.Name() == name {
+			return r.gateways[i].cb.State(), r.gateways[i].cb.FailCount()
 		}
 	}
 	return StateClosed, 0

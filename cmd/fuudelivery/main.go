@@ -1455,16 +1455,14 @@ func main() {
 	// Comportamento:
 	//   - ALLOWED_ORIGINS (env, render.yaml) SOMA com os defaults — nunca
 	//     remove os domínios de produção ao adicionar uma origem nova.
-	//   - Em desenvolvimento (GO_ENV != production) liberam-se também os
-	//     previews do Freebuff Cloud (*.daytonaproxy01.net) e localhost em
-	//     qualquer porta (isLocalDevOrigin). Em produção NENHUM dos dois
-	//     vale: wildcard de preview + credentials é superfície de ataque.
+	//   - Em desenvolvimento (GO_ENV != production) libera-se localhost em
+	//     qualquer porta (isLocalDevOrigin). Em produção NENHUM localhost
+	//     vale: credentials + localhost é superfície de ataque CSRF.
+	//   - Domínios de preview (ex.: *.daytonaproxy01.net) devem ser
+	//     adicionados EXPLICITAMENTE via ALLOWED_ORIGINS, nunca como wildcard.
 	defaultOrigins := []string{
 		"https://fuudelivery-web.onrender.com",
 		"https://fuudelivery-admin-lv7f.onrender.com",
-	}
-	if os.Getenv("GO_ENV") != "production" {
-		defaultOrigins = append(defaultOrigins, "https://*.daytonaproxy01.net")
 	}
 	allowedOrigins := append([]string{}, defaultOrigins...)
 	if extra := os.Getenv("ALLOWED_ORIGINS"); extra != "" {
@@ -1716,8 +1714,14 @@ func processStatusUpdate(queueName string, msg []byte) error {
 func isLocalDevOrigin(origin string) bool {
 	// Em PRODUÇÃO devolve sempre false: localhost-any-port com credentials
 	// permitia qualquer app local do usuário autenticar contra a API.
-	if origin == "" || os.Getenv("GO_ENV") == "production" {
+	if origin == "" {
 		return false
+	}
+	if os.Getenv("GO_ENV") == "production" {
+		return false
+	}
+	if os.Getenv("GO_ENV") == "" {
+		log.Println("[CORS] WARNING: GO_ENV não definido — assumindo development (localhost permitido)")
 	}
 	u, err := url.Parse(origin)
 	if err != nil {

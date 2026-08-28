@@ -69,8 +69,22 @@ api.interceptors.response.use(
       isRefreshing = true
 
       try {
-        const refreshResponse = await api.post("/auth/session/refresh", {}, { withCredentials: true })
-        const { token } = refreshResponse.data
+        const refreshToken = localStorage.getItem("fuu_admin_refresh_token")
+        if (!refreshToken) {
+          throw new Error("no refresh token")
+        }
+
+        const refreshResponse = await api.post("/auth/refresh", {
+          refresh_token: refreshToken,
+        })
+        const { token, refresh_token } = refreshResponse.data
+
+        if (token) {
+          localStorage.setItem("fuu_admin_token", token)
+        }
+        if (refresh_token) {
+          localStorage.setItem("fuu_admin_refresh_token", refresh_token)
+        }
 
         processQueue(null, token)
 

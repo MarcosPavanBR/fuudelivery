@@ -1049,6 +1049,7 @@ func rateLimitByIdentifierMiddleware(maxPerMinute int) fiber.Handler {
 }
 
 func setupAuthRoutes(app *fiber.App) {
+	app.Get("/csrf-token", authHandlers.GetCSRFToken)
 	app.Post("/users/register", rateLimitMiddleware(5), authHandlers.CreateUser)
 	app.Post("/users/login", rateLimitMiddleware(10), authHandlers.Login)
 	app.Post("/auth/refresh", rateLimitMiddleware(30), authHandlers.RefreshToken)

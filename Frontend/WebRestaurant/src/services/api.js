@@ -28,15 +28,28 @@ function getCookie(name) {
   return null
 }
 
+// Garante que o cookie csrf_token existe antes de mutações.
+async function ensureCsrfToken() {
+  let token = getCookie("csrf_token")
+  if (!token) {
+    const res = await api.get("/csrf-token", { withCredentials: true })
+    token = res.data?.csrf_token
+  }
+  return token
+}
+
 api.interceptors.request.use(
-  (config) => {
+  async (config) => {
     const withCredentials = config.withCredentials !== false
     if (withCredentials) {
       config.withCredentials = true
     }
-    const csrfToken = getCookie("csrf_token")
-    if (csrfToken && ["post", "put", "delete", "patch"].includes((config.method || "get").toLowerCase())) {
-      config.headers["X-CSRF-Token"] = csrfToken
+    const method = (config.method || "get").toLowerCase()
+    if (["post", "put", "delete", "patch"].includes(method)) {
+      const csrfToken = await ensureCsrfToken()
+      if (csrfToken) {
+        config.headers["X-CSRF-Token"] = csrfToken
+      }
     }
     return config
   },

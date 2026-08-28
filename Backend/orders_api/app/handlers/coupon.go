@@ -8,6 +8,7 @@ import (
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func CreateCoupon(c *fiber.Ctx) error {
@@ -190,7 +191,7 @@ func ApplyCoupon(c *fiber.Ctx) error {
 	defer tx.Rollback()
 
 	var coupon models.Coupon
-	if err := tx.Clauses(gorm.Locking{Strength: "UPDATE", Options: "NOWAIT"}).
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE", Options: "NOWAIT"}).
 		Where("code = ?", request.Code).
 		First(&coupon).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Cupom não encontrado"})

@@ -9,12 +9,10 @@ import {
 } from "react-native";
 import Texts from "@/constants/Texts";
 import helper from "@/helpers/helper";
-import { useRoute } from "@react-navigation/native";
+import { useLocalSearchParams } from "expo-router";
 import Colors from "@/constants/Colors";
 
 function ExtractView() {
-  const route = useRoute();
-
   const {
     distance,
     status,
@@ -23,7 +21,7 @@ function ExtractView() {
     establishment,
     order_id,
     operationDate,
-  } = route?.params as any;
+  } = useLocalSearchParams() as any;
 
   const handleShare = () => {
     const textToShare = `${Texts.establishment}:\nNome: ${

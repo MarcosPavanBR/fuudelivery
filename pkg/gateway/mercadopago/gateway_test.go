@@ -122,7 +122,7 @@ func TestParseWebhookPaymentUpdated(t *testing.T) {
 
 	payload := WebhookPayload{
 		Action: "payment.updated",
-		Data: &WebhookData{ID: "mp_123456"},
+		Data:   &WebhookData{ID: "mp_123456"},
 	}
 
 	body, _ := json.Marshal(payload)
@@ -144,7 +144,7 @@ func TestParseWebhookDesconhecido(t *testing.T) {
 
 	payload := WebhookPayload{
 		Action: "unknown.action",
-		Data: &WebhookData{ID: "abc"},
+		Data:   &WebhookData{ID: "abc"},
 	}
 
 	body, _ := json.Marshal(payload)

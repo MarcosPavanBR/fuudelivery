@@ -13,14 +13,12 @@ O FuuDelivery é uma plataforma de delivery colaborativa (cooperativa) que conec
 
 ### Backend (Go)
 - **Monolito principal**: `cmd/fuudelivery/main.go` (361 handlers)
-- **Payment Service**: `Backend/Payment/` (pagamentos, split, chargeback)
-- **Módulos**: auth_api, orders_api, payment_api, users_api, notification_api, chat_api, storage
+- **Módulos**: auth_api, orders_api, payment_api, delivery_api, chat_api, storage
 
 ### Infraestrutura
-- **Banco relacional**: PostgreSQL (Supabase)
-- **Banco documental**: MongoDB Atlas
+- **Banco de dados**: PostgreSQL (Supabase) — único banco relacional
 - **Cache/Filas**: Redis (Redis Streams para comunicação entre serviços)
-- **Deploy**: Render.com (5 serviços web)
+- **Deploy**: Render.com
 - **Storage**: Supabase Storage (imagens)
 
 ### Frontend
@@ -47,9 +45,8 @@ Cliente (App) → API Gateway → Pedidos → Pagamento (PIX via AbacatePay)
 ## Arquitetura de Microsserviços
 
 O sistema usa um padrão híbrido:
-- **Monolito principal**: Autenticação, pedidos, usuários, notificações
-- **Payment Service**: Serviço isolado para operações financeiras
-- **Comunicação**: Redis Streams (ordem dos eventos garantida)
+- **Monolito**: Todos os domínios (auth, orders, payments, delivery, chat)
+- **Comunicação interna**: Redis Streams (ordem dos eventos garantida)
 
 ## Decisões Arquiteturais
 

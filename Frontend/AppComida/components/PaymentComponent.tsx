@@ -1,7 +1,7 @@
 import Colors from "@/constants/Colors";
 import Texts from "@/constants/Texts";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation } from "expo-router";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 function PaymentComponent({ title, icon, hiddenTitle = true, onPress }: any) {

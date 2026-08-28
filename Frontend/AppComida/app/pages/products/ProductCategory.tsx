@@ -1,7 +1,6 @@
 import React from "react";
 import { View, Text, Image, StyleSheet, TouchableOpacity } from "react-native";
-import { useNavigation } from "@react-navigation/native";
-import { Link } from "expo-router";
+import { useNavigation, Link } from "expo-router";
 import Texts from "@/constants/Texts";
 import helpers from "@/helpers/helpers";
 import Colors from "@/constants/Colors";

@@ -11,7 +11,8 @@ import (
 	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
-	"gorm.io/gorm"
+	
+	"gorm.io/gorm/clause"
 )
 
 // lookupServerOrderTotal lê o total recalculado no servidor no momento da
@@ -110,7 +111,7 @@ func EarnPoints(c *fiber.Ctx) error {
 	defer tx.Rollback()
 
 	var loyalty models.LoyaltyPoints
-	if err := tx.Clauses(gorm.Locking{Strength: "UPDATE", Options: "NOWAIT"}).
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE", Options: "NOWAIT"}).
 		Where("user_phone = ?", req.UserPhone).
 		First(&loyalty).Error; err != nil {
 		loyalty = models.LoyaltyPoints{
@@ -179,7 +180,7 @@ func EarnPointsForOrder(userPhone, orderID string, orderValue float64) error {
 	defer tx.Rollback()
 
 	var loyalty models.LoyaltyPoints
-	if err := tx.Clauses(gorm.Locking{Strength: "UPDATE", Options: "NOWAIT"}).
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE", Options: "NOWAIT"}).
 		Where("user_phone = ?", userPhone).
 		First(&loyalty).Error; err != nil {
 		loyalty = models.LoyaltyPoints{
@@ -250,7 +251,7 @@ func RedeemPoints(c *fiber.Ctx) error {
 	defer tx.Rollback()
 
 	var loyalty models.LoyaltyPoints
-	if err := tx.Clauses(gorm.Locking{Strength: "UPDATE", Options: "NOWAIT"}).
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE", Options: "NOWAIT"}).
 		Where("user_phone = ?", req.UserPhone).
 		First(&loyalty).Error; err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Usuário não encontrado"})

@@ -10,14 +10,14 @@ import Colors from "@/constants/Colors";
 import OrderSummary from "@/components/OrderSummary";
 import { useEffect, useRef, useState } from "react";
 import { useApi } from "@/contexts/ApiContext";
-import { useIsFocused } from "@react-navigation/native";
+import { useIsFocused } from "expo-router/react-navigation";
 import Texts from "@/constants/Texts";
 import helpers from "@/helpers/helpers";
 import Strings from "@/constants/Strings";
 import orderModel from "@/services/order.model";
 import ReorderButton from "@/components/ReorderButton";
 import { useCartApi } from "@/contexts/ApiCartContext";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation } from "expo-router";
 import LiveTrackingReadonly from "@/components/LiveTrackingReadonly";
 
 export default function TabTwoScreen() {

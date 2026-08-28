@@ -3,7 +3,7 @@ import { PAYMENT_TYPE } from "@/config/config";
 import Colors from "@/constants/Colors";
 import Texts from "@/constants/Texts";
 import { useCartApi } from "@/contexts/ApiCartContext";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation } from "expo-router";
 import { StyleSheet, View } from "react-native";
 
 function Payments() {

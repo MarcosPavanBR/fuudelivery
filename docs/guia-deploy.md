@@ -5,10 +5,9 @@
 ### Pré-requisitos
 1. Conta no Render.com
 2. Repositório no GitHub
-3. MongoDB Atlas (cluster gratuito)
-4. Supabase (projeto gratuito)
-5. Redis (Render ou Upstash)
-6. Conta AbacatePay (para pagamentos PIX)
+3. Supabase (projeto gratuito)
+4. Redis (Render ou Upstash)
+5. Conta AbacatePay (para pagamentos PIX)
 
 ### Variáveis de Ambiente Obrigatórias
 
@@ -16,7 +15,6 @@
 ```
 # Banco de Dados
 DB_CONNECTION_STRING=postgresql://...
-MONGO_URI=mongodb+srv://...
 REDIS_URL=redis://...
 
 # Autenticação
@@ -106,10 +104,6 @@ docker-compose -f docker/docker-compose.dev.yml up
 ### PostgreSQL (Supabase)
 - Backup automático diário (gratuito)
 - Point-in-Time Recovery (plano pago)
-
-### MongoDB Atlas
-- Backup automático diário
-- Oplog habilitado para restauração pontual
 
 ### Redis
 - Persistência habilitada (RDB + AEOF)

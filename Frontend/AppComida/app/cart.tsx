@@ -5,7 +5,7 @@ import PIXQRCode from "@/components/PIXQRCode";
 import Colors from "@/constants/Colors";
 import Texts from "@/constants/Texts";
 import { useCartApi } from "@/contexts/ApiCartContext";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation } from "expo-router";
 import React, { useEffect, useState } from "react";
 
 import {

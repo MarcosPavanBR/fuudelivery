@@ -88,15 +88,15 @@ func (g *AbacatePayGateway) CreateTransaction(
 	expiresAt, _ := time.Parse(time.RFC3339, billingResp.ExpiresAt)
 
 	return &gateway.TransactionResponse{
-		GatewayID:     billingResp.ID,
-		Gateway:       "abacatepay",
-		Status:        mapAbacateStatus(billingResp.Status),
-		PIXQRCode:     billingResp.QRCode,
-		PIXCopyPaste:  billingResp.CopyPaste,
-		PIXExpiresAt:  &expiresAt,
-		SplitApplied:  false, // AbacatePay não suporta split
-		SplitCount:    0,
-		Metadata:      req.Metadata,
+		GatewayID:    billingResp.ID,
+		Gateway:      "abacatepay",
+		Status:       mapAbacateStatus(billingResp.Status),
+		PIXQRCode:    billingResp.QRCode,
+		PIXCopyPaste: billingResp.CopyPaste,
+		PIXExpiresAt: &expiresAt,
+		SplitApplied: false, // AbacatePay não suporta split
+		SplitCount:   0,
+		Metadata:     req.Metadata,
 	}, nil
 }
 
@@ -241,20 +241,20 @@ func (g *AbacatePayGateway) ParseWebhook(body []byte) (*gateway.WebhookEvent, er
 	}
 
 	return &gateway.WebhookEvent{
-		Gateway:       "abacatepay",
-		GatewayName:   "abacatepay",
-		ID:            fmt.Sprintf("abtw_%s_%d", payload.ID, time.Now().UnixNano()),
-		EventType:     eventType,
-		Type:          normalizedType,
-		TransactionID: payload.ID,
-		GatewayID:     payload.ID,
+		Gateway:           "abacatepay",
+		GatewayName:       "abacatepay",
+		ID:                fmt.Sprintf("abtw_%s_%d", payload.ID, time.Now().UnixNano()),
+		EventType:         eventType,
+		Type:              normalizedType,
+		TransactionID:     payload.ID,
+		GatewayID:         payload.ID,
 		PaymentExternalID: payload.ID,
-		OrderID:       payload.ExternalID,
-		Amount:        payload.Amount,
-		Status:        status,
-		PaymentMethod: gateway.MethodPIX,
-		RawPayload:    body,
-		ReceivedAt:    time.Now(),
+		OrderID:           payload.ExternalID,
+		Amount:            payload.Amount,
+		Status:            status,
+		PaymentMethod:     gateway.MethodPIX,
+		RawPayload:        body,
+		ReceivedAt:        time.Now(),
 	}, nil
 }
 
@@ -266,11 +266,11 @@ func (g *AbacatePayGateway) SupportsMethod(method gateway.PaymentMethod) bool {
 	return method == gateway.MethodPIX // Apenas PIX
 }
 
-func (g *AbacatePayGateway) SupportsSplit() bool            { return false }
-func (g *AbacatePayGateway) SupportsPreAuth() bool           { return false }
-func (g *AbacatePayGateway) Supports3DS() bool               { return false }
-func (g *AbacatePayGateway) SupportsEscrow() bool            { return false }
-func (g *AbacatePayGateway) MaxSplitRecipients() int         { return 0 }
+func (g *AbacatePayGateway) SupportsSplit() bool     { return false }
+func (g *AbacatePayGateway) SupportsPreAuth() bool   { return false }
+func (g *AbacatePayGateway) Supports3DS() bool       { return false }
+func (g *AbacatePayGateway) SupportsEscrow() bool    { return false }
+func (g *AbacatePayGateway) MaxSplitRecipients() int { return 0 }
 
 // ═══════════════════════════════════════════════════════════════
 // HELPERS

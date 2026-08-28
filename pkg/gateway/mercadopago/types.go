@@ -52,9 +52,9 @@ type CreatePaymentRequest struct {
 
 // PayerRequest dados do pagador.
 type PayerRequest struct {
-	Email       string `json:"email,omitempty"`
-	FirstName   string `json:"first_name,omitempty"`
-	LastName    string `json:"last_name,omitempty"`
+	Email          string                 `json:"email,omitempty"`
+	FirstName      string                 `json:"first_name,omitempty"`
+	LastName       string                 `json:"last_name,omitempty"`
 	Identification *IdentificationRequest `json:"identification,omitempty"`
 }
 
@@ -70,24 +70,24 @@ type IdentificationRequest struct {
 
 // CreatePaymentResponse é a resposta da criação de pagamento.
 type CreatePaymentResponse struct {
-	ID                int64   `json:"id"`
-	Status            string  `json:"status"` // "pending", "approved", "rejected", "authorized", "in_process", "cancelled"
-	StatusDetail      string  `json:"status_detail"`
-	PaymentTypeID     string  `json:"payment_type_id"` // "credit_card", "debit_card", "bank_transfer"
-	PaymentMethodID   string  `json:"payment_method_id"` // "pix", "visa", "mastercard"
-	TransactionAmount float64 `json:"transaction_amount"`
-	Description       string  `json:"description"`
-	DateCreated       string  `json:"date_created"`
-	DateApproved      string  `json:"date_approved,omitempty"`
-	ExternalReference string  `json:"external_reference"`
+	ID                 int64               `json:"id"`
+	Status             string              `json:"status"` // "pending", "approved", "rejected", "authorized", "in_process", "cancelled"
+	StatusDetail       string              `json:"status_detail"`
+	PaymentTypeID      string              `json:"payment_type_id"`   // "credit_card", "debit_card", "bank_transfer"
+	PaymentMethodID    string              `json:"payment_method_id"` // "pix", "visa", "mastercard"
+	TransactionAmount  float64             `json:"transaction_amount"`
+	Description        string              `json:"description"`
+	DateCreated        string              `json:"date_created"`
+	DateApproved       string              `json:"date_approved,omitempty"`
+	ExternalReference  string              `json:"external_reference"`
 	PointOfInteraction *PointOfInteraction `json:"point_of_interaction,omitempty"`
-	CardLastFour      string  `json:"card_last_four_digits,omitempty"`
-	CardBrand         string  `json:"card_payment_type,omitempty"` // "visa", "mastercard"
+	CardLastFour       string              `json:"card_last_four_digits,omitempty"`
+	CardBrand          string              `json:"card_payment_type,omitempty"` // "visa", "mastercard"
 }
 
 // PointOfInteraction dados de interação (PIX QR Code).
 type PointOfInteraction struct {
-	Type   string `json:"type"` // "PIX"
+	Type   string      `json:"type"` // "PIX"
 	QRCode *QRCodeData `json:"transaction_data,omitempty"`
 }
 
@@ -103,13 +103,13 @@ type QRCodeData struct {
 
 // WebhookPayload é o payload do webhook Mercado Pago.
 type WebhookPayload struct {
-	ID            int64  `json:"id"`
-	Action        string `json:"action"` // "payment.created", "payment.updated"
-	LiveMode      bool   `json:"live_mode"`
-	DateCreated   string `json:"date_created"`
-	UserID        int64  `json:"user_id"`
-	APIVersion    string `json:"api_version"`
-	Data          *WebhookData `json:"data,omitempty"`
+	ID          int64        `json:"id"`
+	Action      string       `json:"action"` // "payment.created", "payment.updated"
+	LiveMode    bool         `json:"live_mode"`
+	DateCreated string       `json:"date_created"`
+	UserID      int64        `json:"user_id"`
+	APIVersion  string       `json:"api_version"`
+	Data        *WebhookData `json:"data,omitempty"`
 }
 
 // WebhookData dados do webhook.

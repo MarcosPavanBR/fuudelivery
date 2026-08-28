@@ -9,8 +9,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/Colors";
-import { useNavigation } from "expo-router";
-import { useRoute } from "@react-navigation/native";
+import { useNavigation, useLocalSearchParams } from "expo-router";
 import Texts from "@/constants/Texts";
 import helper from "@/helpers/helper";
 import api from "@/services/api";
@@ -19,9 +18,8 @@ import { useAuthApi } from "@/contexts/AuthContext";
 const ConfirmScreen = () => {
   const insets = useSafeAreaInsets();
   const nav = useNavigation();
-  const route = useRoute();
   const { isActiveOrder } = useAuthApi();
-  const { order, delivery } = route.params as any;
+  const { order, delivery } = useLocalSearchParams() as any;
   const [loading, setLoading] = useState(false);
 
   async function aceitarRota() {

@@ -2,7 +2,8 @@ import React, { useEffect, useState } from "react";
 import { RefreshControl, ScrollView, StyleSheet, Text } from "react-native";
 
 import Colors from "@/constants/Colors";
-import { useIsFocused, useNavigation } from "@react-navigation/native";
+import { useNavigation } from "expo-router";
+import { useIsFocused } from "expo-router/react-navigation";
 import { APP_MODE, APP_MODE_OPTIONS } from "@/config/config";
 import EstablishmentView from "@/components/EstablishmentView";
 import Establishment from "../establishment";

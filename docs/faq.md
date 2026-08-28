@@ -96,7 +96,7 @@ Diferente de plataformas tradicionais onde a empresa lucra com taxas altas, o Fu
 
 ### Quais são as tecnologias usadas?
 - **Backend**: Go (Golang)
-- **Banco de dados**: PostgreSQL (Supabase) + MongoDB Atlas
+- **Banco de dados**: PostgreSQL (Supabase)
 - **Cache/Filas**: Redis (Redis Streams)
 - **Frontend Web**: React + Vite
 - **Apps Mobile**: React Native + Expo

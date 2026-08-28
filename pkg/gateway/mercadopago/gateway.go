@@ -343,11 +343,11 @@ func (g *MercadoPagoGateway) SupportsMethod(method gateway.PaymentMethod) bool {
 	}
 }
 
-func (g *MercadoPagoGateway) SupportsSplit() bool            { return true } // 1:1 only
-func (g *MercadoPagoGateway) SupportsPreAuth() bool           { return false }
-func (g *MercadoPagoGateway) Supports3DS() bool               { return true }
-func (g *MercadoPagoGateway) SupportsEscrow() bool            { return false }
-func (g *MercadoPagoGateway) MaxSplitRecipients() int         { return 1 } // 1:1 only
+func (g *MercadoPagoGateway) SupportsSplit() bool     { return true } // 1:1 only
+func (g *MercadoPagoGateway) SupportsPreAuth() bool   { return false }
+func (g *MercadoPagoGateway) Supports3DS() bool       { return true }
+func (g *MercadoPagoGateway) SupportsEscrow() bool    { return false }
+func (g *MercadoPagoGateway) MaxSplitRecipients() int { return 1 } // 1:1 only
 
 // ═══════════════════════════════════════════════════════════════
 // HELPERS
@@ -355,11 +355,11 @@ func (g *MercadoPagoGateway) MaxSplitRecipients() int         { return 1 } // 1:
 
 func (g *MercadoPagoGateway) mapResponse(resp *CreatePaymentResponse, req *gateway.TransactionRequest) *gateway.TransactionResponse {
 	result := &gateway.TransactionResponse{
-		GatewayID:     strconv.FormatInt(resp.ID, 10),
-		Gateway:       "mercadopago",
-		Status:        mapMPStatus(resp.Status),
-		CardBrand:     resp.CardBrand,
-		CardLast4:     resp.CardLastFour,
+		GatewayID: strconv.FormatInt(resp.ID, 10),
+		Gateway:   "mercadopago",
+		Status:    mapMPStatus(resp.Status),
+		CardBrand: resp.CardBrand,
+		CardLast4: resp.CardLastFour,
 	}
 
 	// PIX QR Code

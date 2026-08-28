@@ -51,6 +51,11 @@ import (
 	"github.com/carloshomar/fuudelivery/pkg/health"
 	"github.com/carloshomar/fuudelivery/pkg/metrics"
 	"github.com/carloshomar/fuudelivery/pkg/queue"
+	"github.com/carloshomar/fuudelivery/pkg/gateway"
+	"github.com/carloshomar/fuudelivery/pkg/gateway/abacatepay"
+	"github.com/carloshomar/fuudelivery/pkg/gateway/asaas"
+	"github.com/carloshomar/fuudelivery/pkg/gateway/mercadopago"
+	"github.com/carloshomar/fuudelivery/pkg/gateway/pagarme"
 	"github.com/carloshomar/fuudelivery/pkg/search"
 	"github.com/carloshomar/fuudelivery/pkg/upload"
 )
@@ -1231,38 +1236,46 @@ func setupDispatchRoutes(app *fiber.App) {
 	dispatch.Get("/status", adminRequired, dispatchHandler.GetDispatchStatus)
 }
 
-func setupPaymentRoutes(app *fiber.App) {
+// paymentRouterMiddleware injeta o router de pagamento no contexto Fiber.
+func paymentRouterMiddleware(router *gateway.Router) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		c.Locals("payment_router", router)
+		return c.Next()
+	}
+}
+
+func setupPaymentRoutes(app *fiber.App, router *gateway.Router) {
+	paymentGroup := app.Group("/payments", paymentRouterMiddleware(router))
+	walletGroup := app.Group("/wallets", paymentRouterMiddleware(router))
 	// Admin — painel Financeiro do WebAdmin
-	app.Get("/payments/all", adminRequired, paymentHandlers.ListAllPayments)
-	app.Get("/payments/", adminRequired, paymentHandlers.ListAllPayments)
-	app.Get("/payments/stats", adminRequired, paymentHandlers.GetPaymentStats)
-	app.Get("/wallets", adminRequired, paymentHandlers.ListWallets)
-	app.Get("/chargebacks", adminRequired, paymentHandlers.ListChargebacks)
-	app.Post("/payments/:id/approve", adminRequired, rateLimitMiddleware(20), paymentHandlers.ApprovePayment)
-	app.Post("/payments/:id/reject", adminRequired, rateLimitMiddleware(20), paymentHandlers.RejectPayment)
+	paymentGroup.Get("/all", adminRequired, paymentHandlers.ListAllPayments)
+	paymentGroup.Get("/", adminRequired, paymentHandlers.ListAllPayments)
+	paymentGroup.Get("/stats", adminRequired, paymentHandlers.GetPaymentStats)
+	walletGroup.Get("/balance/:user_id", protectedRoute, paymentHandlers.GetBalance)
+	walletGroup.Get("/establishment/balance", protectedRoute, paymentHandlers.GetEstablishmentWallet)
+	walletGroup.Get("/establishment/transactions", protectedRoute, paymentHandlers.GetEstablishmentTransactions)
+	walletGroup.Post("/topup", protectedRoute, rateLimitMiddleware(20), paymentHandlers.TopUp)
+	walletGroup.Post("/deduct", protectedRoute, rateLimitMiddleware(20), paymentHandlers.DeductFromWallet)
+	walletGroup.Post("/establishment/withdraw", protectedRoute, rateLimitMiddleware(20), paymentHandlers.EstablishmentWithdraw)
+	paymentGroup.Get("/chargebacks", adminRequired, paymentHandlers.ListChargebacks)
+	paymentGroup.Post("/:id/approve", adminRequired, rateLimitMiddleware(20), paymentHandlers.ApprovePayment)
+	paymentGroup.Post("/:id/reject", adminRequired, rateLimitMiddleware(20), paymentHandlers.RejectPayment)
 	// Rate limit 20/min nos endpoints de dinheiro (proteção contra abuso/custo)
-	app.Post("/payments/pix/generate", protectedRoute, rateLimitMiddleware(20), paymentHandlers.GeneratePIX)
+	paymentGroup.Post("/pix/generate", protectedRoute, rateLimitMiddleware(20), paymentHandlers.GeneratePIX)
 	// Tokenização de cartão REMOVIDA: o endpoint recebia PAN/CVV crus e
 	// devolvia um "token" local sem valor no gateway (risco PCI puro). O
 	// cartão volta quando houver tokenização server-side do AbacatePay.
-	app.Post("/payments/card/charge", protectedRoute, rateLimitMiddleware(20), paymentHandlers.ChargeCard)
-	app.Post("/payments/process", protectedRoute, rateLimitMiddleware(20), paymentHandlers.ProcessPayment)
+	paymentGroup.Post("/card/charge", protectedRoute, rateLimitMiddleware(20), paymentHandlers.ChargeCard)
+	paymentGroup.Post("/process", protectedRoute, rateLimitMiddleware(20), paymentHandlers.ProcessPayment)
 	// Split rules definem como o dinheiro é dividido — só admin.
-	app.Post("/payments/split", adminRequired, rateLimitMiddleware(20), paymentHandlers.ProcessSplit)
-	app.Post("/payments/webhook", rateLimitMiddleware(100), paymentHandlers.HandlePaymentWebhook)
+	paymentGroup.Post("/split", adminRequired, rateLimitMiddleware(20), paymentHandlers.ProcessSplit)
+	paymentGroup.Post("/webhook", rateLimitMiddleware(100), paymentHandlers.HandlePaymentWebhook)
 	// Status da cobrança por pedido (polling do app do cliente pós-PIX).
-	app.Get("/payments/order/:order_id", protectedRoute, rateLimitMiddleware(30), paymentHandlers.GetPaymentByOrder)
-	app.Get("/reports/establishment/:id", protectedRoute, paymentHandlers.GetEstablishmentReport)
-	app.Get("/wallet/balance/:user_id", protectedRoute, paymentHandlers.GetBalance)
-	app.Post("/wallet/topup", protectedRoute, rateLimitMiddleware(20), paymentHandlers.TopUp)
-	app.Post("/wallet/deduct", protectedRoute, rateLimitMiddleware(20), paymentHandlers.DeductFromWallet)
-	// Carteira do restaurante (WebRestaurant) — o estabelecimento vem do JWT
-	app.Get("/wallet/establishment/balance", protectedRoute, paymentHandlers.GetEstablishmentWallet)
-	app.Get("/wallet/establishment/transactions", protectedRoute, paymentHandlers.GetEstablishmentTransactions)
-	app.Post("/wallet/establishment/withdraw", protectedRoute, rateLimitMiddleware(20), paymentHandlers.EstablishmentWithdraw)
-	app.Post("/asaas/wallet/create", protectedRoute, rateLimitMiddleware(20), paymentHandlers.CreateAsaasWallet)
-	app.Get("/asaas/wallet/:walletId/status", protectedRoute, paymentHandlers.GetAsaasWalletStatus)
-	app.Post("/asaas/payment/split", protectedRoute, rateLimitMiddleware(20), paymentHandlers.CreateAsaasSplitPayment)
+	paymentGroup.Get("/order/:order_id", protectedRoute, rateLimitMiddleware(30), paymentHandlers.GetPaymentByOrder)
+	paymentGroup.Get("/reports/establishment/:id", protectedRoute, paymentHandlers.GetEstablishmentReport)
+	paymentGroup.Post("/asaas/wallet/create", protectedRoute, rateLimitMiddleware(20), paymentHandlers.CreateAsaasWallet)
+	paymentGroup.Get("/asaas/wallet/:walletId/status", protectedRoute, paymentHandlers.GetAsaasWalletStatus)
+	paymentGroup.Post("/asaas/payment/split", protectedRoute, rateLimitMiddleware(20), paymentHandlers.CreateAsaasSplitPayment)
 }
 
 func setupSponsoredRoutes(app *fiber.App) {
@@ -1430,6 +1443,9 @@ func main() {
 	// Valida ambiente antes de inicializar
 	validateRequiredEnv()
 
+	// Payment router (initialized before route setup)
+	var paymentRouter *gateway.Router
+
 	// Create Fiber app EARLY so /health is available before DB connections.
 	// Render health check has a 30s timeout; DB connections (5 modules × 5
 	// retries × 5s) can take up to 125s. Registering /health first lets the
@@ -1501,6 +1517,10 @@ func main() {
 	app.Use(func(c *fiber.Ctx) error {
 		c.Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self' wss: https:; font-src 'self' data:")
 		c.Set("X-Content-Type-Options", "nosniff")
+		c.Set("X-Frame-Options", "DENY")
+		c.Set("X-XSS-Protection", "1; mode=block")
+		c.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		c.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		return c.Next()
 	})
 
@@ -1521,8 +1541,8 @@ func main() {
 	})
 
 	// Health check — reuses the Redis client from the queue singleton
-	// HTTP 503 only when Postgres (fonte primária pós-corte 5) está down.
-	// Redis degradation returns HTTP 200 with status "degraded".
+	// HTTP 503 when Postgres is down OR no payment gateway is configured.
+	// Redis/batches degradation returns HTTP 200 with status "degraded".
 	app.Get("/health", func(c *fiber.Ctx) error {
 		redisClient := queue.GetClient()
 
@@ -1530,11 +1550,12 @@ func main() {
 		redisCheck := health.RedisCheck(redisClient)
 		redisGeoCheck := health.RedisGeoCheck(redisClient)
 		batchesCheck := health.BatchCheck(ordersModels.DB)
+		gatewaysCheck := health.GatewayCheck()
 
-		// Critical check: apenas o Postgres (banco-único).
-		criticalStatus := health.OverallStatus(postgresCheck)
-		// All checks: includes Redis and batches
-		allStatus := health.OverallStatus(postgresCheck, redisCheck, redisGeoCheck, batchesCheck)
+		// Critical checks: Postgres + at least one payment gateway.
+		criticalStatus := health.OverallStatus(postgresCheck, gatewaysCheck)
+		// All checks: includes Redis, batches and gateways
+		allStatus := health.OverallStatus(postgresCheck, redisCheck, redisGeoCheck, batchesCheck, gatewaysCheck)
 
 		statusCode := 200
 		if criticalStatus != "up" {
@@ -1546,10 +1567,11 @@ func main() {
 			"service": "fuudelivery",
 			"version": "1.0.0",
 			"checks": fiber.Map{
-				"postgres":  postgresCheck,
-				"redis":     redisCheck,
-				"redis_geo": redisGeoCheck,
-				"batches":   batchesCheck,
+				"postgres":        postgresCheck,
+				"redis":           redisCheck,
+				"redis_geo":       redisGeoCheck,
+				"batches":         batchesCheck,
+				"payment_gateways": gatewaysCheck,
 			},
 			"time": time.Now().UTC(),
 		})
@@ -1584,7 +1606,14 @@ func main() {
 	setupDispatchRoutes(app)
 	setupSponsoredRoutes(app)
 	setupSubscriptionRoutes(app)
-	setupPaymentRoutes(app)
+	// Initialize payment gateway router with fallback chain
+	pagarmeGW, _ := pagarme.NewGateway()
+	asaasGW, _ := asaas.NewGateway()
+	abacatepayGW, _ := abacatepay.NewGateway()
+	mpGW, _ := mercadopago.NewGateway()
+	paymentRouter = gateway.NewRouter(pagarmeGW, asaasGW, abacatepayGW, mpGW)
+	paymentRouter.SetStrategy(gateway.StrategyOrdered)
+	setupPaymentRoutes(app, paymentRouter)
 	setupChatRoutes(app)
 
 	// Upload de imagens (Supabase Storage)
@@ -1614,11 +1643,6 @@ func main() {
 
 		// Wire loyalty points
 		paymentHandlers.OnPaymentApproved = ordersHandlers.EarnPointsForOrder
-
-		// Wire zone-based split config
-		paymentHandlers.GetSplitConfigForEstablishment = func(establishmentID int64) (platformPct, establishmentPct float64) {
-			return models.GetZoneSplitConfig(uint(establishmentID))
-		}
 
 		// Initialize dispatch engine (courier store + matching engine + handler)
 		initDispatchEngine(models.DB)
@@ -1654,7 +1678,7 @@ func main() {
 	go func() {
 		<-c
 		log.Println("Shutting down...")
-		queue.Close()
+		queue.CloseQueue()
 		app.ShutdownWithTimeout(10 * time.Second)
 		wg.Wait()
 		log.Println("All background workers stopped")

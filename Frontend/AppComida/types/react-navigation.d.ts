@@ -5,11 +5,11 @@
  * tipado como `never` e todo navegador por nome quebra no type-check.
  * Esta augmentation restaura o comportamento v6 (nomes como string).
  */
-import { ParamListBase } from "@react-navigation/native";
-
 declare global {
   namespace ReactNavigation {
-    interface RootParamList extends ParamListBase {}
+    interface RootParamList {
+      [key: string]: object | undefined;
+    }
   }
 }
 

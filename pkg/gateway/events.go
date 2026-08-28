@@ -73,39 +73,39 @@ type PaymentEvent struct {
 	Channel EventChannel `json:"channel"`
 
 	// Dados do pagamento
-	PaymentID        int64              `json:"payment_id"`         // ID interno no FuuDelivery
-	PaymentExternalID string            `json:"payment_external_id"` // ID no gateway
-	GatewayName      string             `json:"gateway_name"`       // pagarme, asaas, etc.
-	OrderID          int64              `json:"order_id"`           // ID do pedido关联
+	PaymentID         int64  `json:"payment_id"`          // ID interno no FuuDelivery
+	PaymentExternalID string `json:"payment_external_id"` // ID no gateway
+	GatewayName       string `json:"gateway_name"`        // pagarme, asaas, etc.
+	OrderID           int64  `json:"order_id"`            // ID do pedido关联
 
 	// Status
-	Status           TransactionStatus  `json:"status"`            // Status interno normalizado
-	PreviousStatus   TransactionStatus  `json:"previous_status,omitempty"`
+	Status         TransactionStatus `json:"status"` // Status interno normalizado
+	PreviousStatus TransactionStatus `json:"previous_status,omitempty"`
 
 	// Valores (em centavos)
-	Amount           int64              `json:"amount"`             // Valor total
-	CapturedAmount   int64              `json:"captured_amount,omitempty"`
+	Amount         int64 `json:"amount"` // Valor total
+	CapturedAmount int64 `json:"captured_amount,omitempty"`
 
 	// Split
-	SplitStatus      string             `json:"split_status,omitempty"` // ok, erro, pendente, nao_aplicavel
-	SplitDetails     []SplitResult      `json:"split_details,omitempty"`
+	SplitStatus  string        `json:"split_status,omitempty"` // ok, erro, pendente, nao_aplicavel
+	SplitDetails []SplitResult `json:"split_details,omitempty"`
 
 	// Timestamps
-	ReceivedAt       time.Time          `json:"received_at"`
-	ProcessedAt      time.Time          `json:"processed_at,omitempty"`
+	ReceivedAt  time.Time `json:"received_at"`
+	ProcessedAt time.Time `json:"processed_at,omitempty"`
 
 	// Metadados extras do gateway
-	Metadata         map[string]string  `json:"metadata,omitempty"`
+	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 // SplitResult representa o resultado do processamento de um split para um recebedor.
 type SplitResult struct {
-	RecipientID    int64  `json:"recipient_id"`    // ID interno do recebedor
-	GatewayID      string `json:"gateway_id"`      // ID da sub-conta no gateway
-	RecipientType  string `json:"recipient_type"`  // establishment, deliveryman, platform
-	Amount         int64  `json:"amount"`          // Valor em centavos
-	Status         string `json:"status"`          // ok, erro, pendente
-	ErrorMessage   string `json:"error_message,omitempty"`
+	RecipientID   int64  `json:"recipient_id"`   // ID interno do recebedor
+	GatewayID     string `json:"gateway_id"`     // ID da sub-conta no gateway
+	RecipientType string `json:"recipient_type"` // establishment, deliveryman, platform
+	Amount        int64  `json:"amount"`         // Valor em centavos
+	Status        string `json:"status"`         // ok, erro, pendente
+	ErrorMessage  string `json:"error_message,omitempty"`
 }
 
 // ═══════════════════════════════════════════════════════════════

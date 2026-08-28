@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"log"
+	"os"
 	"time"
 
-	"github.com/carloshomar/fuudelivery/pkg/gateway"
 )
 
 // Client é o cliente HTTP para a API do Pagar.me.
@@ -21,16 +22,12 @@ type Client struct {
 }
 
 // NewClient cria um novo cliente Pagar.me.
-<<<<<<< ours
-func NewClient(baseURL, apiKey string) *Client {
-=======
 func NewClient() *Client {
 	baseURL := os.Getenv("PAGARME_BASE_URL")
 	if baseURL == "" {
 		baseURL = "https://api.pagar.me/v4"
 	}
 	apiKey := os.Getenv("PAGARME_API_KEY")
->>>>>>> theirs
 	return &Client{
 		baseURL: baseURL,
 		apiKey:  apiKey,

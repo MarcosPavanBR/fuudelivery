@@ -10,15 +10,15 @@ import (
 
 // UnmatchedOrderRow representa uma linha na tabela unmatched_orders (Postgres).
 type UnmatchedOrderRow struct {
-	ID               int64  `gorm:"primaryKey;autoIncrement"`
-	OrderID          string `gorm:"column:order_id;size:64;not null"`
-	EstablishmentLat float64 `gorm:"column:establishment_lat;not null"`
-	EstablishmentLng float64 `gorm:"column:establishment_lng;not null"`
-	ZoneID           int    `gorm:"column:zone_id;default:0"`
-	CreatedAt        int64  `gorm:"column:created_at;not null"`
-	RetryCount       int    `gorm:"column:retry_count;default:0"`
-	LastAttemptAt    int64  `gorm:"column:last_attempt_at;not null"`
-	Metadata         string `gorm:"column:metadata;type:jsonb"`
+	ID               int64     `gorm:"primaryKey;autoIncrement"`
+	OrderID          string    `gorm:"column:order_id;size:64;not null"`
+	EstablishmentLat float64   `gorm:"column:establishment_lat;not null"`
+	EstablishmentLng float64   `gorm:"column:establishment_lng;not null"`
+	ZoneID           int       `gorm:"column:zone_id;default:0"`
+	CreatedAt        int64     `gorm:"column:created_at;not null"`
+	RetryCount       int       `gorm:"column:retry_count;default:0"`
+	LastAttemptAt    int64     `gorm:"column:last_attempt_at;not null"`
+	Metadata         string    `gorm:"column:metadata;type:jsonb"`
 	CreatedTZ        time.Time `gorm:"column:created_tz;autoCreateTime"`
 }
 

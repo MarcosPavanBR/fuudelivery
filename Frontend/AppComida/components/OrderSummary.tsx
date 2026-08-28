@@ -5,7 +5,7 @@ import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import QuantitySelector from "./QuantitySelector";
 import { useCartApi } from "@/contexts/ApiCartContext";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation } from "expo-router";
 
 const OrderSummary = ({ data, disabled }: any) => {
   const { removeCart, editCart } = useCartApi();

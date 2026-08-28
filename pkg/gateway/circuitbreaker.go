@@ -49,13 +49,13 @@ func (s CircuitState) String() string {
 //	// ... fazer requisição ...
 //	cb.RecordSuccess() // ou cb.RecordFailure()
 type CircuitBreaker struct {
-	mu             sync.Mutex
-	state          CircuitState
-	failCount      int
-	threshold      int           // Falhas para abrir o circuit
-	cooldown       time.Duration // Tempo para tentar half-open
-	lastFailure    time.Time
-	halfOpenUsed   bool          // Se já usou a requisição de teste no half-open
+	mu           sync.Mutex
+	state        CircuitState
+	failCount    int
+	threshold    int           // Falhas para abrir o circuit
+	cooldown     time.Duration // Tempo para tentar half-open
+	lastFailure  time.Time
+	halfOpenUsed bool // Se já usou a requisição de teste no half-open
 }
 
 // NewCircuitBreaker cria um novo circuit breaker.

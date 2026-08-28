@@ -27,12 +27,12 @@ import (
 //   - API Key enviada via header Authorization: Bearer {api_key}
 //   - Nunca loga a API Key completa
 type Client struct {
-	apiKey       string
+	apiKey        string
 	encryptionKey string
-	baseURL      string
-	httpClient   *http.Client
-	maxRetries   int
-	retryDelay   time.Duration
+	baseURL       string
+	httpClient    *http.Client
+	maxRetries    int
+	retryDelay    time.Duration
 }
 
 // NewClient cria um novo cliente Pagar.me.

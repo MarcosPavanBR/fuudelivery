@@ -34,14 +34,14 @@ type CreateBillingRequest struct {
 
 // CreateBillingResponse é a resposta da criação de cobrança.
 type CreateBillingResponse struct {
-	ID          string `json:"id"`
-	Status      string `json:"status"` // "waiting", "paid", "expired"
-	Amount      int64  `json:"amount"`
-	QRCode      string `json:"qrCode,omitempty"`
-	CopyPaste   string `json:"copyPaste,omitempty"`
-	ExternalID  string `json:"externalId,omitempty"`
-	CreatedAt   string `json:"createdAt,omitempty"`
-	ExpiresAt   string `json:"expiresAt,omitempty"`
+	ID         string `json:"id"`
+	Status     string `json:"status"` // "waiting", "paid", "expired"
+	Amount     int64  `json:"amount"`
+	QRCode     string `json:"qrCode,omitempty"`
+	CopyPaste  string `json:"copyPaste,omitempty"`
+	ExternalID string `json:"externalId,omitempty"`
+	CreatedAt  string `json:"createdAt,omitempty"`
+	ExpiresAt  string `json:"expiresAt,omitempty"`
 }
 
 // ═══════════════════════════════════════════════════════════════

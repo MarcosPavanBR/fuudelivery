@@ -92,47 +92,47 @@ type CreditCardHolderRequest struct {
 
 // CreatePaymentResponse é a resposta do POST /v3/payments.
 type CreatePaymentResponse struct {
-	ID                string            `json:"id"`
-	DateCreated       string            `json:"dateCreated"`
-	Customer          string            `json:"customer"`
-	BillingType       string            `json:"billingType"`
-	Status            string            `json:"status"` // "PENDING", "RECEIVED", "CONFIRMED", etc.
-	Value             float64           `json:"value"`
-	NetValue          float64           `json:"netValue"`
-	Description       string            `json:"description"`
-	ExternalReference string            `json:"externalReference"`
-	DueDate           string            `json:"dueDate"`
-	OriginalDueDate   string            `json:"originalDueDate"`
-	PaymentDate       string            `json:"paymentDate,omitempty"`
-	TransactionReceiptUrl string       `json:"transactionReceiptUrl,omitempty"`
-	PixQrCode         string            `json:"pixQrCode,omitempty"`
-	PixCopyPaste      string            `json:"pixCopyPaste,omitempty"`
-	InvoiceUrl        string            `json:"invoiceUrl,omitempty"`
-	BankSlipUrl       string            `json:"bankSlipUrl,omitempty"`
-	Chargebacks       []ChargebackResponse `json:"chargebacks,omitempty"`
-	Refunds           []RefundResponse   `json:"refunds,omitempty"`
-	Split             []SplitResponse    `json:"split,omitempty"`
-	FinancialTransaction *FinancialTransactionResponse `json:"financialTransaction,omitempty"`
+	ID                    string                        `json:"id"`
+	DateCreated           string                        `json:"dateCreated"`
+	Customer              string                        `json:"customer"`
+	BillingType           string                        `json:"billingType"`
+	Status                string                        `json:"status"` // "PENDING", "RECEIVED", "CONFIRMED", etc.
+	Value                 float64                       `json:"value"`
+	NetValue              float64                       `json:"netValue"`
+	Description           string                        `json:"description"`
+	ExternalReference     string                        `json:"externalReference"`
+	DueDate               string                        `json:"dueDate"`
+	OriginalDueDate       string                        `json:"originalDueDate"`
+	PaymentDate           string                        `json:"paymentDate,omitempty"`
+	TransactionReceiptUrl string                        `json:"transactionReceiptUrl,omitempty"`
+	PixQrCode             string                        `json:"pixQrCode,omitempty"`
+	PixCopyPaste          string                        `json:"pixCopyPaste,omitempty"`
+	InvoiceUrl            string                        `json:"invoiceUrl,omitempty"`
+	BankSlipUrl           string                        `json:"bankSlipUrl,omitempty"`
+	Chargebacks           []ChargebackResponse          `json:"chargebacks,omitempty"`
+	Refunds               []RefundResponse              `json:"refunds,omitempty"`
+	Split                 []SplitResponse               `json:"split,omitempty"`
+	FinancialTransaction  *FinancialTransactionResponse `json:"financialTransaction,omitempty"`
 }
 
 // SplitResponse resultado de um split.
 type SplitResponse struct {
-	ID             string  `json:"id"`
-	Status         string  `json:"status"` // "PENDING", "CREDITED", "REFUSED"
-	WalletId       string  `json:"walletId"`
-	FixedValue     float64 `json:"fixedValue,omitempty"`
+	ID              string  `json:"id"`
+	Status          string  `json:"status"` // "PENDING", "CREDITED", "REFUSED"
+	WalletId        string  `json:"walletId"`
+	FixedValue      float64 `json:"fixedValue,omitempty"`
 	PercentualValue float64 `json:"percentualValue,omitempty"`
-	Amount         float64 `json:"amount"`
-	Description    string  `json:"description,omitempty"`
+	Amount          float64 `json:"amount"`
+	Description     string  `json:"description,omitempty"`
 }
 
 // ChargebackResponse resultado de um chargeback.
 type ChargebackResponse struct {
-	ID         string  `json:"id"`
-	Status     string  `json:"status"`
-	Amount     float64 `json:"amount"`
-	Reason     string  `json:"reason,omitempty"`
-	CreatedAt  string  `json:"created_at"`
+	ID        string  `json:"id"`
+	Status    string  `json:"status"`
+	Amount    float64 `json:"amount"`
+	Reason    string  `json:"reason,omitempty"`
+	CreatedAt string  `json:"created_at"`
 }
 
 // RefundResponse é a resposta de um estorno.
@@ -145,12 +145,12 @@ type RefundResponse struct {
 
 // FinancialTransactionResponse transação financeira associada.
 type FinancialTransactionResponse struct {
-	ID            string  `json:"id"`
-	Balance       float64 `json:"balance"`
-	Amount        float64 `json:"amount"`
-	Fee           float64 `json:"fee"`
-	EffectedDate  string  `json:"effectedDate"`
-	Description   string  `json:"description"`
+	ID           string  `json:"id"`
+	Balance      float64 `json:"balance"`
+	Amount       float64 `json:"amount"`
+	Fee          float64 `json:"fee"`
+	EffectedDate string  `json:"effectedDate"`
+	Description  string  `json:"description"`
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -159,30 +159,30 @@ type FinancialTransactionResponse struct {
 
 // CreateCustomerRequest cria um cliente no Asaas.
 type CreateCustomerRequest struct {
-	Name            string `json:"name"`
-	CpfCnpj         string `json:"cpfCnpj"`
-	Email           string `json:"email,omitempty"`
-	Phone           string `json:"phone,omitempty"`
-	MobilePhone     string `json:"mobilePhone,omitempty"`
-	Address         string `json:"address,omitempty"`
-	AddressNumber   string `json:"addressNumber,omitempty"`
-	Complement      string `json:"complement,omitempty"`
-	Province        string `json:"province,omitempty"`
-	City            string `json:"city,omitempty"`
-	CityName        string `json:"cityName,omitempty"`
-	State           string `json:"state,omitempty"`
-	PostalCode      string `json:"postalCode,omitempty"`
-	Country         string `json:"country,omitempty"`
+	Name              string `json:"name"`
+	CpfCnpj           string `json:"cpfCnpj"`
+	Email             string `json:"email,omitempty"`
+	Phone             string `json:"phone,omitempty"`
+	MobilePhone       string `json:"mobilePhone,omitempty"`
+	Address           string `json:"address,omitempty"`
+	AddressNumber     string `json:"addressNumber,omitempty"`
+	Complement        string `json:"complement,omitempty"`
+	Province          string `json:"province,omitempty"`
+	City              string `json:"city,omitempty"`
+	CityName          string `json:"cityName,omitempty"`
+	State             string `json:"state,omitempty"`
+	PostalCode        string `json:"postalCode,omitempty"`
+	Country           string `json:"country,omitempty"`
 	ExternalReference string `json:"externalReference,omitempty"`
 }
 
 // CreateCustomerResponse é a resposta da criação de um cliente.
 type CreateCustomerResponse struct {
-	ID            string `json:"id"`
-	DateCreated   string `json:"dateCreated"`
-	Name          string `json:"name"`
-	CpfCnpj       string `json:"cpfCnpj"`
-	Email         string `json:"email"`
+	ID                string `json:"id"`
+	DateCreated       string `json:"dateCreated"`
+	Name              string `json:"name"`
+	CpfCnpj           string `json:"cpfCnpj"`
+	Email             string `json:"email"`
 	ExternalReference string `json:"externalReference"`
 }
 
@@ -192,8 +192,8 @@ type CreateCustomerResponse struct {
 
 // BalanceResponse é a resposta de consulta de saldo.
 type BalanceResponse struct {
-	Available   float64 `json:"available"`
-	Unavailable float64 `json:"unavailable"`
+	Available    float64 `json:"available"`
+	Unavailable  float64 `json:"unavailable"`
 	WaitingFunds float64 `json:"waitingFund"`
 }
 
@@ -203,47 +203,47 @@ type BalanceResponse struct {
 
 // WebhookPayload é o payload bruto do webhook do Asaas.
 type WebhookPayload struct {
-	Event           string                    `json:"event"`
-	Payment         *WebhookPaymentData       `json:"payment,omitempty"`
-	SplitRule       *WebhookSplitData         `json:"splitRule,omitempty"`
-	Chargeback      *WebhookChargebackData    `json:"chargeback,omitempty"`
+	Event      string                 `json:"event"`
+	Payment    *WebhookPaymentData    `json:"payment,omitempty"`
+	SplitRule  *WebhookSplitData      `json:"splitRule,omitempty"`
+	Chargeback *WebhookChargebackData `json:"chargeback,omitempty"`
 }
 
 // WebhookPaymentData dados do pagamento no webhook.
 type WebhookPaymentData struct {
-	ID                string            `json:"id"`
-	DateCreated       string            `json:"dateCreated"`
-	Customer          string            `json:"customer"`
-	BillingType       string            `json:"billingType"`
-	Status            string            `json:"status"`
-	Value             float64           `json:"value"`
-	NetValue          float64           `json:"netValue"`
-	Description       string            `json:"description"`
-	ExternalReference string            `json:"externalReference"`
-	DueDate           string            `json:"dueDate"`
-	PaymentDate       string            `json:"paymentDate,omitempty"`
-	TransactionReceiptUrl string       `json:"transactionReceiptUrl,omitempty"`
-	PixQrCode         string            `json:"pixQrCode,omitempty"`
-	PixCopyPaste      string            `json:"pixCopyPaste,omitempty"`
-	Split             []SplitResponse   `json:"split,omitempty"`
+	ID                    string          `json:"id"`
+	DateCreated           string          `json:"dateCreated"`
+	Customer              string          `json:"customer"`
+	BillingType           string          `json:"billingType"`
+	Status                string          `json:"status"`
+	Value                 float64         `json:"value"`
+	NetValue              float64         `json:"netValue"`
+	Description           string          `json:"description"`
+	ExternalReference     string          `json:"externalReference"`
+	DueDate               string          `json:"dueDate"`
+	PaymentDate           string          `json:"paymentDate,omitempty"`
+	TransactionReceiptUrl string          `json:"transactionReceiptUrl,omitempty"`
+	PixQrCode             string          `json:"pixQrCode,omitempty"`
+	PixCopyPaste          string          `json:"pixCopyPaste,omitempty"`
+	Split                 []SplitResponse `json:"split,omitempty"`
 }
 
 // WebhookSplitData dados de split no webhook.
 type WebhookSplitData struct {
-	ID             string  `json:"id"`
-	Status         string  `json:"status"`
-	Payment        string  `json:"payment"`
-	WalletId       string  `json:"walletId"`
-	FixedValue     float64 `json:"fixedValue,omitempty"`
+	ID              string  `json:"id"`
+	Status          string  `json:"status"`
+	Payment         string  `json:"payment"`
+	WalletId        string  `json:"walletId"`
+	FixedValue      float64 `json:"fixedValue,omitempty"`
 	PercentualValue float64 `json:"percentualValue,omitempty"`
-	Amount         float64 `json:"amount"`
+	Amount          float64 `json:"amount"`
 }
 
 // WebhookChargebackData dados de chargeback no webhook.
 type WebhookChargebackData struct {
-	ID        string  `json:"id"`
-	Status    string  `json:"status"`
-	Payment   string  `json:"payment"`
-	Amount    float64 `json:"amount"`
-	Reason    string  `json:"reason,omitempty"`
+	ID      string  `json:"id"`
+	Status  string  `json:"status"`
+	Payment string  `json:"payment"`
+	Amount  float64 `json:"amount"`
+	Reason  string  `json:"reason,omitempty"`
 }

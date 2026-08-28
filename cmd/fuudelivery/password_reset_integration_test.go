@@ -24,18 +24,18 @@ import (
 
 // TestPasswordResetFlow valida o fluxo completo "esqueci minha senha":
 //
-//  1. Bootstrap admin + login → token JWT admin
+//  1. Bootstrap admin + login â†’ token JWT admin
 //  2. Criar cliente de teste no Postgres
-//  3. POST /admin/password-reset/code → recebe código em claro
-//  4. POST /auth/reset-password com o código → senha redefinida
-//  5. Login com senha antiga → 401; login com nova senha → 200
+//  3. POST /admin/password-reset/code â†’ recebe cÃ³digo em claro
+//  4. POST /auth/reset-password com o cÃ³digo â†’ senha redefinida
+//  5. Login com senha antiga â†’ 401; login com nova senha â†’ 200
 //
-// Cenários negativos:
-//   - Código errado → 400 (msg genérica)
-//   - Código expirado → 400
-//   - Identificador inexistente → 404 (admin) / 400 (público)
-//   - user_type inválido → 400
-//   - Senha muito curta → 400
+// CenÃ¡rios negativos:
+//   - CÃ³digo errado â†’ 400 (msg genÃ©rica)
+//   - CÃ³digo expirado â†’ 400
+//   - Identificador inexistente â†’ 404 (admin) / 400 (pÃºblico)
+//   - user_type invÃ¡lido â†’ 400
+//   - Senha muito curta â†’ 400
 func TestPasswordResetFlow(t *testing.T) {
 	ctx := context.Background()
 
@@ -58,7 +58,7 @@ func TestPasswordResetFlow(t *testing.T) {
 		require.NoError(t, pErr)
 	}
 
-	// Backoff para CI (container pode demorar para aceitar conexões)
+	// Backoff para CI (container pode demorar para aceitar conexÃµes)
 	var pgDB *gorm.DB
 	var err error
 	for attempt := 0; attempt < 10; attempt++ {
@@ -74,7 +74,7 @@ func TestPasswordResetFlow(t *testing.T) {
 	}
 	require.NoError(t, err, "conectar ao Postgres do testcontainer")
 
-	// ---- Setup: variáveis de ambiente ----
+	// ---- Setup: variÃ¡veis de ambiente ----
 	os.Setenv("JWT_SECRET", "pwdreset-test-secret")
 	os.Setenv("GO_ENV", "test")
 	os.Setenv("ADMIN_BOOTSTRAP_SECRET", "pwdreset-bootstrap-secret")
@@ -100,9 +100,9 @@ func TestPasswordResetFlow(t *testing.T) {
 		var reqBody *bytes.Buffer
 		if body != nil {
 			b, _ := json.Marshal(body)
-			reqBody = bytes.NewReader(b)
+			reqBody = bytes.NewBuffer(b)
 		} else {
-			reqBody = bytes.NewReader(nil)
+			reqBody = bytes.NewBuffer(nil)
 		}
 		req := httptest.NewRequest(method, path, reqBody)
 		req.Header.Set("Content-Type", "application/json")
@@ -170,7 +170,7 @@ func TestPasswordResetFlow(t *testing.T) {
 		require.NotZero(t, clientID)
 	})
 
-	// ---- 3. Gerar código de reset (admin) ----
+	// ---- 3. Gerar cÃ³digo de reset (admin) ----
 	var resetCode string
 	t.Run("GenerateResetCode", func(t *testing.T) {
 		resp := doJSON(http.MethodPost, "/admin/password-reset/code", map[string]string{
@@ -183,12 +183,12 @@ func TestPasswordResetFlow(t *testing.T) {
 		code, ok := result["code"].(string)
 		require.True(t, ok, "response deve conter code")
 		resetCode = code
-		require.Len(t, resetCode, 8, "código deve ter 8 caracteres")
+		require.Len(t, resetCode, 8, "cÃ³digo deve ter 8 caracteres")
 		require.Equal(t, "client", result["user_type"])
 		require.NotNil(t, result["expires_at"])
 	})
 
-	// ---- 4. Resetar senha com código válido ----
+	// ---- 4. Resetar senha com cÃ³digo vÃ¡lido ----
 	newPass := "NovaSenha456!"
 	t.Run("ResetPassword_Success", func(t *testing.T) {
 		resp := doJSON(http.MethodPost, "/auth/reset-password", map[string]string{
@@ -202,7 +202,7 @@ func TestPasswordResetFlow(t *testing.T) {
 		require.Contains(t, result["message"], "sucesso")
 	})
 
-	// ---- 5. Verificar: senha antiga não funciona mais ----
+	// ---- 5. Verificar: senha antiga nÃ£o funciona mais ----
 	t.Run("LoginWithOldPassword_Fails", func(t *testing.T) {
 		resp := doJSON(http.MethodPost, "/users/login/client", map[string]string{
 			"phone":    clientPhone,
@@ -220,7 +220,7 @@ func TestPasswordResetFlow(t *testing.T) {
 		require.Equal(t, 200, resp.StatusCode)
 	})
 
-	// ---- 7. Código já usado não pode ser reutilizado ----
+	// ---- 7. CÃ³digo jÃ¡ usado nÃ£o pode ser reutilizado ----
 	t.Run("ReuseCode_Fails", func(t *testing.T) {
 		resp := doJSON(http.MethodPost, "/auth/reset-password", map[string]string{
 			"user_type":    "client",
@@ -230,19 +230,19 @@ func TestPasswordResetFlow(t *testing.T) {
 		})
 		require.Equal(t, 400, resp.StatusCode)
 		result := decodeJSON(resp)
-		require.Equal(t, errInvalidCode, result["error"])
+		require.Equal(t, "Código inválido ou expirado. Confira os dados com o suporte.", result["error"])
 	})
 
-	// ---- Cenários negativos ----
+	// ---- CenÃ¡rios negativos ----
 	t.Run("WrongCode_Fails", func(t *testing.T) {
-		// Gerar um novo código válido primeiro
+		// Gerar um novo cÃ³digo vÃ¡lido primeiro
 		resp := doJSON(http.MethodPost, "/admin/password-reset/code", map[string]string{
 			"user_type":  "client",
 			"identifier": clientPhone,
 		}, adminAuth)
 		require.Equal(t, 200, resp.StatusCode)
 
-		// Tentar com código errado
+		// Tentar com cÃ³digo errado
 		resp = doJSON(http.MethodPost, "/auth/reset-password", map[string]string{
 			"user_type":    "client",
 			"identifier":   clientPhone,
@@ -294,13 +294,13 @@ func TestPasswordResetFlow(t *testing.T) {
 			"new_password": "Teste123!",
 		})
 		require.Equal(t, 400, resp.StatusCode)
-		// Mensagem genérica (anti-enumeration)
+		// Mensagem genÃ©rica (anti-enumeration)
 		result := decodeJSON(resp)
-		require.Equal(t, errInvalidCode, result["error"])
+		require.Equal(t, "Código inválido ou expirado. Confira os dados com o suporte.", result["error"])
 	})
 
 	t.Run("MaxAttempts_LocksCode", func(t *testing.T) {
-		// Gerar código
+		// Gerar cÃ³digo
 		resp := doJSON(http.MethodPost, "/admin/password-reset/code", map[string]string{
 			"user_type":  "client",
 			"identifier": clientPhone,
@@ -320,7 +320,7 @@ func TestPasswordResetFlow(t *testing.T) {
 			require.Equal(t, 400, resp.StatusCode)
 		}
 
-		// 6a tentativa com o código CORRETO deve falhar (código bloqueado)
+		// 6a tentativa com o cÃ³digo CORRETO deve falhar (cÃ³digo bloqueado)
 		resp = doJSON(http.MethodPost, "/auth/reset-password", map[string]string{
 			"user_type":    "client",
 			"identifier":   clientPhone,

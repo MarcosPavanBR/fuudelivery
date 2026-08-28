@@ -28,8 +28,8 @@ import (
 // Segurança:
 //   - Webhook: validação por token (access_token)
 type AsaasGateway struct {
-	client        *Client
-	webhookToken  string
+	client       *Client
+	webhookToken string
 }
 
 // NewGateway cria uma nova instância do gateway Asaas.
@@ -429,11 +429,11 @@ func (g *AsaasGateway) SupportsMethod(method gateway.PaymentMethod) bool {
 	}
 }
 
-func (g *AsaasGateway) SupportsSplit() bool            { return true }
-func (g *AsaasGateway) SupportsPreAuth() bool           { return true }
-func (g *AsaasGateway) Supports3DS() bool               { return true }
-func (g *AsaasGateway) SupportsEscrow() bool            { return true }
-func (g *AsaasGateway) MaxSplitRecipients() int         { return 10 }
+func (g *AsaasGateway) SupportsSplit() bool     { return true }
+func (g *AsaasGateway) SupportsPreAuth() bool   { return true }
+func (g *AsaasGateway) Supports3DS() bool       { return true }
+func (g *AsaasGateway) SupportsEscrow() bool    { return true }
+func (g *AsaasGateway) MaxSplitRecipients() int { return 10 }
 
 // ═══════════════════════════════════════════════════════════════
 // HELPERS PRIVADOS
@@ -468,11 +468,11 @@ func (g *AsaasGateway) ensureCustomer(req *gateway.TransactionRequest) (string, 
 // mapResponse converte a resposta do Asaas para o formato normalizado.
 func (g *AsaasGateway) mapResponse(resp *CreatePaymentResponse, req *gateway.TransactionRequest) *gateway.TransactionResponse {
 	result := &gateway.TransactionResponse{
-		GatewayID:     resp.ID,
-		Gateway:       "asaas",
-		Status:        mapAsaasStatus(resp.Status),
-		SplitApplied:  len(resp.Split) > 0,
-		SplitCount:    len(resp.Split),
+		GatewayID:    resp.ID,
+		Gateway:      "asaas",
+		Status:       mapAsaasStatus(resp.Status),
+		SplitApplied: len(resp.Split) > 0,
+		SplitCount:   len(resp.Split),
 	}
 
 	// PIX

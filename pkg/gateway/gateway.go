@@ -67,10 +67,10 @@ const (
 type RecipientStatus string
 
 const (
-	RecipientPending    RecipientStatus = "pending"
-	RecipientActive     RecipientStatus = "active"
-	RecipientBlocked    RecipientStatus = "blocked"
-	RecipientKYCPending RecipientStatus = "kyc_pending"
+	RecipientPending     RecipientStatus = "pending"
+	RecipientActive      RecipientStatus = "active"
+	RecipientBlocked     RecipientStatus = "blocked"
+	RecipientKYCPending  RecipientStatus = "kyc_pending"
 	RecipientKYCRejected RecipientStatus = "kyc_rejected"
 )
 
@@ -221,10 +221,10 @@ type RecipientRequest struct {
 
 	// ── Dados bancários ────────────────────────────────────────
 
-	BankCode      string // Código do BACEN (ex: "341" = Itaú, "001" = BB)
-	BankAgency    string // Agência (somente dígitos)
-	BankAccount   string // Conta (somente dígitos)
-	BankAccountDV string // Dígito verificador da conta
+	BankCode        string // Código do BACEN (ex: "341" = Itaú, "001" = BB)
+	BankAgency      string // Agência (somente dígitos)
+	BankAccount     string // Conta (somente dígitos)
+	BankAccountDV   string // Dígito verificador da conta
 	BankAccountType string // "conta_corrente" | "conta_poupanca"
 
 	// ── Configuração de transferência ──────────────────────────
@@ -398,15 +398,15 @@ type WebhookEvent struct {
 type WebhookEventType string
 
 const (
-	WebhookPaymentApproved WebhookEventType = "payment_approved"
-	WebhookPaymentFailed   WebhookEventType = "payment_failed"
-	WebhookPaymentPending  WebhookEventType = "payment_pending"
-	WebhookPaymentUpdated  WebhookEventType = "payment_updated"
+	WebhookPaymentApproved  WebhookEventType = "payment_approved"
+	WebhookPaymentFailed    WebhookEventType = "payment_failed"
+	WebhookPaymentPending   WebhookEventType = "payment_pending"
+	WebhookPaymentUpdated   WebhookEventType = "payment_updated"
 	WebhookPaymentCancelled WebhookEventType = "payment_cancelled"
-	WebhookRefundCompleted WebhookEventType = "refund_completed"
-	WebhookSplitDone       WebhookEventType = "split_done"
-	WebhookSplitFailed     WebhookEventType = "split_failed"
-	WebhookUnknown         WebhookEventType = "unknown"
+	WebhookRefundCompleted  WebhookEventType = "refund_completed"
+	WebhookSplitDone        WebhookEventType = "split_done"
+	WebhookSplitFailed      WebhookEventType = "split_failed"
+	WebhookUnknown          WebhookEventType = "unknown"
 )
 
 // SplitDetail representa o resultado de um split para um recipient específico.

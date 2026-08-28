@@ -7,12 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "fuudelivery",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/images/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#DC2626"
-    },
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -33,7 +27,16 @@
     },
     "plugins": [
       "expo-router",
-      "@maplibre/maplibre-react-native"
+      "@maplibre/maplibre-react-native",
+      "expo-font",
+      "expo-secure-store",
+      ["expo-splash-screen", {
+        "image": "./assets/images/splash.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#DC2626"
+      }],
+      "expo-status-bar",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true

@@ -30,8 +30,8 @@ import (
 //   - Webhook: validação HMAC-SHA256 com PAGARME_WEBHOOK_SECRET
 //   - 3DS: autenticação obrigatória para débito e crédito > R$ 200
 type PagarMeGateway struct {
-	client         *Client
-	webhookSecret  string
+	client        *Client
+	webhookSecret string
 }
 
 // NewGateway cria uma nova instância do gateway Pagar.me.
@@ -418,10 +418,10 @@ func (g *PagarMeGateway) buildTransactionRequest(req *gateway.TransactionRequest
 	splitRules := make([]SplitRuleRequest, len(req.SplitRules))
 	for i, rule := range req.SplitRules {
 		splitRules[i] = SplitRuleRequest{
-			RecipientID:        rule.RecipientID,
-			Percentage:         rule.Percentage,
-			Amount:             rule.FixedValue,
-			Liable:             rule.Liable,
+			RecipientID:         rule.RecipientID,
+			Percentage:          rule.Percentage,
+			Amount:              rule.FixedValue,
+			Liable:              rule.Liable,
 			ChargeProcessingFee: rule.ChargebackResponsible,
 		}
 	}
@@ -481,29 +481,29 @@ func (g *PagarMeGateway) buildRecipientRequest(req *gateway.RecipientRequest) Cr
 	}
 
 	return CreateRecipientRequest{
-		RegisterInformation: registerInfo,
-		BankAccount:         bankAccount,
-		AutomaticAnticipationEnabled: true,
+		RegisterInformation:           registerInfo,
+		BankAccount:                   bankAccount,
+		AutomaticAnticipationEnabled:  true,
 		AnticipatableVolumePercentage: 85,
-		TransferEnabled:    true,
-		TransferInterval:   req.TransferInterval,
-		TransferDay:        transferDay,
+		TransferEnabled:               true,
+		TransferInterval:              req.TransferInterval,
+		TransferDay:                   transferDay,
 	}
 }
 
 // mapResponse converte a resposta do Pagar.me para o formato normalizado.
 func (g *PagarMeGateway) mapResponse(resp *CreateTransactionResponse, req *gateway.TransactionRequest) *gateway.TransactionResponse {
 	result := &gateway.TransactionResponse{
-		GatewayID:     strconv.FormatInt(resp.ID, 10),
-		Gateway:       "pagarme",
-		Status:        mapStatus(resp.Status),
-		CardBrand:     resp.CardBrand,
-		CardLast4:     resp.CardLastFour,
-		RequiresAuth:  resp.Authenticate,
-		AuthURL:       resp.AuthenticateURL,
-		SplitApplied:  len(resp.SplitRules) > 0,
-		SplitCount:    len(resp.SplitRules),
-		Metadata:      resp.Metadata,
+		GatewayID:    strconv.FormatInt(resp.ID, 10),
+		Gateway:      "pagarme",
+		Status:       mapStatus(resp.Status),
+		CardBrand:    resp.CardBrand,
+		CardLast4:    resp.CardLastFour,
+		RequiresAuth: resp.Authenticate,
+		AuthURL:      resp.AuthenticateURL,
+		SplitApplied: len(resp.SplitRules) > 0,
+		SplitCount:   len(resp.SplitRules),
+		Metadata:     resp.Metadata,
 	}
 
 	// PIX

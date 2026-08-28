@@ -153,8 +153,13 @@ func (g *AsaasGateway) CreateTransaction(
 		asaasReq.Metadata = req.Metadata
 	}
 
+	headers := map[string]string{}
+	if req.IdempotencyKey != "" {
+		headers["X-Idempotency-Key"] = req.IdempotencyKey
+	}
+
 	// Enviar para a API
-	respBody, err := g.client.post("/payments", asaasReq)
+	respBody, err := g.client.postWithHeaders("/payments", asaasReq, headers)
 	if err != nil {
 		return nil, fmt.Errorf("create transaction: %w", err)
 	}
@@ -177,12 +182,13 @@ func (g *AsaasGateway) CaptureTransaction(
 ) error {
 
 	path := fmt.Sprintf("/payments/%s/capture", gatewayID)
-	_, err := g.client.post(path, nil)
+	value := float64(amount) / 100.0
+	_, err := g.client.post(path, map[string]interface{}{"value": value})
 	if err != nil {
 		return fmt.Errorf("capture transaction %s: %w", gatewayID, err)
 	}
 
-	log.Printf("[ASAAS] Transaction %s captured: %d cents", gatewayID, amount)
+	log.Printf("[ASAAS] Transaction %s captured: %.2f", gatewayID, value)
 	return nil
 }
 

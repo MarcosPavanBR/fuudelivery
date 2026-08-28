@@ -11,11 +11,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"time"
 
@@ -212,11 +209,6 @@ func GetEstablishment(establishmentID int64) (*dto.Establishment, error) {
 		LocationString:       est.LocationString,
 	}, nil
 }
-
-// clientHTTPCheck é o client HTTP usado para checagens internas entre domínios.
-// Timeout curto e obrigatório: sem ele, um endpoint lento travaria a criação
-// de pedidos inteira (o handler é síncrono).
-var clientHTTPCheck = &http.Client{Timeout: 3 * time.Second}
 
 // checkEstablishmentOpen verifica se o estabelecimento está aberto antes de
 // aceitar pedidos. Consulta diretamente o Postgres (mesmo banco do monolito)

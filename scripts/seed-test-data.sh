@@ -245,20 +245,7 @@ echo "   Email: joao@entregador.com"
 echo "   Senha: (definida via FUU_DELIVERY_PASSWORD)"
 echo ""
 echo "============================================"
-echo "  Tokens (para uso manual com curl)"
+echo "  Pronto! Todos os registros foram criados via API."
 echo "============================================"
-echo ""
-if [ -n "$ADMIN_TOKEN" ]; then
-    echo "ADMIN_TOKEN=$ADMIN_TOKEN"
-fi
-if [ -n "$RESTAURANT_TOKEN" ]; then
-    echo "RESTAURANT_TOKEN=$RESTAURANT_TOKEN"
-fi
-if [ -n "$CLIENT_TOKEN" ]; then
-    echo "CLIENT_TOKEN=$CLIENT_TOKEN"
-fi
-if [ -n "$DELIVERY_TOKEN" ]; then
-    echo "DELIVERY_TOKEN=$DELIVERY_TOKEN"
-fi
-echo ""
-echo "Pronto! Todos os registros foram criados via API. 🎉"
+
+unset ADMIN_TOKEN RESTAURANT_TOKEN CLIENT_TOKEN DELIVERY_TOKEN ADMIN_PASSWORD RESTAURANT_PASSWORD CLIENT_PASSWORD DELIVERY_PASSWORD BOOTSTRAP_SECRET

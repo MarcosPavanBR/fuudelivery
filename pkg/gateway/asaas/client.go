@@ -5,52 +5,28 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
-	"os"
 	"time"
-)
 
-// ═══════════════════════════════════════════════════════════════
-// CLIENT HTTP
-// ═══════════════════════════════════════════════════════════════
+	"github.com/carloshomar/fuudelivery/pkg/gateway"
+)
 
 // Client é o cliente HTTP para a API do Asaas.
 type Client struct {
-	apiKey     string
-	baseURL    string
-	httpClient *http.Client
-	maxRetries int
-	retryDelay time.Duration
+	baseURL     string
+	apiKey      string
+	httpClient  *http.Client
+	maxRetries  int
+	retryDelay  time.Duration
 }
 
 // NewClient cria um novo cliente Asaas.
-//
-// Lê a env var ASAAS_API_KEY (obrigatório).
-func NewClient() (*Client, error) {
-	apiKey := os.Getenv("ASAAS_API_KEY")
-	if apiKey == "" {
-		return nil, fmt.Errorf("asaas: ASAAS_API_KEY not configured")
-	}
-
+func NewClient(baseURL, apiKey string) *Client {
 	return &Client{
+		baseURL: baseURL,
 		apiKey:  apiKey,
-		baseURL: "https://api.asaas.com/v3",
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
-		},
-		maxRetries: 3,
-		retryDelay: 1 * time.Second,
-	}, nil
-}
-
-// NewClientWithConfig cria um cliente com configuração customizada.
-func NewClientWithConfig(apiKey, baseURL string, timeout time.Duration) *Client {
-	return &Client{
-		apiKey:  apiKey,
-		baseURL: baseURL,
-		httpClient: &http.Client{
-			Timeout: timeout,
 		},
 		maxRetries: 3,
 		retryDelay: 1 * time.Second,
@@ -63,21 +39,26 @@ func NewClientWithConfig(apiKey, baseURL string, timeout time.Duration) *Client 
 
 // post envia uma requisição POST com retry.
 func (c *Client) post(path string, body interface{}) ([]byte, error) {
-	return c.doRequest("POST", path, body)
+	return c.doRequest("POST", path, body, nil)
+}
+
+// postWithHeaders envia uma requisição POST com headers customizados.
+func (c *Client) postWithHeaders(path string, body interface{}, headers map[string]string) ([]byte, error) {
+	return c.doRequest("POST", path, body, headers)
 }
 
 // get envia uma requisição GET com retry.
 func (c *Client) get(path string) ([]byte, error) {
-	return c.doRequest("GET", path, nil)
+	return c.doRequest("GET", path, nil, nil)
 }
 
 // put envia uma requisição PUT com retry.
 func (c *Client) put(path string, body interface{}) ([]byte, error) {
-	return c.doRequest("PUT", path, body)
+	return c.doRequest("PUT", path, body, nil)
 }
 
 // doRequest executa uma requisição HTTP com retry e backoff exponencial.
-func (c *Client) doRequest(method, path string, body interface{}) ([]byte, error) {
+func (c *Client) doRequest(method, path string, body interface{}, extraHeaders map[string]string) ([]byte, error) {
 	var bodyReader io.Reader
 
 	if body != nil {
@@ -102,6 +83,11 @@ func (c *Client) doRequest(method, path string, body interface{}) ([]byte, error
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Accept", "application/json")
 
+		// Headers customizados (ex: Idempotency-Key)
+		for k, v := range extraHeaders {
+			req.Header.Set(k, v)
+		}
+
 		// Retry: resetar body reader
 		if body != nil && attempt > 1 {
 			jsonBytes, _ := json.Marshal(body)
@@ -118,8 +104,8 @@ func (c *Client) doRequest(method, path string, body interface{}) ([]byte, error
 			time.Sleep(c.retryDelay * time.Duration(attempt))
 			continue
 		}
-
 		defer resp.Body.Close()
+
 		respBody, err := io.ReadAll(resp.Body)
 		if err != nil {
 			lastErr = fmt.Errorf("asaas: failed to read response body: %w", err)

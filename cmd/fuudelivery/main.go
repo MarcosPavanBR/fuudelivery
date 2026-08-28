@@ -1540,8 +1540,8 @@ func main() {
 	})
 
 	// Health check — reuses the Redis client from the queue singleton
-	// HTTP 503 only when Postgres (fonte primária pós-corte 5) está down.
-	// Redis degradation returns HTTP 200 with status "degraded".
+	// HTTP 503 when Postgres is down OR no payment gateway is configured.
+	// Redis/batches degradation returns HTTP 200 with status "degraded".
 	app.Get("/health", func(c *fiber.Ctx) error {
 		redisClient := queue.GetClient()
 
@@ -1549,11 +1549,12 @@ func main() {
 		redisCheck := health.RedisCheck(redisClient)
 		redisGeoCheck := health.RedisGeoCheck(redisClient)
 		batchesCheck := health.BatchCheck(ordersModels.DB)
+		gatewaysCheck := health.GatewayCheck()
 
-		// Critical check: apenas o Postgres (banco-único).
-		criticalStatus := health.OverallStatus(postgresCheck)
-		// All checks: includes Redis and batches
-		allStatus := health.OverallStatus(postgresCheck, redisCheck, redisGeoCheck, batchesCheck)
+		// Critical checks: Postgres + at least one payment gateway.
+		criticalStatus := health.OverallStatus(postgresCheck, gatewaysCheck)
+		// All checks: includes Redis, batches and gateways
+		allStatus := health.OverallStatus(postgresCheck, redisCheck, redisGeoCheck, batchesCheck, gatewaysCheck)
 
 		statusCode := 200
 		if criticalStatus != "up" {
@@ -1565,10 +1566,11 @@ func main() {
 			"service": "fuudelivery",
 			"version": "1.0.0",
 			"checks": fiber.Map{
-				"postgres":  postgresCheck,
-				"redis":     redisCheck,
-				"redis_geo": redisGeoCheck,
-				"batches":   batchesCheck,
+				"postgres":        postgresCheck,
+				"redis":           redisCheck,
+				"redis_geo":       redisGeoCheck,
+				"batches":         batchesCheck,
+				"payment_gateways": gatewaysCheck,
 			},
 			"time": time.Now().UTC(),
 		})

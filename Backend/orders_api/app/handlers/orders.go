@@ -11,11 +11,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"time"
 
@@ -213,46 +210,15 @@ func GetEstablishment(establishmentID int64) (*dto.Establishment, error) {
 	}, nil
 }
 
-// clientHTTPCheck é o client HTTP usado para checagens internas entre domínios.
-// Timeout curto e obrigatório: sem ele, um endpoint lento travaria a criação
-// de pedidos inteira (o handler é síncrono).
-var clientHTTPCheck = &http.Client{Timeout: 3 * time.Second}
-
 // checkEstablishmentOpen verifica se o estabelecimento está aberto antes de
-// aceitar pedidos. A URL base é configurável via URL_CHECK_ESTABLISHMENT_OPEN
-// (template com %d para o ID). O default aponta para o PRÓPRIO processo —
-// desde 2026-08 auth e orders vivem no mesmo binário (monolito), então o
-// antigo hostname de Docker Compose "auth-api" não resolve mais em produção.
+// aceitar pedidos. Consulta diretamente o Postgres (mesmo banco do monolito)
+// para evitar latência de HTTP loopback e falhas de porta.
 func checkEstablishmentOpen(establishmentID int64) (bool, error) {
-	urlEnv := os.Getenv("URL_CHECK_ESTABLISHMENT_OPEN")
-	if urlEnv == "" {
-		port := os.Getenv("PORT")
-		if port == "" {
-			port = "3000"
-		}
-		urlEnv = fmt.Sprintf("http://localhost:%s/api/auth/establishments/%%d/is-open", port)
+	var establishment models.Establishment
+	if err := authModels.DB.First(&establishment, establishmentID).Error; err != nil {
+		return false, fmt.Errorf("establishment not found: %w", err)
 	}
-
-	url := fmt.Sprintf(urlEnv, establishmentID)
-	resp, err := clientHTTPCheck.Get(url)
-	if err != nil {
-		return false, err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return false, err
-	}
-
-	var result struct {
-		IsOpen bool `json:"is_open"`
-	}
-	if err := json.Unmarshal(body, &result); err != nil {
-		return false, err
-	}
-
-	return result.IsOpen, nil
+	return establishment.OpenData != nil, nil
 }
 
 func UpdateOrderStatus(c *fiber.Ctx, sendMessageToClient func(clientID int64, message []byte) error) error {
@@ -550,6 +516,15 @@ func ListOrdersByPhone(c *fiber.Ctx) error {
 	phoneNumber, err := url.QueryUnescape(phoneNumberEncoded)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Erro ao decodificar número de telefone"})
+	}
+
+	tokenPhone, phoneErr := middlewares.GetUserPhoneFromToken(c)
+	if phoneErr != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+	}
+	role, roleErr := middlewares.GetUserRoleFromToken(c)
+	if roleErr != nil || (role != "admin" && tokenPhone != phoneNumber) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
 	}
 
 	var docs []models.OrderDocument

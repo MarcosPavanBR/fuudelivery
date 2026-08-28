@@ -43,6 +43,7 @@ func ListAllPayments(c *fiber.Ctx) error {
 
 // paymentToMap serializa o pagamento mantendo as chaves que o WebAdmin
 // consome (json tags do modelo já são snake_case legado).
+// Campos sensíveis (card_token) são removidos antes de serializar.
 func paymentToMap(p *models.Payment) map[string]interface{} {
 	b, err := json.Marshal(p)
 	if err != nil {
@@ -52,6 +53,9 @@ func paymentToMap(p *models.Payment) map[string]interface{} {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return map[string]interface{}{}
 	}
+	delete(m, "card_token")
+	delete(m, "card_cvv")
+	delete(m, "card_expiry")
 	return m
 }
 

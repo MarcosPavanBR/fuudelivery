@@ -4,7 +4,16 @@
 package handlers
 
 import (
+	"sync"
 	"testing"
+
+	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
+	"github.com/carloshomar/fuudelivery/orders_api/app/models"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/mock"
+	"github.com/stretchr/testify/assert"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 // === Testes de getTier ===
@@ -268,5 +277,77 @@ func TestEarnPointsForOrder_Validation(t *testing.T) {
 				t.Errorf("got skip=%v, want %v", shouldSkip, tt.shouldSkip)
 			}
 		})
+	}
+}
+
+// === Testes de race condition ===
+
+func TestEarnPointsForOrder_RaceCondition(t *testing.T) {
+	db := setupTestDB()
+	models.DB = db
+
+	var wg sync.WaitGroup
+	successCount := 0
+	mu := sync.Mutex{}
+
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			err := EarnPointsForOrder("+5511999900001", "order-race", 50.0)
+			if err == nil {
+				mu.Lock()
+				successCount++
+				mu.Unlock()
+			}
+		}()
+	}
+
+	wg.Wait()
+	if successCount != 1 {
+		t.Errorf("Expected 1 successful earn, got %d", successCount)
+	}
+}
+
+func TestRedeemPoints_RaceCondition(t *testing.T) {
+	db := setupTestDB()
+	models.DB = db
+
+	loyalty := models.LoyaltyPoints{
+		UserPhone: "+5511999900001",
+		Points:    100,
+		Tier:      "bronze",
+	}
+	models.DB.Create(&loyalty)
+
+	var wg sync.WaitGroup
+	successCount := 0
+	mu := sync.Mutex{}
+
+	for i := 0; i < 3; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			app := fiber.New()
+			app.Use(mock.Middleware())
+			app.Post("/loyalty/redeem", RedeemPoints)
+
+			req := mock.CreateRequest("POST", "/loyalty/redeem")
+			req.Request().Header.Set("Content-Type", "application/json")
+			req.Request().Body = []byte(`{"user_phone":"+5511999900001","points":10,"order_id":"order-1"}`)
+			req.JSON()
+
+			_, err := app.Test(req)
+			if err == nil {
+				mu.Lock()
+				successCount++
+				mu.Unlock()
+			}
+		}()
+	}
+
+	wg.Wait()
+	if successCount != 10 {
+		t.Errorf("Expected 10 successful redeems, got %d", successCount)
 	}
 }

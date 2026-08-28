@@ -8,7 +8,12 @@
 
 set -euo pipefail
 
-API="https://fuudelivery-api-8y6l.onrender.com"
+API="${FUU_API_URL:-https://fuudelivery-api-8y6l.onrender.com}"
+BOOTSTRAP_SECRET="${FUU_BOOTSTRAP_SECRET:-}"
+ADMIN_PASSWORD="${FUU_ADMIN_PASSWORD:-}"
+RESTAURANT_PASSWORD="${FUU_RESTAURANT_PASSWORD:-}"
+CLIENT_PASSWORD="${FUU_CLIENT_PASSWORD:-}"
+DELIVERY_PASSWORD="${FUU_DELIVERY_PASSWORD:-}"
 ADMIN_TOKEN=""
 RESTAURANT_TOKEN=""
 CLIENT_TOKEN=""
@@ -54,17 +59,21 @@ fi
 # 1) Bootstrap admin
 echo ""
 echo "1. Bootstrapping admin..."
-BOOTSTRAP_RESP=$(curl -s -X POST "$API/admin/bootstrap" \
-    -H "Content-Type: application/json" \
-    -d '{"secret":"fuu-bootstrap-2026","email":"admin@fuudelivery.com","phone":"+5511999900001","name":"Admin Master","password":"Admin@2026!"}')
-check "$BOOTSTRAP_RESP" "Bootstrap admin" || warn "Pode já existir um admin — tentando login..."
+if [ -n "$BOOTSTRAP_SECRET" ]; then
+    BOOTSTRAP_RESP=$(curl -s -X POST "$API/admin/bootstrap" \
+        -H "Content-Type: application/json" \
+        -d "{\"secret\":\"$BOOTSTRAP_SECRET\",\"email\":\"admin@fuudelivery.com\",\"phone\":\"+5511999900001\",\"name\":\"Admin Master\",\"password\":\"$ADMIN_PASSWORD\"}")
+    check "$BOOTSTRAP_RESP" "Bootstrap admin" || warn "Pode já existir um admin — tentando login..."
+else
+    warn "FUU_BOOTSTRAP_SECRET não definido — pulando bootstrap do admin"
+fi
 
 # 2) Login admin
 echo ""
 echo "2. Login admin..."
 LOGIN_RESP=$(curl -s -X POST "$API/users/login" \
     -H "Content-Type: application/json" \
-    -d '{"email":"admin@fuudelivery.com","password":"Admin@2026!"}')
+    -d '{"email":"admin@fuudelivery.com","password":"'${ADMIN_PASSWORD:-Admin@2026!}'"}')
 ADMIN_TOKEN=$(echo "$LOGIN_RESP" | grep -o '"token":"[^"]*"' | head -1 | cut -d'"' -f4)
 if [ -n "$ADMIN_TOKEN" ]; then
     log "Admin logado com sucesso (token: ${ADMIN_TOKEN:0:20}...)"
@@ -82,7 +91,7 @@ REST_RESP=$(curl -s -X POST "$API/users/register" \
         "name": "Sabor da Terra",
         "email": "restaurante@sabordaterra.com",
         "phone": "+5511999900002",
-        "password": "Rest@2026!",
+        "password": "'${RESTAURANT_PASSWORD:-Rest@2026!}'",
         "establishment": {
             "name": "Sabor da Terra - Matriz",
             "description": "Comida caseira brasileira com tempero especial",
@@ -103,7 +112,7 @@ echo ""
 echo "4. Login restaurante..."
 REST_LOGIN=$(curl -s -X POST "$API/users/login" \
     -H "Content-Type: application/json" \
-    -d '{"email":"restaurante@sabordaterra.com","password":"Rest@2026!"}')
+    -d '{"email":"restaurante@sabordaterra.com","password":"'${RESTAURANT_PASSWORD:-Rest@2026!}'"}')
 RESTAURANT_TOKEN=$(echo "$REST_LOGIN" | grep -o '"token":"[^"]*"' | head -1 | cut -d'"' -f4)
 if [ -n "$RESTAURANT_TOKEN" ]; then
     log "Restaurante logado (token: ${RESTAURANT_TOKEN:0:20}...)"
@@ -159,7 +168,7 @@ echo ""
 echo "7. Criando cliente 'Maria Silva'..."
 CLIENT_RESP=$(curl -s -X POST "$API/clients/register" \
     -H "Content-Type: application/json" \
-    -d '{"name":"Maria Silva","phone":"+5511999900003","password":"Client@2026!"}')
+    -d '{"name":"Maria Silva","phone":"+5511999900003","password":"'${CLIENT_PASSWORD:-Client@2026!}'"}')
 check "$CLIENT_RESP" "Criar cliente"
 
 # 8) Login cliente
@@ -167,7 +176,7 @@ echo ""
 echo "8. Login cliente..."
 CLIENT_LOGIN=$(curl -s -X POST "$API/clients/login" \
     -H "Content-Type: application/json" \
-    -d '{"phone":"+5511999900003","password":"Client@2026!"}')
+    -d '{"phone":"+5511999900003","password":"'${CLIENT_PASSWORD:-Client@2026!}'"}')
 CLIENT_TOKEN=$(echo "$CLIENT_LOGIN" | grep -o '"token":"[^"]*"' | head -1 | cut -d'"' -f4)
 if [ -n "$CLIENT_TOKEN" ]; then
     log "Cliente logado (token: ${CLIENT_TOKEN:0:20}...)"
@@ -180,7 +189,7 @@ echo ""
 echo "9. Criando entregador 'João Entregador'..."
 DELIV_RESP=$(curl -s -X POST "$API/delivery-man/register" \
     -H "Content-Type: application/json" \
-    -d '{"name":"João Entregador","email":"joao@entregador.com","phone":"+5511999900004","password":"Entrega@2026!"}')
+    -d '{"name":"João Entregador","email":"joao@entregador.com","phone":"+5511999900004","password":"'${DELIVERY_PASSWORD:-Entrega@2026!}'"}')
 check "$DELIV_RESP" "Criar entregador"
 
 # 10) Login entregador
@@ -188,7 +197,7 @@ echo ""
 echo "10. Login entregador..."
 DELIV_LOGIN=$(curl -s -X POST "$API/delivery-man/login" \
     -H "Content-Type: application/json" \
-    -d '{"email":"joao@entregador.com","password":"Entrega@2026!"}')
+    -d '{"email":"joao@entregador.com","password":"'${DELIVERY_PASSWORD:-Entrega@2026!}'"}')
 DELIVERY_TOKEN=$(echo "$DELIV_LOGIN" | grep -o '"token":"[^"]*"' | head -1 | cut -d'"' -f4)
 if [ -n "$DELIVERY_TOKEN" ]; then
     log "Entregador logado (token: ${DELIVERY_TOKEN:0:20}...)"
@@ -216,40 +225,27 @@ echo "============================================"
 echo ""
 echo "👤 Admin:"
 echo "   Email: admin@fuudelivery.com"
-echo "   Senha: Admin@2026!"
+echo "   Senha: (definida via FUU_ADMIN_PASSWORD)"
 echo ""
 echo "🍽️  Restaurante:"
 echo "   Nome: Sabor da Terra - Matriz"
 echo "   Email: restaurante@sabordaterra.com"
-echo "   Senha: Rest@2026!"
+echo "   Senha: (definida via FUU_RESTAURANT_PASSWORD)"
 echo ""
 echo "📦 Produtos: 6 itens (Feijão Tropeiro, Peixe Frito, Frango, etc.)"
 echo ""
 echo "🛒 Cliente:"
 echo "   Nome: Maria Silva"
 echo "   Telefone: +5511999900003"
-echo "   Senha: Client@2026!"
+echo "   Senha: (definida via FUU_CLIENT_PASSWORD)"
 echo ""
 echo "🚚 Entregador:"
 echo "   Nome: João Entregador"
 echo "   Email: joao@entregador.com"
-echo "   Senha: Entrega@2026!"
+echo "   Senha: (definida via FUU_DELIVERY_PASSWORD)"
 echo ""
 echo "============================================"
-echo "  Tokens (para uso manual com curl)"
+echo "  Pronto! Todos os registros foram criados via API."
 echo "============================================"
-echo ""
-if [ -n "$ADMIN_TOKEN" ]; then
-    echo "ADMIN_TOKEN=$ADMIN_TOKEN"
-fi
-if [ -n "$RESTAURANT_TOKEN" ]; then
-    echo "RESTAURANT_TOKEN=$RESTAURANT_TOKEN"
-fi
-if [ -n "$CLIENT_TOKEN" ]; then
-    echo "CLIENT_TOKEN=$CLIENT_TOKEN"
-fi
-if [ -n "$DELIVERY_TOKEN" ]; then
-    echo "DELIVERY_TOKEN=$DELIVERY_TOKEN"
-fi
-echo ""
-echo "Pronto! Todos os registros foram criados via API. 🎉"
+
+unset ADMIN_TOKEN RESTAURANT_TOKEN CLIENT_TOKEN DELIVERY_TOKEN ADMIN_PASSWORD RESTAURANT_PASSWORD CLIENT_PASSWORD DELIVERY_PASSWORD BOOTSTRAP_SECRET

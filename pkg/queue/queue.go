@@ -239,9 +239,17 @@ func (q *Queue) SubscribeFunc(queueName string, handler func([]byte) error) {
 
 	go func() {
 		log.Printf("[QUEUE] Consumer Go channel iniciado em %s...", queueName)
-		for msg := range ch {
-			if err := handler(msg); err != nil {
-				log.Printf("[QUEUE] Handler falhou em %s: %v", queueName, err)
+		for {
+			select {
+			case msg, ok := <-ch:
+				if !ok {
+					return
+				}
+				if err := handler(msg); err != nil {
+					log.Printf("[QUEUE] Handler falhou em %s: %v", queueName, err)
+				}
+			case <-q.ctx.Done():
+				return
 			}
 		}
 	}()
@@ -250,7 +258,7 @@ func (q *Queue) SubscribeFunc(queueName string, handler func([]byte) error) {
 // ensureGroup cria o consumer group do stream (idempotente).
 // Se o group ja existe (BUSYGROUP), ignora.
 func (q *Queue) ensureGroup(queueName string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(q.ctx, 5*time.Second)
 	defer cancel()
 
 	err := q.client.XGroupCreateMkStream(ctx, streamKey(queueName), groupName, "0").Err()
@@ -363,7 +371,7 @@ func (c *consumer) safeHandle(msg redis.XMessage) (err error) {
 // handleFailure contabiliza a falha da mensagem. Apos maxRetries, move a
 // mensagem para a DLQ e a confirma no stream original (evita reprocessamento eterno).
 func (c *consumer) handleFailure(msg redis.XMessage, handlerErr error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(c.q.ctx, 5*time.Second)
 	defer cancel()
 	atomic.AddInt64(&c.q.metrics.failed, 1)
 
@@ -514,6 +522,12 @@ func (q *Queue) Close() {
 	if q.cancel != nil {
 		q.cancel()
 	}
+	q.mu.Lock()
+	for name, ch := range q.internalQueues {
+		close(ch)
+		q.internalQueues[name] = nil
+	}
+	q.mu.Unlock()
 	if q.client != nil {
 		q.client.Close()
 		log.Println("[QUEUE] Conexao Redis encerrada")

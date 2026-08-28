@@ -100,11 +100,16 @@ func startRateLimitCleanup() {
 // Valida SigningMethod HMAC (HS256) para evitar ataques de algorithm confusion,
 // consistente com o middleware HTTP (auth_api/app/middlewares/jwt.go).
 func parseWSToken(tokenStr string) (jwt.MapClaims, error) {
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		return nil, fmt.Errorf("JWT secret not configured")
+	}
+
 	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
-		return []byte(os.Getenv("JWT_SECRET")), nil
+		return []byte(secret), nil
 	})
 	if err != nil || !token.Valid {
 		return nil, fmt.Errorf("invalid token")
@@ -1048,6 +1053,9 @@ func setupAuthRoutes(app *fiber.App) {
 	app.Post("/users/login", rateLimitMiddleware(10), authHandlers.Login)
 	app.Post("/auth/refresh", rateLimitMiddleware(30), authHandlers.RefreshToken)
 	app.Post("/auth/logout", rateLimitMiddleware(10), authHandlers.Logout)
+	app.Post("/auth/session", rateLimitMiddleware(10), authHandlers.SessionLogin)
+	app.Post("/auth/session/refresh", rateLimitMiddleware(30), authHandlers.SessionRefresh)
+	app.Post("/auth/session/logout", rateLimitMiddleware(10), authHandlers.SessionLogout)
 	// Ticket de curta duração (60s) para WebSockets: o JWT fica SÓ no header
 	// Authorization desta chamada e o WS conecta com ?ticket= — nada de JWT
 	// na query string (vazava em logs de proxy). Ver resolveWSTicket.
@@ -1450,16 +1458,14 @@ func main() {
 	// Comportamento:
 	//   - ALLOWED_ORIGINS (env, render.yaml) SOMA com os defaults — nunca
 	//     remove os domínios de produção ao adicionar uma origem nova.
-	//   - Em desenvolvimento (GO_ENV != production) liberam-se também os
-	//     previews do Freebuff Cloud (*.daytonaproxy01.net) e localhost em
-	//     qualquer porta (isLocalDevOrigin). Em produção NENHUM dos dois
-	//     vale: wildcard de preview + credentials é superfície de ataque.
+	//   - Em desenvolvimento (GO_ENV != production) libera-se localhost em
+	//     qualquer porta (isLocalDevOrigin). Em produção NENHUM localhost
+	//     vale: credentials + localhost é superfície de ataque CSRF.
+	//   - Domínios de preview (ex.: *.daytonaproxy01.net) devem ser
+	//     adicionados EXPLICITAMENTE via ALLOWED_ORIGINS, nunca como wildcard.
 	defaultOrigins := []string{
 		"https://fuudelivery-web.onrender.com",
 		"https://fuudelivery-admin-lv7f.onrender.com",
-	}
-	if os.Getenv("GO_ENV") != "production" {
-		defaultOrigins = append(defaultOrigins, "https://*.daytonaproxy01.net")
 	}
 	allowedOrigins := append([]string{}, defaultOrigins...)
 	if extra := os.Getenv("ALLOWED_ORIGINS"); extra != "" {
@@ -1486,8 +1492,32 @@ func main() {
 		AllowOriginsFunc: isLocalDevOrigin,
 		AllowCredentials: true,
 		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
-		AllowHeaders:     "Origin,Content-Type,Accept,Authorization",
+		AllowHeaders: "Origin,Content-Type,Accept,Authorization,X-CSRF-Token",
 	}))
+
+
+	// Content Security Policy — previne execução de scripts arbitrários.
+	app.Use(func(c *fiber.Ctx) error {
+		c.Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self' wss: https:; font-src 'self' data:")
+		c.Set("X-Content-Type-Options", "nosniff")
+		return c.Next()
+	})
+
+	// CSRF protection — valida token em mutações.
+	app.Use(func(c *fiber.Ctx) error {
+		method := c.Method()
+		if method == "GET" || method == "OPTIONS" || method == "HEAD" {
+			return c.Next()
+		}
+		csrfToken := c.Get("X-CSRF-Token")
+		if csrfToken == "" {
+			csrfToken = c.Cookies("csrf_token")
+		}
+		if csrfToken == "" || len(csrfToken) < 32 {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "CSRF token missing or invalid"})
+		}
+		return c.Next()
+	})
 
 	// Health check — reuses the Redis client from the queue singleton
 	// HTTP 503 only when Postgres (fonte primária pós-corte 5) está down.
@@ -1594,9 +1624,22 @@ func main() {
 	}()
 
 	// Start background workers
-	go startQueueListeners()
-	go startRefreshTokenCleanup() // limpa tokens expirados a cada 24h
-	startRateLimitCleanup()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		startQueueListeners()
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		startRefreshTokenCleanup() // limpa tokens expirados a cada 24h
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		startRateLimitCleanup()
+	}()
 
 	// Graceful shutdown
 	port := os.Getenv("PORT")
@@ -1610,7 +1653,10 @@ func main() {
 	go func() {
 		<-c
 		log.Println("Shutting down...")
+		queue.Close()
 		app.ShutdownWithTimeout(10 * time.Second)
+		wg.Wait()
+		log.Println("All background workers stopped")
 	}()
 
 	log.Printf("FUUDELIVERY server starting on port %s", port)
@@ -1695,8 +1741,14 @@ func processStatusUpdate(queueName string, msg []byte) error {
 func isLocalDevOrigin(origin string) bool {
 	// Em PRODUÇÃO devolve sempre false: localhost-any-port com credentials
 	// permitia qualquer app local do usuário autenticar contra a API.
-	if origin == "" || os.Getenv("GO_ENV") == "production" {
+	if origin == "" {
 		return false
+	}
+	if os.Getenv("GO_ENV") == "production" {
+		return false
+	}
+	if os.Getenv("GO_ENV") == "" {
+		log.Println("[CORS] WARNING: GO_ENV não definido — assumindo development (localhost permitido)")
 	}
 	u, err := url.Parse(origin)
 	if err != nil {

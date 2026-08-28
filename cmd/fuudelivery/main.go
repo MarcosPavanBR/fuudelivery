@@ -1053,6 +1053,9 @@ func setupAuthRoutes(app *fiber.App) {
 	app.Post("/users/login", rateLimitMiddleware(10), authHandlers.Login)
 	app.Post("/auth/refresh", rateLimitMiddleware(30), authHandlers.RefreshToken)
 	app.Post("/auth/logout", rateLimitMiddleware(10), authHandlers.Logout)
+	app.Post("/auth/session", rateLimitMiddleware(10), authHandlers.SessionLogin)
+	app.Post("/auth/session/refresh", rateLimitMiddleware(30), authHandlers.SessionRefresh)
+	app.Post("/auth/session/logout", rateLimitMiddleware(10), authHandlers.SessionLogout)
 	// Ticket de curta duração (60s) para WebSockets: o JWT fica SÓ no header
 	// Authorization desta chamada e o WS conecta com ?ticket= — nada de JWT
 	// na query string (vazava em logs de proxy). Ver resolveWSTicket.
@@ -1489,8 +1492,32 @@ func main() {
 		AllowOriginsFunc: isLocalDevOrigin,
 		AllowCredentials: true,
 		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
-		AllowHeaders:     "Origin,Content-Type,Accept,Authorization",
+		AllowHeaders: "Origin,Content-Type,Accept,Authorization,X-CSRF-Token",
 	}))
+
+
+	// Content Security Policy — previne execução de scripts arbitrários.
+	app.Use(func(c *fiber.Ctx) error {
+		c.Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self' wss: https:; font-src 'self' data:")
+		c.Set("X-Content-Type-Options", "nosniff")
+		return c.Next()
+	})
+
+	// CSRF protection — valida token em mutações.
+	app.Use(func(c *fiber.Ctx) error {
+		method := c.Method()
+		if method == "GET" || method == "OPTIONS" || method == "HEAD" {
+			return c.Next()
+		}
+		csrfToken := c.Get("X-CSRF-Token")
+		if csrfToken == "" {
+			csrfToken = c.Cookies("csrf_token")
+		}
+		if csrfToken == "" || len(csrfToken) < 32 {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "CSRF token missing or invalid"})
+		}
+		return c.Next()
+	})
 
 	// Health check — reuses the Redis client from the queue singleton
 	// HTTP 503 only when Postgres (fonte primária pós-corte 5) está down.

@@ -28,9 +28,6 @@ func NewClient() *Client {
 		baseURL = "https://api.pagar.me/v4"
 	}
 	apiKey := os.Getenv("PAGARME_API_KEY")
-	if apiKey == "" {
-		log.Fatal("pagarme: PAGARME_API_KEY not configured")
-	}
 	return &Client{
 		baseURL: baseURL,
 		apiKey:  apiKey,
@@ -68,6 +65,10 @@ func (c *Client) put(path string, body interface{}) ([]byte, error) {
 
 // doRequest executa uma requisição HTTP com retry e backoff exponencial.
 func (c *Client) doRequest(method, path string, body interface{}, extraHeaders map[string]string) ([]byte, error) {
+	if c.apiKey == "" {
+		return nil, fmt.Errorf("pagarme: PAGARME_API_KEY not configured")
+	}
+
 	var bodyReader io.Reader
 
 	if body != nil {

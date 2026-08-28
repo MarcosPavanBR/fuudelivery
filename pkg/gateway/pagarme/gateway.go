@@ -41,10 +41,8 @@ type PagarMeGateway struct {
 //   - PAGARME_ENCRYPTION_KEY (obrigatório para cartão)
 //   - PAGARME_WEBHOOK_SECRET (obrigatório para webhook)
 func NewGateway() (*PagarMeGateway, error) {
-	client, err := NewClient()
-	if err != nil {
-		return nil, fmt.Errorf("pagarme gateway: %w", err)
-	}
+	client := NewClient()
+	// NewClient no longer returns error
 
 	webhookSecret := os.Getenv("PAGARME_WEBHOOK_SECRET")
 	if webhookSecret == "" {

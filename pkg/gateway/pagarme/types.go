@@ -52,25 +52,25 @@ type CreateTransactionRequest struct {
 type OrderItem struct {
 	ID          string `json:"id"`
 	Title       string `json:"title"`
-	UnitPrice   int64  `json:"unit_price"`   // Em centavos
+	UnitPrice   int64  `json:"unit_price"` // Em centavos
 	Quantity    int    `json:"quantity"`
-	Tangible    bool   `json:"tangible"`      // true = produto físico
+	Tangible    bool   `json:"tangible"` // true = produto físico
 	Description string `json:"description,omitempty"`
 }
 
 // CustomerRequest dados do cliente para o Pagar.me.
 type CustomerRequest struct {
-	Name            string          `json:"name"`
-	Email           string          `json:"email"`
-	Type            string          `json:"type"`             // "individual" ou "corporation"
-	Documents       []DocumentRequest `json:"documents"`
-	PhoneNumbers    []PhoneNumber   `json:"phone_numbers,omitempty"`
-	Addresses       []AddressRequest `json:"addresses,omitempty"`
+	Name         string            `json:"name"`
+	Email        string            `json:"email"`
+	Type         string            `json:"type"` // "individual" ou "corporation"
+	Documents    []DocumentRequest `json:"documents"`
+	PhoneNumbers []PhoneNumber     `json:"phone_numbers,omitempty"`
+	Addresses    []AddressRequest  `json:"addresses,omitempty"`
 }
 
 // DocumentRequest documento do cliente (CPF/CNPJ).
 type DocumentRequest struct {
-	Type  string `json:"type"`  // "cpf" ou "cnpj"
+	Type   string `json:"type"`   // "cpf" ou "cnpj"
 	Number string `json:"number"` // Somente dígitos
 }
 
@@ -82,30 +82,30 @@ type PhoneNumber struct {
 
 // AddressRequest endereço do cliente.
 type AddressRequest struct {
-	Street        string `json:"street"`
-	Number        string `json:"number"`
-	Complement    string `json:"complement,omitempty"`
-	Neighborhood  string `json:"neighborhood"`
-	City          string `json:"city"`
-	State         string `json:"state"`
-	ZipCode       string `json:"zip_code"`
-	Country       string `json:"country"` // "BR"
+	Street       string `json:"street"`
+	Number       string `json:"number"`
+	Complement   string `json:"complement,omitempty"`
+	Neighborhood string `json:"neighborhood"`
+	City         string `json:"city"`
+	State        string `json:"state"`
+	ZipCode      string `json:"zip_code"`
+	Country      string `json:"country"` // "BR"
 }
 
 // ShippingRequest dados de entrega.
 type ShippingRequest struct {
-	Name    string         `json:"name"`
-	Fee     int64          `json:"fee"`      // Taxa de entrega em centavos
+	Name    string          `json:"name"`
+	Fee     int64           `json:"fee"` // Taxa de entrega em centavos
 	Address *AddressRequest `json:"address,omitempty"`
 }
 
 // SplitRuleRequest define uma regra de split para o Pagar.me.
 type SplitRuleRequest struct {
-	RecipientID       string  `json:"recipient_id"`       // ID do recipient no Pagar.me
-	Percentage        float64 `json:"percentage,omitempty"` // Percentual (0-100)
-	Amount            int64   `json:"amount,omitempty"`     // Valor fixo em centavos
-	Liable            bool    `json:"liable"`               // Responsável pelo MDR
-	ChargeProcessingFee bool   `json:"charge_processing_fee"` // Responsável por taxas
+	RecipientID         string  `json:"recipient_id"`          // ID do recipient no Pagar.me
+	Percentage          float64 `json:"percentage,omitempty"`  // Percentual (0-100)
+	Amount              int64   `json:"amount,omitempty"`      // Valor fixo em centavos
+	Liable              bool    `json:"liable"`                // Responsável pelo MDR
+	ChargeProcessingFee bool    `json:"charge_processing_fee"` // Responsável por taxas
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -115,7 +115,7 @@ type SplitRuleRequest struct {
 // CreateTransactionResponse é a resposta do POST /1/orders.
 type CreateTransactionResponse struct {
 	ID                int64             `json:"id"`
-	Status            string            `json:"status"`            // "pending", "paid", "refused", "authorized"
+	Status            string            `json:"status"` // "pending", "paid", "refused", "authorized"
 	PaymentMethod     string            `json:"payment_method"`
 	Amount            int64             `json:"amount"`
 	ExternalReference string            `json:"external_reference"`
@@ -124,17 +124,17 @@ type CreateTransactionResponse struct {
 	Metadata          map[string]string `json:"metadata,omitempty"`
 
 	// PIX
-	QRCode       string `json:"qr_code,omitempty"`        // QR Code base64
-	QRCodeURL    string `json:"qr_code_url,omitempty"`    // URL do QR Code
-	PixPayload   string `json:"pix_payload,omitempty"`    // Código copia-e-cola
+	QRCode     string `json:"qr_code,omitempty"`     // QR Code base64
+	QRCodeURL  string `json:"qr_code_url,omitempty"` // URL do QR Code
+	PixPayload string `json:"pix_payload,omitempty"` // Código copia-e-cola
 
 	// Cartão
-	CardBrand     string `json:"card_brand,omitempty"`     // "visa", "mastercard", etc.
-	CardLastFour  string `json:"card_last_four,omitempty"` // Últimos 4 dígitos
-	Installments  int    `json:"installments,omitempty"`
+	CardBrand    string `json:"card_brand,omitempty"`     // "visa", "mastercard", etc.
+	CardLastFour string `json:"card_last_four,omitempty"` // Últimos 4 dígitos
+	Installments int    `json:"installments,omitempty"`
 
 	// 3DS
-	Authenticate    bool   `json:"authenticate"`              // Se 3DS é necessário
+	Authenticate    bool   `json:"authenticate"`               // Se 3DS é necessário
 	AuthenticateURL string `json:"authenticate_url,omitempty"` // URL de autenticação
 
 	// Split
@@ -143,12 +143,12 @@ type CreateTransactionResponse struct {
 
 // SplitRuleResponse resultado de uma regra de split.
 type SplitRuleResponse struct {
-	ID            int64   `json:"id"`
-	RecipientID   string  `json:"recipient_id"`
-	Percentage    float64 `json:"percentage"`
-	Amount        int64   `json:"amount"`
-	Liable        bool    `json:"liable"`
-	Status        string  `json:"status"` // "pending", "paid", "refused"
+	ID          int64   `json:"id"`
+	RecipientID string  `json:"recipient_id"`
+	Percentage  float64 `json:"percentage"`
+	Amount      int64   `json:"amount"`
+	Liable      bool    `json:"liable"`
+	Status      string  `json:"status"` // "pending", "paid", "refused"
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -220,50 +220,50 @@ type CreateRecipientRequest struct {
 
 // RegisterInformationRequest dados de registro do recebedor.
 type RegisterInformationRequest struct {
-	Type            string               `json:"type"`            // "individual" ou "corporation"
-	DocumentNumber  string               `json:"document_number"` // CPF/CNPJ
-	CompanyName     string               `json:"company_name,omitempty"`
-	Email           string               `json:"email"`
-	SiteURL         string               `json:"site_url,omitempty"`
-	AnnualRevenue   string               `json:"annual_revenue,omitempty"`
-	Address         *AddressRequest      `json:"address,omitempty"`
-	PhoneNumbers    []PhoneNumber        `json:"phone_numbers,omitempty"`
+	Type             string                   `json:"type"`            // "individual" ou "corporation"
+	DocumentNumber   string                   `json:"document_number"` // CPF/CNPJ
+	CompanyName      string                   `json:"company_name,omitempty"`
+	Email            string                   `json:"email"`
+	SiteURL          string                   `json:"site_url,omitempty"`
+	AnnualRevenue    string                   `json:"annual_revenue,omitempty"`
+	Address          *AddressRequest          `json:"address,omitempty"`
+	PhoneNumbers     []PhoneNumber            `json:"phone_numbers,omitempty"`
 	ManagingPartners []ManagingPartnerRequest `json:"managing_partners,omitempty"`
 }
 
 // ManagingPartnerRequest dados de sócios/parceiros.
 type ManagingPartnerRequest struct {
-	Name            string         `json:"name"`
-	DocumentNumber  string         `json:"document_number"`
-	MotherName      string         `json:"mother_name,omitempty"`
-	Birthdate       string         `json:"birthdate,omitempty"`
-	Email           string         `json:"email"`
-	MonthlyIncome   string         `json:"monthly_income,omitempty"`
-	ProfessionalOccupation string `json:"professional_occupation,omitempty"`
-	SelfDeclaredLegalRepresentative bool `json:"self_declared_legal_representative"`
-	Address         *AddressRequest `json:"address,omitempty"`
-	PhoneNumbers    []PhoneNumber  `json:"phone_numbers,omitempty"`
+	Name                            string          `json:"name"`
+	DocumentNumber                  string          `json:"document_number"`
+	MotherName                      string          `json:"mother_name,omitempty"`
+	Birthdate                       string          `json:"birthdate,omitempty"`
+	Email                           string          `json:"email"`
+	MonthlyIncome                   string          `json:"monthly_income,omitempty"`
+	ProfessionalOccupation          string          `json:"professional_occupation,omitempty"`
+	SelfDeclaredLegalRepresentative bool            `json:"self_declared_legal_representative"`
+	Address                         *AddressRequest `json:"address,omitempty"`
+	PhoneNumbers                    []PhoneNumber   `json:"phone_numbers,omitempty"`
 }
 
 // BankAccountRequest dados bancários do recebedor.
 type BankAccountRequest struct {
-	BankCode       string `json:"bank_code"`       // Código BACEN (ex: "341")
-	Agencia        string `json:"agencia"`         // Agência
+	BankCode       string `json:"bank_code"`            // Código BACEN (ex: "341")
+	Agencia        string `json:"agencia"`              // Agência
 	AgenciaDV      string `json:"agencia_dv,omitempty"` // DV da agência
-	Conta          string `json:"conta"`           // Conta
+	Conta          string `json:"conta"`                // Conta
 	ContaDV        string `json:"conta_dv,omitempty"`   // DV da conta
-	Type           string `json:"type"`            // "conta_corrente", "conta_poupanca"
-	DocumentNumber string `json:"document_number"` // CPF/CNPJ do titular
-	LegalName      string `json:"legal_name"`      // Nome do titular
+	Type           string `json:"type"`                 // "conta_corrente", "conta_poupanca"
+	DocumentNumber string `json:"document_number"`      // CPF/CNPJ do titular
+	LegalName      string `json:"legal_name"`           // Nome do titular
 }
 
 // CreateRecipientResponse é a resposta da criação de um recipient.
 type CreateRecipientResponse struct {
-	ID            string `json:"id"`
-	Name          string `json:"name"`
-	Status        string `json:"status"`
-	CreatedAt     string `json:"created_at"`
-	UpdatedAt     string `json:"updated_at"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Status    string `json:"status"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -272,22 +272,22 @@ type CreateRecipientResponse struct {
 
 // WebhookPayload é o payload bruto do webhook do Pagar.me.
 type WebhookPayload struct {
-	ID            int64             `json:"id"`
-	Object        string            `json:"object"`            // "transaction"
-	Status        string            `json:"status"`            // "paid", "refused", "refunded", etc.
-	PaymentMethod string            `json:"payment_method"`
-	Amount        int64             `json:"amount"`
-	ExternalReference string        `json:"external_reference"`
-	CreatedAt     string            `json:"created_at"`
-	UpdatedAt     string            `json:"updated_at"`
-	Metadata      map[string]string `json:"metadata,omitempty"`
+	ID                int64             `json:"id"`
+	Object            string            `json:"object"` // "transaction"
+	Status            string            `json:"status"` // "paid", "refused", "refunded", etc.
+	PaymentMethod     string            `json:"payment_method"`
+	Amount            int64             `json:"amount"`
+	ExternalReference string            `json:"external_reference"`
+	CreatedAt         string            `json:"created_at"`
+	UpdatedAt         string            `json:"updated_at"`
+	Metadata          map[string]string `json:"metadata,omitempty"`
 
 	// PIX
-	PixPayload   string `json:"pix_payload,omitempty"`
+	PixPayload string `json:"pix_payload,omitempty"`
 
 	// Cartão
-	CardBrand     string `json:"card_brand,omitempty"`
-	CardLastFour  string `json:"card_last_four,omitempty"`
+	CardBrand    string `json:"card_brand,omitempty"`
+	CardLastFour string `json:"card_last_four,omitempty"`
 
 	// Split
 	SplitRules []SplitRuleResponse `json:"split_rules,omitempty"`
@@ -295,6 +295,6 @@ type WebhookPayload struct {
 
 // BalanceResponse é a resposta de consulta de saldo.
 type BalanceResponse struct {
-	Available int64 `json:"available"` // Saldo disponível em centavos
+	Available    int64 `json:"available"`     // Saldo disponível em centavos
 	WaitingFunds int64 `json:"waiting_funds"` // Saldo pendente em centavos
 }

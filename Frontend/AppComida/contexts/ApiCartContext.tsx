@@ -16,7 +16,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Colors from "@/constants/Colors";
 import Texts from "@/constants/Texts";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation } from "expo-router";
 import helpers from "@/helpers/helpers";
 
 import * as Location from "expo-location";

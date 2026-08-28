@@ -10,17 +10,14 @@ import {
 } from "react-native";
 import DeliveryHappy from "../assets/images/deliveryman_happy.png";
 import Texts from "@/constants/Texts";
-import { useNavigation } from "expo-router";
-import { useRoute } from "@react-navigation/native";
+import { useNavigation, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import api from "@/services/api";
 
 export default function ConfirmGenerical() {
   const nav = useNavigation();
-  const route = useRoute();
-
   const { onConfirm, orderId, needsCode = false, legacyCode = false } =
-    route.params as any;
+    useLocalSearchParams() as any;
   const [code, setCode] = useState("");
   const [checking, setChecking] = useState(false);
 

@@ -15,7 +15,7 @@ import Colors from "@/constants/Colors";
 import { Ionicons } from "@expo/vector-icons";
 import api from "@/services/api";
 import { removeCached, CACHE_KEYS } from "@/config/cache";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation } from "expo-router";
 
 export default function OnboardingScreen() {
   const { getUserData } = useApi();

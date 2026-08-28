@@ -12,7 +12,7 @@ import { Text, View } from "@/components/Themed";
 import Colors from "@/constants/Colors";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import Texts from "@/constants/Texts";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation } from "expo-router";
 import api from "@/services/api";
 
 export default function Perfil() {

@@ -5,7 +5,7 @@ import Texts from "@/constants/Texts";
 import Strings from "@/constants/Strings";
 import { useNavigation } from "expo-router";
 import { useEffect } from "react";
-import { useIsFocused } from "@react-navigation/native";
+import { useIsFocused } from "expo-router/react-navigation";
 
 function index() {
   const { inWork } = useAuthApi();

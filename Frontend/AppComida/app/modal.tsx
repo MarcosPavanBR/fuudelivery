@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   Platform,
 } from "react-native";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import { useNavigation, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import Colors from "@/constants/Colors";
@@ -18,7 +18,7 @@ import helpers from "@/helpers/helpers";
 import { useCartApi } from "@/contexts/ApiCartContext";
 
 const ProductPage = () => {
-  const route = useRoute();
+  const params = useLocalSearchParams();
   const navigation = useNavigation();
   const { addCart, editCart } = useCartApi();
 
@@ -28,7 +28,7 @@ const ProductPage = () => {
     quantityInit = 1,
     selectedsInit = [],
     itemId,
-  }: any = route.params;
+  }: any = params;
 
   const [quantity, setQuantity] = useState(quantityInit);
   const [selectedsAdditional, setSelectedAdditionals] =

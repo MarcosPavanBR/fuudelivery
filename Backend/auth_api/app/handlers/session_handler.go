@@ -1,9 +1,14 @@
 package handlers
 
 import (
-	"net/http"
+	"log"
+	"errors"
 	"time"
 
+	"github.com/carloshomar/fuudelivery/auth_api/app/models"
+	"github.com/carloshomar/fuudelivery/auth_api/app/dto"
+	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
+	"golang.org/x/crypto/bcrypt"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -116,7 +121,7 @@ func SessionLogout(c *fiber.Ctx) error {
 	}
 
 	if req.RefreshToken != "" {
-		if err := RevokeRefreshToken(req.RefreshToken); err != nil {
+		if err := middlewares.RevokeRefreshToken(req.RefreshToken); err != nil {
 			log.Printf("[WARN] Failed to revoke refresh token on logout: %v", err)
 		}
 	}
@@ -133,8 +138,8 @@ func SessionRefresh(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Refresh token required"})
 	}
 
-	userID, newRefreshToken, rErr := RotateRefreshToken(refreshToken)
-	if errors.Is(rErr, ErrRefreshReuse) {
+	userID, newRefreshToken, rErr := middlewares.RotateRefreshToken(refreshToken)
+	if errors.Is(rErr, middlewares.ErrRefreshReuse) {
 		clearAuthCookies(c)
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "Sessão encerrada por segurança. Faça login novamente.",
@@ -157,7 +162,7 @@ func SessionRefresh(c *fiber.Ctx) error {
 		}
 	}
 
-	accessToken, err := GenerateJWT(&user, establishmentPtr)
+	accessToken, err := middlewares.GenerateJWT(&user, establishmentPtr)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to generate token"})
 	}

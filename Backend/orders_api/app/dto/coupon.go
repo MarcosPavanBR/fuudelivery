@@ -32,7 +32,8 @@ type ValidateCouponResponse struct {
 type ApplyCouponRequest struct {
 	Code      string `json:"code"`
 	UserPhone string `json:"user_phone"`
-	OrderID   string `json:"order_id"`
+	OrderID    string `json:"order_id"`
+	EstablishmentID uint    `json:"establishment_id"`
 }
 
 type ReferralCouponRequest struct {

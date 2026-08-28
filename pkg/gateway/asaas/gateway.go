@@ -38,10 +38,8 @@ type AsaasGateway struct {
 //   - ASAAS_API_KEY (obrigatório)
 //   - ASAAS_WEBHOOK_TOKEN (obrigatório para webhook)
 func NewGateway() (*AsaasGateway, error) {
-	client, err := NewClient()
-	if err != nil {
-		return nil, fmt.Errorf("asaas gateway: %w", err)
-	}
+	client := NewClient()
+	// NewClient no longer returns error
 
 	webhookToken := os.Getenv("ASAAS_WEBHOOK_TOKEN")
 	if webhookToken == "" {

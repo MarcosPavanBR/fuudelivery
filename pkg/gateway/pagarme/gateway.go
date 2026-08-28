@@ -99,8 +99,13 @@ func (g *PagarMeGateway) CreateTransaction(
 	// Construir payload do Pagar.me
 	pagarmeReq := g.buildTransactionRequest(req)
 
+	headers := map[string]string{}
+	if req.IdempotencyKey != "" {
+		headers["X-Idempotency-Key"] = req.IdempotencyKey
+	}
+
 	// Enviar para a API
-	respBody, err := g.client.post("/orders", pagarmeReq)
+	respBody, err := g.client.postWithHeaders("/orders", pagarmeReq, headers)
 	if err != nil {
 		return nil, fmt.Errorf("create transaction: %w", err)
 	}
@@ -317,6 +322,20 @@ func (g *PagarMeGateway) ParseWebhook(body []byte) (*gateway.WebhookEvent, error
 	// Mapear evento
 	eventType := mapEventType(payload.Status)
 
+	var normalizedType gateway.WebhookEventType
+	switch status {
+	case gateway.StatusPaid, gateway.StatusCaptured:
+		normalizedType = gateway.WebhookPaymentApproved
+	case gateway.StatusFailed, gateway.StatusExpired:
+		normalizedType = gateway.WebhookPaymentFailed
+	case gateway.StatusRefunded:
+		normalizedType = gateway.WebhookRefundCompleted
+	case gateway.StatusVoided:
+		normalizedType = gateway.WebhookPaymentCancelled
+	default:
+		normalizedType = gateway.WebhookPaymentPending
+	}
+
 	// Construir detalhes do split
 	splitDetails := make([]gateway.SplitDetail, len(payload.SplitRules))
 	for i, rule := range payload.SplitRules {
@@ -340,6 +359,7 @@ func (g *PagarMeGateway) ParseWebhook(body []byte) (*gateway.WebhookEvent, error
 	return &gateway.WebhookEvent{
 		Gateway:       "pagarme",
 		EventType:     eventType,
+		Type:          normalizedType,
 		TransactionID: strconv.FormatInt(payload.ID, 10),
 		OrderID:       payload.ExternalReference,
 		Amount:        payload.Amount,

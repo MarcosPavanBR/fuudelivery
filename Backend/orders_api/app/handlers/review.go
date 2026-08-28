@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/orders_api/app/dto"
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
@@ -38,6 +39,20 @@ func CreateReview(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "You have already reviewed this order"})
 	}
 
+	// Verifica se o revisor é o dono do pedido ou o estabelecimento
+	tokenPhone, phoneErr := middlewares.GetUserPhoneFromToken(c)
+	isOwner := phoneErr == nil && tokenPhone == req.UserPhone
+	isAdmin := false
+	if !isOwner {
+		role, roleErr := middlewares.GetUserRoleFromToken(c)
+		if roleErr == nil && role == "admin" {
+			isAdmin = true
+		}
+	}
+	if !isOwner && !isAdmin {
+		return c.Status(403).JSON(fiber.Map{"error": "Only the order owner or admin can review"})
+	}
+
 	establishmentID := uint(doc.EstablishmentID)
 
 	review := models.Review{
@@ -65,12 +80,16 @@ func CreateReview(c *fiber.Ctx) error {
 				Points:    0,
 				Tier:      "bronze",
 			}
-			models.DB.Create(&loyalty)
+			if err := models.DB.Create(&loyalty).Error; err != nil {
+				log.Printf("[REVIEW] Erro ao criar loyalty para %s: %v", req.UserPhone, err)
+			}
 		}
 
 		loyalty.Points += 5
 		loyalty.UpdatedAt = time.Now()
-		models.DB.Save(&loyalty)
+		if err := models.DB.Save(&loyalty).Error; err != nil {
+			log.Printf("[REVIEW] Erro ao atualizar loyalty para %s: %v", req.UserPhone, err)
+		}
 
 		transaction := models.LoyaltyTransaction{
 			UserPhone:   req.UserPhone,
@@ -80,7 +99,9 @@ func CreateReview(c *fiber.Ctx) error {
 			OrderID:     req.OrderID,
 			CreatedAt:   time.Now(),
 		}
-		models.DB.Create(&transaction)
+		if err := models.DB.Create(&transaction).Error; err != nil {
+			log.Printf("[REVIEW] Erro ao registrar transação para %s: %v", req.UserPhone, err)
+		}
 	}
 
 	return c.JSON(fiber.Map{
@@ -190,6 +211,10 @@ func RespondToReview(c *fiber.Ctx) error {
 	var review models.Review
 	if err := models.DB.First(&review, reviewID).Error; err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Review not found"})
+	}
+
+	if !canActOnEstablishment(c, int64(review.EstablishmentID)) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
 	}
 
 	now := time.Now()

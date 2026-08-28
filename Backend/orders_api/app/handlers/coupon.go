@@ -7,6 +7,7 @@ import (
 	"github.com/carloshomar/fuudelivery/orders_api/app/dto"
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
+	"gorm.io/gorm"
 )
 
 func CreateCoupon(c *fiber.Ctx) error {
@@ -185,8 +186,47 @@ func ApplyCoupon(c *fiber.Ctx) error {
 		return c.JSON(validateResp)
 	}
 
+	tx := models.DB.Begin()
+	defer tx.Rollback()
+
 	var coupon models.Coupon
-	models.DB.Where("code = ?", request.Code).First(&coupon)
+	if err := tx.Clauses(gorm.Locking{Strength: "UPDATE", Options: "NOWAIT"}).
+		Where("code = ?", request.Code).
+		First(&coupon).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Cupom não encontrado"})
+	}
+
+	now := time.Now()
+	if !coupon.IsActive {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cupom está inativo"})
+	}
+	if now.Before(coupon.StartDate) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cupom ainda não está válido"})
+	}
+	if now.After(coupon.ExpiryDate) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cupom expirado"})
+	}
+	if coupon.MaxUses > 0 && coupon.UsedCount >= coupon.MaxUses {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Cupom atingiu o limite máximo de usos"})
+	}
+
+	if request.EstablishmentID != 0 && coupon.EstablishmentID != 0 && coupon.EstablishmentID != request.EstablishmentID {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cupom não é válido para este estabelecimento"})
+	}
+
+	if coupon.OwnerPhone != "" && request.UserPhone != "" && coupon.OwnerPhone != request.UserPhone {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Este cupom é pessoal e intransferível"})
+	}
+
+	if coupon.MaxUsesPerUser > 0 && request.UserPhone != "" {
+		var userUsageCount int64
+		if err := tx.Model(&models.CouponUsage{}).Where("coupon_id = ? AND user_phone = ?", coupon.ID, request.UserPhone).Count(&userUsageCount).Error; err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Erro ao verificar uso do cupom"})
+		}
+		if int(userUsageCount) >= coupon.MaxUsesPerUser {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Você já atingiu o limite de usos deste cupom"})
+		}
+	}
 
 	usage := models.CouponUsage{
 		CouponID:       coupon.ID,
@@ -196,11 +236,17 @@ func ApplyCoupon(c *fiber.Ctx) error {
 		UsedAt:         time.Now(),
 	}
 
-	if err := models.DB.Create(&usage).Error; err != nil {
+	if err := tx.Create(&usage).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Erro ao registrar uso do cupom"})
 	}
 
-	models.DB.Model(&coupon).UpdateColumn("used_count", coupon.UsedCount+1)
+	if err := tx.Model(&coupon).UpdateColumn("used_count", gorm.Expr("used_count + ?", 1)).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Erro ao atualizar contagem do cupom"})
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Erro ao confirmar uso do cupom"})
+	}
 
 	return c.JSON(fiber.Map{
 		"success":         true,

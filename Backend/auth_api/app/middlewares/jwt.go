@@ -22,12 +22,20 @@ func ValidateJWT(c *fiber.Ctx) (*jwt.Token, error) {
 	if len(tokenString) > 7 {
 		tokenString = tokenString[7:]
 	}
+	if tokenString == "" {
+		tokenString = c.Cookies("access_token")
+	}
+
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		return nil, fiber.NewError(fiber.StatusInternalServerError, "JWT secret not configured")
+	}
 
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.New("unexpected signing method")
 		}
-		return []byte(os.Getenv("JWT_SECRET")), nil
+		return []byte(secret), nil
 	})
 
 	if err != nil {
@@ -47,6 +55,11 @@ func GenerateJWT(user *models.User, establishment *models.Establishment) (string
 	// separadamente no banco via CreateRefreshToken. O token contem:
 	// id, name, email, role, establishment_id (se aplicavel).
 	// Assinado com HS256 usando JWT_SECRET.
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		return "", fmt.Errorf("JWT_SECRET not configured")
+	}
+
 	expirationTime := time.Now().UTC().Add(15 * time.Minute).Unix()
 
 	claims := jwt.MapClaims{
@@ -71,7 +84,7 @@ func GenerateJWT(user *models.User, establishment *models.Establishment) (string
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	tokenString, err := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
+	tokenString, err := token.SignedString([]byte(secret))
 	if err != nil {
 		return "", err
 	}
@@ -265,6 +278,11 @@ func CleanupExpiredRefreshTokens() {
 // GenerateJWTDeliveryMan gera um token JWT para um entregador.
 // Similar ao GenerateJWT, mas sem campo establishment_id.
 func GenerateJWTDeliveryMan(user *models.DeliveryMan) (string, error) {
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		return "", fmt.Errorf("JWT_SECRET not configured")
+	}
+
 	expirationTime := time.Now().UTC().Add(ACCESS_TOKEN_DURATION).Unix()
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
@@ -275,7 +293,7 @@ func GenerateJWTDeliveryMan(user *models.DeliveryMan) (string, error) {
 		"exp":   expirationTime,
 	})
 
-	tokenString, err := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
+	tokenString, err := token.SignedString([]byte(secret))
 	if err != nil {
 		return "", err
 	}

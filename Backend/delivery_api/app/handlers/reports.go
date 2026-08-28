@@ -4,9 +4,11 @@ import (
 	"log"
 	"strconv"
 
+	"github.com/gofiber/fiber/v2"
+
+	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/delivery_api/app/dto"
 	"github.com/carloshomar/fuudelivery/delivery_api/app/models"
-	"github.com/gofiber/fiber/v2"
 )
 
 // GetExtrato lista os pedidos FINALIZADOS de um entregador, mais recentes
@@ -18,6 +20,10 @@ func GetExtrato(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "ID de deliveryman inválido",
 		})
+	}
+
+	if !canAccessDeliveryman(c, deliverymanID) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
 	}
 
 	var rows []models.DeliverySolicitation

@@ -22,6 +22,9 @@ func ValidateJWT(c *fiber.Ctx) (*jwt.Token, error) {
 	if len(tokenString) > 7 {
 		tokenString = tokenString[7:]
 	}
+	if tokenString == "" {
+		tokenString = c.Cookies("access_token")
+	}
 
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {

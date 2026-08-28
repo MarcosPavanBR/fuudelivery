@@ -8,12 +8,21 @@ import (
 	"github.com/carloshomar/fuudelivery/payment_api/app/dto"
 	"github.com/carloshomar/fuudelivery/payment_api/app/models"
 	"github.com/carloshomar/fuudelivery/payment_api/app/services"
+	"github.com/carloshomar/fuudelivery/pkg/gateway"
 	"github.com/gofiber/fiber/v2"
 )
 
-// ChargeCard cobra diretamente um cartão tokenizado no gateway (AbacatePay).
-// Não persiste pagamento — é uma cobrança avulsa (o fluxo de pedidos usa
-// ProcessPayment, que grava em Postgres com dual-write).
+// getPaymentRouter extrai o router de pagamento do contexto Fiber.
+func getPaymentRouter(c *fiber.Ctx) (*gateway.Router, error) {
+	router, ok := c.Locals("payment_router").(*gateway.Router)
+	if !ok || router == nil {
+		return nil, fmt.Errorf("payment router not available")
+	}
+	return router, nil
+}
+
+// ChargeCard cobra um cartão usando o PaymentRouter (fallback chain + circuit breaker).
+// Não persiste pagamento — é uma cobrança avulsa.
 func ChargeCard(c *fiber.Ctx) error {
 	var req struct {
 		CardToken    string  `json:"card_token"`
@@ -59,30 +68,42 @@ func ChargeCard(c *fiber.Ctx) error {
 		installments = 1
 	}
 
-	client := services.NewAbacatePayClient()
-	chargeReq := services.CardChargeRequest{
-		Amount:       req.Amount,
-		Description:  "Pagamento cartao",
-		Installments: installments,
-		CardToken:    req.CardToken,
-	}
-	chargeReq.Customer.Name = name
-	chargeReq.Customer.Email = email
-	chargeReq.Customer.Phone = req.Phone
-	chargeReq.Customer.CPF = req.CPF
-
-	apiResp, err := client.CreateCardCharge(chargeReq)
+	router, err := getPaymentRouter(c)
 	if err != nil {
-		log.Printf("[CARD] Error creating card payment via AbacatePay: amount=%.2f", req.Amount)
+		return c.Status(500).JSON(fiber.Map{"error": "Payment router unavailable"})
+	}
+
+	gatewayReq := &gateway.TransactionRequest{
+		OrderID:         0, // ChargeCard é avulsa, sem pedido interno
+		Amount:          int64(req.Amount * 100),
+		Currency:        "BRL",
+		PaymentMethod:   gateway.MethodCreditCard,
+		CustomerEmail:   email,
+		CustomerName:    name,
+		CustomerDoc:     req.CPF,
+		CustomerPhone:   req.Phone,
+		CardData: &gateway.CardData{
+			Token:        req.CardToken,
+			Installments: installments,
+			HolderName:   name,
+			HolderDoc:    req.CPF,
+		},
+		Capture: true,
+	}
+
+	resp, err := router.CreateTransactionWithFallback(c.Context(), gatewayReq)
+	if err != nil {
+		log.Printf("[CARD] Error creating card payment via router: amount=%.2f err=%v", req.Amount, err)
 		return c.Status(500).JSON(fiber.Map{"error": "Card payment failed"})
 	}
 
 	return c.Status(200).JSON(fiber.Map{
-		"charge_id":    apiResp.ID,
-		"status":       apiResp.Status,
-		"installments": apiResp.Installments,
-		"last_digits":  apiResp.LastDigits,
-		"message":      "Card payment processed via AbacatePay",
+		"charge_id":    resp.GatewayID,
+		"status":       resp.Status,
+		"installments": installments,
+		"last_digits":  resp.CardLastDigits,
+		"gateway":      resp.Gateway,
+		"message":      "Card payment processed via PaymentRouter",
 	})
 }
 
@@ -100,8 +121,6 @@ func ProcessPayment(c *fiber.Ctx) error {
 		email = "cliente@email.com"
 	}
 
-	// O valor cobrado é o total recalculado no servidor na criação do pedido —
-	// nunca o amount enviado pelo cliente.
 	serverTotal, ok := validateChargeAmount(req.OrderID, req.Amount)
 	if !ok {
 		log.Printf("[CARD] Cobrança rejeitada: valor diverge do pedido %s (client=%.2f)", req.OrderID, req.Amount)
@@ -109,7 +128,10 @@ func ProcessPayment(c *fiber.Ctx) error {
 	}
 	req.Amount = serverTotal
 
-	client := services.NewAbacatePayClient()
+	router, err := getPaymentRouter(c)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Payment router unavailable"})
+	}
 
 	if req.Method == "credit" || req.Method == "debit" {
 		installments := req.Installments
@@ -117,36 +139,40 @@ func ProcessPayment(c *fiber.Ctx) error {
 			installments = 1
 		}
 
-		cardReq := services.CardChargeRequest{
-			Amount:       req.Amount,
-			Description:  description,
-			Installments: installments,
-			CardToken:    req.CardToken,
+		gatewayReq := &gateway.TransactionRequest{
+			OrderID:        req.OrderID,
+			Amount:         int64(req.Amount * 100),
+			Currency:       "BRL",
+			PaymentMethod:  gateway.MethodCreditCard,
+			CustomerEmail:  email,
+			CustomerName:   req.CustomerName,
+			CustomerDoc:    req.CustomerDoc,
+			CustomerPhone:  req.CustomerPhone,
+			CardData: &gateway.CardData{
+				Token:        req.CardToken,
+				Installments: installments,
+				HolderName:   req.CustomerName,
+				HolderDoc:    req.CustomerDoc,
+			},
+			Capture: true,
 		}
-		cardReq.Customer.Name = req.CustomerName
-		cardReq.Customer.Email = email
-		cardReq.Customer.Phone = req.CustomerPhone
-		cardReq.Customer.CPF = ""
 
-		apiResp, err := client.CreateCardCharge(cardReq)
+		resp, err := router.CreateTransactionWithFallback(c.Context(), gatewayReq)
 		if err != nil {
-			log.Printf("Error processing card payment via AbacatePay: %v", err)
+			log.Printf("Error processing card payment via router: %v", err)
 			return c.Status(500).JSON(fiber.Map{"error": "Payment processing failed"})
 		}
 
 		paymentStatus := "PENDING"
 		now := time.Now()
 		var confirmedAt *time.Time
-		if apiResp.Status == "paid" {
+		if resp.Status == "paid" || resp.Status == "authorized" {
 			paymentStatus = "CONFIRMED"
 			confirmedAt = &now
-		} else if apiResp.Status == "refused" {
+		} else if resp.Status == "failed" || resp.Status == "canceled" {
 			paymentStatus = "REFUSED"
 		}
 
-		// ID é BIGSERIAL no Postgres — preenchido automaticamente pelo Create.
-		// CardToken NÃO é mais persistido: PAN/CVV não podem transitar pela
-		// nossa API (PCI). O campo fica no modelo apenas para histórico.
 		payment := models.Payment{
 			OrderID:         req.OrderID,
 			CustomerID:      req.CustomerID,
@@ -157,8 +183,9 @@ func ProcessPayment(c *fiber.Ctx) error {
 			Method:          req.Method,
 			Status:          paymentStatus,
 			Installments:    installments,
-			CardLastDigits:  apiResp.LastDigits,
-			AbacatePayID:    apiResp.ID,
+			CardLastDigits:  resp.CardLastDigits,
+			GatewayID:       resp.GatewayID,
+			Gateway:         resp.Gateway,
 			CreatedAt:       time.Now(),
 			ConfirmedAt:     confirmedAt,
 		}
@@ -171,25 +198,30 @@ func ProcessPayment(c *fiber.Ctx) error {
 		response := dto.PaymentResponse{
 			PaymentID:    payment.IDString(),
 			Status:       paymentStatus,
-			AbacatePayID: apiResp.ID,
-			Message:      "Payment processed via AbacatePay",
+			GatewayID:    resp.GatewayID,
+			Gateway:      resp.Gateway,
+			Message:      fmt.Sprintf("Payment processed via %s", resp.Gateway),
 		}
 
 		return c.Status(201).JSON(response)
 	}
 
 	if req.Method == "pix" {
-		pixReq := services.PIXChargeRequest{}
-		// toCents com arredondamento: int64(req.Amount) truncava
-		// R$99,99 → 9999*100 falhando em 99.99*100=9998.999…
-		pixReq.Data.Amount = toCents(req.Amount)
-		pixReq.Data.Description = description
-		pixReq.Data.ExternalID = req.OrderID
-		// customer é opcional para PIX; sem CPF válido o gateway responde 422.
+		gatewayReq := &gateway.TransactionRequest{
+			OrderID:       req.OrderID,
+			Amount:        int64(req.Amount * 100),
+			Currency:      "BRL",
+			PaymentMethod: gateway.MethodPIX,
+			CustomerEmail: email,
+			CustomerName:  req.CustomerName,
+			CustomerDoc:   req.CustomerDoc,
+			CustomerPhone: req.CustomerPhone,
+			Capture:       true,
+		}
 
-		apiResp, err := client.CreatePIXCharge(pixReq)
+		resp, err := router.CreateTransactionWithFallback(c.Context(), gatewayReq)
 		if err != nil {
-			log.Printf("Error processing PIX payment via AbacatePay: %v", err)
+			log.Printf("Error processing PIX payment via router: %v", err)
 			return c.Status(500).JSON(fiber.Map{"error": "PIX payment failed"})
 		}
 
@@ -202,10 +234,11 @@ func ProcessPayment(c *fiber.Ctx) error {
 			DeliveryAmount:  req.DeliveryAmount,
 			Method:          "pix",
 			Status:          "PENDING",
-			PixCopyPaste:    apiResp.CopyPaste,
-			QRCodeBase64:    apiResp.QRCodeBase64,
-			PixQRCode:       apiResp.QRCode,
-			AbacatePayID:    apiResp.ID,
+			PixCopyPaste:    resp.PIXCopyPaste,
+			QRCodeBase64:    resp.PIXQRCode,
+			PixQRCode:       resp.PIXQRCode,
+			GatewayID:       resp.GatewayID,
+			Gateway:         resp.Gateway,
 			CreatedAt:       time.Now(),
 		}
 
@@ -217,11 +250,12 @@ func ProcessPayment(c *fiber.Ctx) error {
 		response := dto.PaymentResponse{
 			PaymentID:    payment.IDString(),
 			Status:       "PENDING",
-			PixCopyPaste: apiResp.CopyPaste,
-			QRCodeBase64: apiResp.QRCodeBase64,
-			PixQRCode:    apiResp.QRCode,
-			AbacatePayID: apiResp.ID,
-			Message:      "PIX payment created via AbacatePay",
+			PixCopyPaste: resp.PIXCopyPaste,
+			QRCodeBase64: resp.PIXQRCode,
+			PixQRCode:    resp.PIXQRCode,
+			GatewayID:    resp.GatewayID,
+			Gateway:      resp.Gateway,
+			Message:      fmt.Sprintf("PIX payment created via %s", resp.Gateway),
 		}
 
 		return c.Status(201).JSON(response)

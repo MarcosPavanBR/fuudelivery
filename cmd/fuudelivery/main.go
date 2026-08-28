@@ -1243,9 +1243,9 @@ func paymentRouterMiddleware(router *gateway.Router) fiber.Handler {
 	}
 }
 
-func setupPaymentRoutes(app *fiber.App) {
-	paymentGroup := app.Group("/payments", paymentRouterMiddleware(paymentRouter))
-	walletGroup := app.Group("/wallets", paymentRouterMiddleware(paymentRouter))
+func setupPaymentRoutes(app *fiber.App, router *gateway.Router) {
+	paymentGroup := app.Group("/payments", paymentRouterMiddleware(router))
+	walletGroup := app.Group("/wallets", paymentRouterMiddleware(router))
 	// Admin — painel Financeiro do WebAdmin
 	paymentGroup.Get("/all", adminRequired, paymentHandlers.ListAllPayments)
 	paymentGroup.Get("/", adminRequired, paymentHandlers.ListAllPayments)
@@ -1442,6 +1442,9 @@ func main() {
 	// Valida ambiente antes de inicializar
 	validateRequiredEnv()
 
+	// Payment router (initialized before route setup)
+	var paymentRouter *gateway.Router
+
 	// Create Fiber app EARLY so /health is available before DB connections.
 	// Render health check has a 30s timeout; DB connections (5 modules × 5
 	// retries × 5s) can take up to 125s. Registering /health first lets the
@@ -1600,7 +1603,14 @@ func main() {
 	setupDispatchRoutes(app)
 	setupSponsoredRoutes(app)
 	setupSubscriptionRoutes(app)
-	setupPaymentRoutes(app)
+	// Initialize payment gateway router with fallback chain
+	pagarmeGW, _ := pagarme.NewGateway()
+	asaasGW, _ := asaas.NewGateway()
+	abacatepayGW, _ := abacatepay.NewGateway()
+	mpGW, _ := mercadopago.NewGateway()
+	paymentRouter = gateway.NewRouter(pagarmeGW, asaasGW, abacatepayGW, mpGW)
+	paymentRouter.SetStrategy(gateway.StrategyOrdered)
+	setupPaymentRoutes(app, paymentRouter)
 	setupChatRoutes(app)
 
 	// Upload de imagens (Supabase Storage)
@@ -1630,22 +1640,6 @@ func main() {
 
 		// Wire loyalty points
 		paymentHandlers.OnPaymentApproved = ordersHandlers.EarnPointsForOrder
-
-		// Wire zone-based split config
-		paymentHandlers.GetSplitConfigForEstablishment = func(establishmentID int64) (platformPct, establishmentPct float64) {
-			return models.GetZoneSplitConfig(uint(establishmentID))
-		}
-
-		// Initialize payment gateway router with fallback chain
-		var paymentRouter *gateway.Router
-		{
-			pagarmeGW, _ := pagarme.NewGateway()
-			asaasGW, _ := asaas.NewGateway()
-			abacatepayGW, _ := abacatepay.NewGateway()
-			mpGW, _ := mercadopago.NewGateway()
-			paymentRouter = gateway.NewRouter(pagarmeGW, asaasGW, abacatepayGW, mpGW)
-			paymentRouter.SetStrategy(gateway.StrategyOrdered)
-		}
 
 		// Initialize dispatch engine (courier store + matching engine + handler)
 		initDispatchEngine(models.DB)
@@ -1681,7 +1675,7 @@ func main() {
 	go func() {
 		<-c
 		log.Println("Shutting down...")
-		queue.Close()
+		queue.CloseQueue()
 		app.ShutdownWithTimeout(10 * time.Second)
 		wg.Wait()
 		log.Println("All background workers stopped")

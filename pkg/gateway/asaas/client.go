@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"log"
+	"os"
 	"time"
 
-	"github.com/carloshomar/fuudelivery/pkg/gateway"
 )
 
 // Client é o cliente HTTP para a API do Asaas.
@@ -21,7 +22,15 @@ type Client struct {
 }
 
 // NewClient cria um novo cliente Asaas.
-func NewClient(baseURL, apiKey string) *Client {
+func NewClient() *Client {
+	baseURL := os.Getenv("ASAAS_BASE_URL")
+	if baseURL == "" {
+		baseURL = "https://api.asaas.com/v3"
+	}
+	apiKey := os.Getenv("ASAAS_API_KEY")
+	if apiKey == "" {
+		log.Fatal("asaas: ASAAS_API_KEY not configured")
+	}
 	return &Client{
 		baseURL: baseURL,
 		apiKey:  apiKey,

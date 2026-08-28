@@ -214,7 +214,7 @@ func GetEstablishment(establishmentID int64) (*dto.Establishment, error) {
 // aceitar pedidos. Consulta diretamente o Postgres (mesmo banco do monolito)
 // para evitar latência de HTTP loopback e falhas de porta.
 func checkEstablishmentOpen(establishmentID int64) (bool, error) {
-	var establishment models.Establishment
+	var establishment authModels.Establishment
 	if err := authModels.DB.First(&establishment, establishmentID).Error; err != nil {
 		return false, fmt.Errorf("establishment not found: %w", err)
 	}

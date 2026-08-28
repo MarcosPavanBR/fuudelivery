@@ -295,7 +295,8 @@ func publishPaymentApproved(abacatepayID string) {
 	splitResult, err := services.CalculateSplitRules(payment, platformPct, establishmentPct)
 	if err != nil {
 		log.Printf("[SPLIT] Erro ao calcular split para %s: %v", abacatepayID, err)
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid split configuration"})
+		log.Printf("[SPLIT] Erro ao calcular split: %v", err)
+		return
 	}
 	splitRules := splitResult.Rules
 

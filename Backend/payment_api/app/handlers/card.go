@@ -7,7 +7,7 @@ import (
 
 	"github.com/carloshomar/fuudelivery/payment_api/app/dto"
 	"github.com/carloshomar/fuudelivery/payment_api/app/models"
-	"github.com/carloshomar/fuudelivery/payment_api/app/services"
+	
 	"github.com/carloshomar/fuudelivery/pkg/gateway"
 	"github.com/gofiber/fiber/v2"
 )
@@ -101,7 +101,7 @@ func ChargeCard(c *fiber.Ctx) error {
 		"charge_id":    resp.GatewayID,
 		"status":       resp.Status,
 		"installments": installments,
-		"last_digits":  resp.CardLastDigits,
+		"last_digits":  resp.CardLast4,
 		"gateway":      resp.Gateway,
 		"message":      "Card payment processed via PaymentRouter",
 	})
@@ -115,7 +115,6 @@ func ProcessPayment(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
-	description := fmt.Sprintf("Pedido %s", req.OrderID)
 	email := req.CustomerEmail
 	if email == "" {
 		email = "cliente@email.com"
@@ -140,19 +139,19 @@ func ProcessPayment(c *fiber.Ctx) error {
 		}
 
 		gatewayReq := &gateway.TransactionRequest{
-			OrderID:        req.OrderID,
+			OrderID:        0,
 			Amount:         int64(req.Amount * 100),
 			Currency:       "BRL",
 			PaymentMethod:  gateway.MethodCreditCard,
 			CustomerEmail:  email,
 			CustomerName:   req.CustomerName,
-			CustomerDoc:    req.CustomerDoc,
+			CustomerDoc:    "",
 			CustomerPhone:  req.CustomerPhone,
 			CardData: &gateway.CardData{
 				Token:        req.CardToken,
 				Installments: installments,
 				HolderName:   req.CustomerName,
-				HolderDoc:    req.CustomerDoc,
+				HolderDoc:    "",
 			},
 			Capture: true,
 		}
@@ -183,9 +182,7 @@ func ProcessPayment(c *fiber.Ctx) error {
 			Method:          req.Method,
 			Status:          paymentStatus,
 			Installments:    installments,
-			CardLastDigits:  resp.CardLastDigits,
-			GatewayID:       resp.GatewayID,
-			Gateway:         resp.Gateway,
+			CardLastDigits:  resp.CardLast4,
 			CreatedAt:       time.Now(),
 			ConfirmedAt:     confirmedAt,
 		}
@@ -198,8 +195,6 @@ func ProcessPayment(c *fiber.Ctx) error {
 		response := dto.PaymentResponse{
 			PaymentID:    payment.IDString(),
 			Status:       paymentStatus,
-			GatewayID:    resp.GatewayID,
-			Gateway:      resp.Gateway,
 			Message:      fmt.Sprintf("Payment processed via %s", resp.Gateway),
 		}
 
@@ -208,13 +203,13 @@ func ProcessPayment(c *fiber.Ctx) error {
 
 	if req.Method == "pix" {
 		gatewayReq := &gateway.TransactionRequest{
-			OrderID:       req.OrderID,
+			OrderID:        parseOrderID(req.OrderID),
 			Amount:        int64(req.Amount * 100),
 			Currency:      "BRL",
 			PaymentMethod: gateway.MethodPIX,
 			CustomerEmail: email,
 			CustomerName:  req.CustomerName,
-			CustomerDoc:   req.CustomerDoc,
+			CustomerDoc:   "",
 			CustomerPhone: req.CustomerPhone,
 			Capture:       true,
 		}
@@ -237,8 +232,6 @@ func ProcessPayment(c *fiber.Ctx) error {
 			PixCopyPaste:    resp.PIXCopyPaste,
 			QRCodeBase64:    resp.PIXQRCode,
 			PixQRCode:       resp.PIXQRCode,
-			GatewayID:       resp.GatewayID,
-			Gateway:         resp.Gateway,
 			CreatedAt:       time.Now(),
 		}
 
@@ -253,8 +246,6 @@ func ProcessPayment(c *fiber.Ctx) error {
 			PixCopyPaste: resp.PIXCopyPaste,
 			QRCodeBase64: resp.PIXQRCode,
 			PixQRCode:    resp.PIXQRCode,
-			GatewayID:    resp.GatewayID,
-			Gateway:      resp.Gateway,
 			Message:      fmt.Sprintf("PIX payment created via %s", resp.Gateway),
 		}
 
@@ -262,4 +253,13 @@ func ProcessPayment(c *fiber.Ctx) error {
 	}
 
 	return c.Status(400).JSON(fiber.Map{"error": "Invalid payment method"})
+}
+
+func parseOrderID(id string) int64 {
+	if id == "" {
+		return 0
+	}
+	var n int64
+	fmt.Sscanf(id, "%d", &n)
+	return n
 }

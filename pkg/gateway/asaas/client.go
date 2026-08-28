@@ -28,9 +28,6 @@ func NewClient() *Client {
 		baseURL = "https://api.asaas.com/v3"
 	}
 	apiKey := os.Getenv("ASAAS_API_KEY")
-	if apiKey == "" {
-		log.Fatal("asaas: ASAAS_API_KEY not configured")
-	}
 	return &Client{
 		baseURL: baseURL,
 		apiKey:  apiKey,
@@ -68,6 +65,10 @@ func (c *Client) put(path string, body interface{}) ([]byte, error) {
 
 // doRequest executa uma requisição HTTP com retry e backoff exponencial.
 func (c *Client) doRequest(method, path string, body interface{}, extraHeaders map[string]string) ([]byte, error) {
+	if c.apiKey == "" {
+		return nil, fmt.Errorf("asaas: ASAAS_API_KEY not configured")
+	}
+
 	var bodyReader io.Reader
 
 	if body != nil {

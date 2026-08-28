@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/orders_api/app/dto"
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
@@ -19,9 +20,15 @@ func GetByEstablishmentId(c *fiber.Ctx) error {
 
 	var product []models.Product
 
-	models.DB.Where(&models.Product{
+	if err := models.DB.Where(&models.Product{
 		EstablishmentID: uint(establishmentId),
-	}).Preload("Additional").Find(&product).Preload("Categories").Find(&product)
+	}).Preload("Additional").Find(&product).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch products"})
+	}
+
+	if err := models.DB.Preload("Categories").Find(&product).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch product categories"})
+	}
 
 	return c.JSON(&product)
 }
@@ -32,6 +39,10 @@ func CreateProduct(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to parse request body"})
 	}
 
+	if !canActOnEstablishment(c, int64(request.EstablishmentID)) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
+	}
+
 	product := models.Product{
 		Name:            request.Name,
 		Description:     request.Description,
@@ -39,7 +50,9 @@ func CreateProduct(c *fiber.Ctx) error {
 		Image:           request.Image,
 		EstablishmentID: uint(request.EstablishmentID),
 	}
-	models.DB.Create(&product)
+	if err := models.DB.Create(&product).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create product"})
+	}
 
 	return c.JSON(&product)
 }
@@ -61,6 +74,10 @@ func UpdateProduct(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Product not found"})
 	}
 
+	if !canActOnEstablishment(c, int64(existingProduct.EstablishmentID)) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
+	}
+
 	existingProduct.Name = request.Name
 	existingProduct.Description = request.Description
 	existingProduct.Price = request.Price
@@ -79,13 +96,13 @@ func CreateMultProducts(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to parse request body"})
 	}
 
+	if len(requests) > 0 && !canActOnEstablishment(c, int64(requests[0].EstablishmentID)) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
+	}
+
 	var createdProducts []models.Product
 
-	// Iterar sobre os pedidos e criar produtos individualmente
 	for _, request := range requests {
-		// Verificar se o estabelecimento existe (se necessário)
-		// Isso depende dos requisitos do seu aplicativo
-
 		product := models.Product{
 			Name:            request.Name,
 			Description:     request.Description,
@@ -94,8 +111,9 @@ func CreateMultProducts(c *fiber.Ctx) error {
 			EstablishmentID: uint(request.EstablishmentID),
 		}
 
-		// Criar o produto e adicionar à slice de produtos criados
-		models.DB.Create(&product)
+		if err := models.DB.Create(&product).Error; err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create product"})
+		}
 		createdProducts = append(createdProducts, product)
 	}
 
@@ -136,6 +154,10 @@ func DeleteProduct(c *fiber.Ctx) error {
 	var existingProduct models.Product
 	if err := models.DB.First(&existingProduct, productID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Product not found"})
+	}
+
+	if !canActOnEstablishment(c, int64(existingProduct.EstablishmentID)) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
 	}
 
 	if err := models.DB.Where("product_id = ?", productID).Delete(&models.CategoryProducts{}).Error; err != nil {

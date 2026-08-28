@@ -11,6 +11,7 @@ import (
 	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
+	"gorm.io/gorm"
 )
 
 // lookupServerOrderTotal lê o total recalculado no servidor no momento da
@@ -80,10 +81,6 @@ func generateCashbackCode() (string, error) {
 }
 
 func EarnPoints(c *fiber.Ctx) error {
-	// Identidade e valor vêm do servidor: o phone do token JWT identifica o
-	// beneficiário e o order_total é o recalculado no banco na criação do
-	// pedido. O body não pode mintar pontos para outro telefone nem com
-	// valor inventado.
 	tokenPhone, err := middlewares.GetUserPhoneFromToken(c)
 	if err != nil {
 		return c.Status(401).JSON(fiber.Map{"error": "Invalid token"})
@@ -108,20 +105,32 @@ func EarnPoints(c *fiber.Ctx) error {
 	if !ok {
 		return c.Status(400).JSON(fiber.Map{"error": "Pedido inválido ou sem total calculado"})
 	}
-	if alreadyEarned := hasLoyaltyEarnForOrder(req.OrderID); alreadyEarned {
-		return c.Status(409).JSON(fiber.Map{"error": "Pontos já creditados para este pedido"})
-	}
+
+	tx := models.DB.Begin()
+	defer tx.Rollback()
 
 	var loyalty models.LoyaltyPoints
-	result := models.DB.Where("user_phone = ?", req.UserPhone).First(&loyalty)
-
-	if result.Error != nil {
+	if err := tx.Clauses(gorm.Locking{Strength: "UPDATE", Options: "NOWAIT"}).
+		Where("user_phone = ?", req.UserPhone).
+		First(&loyalty).Error; err != nil {
 		loyalty = models.LoyaltyPoints{
 			UserPhone: req.UserPhone,
 			Points:    0,
 			Tier:      "bronze",
 		}
-		models.DB.Create(&loyalty)
+		if err := tx.Create(&loyalty).Error; err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Erro ao criar conta de fidelidade"})
+		}
+	}
+
+	var earnCount int64
+	if err := tx.Model(&models.LoyaltyTransaction{}).
+		Where("order_id = ? AND type = ?", req.OrderID, "earn").
+		Count(&earnCount).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Erro ao verificar crédito"})
+	}
+	if earnCount > 0 {
+		return c.Status(409).JSON(fiber.Map{"error": "Pontos já creditados para este pedido"})
 	}
 
 	multiplier := getPointsMultiplier(loyalty.Tier)
@@ -133,7 +142,9 @@ func EarnPoints(c *fiber.Ctx) error {
 	loyalty.Tier = getTier(loyalty.Points)
 	loyalty.UpdatedAt = time.Now()
 
-	models.DB.Save(&loyalty)
+	if err := tx.Save(&loyalty).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Erro ao atualizar pontos"})
+	}
 
 	transaction := models.LoyaltyTransaction{
 		UserPhone:   req.UserPhone,
@@ -143,7 +154,13 @@ func EarnPoints(c *fiber.Ctx) error {
 		OrderID:     req.OrderID,
 		CreatedAt:   time.Now(),
 	}
-	models.DB.Create(&transaction)
+	if err := tx.Create(&transaction).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Erro ao registrar transação"})
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Erro ao confirmar crédito"})
+	}
 
 	return c.JSON(fiber.Map{
 		"message": "Pontos ganhos com sucesso",
@@ -158,16 +175,31 @@ func EarnPointsForOrder(userPhone, orderID string, orderValue float64) error {
 		return nil
 	}
 
-	var loyalty models.LoyaltyPoints
-	result := models.DB.Where("user_phone = ?", userPhone).First(&loyalty)
+	tx := models.DB.Begin()
+	defer tx.Rollback()
 
-	if result.Error != nil {
+	var loyalty models.LoyaltyPoints
+	if err := tx.Clauses(gorm.Locking{Strength: "UPDATE", Options: "NOWAIT"}).
+		Where("user_phone = ?", userPhone).
+		First(&loyalty).Error; err != nil {
 		loyalty = models.LoyaltyPoints{
 			UserPhone: userPhone,
 			Points:    0,
 			Tier:      "bronze",
 		}
-		models.DB.Create(&loyalty)
+		if err := tx.Create(&loyalty).Error; err != nil {
+			return err
+		}
+	}
+
+	var earnCount int64
+	if err := tx.Model(&models.LoyaltyTransaction{}).
+		Where("order_id = ? AND type = ?", orderID, "earn").
+		Count(&earnCount).Error; err != nil {
+		return err
+	}
+	if earnCount > 0 {
+		return nil
 	}
 
 	multiplier := getPointsMultiplier(loyalty.Tier)
@@ -179,7 +211,9 @@ func EarnPointsForOrder(userPhone, orderID string, orderValue float64) error {
 	loyalty.Tier = getTier(loyalty.Points)
 	loyalty.UpdatedAt = time.Now()
 
-	models.DB.Save(&loyalty)
+	if err := tx.Save(&loyalty).Error; err != nil {
+		return err
+	}
 
 	transaction := models.LoyaltyTransaction{
 		UserPhone:   userPhone,
@@ -189,7 +223,13 @@ func EarnPointsForOrder(userPhone, orderID string, orderValue float64) error {
 		OrderID:     orderID,
 		CreatedAt:   time.Now(),
 	}
-	models.DB.Create(&transaction)
+	if err := tx.Create(&transaction).Error; err != nil {
+		return err
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return err
+	}
 
 	log.Printf("[LOYALTY] %s ganhou %d pontos (pedido %s, valor %.2f)", userPhone, pointsEarned, orderID, orderValue)
 	return nil
@@ -206,9 +246,13 @@ func RedeemPoints(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
 	}
 
+	tx := models.DB.Begin()
+	defer tx.Rollback()
+
 	var loyalty models.LoyaltyPoints
-	result := models.DB.Where("user_phone = ?", req.UserPhone).First(&loyalty)
-	if result.Error != nil {
+	if err := tx.Clauses(gorm.Locking{Strength: "UPDATE", Options: "NOWAIT"}).
+		Where("user_phone = ?", req.UserPhone).
+		First(&loyalty).Error; err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Usuário não encontrado"})
 	}
 
@@ -225,7 +269,9 @@ func RedeemPoints(c *fiber.Ctx) error {
 	loyalty.Points -= req.Points
 	loyalty.Tier = getTier(loyalty.Points)
 	loyalty.UpdatedAt = time.Now()
-	models.DB.Save(&loyalty)
+	if err := tx.Save(&loyalty).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Erro ao atualizar pontos"})
+	}
 
 	transaction := models.LoyaltyTransaction{
 		UserPhone:   req.UserPhone,
@@ -235,7 +281,9 @@ func RedeemPoints(c *fiber.Ctx) error {
 		OrderID:     req.OrderID,
 		CreatedAt:   time.Now(),
 	}
-	models.DB.Create(&transaction)
+	if err := tx.Create(&transaction).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Erro ao registrar transação"})
+	}
 
 	cashbackCode, err := generateCashbackCode()
 	if err != nil {
@@ -257,8 +305,12 @@ func RedeemPoints(c *fiber.Ctx) error {
 		OwnerPhone:     req.UserPhone,
 	}
 
-	if err := models.DB.Create(&cashbackCoupon).Error; err != nil {
+	if err := tx.Create(&cashbackCoupon).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Erro ao criar cupom de cashback"})
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Erro ao confirmar resgate"})
 	}
 
 	return c.JSON(fiber.Map{
@@ -275,6 +327,12 @@ func GetLoyaltyBalance(c *fiber.Ctx) error {
 	phone := c.Params("phone")
 	if phone == "" {
 		return c.Status(400).JSON(fiber.Map{"error": "Phone is required"})
+	}
+
+	tokenPhone, phoneErr := middlewares.GetUserPhoneFromToken(c)
+	role, roleErr := middlewares.GetUserRoleFromToken(c)
+	if phoneErr != nil || roleErr != nil || (role != "admin" && tokenPhone != phone) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
 	}
 
 	var loyalty models.LoyaltyPoints
@@ -302,6 +360,12 @@ func GetLoyaltyHistory(c *fiber.Ctx) error {
 	phone := c.Params("phone")
 	if phone == "" {
 		return c.Status(400).JSON(fiber.Map{"error": "Phone is required"})
+	}
+
+	tokenPhone, phoneErr := middlewares.GetUserPhoneFromToken(c)
+	role, roleErr := middlewares.GetUserRoleFromToken(c)
+	if phoneErr != nil || roleErr != nil || (role != "admin" && tokenPhone != phone) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
 	}
 
 	var transactions []models.LoyaltyTransaction

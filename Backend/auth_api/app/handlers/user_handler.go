@@ -80,7 +80,7 @@ func CreateUser(c *fiber.Ctx) error {
 		err = tx.QueryRow("SELECT nextval('users_id_seq')").Scan(&userID)
 		if err != nil {
 			tx.Rollback()
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create user"})
 		}
 		var roleVal string
 		tx.QueryRow("SELECT enumlabel FROM pg_enum WHERE enumtypid = '\"Role\"'::regtype LIMIT 1").Scan(&roleVal)
@@ -90,11 +90,10 @@ func CreateUser(c *fiber.Ctx) error {
 		_, err = tx.Exec("INSERT INTO users (id, name, email, password, phone, role, \"createdAt\", \"updatedAt\") VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())", userID, user.Name, user.Email, user.Password, user.Phone, roleVal)
 		if err != nil {
 			tx.Rollback()
-			// Check for unique constraint violation on email
 			if strings.Contains(err.Error(), "duplicate key value violates unique constraint") && strings.Contains(err.Error(), "users_email_key") {
 				return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Email already registered"})
 			}
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create user"})
 		}
 		user.ID = userID
 		establishment.OwnerID = userID
@@ -102,19 +101,19 @@ func CreateUser(c *fiber.Ctx) error {
 		err = tx.QueryRow("SELECT nextval('establishments_id_seq')").Scan(&estID)
 		if err != nil {
 			tx.Rollback()
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create establishment"})
 		}
 		_, err = tx.Exec("INSERT INTO establishments (id, name, description, owner_id, lat, long, location_string, max_distance_delivery) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)", estID, establishment.Name, establishment.Description, establishment.OwnerID, establishment.Lat, establishment.Long, establishment.LocationString, establishment.MaxDistanceDelivery)
 		if err != nil {
 			tx.Rollback()
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create establishment"})
 		}
 		establishment.ID = estID
 		user.EstablishmentID = estID
 		_, err = tx.Exec("UPDATE users SET establishment_id = $1 WHERE id = $2", estID, userID)
 		if err != nil {
 			tx.Rollback()
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update user"})
 		}
 		tx.Commit()
 	}

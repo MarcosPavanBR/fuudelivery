@@ -372,6 +372,20 @@ func (g *AsaasGateway) ParseWebhook(body []byte) (*gateway.WebhookEvent, error) 
 	status := mapAsaasStatus(payload.Payment.Status)
 	eventType := mapAsaasEventType(payload.Event)
 
+	var normalizedType gateway.WebhookEventType
+	switch status {
+	case gateway.StatusPaid, gateway.StatusCaptured:
+		normalizedType = gateway.WebhookPaymentApproved
+	case gateway.StatusFailed, gateway.StatusExpired:
+		normalizedType = gateway.WebhookPaymentFailed
+	case gateway.StatusRefunded:
+		normalizedType = gateway.WebhookRefundCompleted
+	case gateway.StatusVoided:
+		normalizedType = gateway.WebhookPaymentCancelled
+	default:
+		normalizedType = gateway.WebhookPaymentPending
+	}
+
 	// Mapear método de pagamento
 	method := gateway.MethodPIX
 	switch payload.Payment.BillingType {
@@ -405,6 +419,7 @@ func (g *AsaasGateway) ParseWebhook(body []byte) (*gateway.WebhookEvent, error) 
 	return &gateway.WebhookEvent{
 		Gateway:       "asaas",
 		EventType:     eventType,
+		Type:          normalizedType,
 		TransactionID: payload.Payment.ID,
 		OrderID:       payload.Payment.ExternalReference,
 		Amount:        amount,

@@ -7,6 +7,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/delivery_api/app/dto"
 	"github.com/carloshomar/fuudelivery/delivery_api/app/models"
 	"gorm.io/gorm"
@@ -17,6 +18,21 @@ import (
 // (tabela delivery_solicitations, sql/02)
 // ============================================================================
 
+func canAccessDeliveryman(c *fiber.Ctx, deliverymanID int64) bool {
+	role, err := middlewares.GetUserRoleFromToken(c)
+	if err != nil {
+		return false
+	}
+	if role == "admin" {
+		return true
+	}
+	tokenUserID, err := middlewares.GetUserIDFromToken(c)
+	if err != nil {
+		return false
+	}
+	return tokenUserID == deliverymanID
+}
+
 func GetOrdersByDeliverymanID(c *fiber.Ctx) error {
 	deliverymanIDStr := c.Params("id")
 	deliverymanID, err := strconv.ParseInt(deliverymanIDStr, 10, 64)
@@ -24,6 +40,10 @@ func GetOrdersByDeliverymanID(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "ID de deliveryman inválido",
 		})
+	}
+
+	if !canAccessDeliveryman(c, deliverymanID) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
 	}
 
 	var rows []models.DeliverySolicitation
@@ -66,11 +86,8 @@ func GetOrderByID(orderID string) (*dto.OrderDTO, error) {
 func UpdateOrderStatusByDeliverymanID(c *fiber.Ctx, sendMessageToClient func(clientID int64, message []byte) error) error {
 
 	var request struct {
-		OrderID     string `json:"order_id"`
-		Deliveryman struct {
-			Id     int64  `json:"id"`
-			Status string `json:"status"`
-		} `json:"deliveryman"`
+		OrderID string `json:"order_id"`
+		Status  string `json:"status"`
 	}
 
 	if err := c.BodyParser(&request); err != nil {
@@ -79,11 +96,16 @@ func UpdateOrderStatusByDeliverymanID(c *fiber.Ctx, sendMessageToClient func(cli
 		})
 	}
 
-	// Atualiza somente se o pedido pertence ao entregador informado.
+	tokenUserID, err := middlewares.GetUserIDFromToken(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+	}
+
+	// Atualiza somente se o pedido pertence ao entregador autenticado.
 	result := models.DB.Model(&models.DeliverySolicitation{}).
-		Where("order_id = ? AND delivery_man_id = ?", request.OrderID, request.Deliveryman.Id).
+		Where("order_id = ? AND delivery_man_id = ?", request.OrderID, tokenUserID).
 		Updates(map[string]interface{}{
-			"delivery_man_status": request.Deliveryman.Status,
+			"delivery_man_status": request.Status,
 		})
 
 	if result.Error != nil {

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/orders_api/app/dto"
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
@@ -11,8 +12,12 @@ func CreateCategories(c *fiber.Ctx) error {
 
 	if err := c.BodyParser(&request); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "",
+			"error": "Failed to parse request body",
 		})
+	}
+
+	if !canActOnEstablishment(c, int64(request.EstablishmentId)) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
 	}
 
 	categorie := models.Category{
@@ -21,7 +26,9 @@ func CreateCategories(c *fiber.Ctx) error {
 		EstablishmentID: request.EstablishmentId,
 	}
 
-	models.DB.Create(&categorie)
+	if err := models.DB.Create(&categorie).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create category"})
+	}
 	request.Id = categorie.ID
 
 	return c.JSON(&request)
@@ -35,11 +42,13 @@ func GetCategories(c *fiber.Ctx) error {
 
 	var categories []models.Category
 
-	models.DB.Where(&models.Category{
+	if err := models.DB.Where(&models.Category{
 		EstablishmentID: uint(establishmentId),
-	}).Find(&categories)
+	}).Find(&categories).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch categories"})
+	}
 
-	return c.JSON(&categories)
+	return c.JSON(categories)
 }
 
 func CreateProductCategorie(c *fiber.Ctx) error {
@@ -48,7 +57,15 @@ func CreateProductCategorie(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to parse request body"})
 	}
 
-	// Verificar se o relacionamento já existe
+	var category models.Category
+	if err := models.DB.First(&category, request.CategoryID).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Category not found"})
+	}
+
+	if !canActOnEstablishment(c, int64(category.EstablishmentID)) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
+	}
+
 	var existingCategoryProduct models.CategoryProducts
 	result := models.DB.Where(&models.CategoryProducts{
 		CategoryID: request.CategoryID,
@@ -56,11 +73,12 @@ func CreateProductCategorie(c *fiber.Ctx) error {
 	}).First(&existingCategoryProduct)
 
 	if result.RowsAffected > 0 {
-		// O relacionamento já existe, então deve removê-lo
-		models.DB.Where(&models.CategoryProducts{
+		if err := models.DB.Where(&models.CategoryProducts{
 			CategoryID: request.CategoryID,
 			ProductID:  request.ProductID,
-		}).Delete(&existingCategoryProduct)
+		}).Delete(&existingCategoryProduct).Error; err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to remove category link"})
+		}
 		return c.JSON(&existingCategoryProduct)
 
 	}
@@ -70,7 +88,9 @@ func CreateProductCategorie(c *fiber.Ctx) error {
 		ProductID:  request.ProductID,
 	}
 
-	models.DB.Create(&categoryProduct)
+	if err := models.DB.Create(&categoryProduct).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create category link"})
+	}
 
 	return c.JSON(&categoryProduct)
 }
@@ -84,16 +104,19 @@ func GetCategoriesWithProducts(c *fiber.Ctx) error {
 	var categories []models.Category
 	var categoriesWithProducts []dto.CategorieRequest
 
-	models.DB.Where(&models.Category{
+	if err := models.DB.Where(&models.Category{
 		EstablishmentID: uint(establishmentID),
-	}).Find(&categories)
+	}).Find(&categories).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch categories"})
+	}
 
 	for _, category := range categories {
 		var products []models.Product
 
-		models.DB.Model(&category).Preload("Additional").Association("Products").Find(&products)
+		if err := models.DB.Model(&category).Preload("Additional").Association("Products").Find(&products).Error; err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch products"})
+		}
 
-		// Adiciona a categoria e os produtos associados à lista final
 		categoriesWithProducts = append(categoriesWithProducts,
 			dto.CategorieRequest{
 				Id:              category.ID,
@@ -114,6 +137,10 @@ func DeleteCategory(c *fiber.Ctx) error {
 	var existingCategory models.Category
 	if err := models.DB.First(&existingCategory, categoryID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Category not found"})
+	}
+
+	if !canActOnEstablishment(c, int64(existingCategory.EstablishmentID)) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
 	}
 
 	if err := models.DB.Where("category_id = ?", categoryID).Delete(&models.CategoryProducts{}).Error; err != nil {
@@ -139,6 +166,10 @@ func UpdateCategory(c *fiber.Ctx) error {
 	var existingCategory models.Category
 	if err := models.DB.First(&existingCategory, categoryID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Category not found"})
+	}
+
+	if !canActOnEstablishment(c, int64(existingCategory.EstablishmentID)) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
 	}
 
 	existingCategory.Name = request.Name

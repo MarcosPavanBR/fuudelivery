@@ -126,6 +126,11 @@ func HandShakeDeliveryman(c *fiber.Ctx) error {
 // GetApprovedSolicitations lista pedidos aprovados/feitos num raio de
 // `limitDistance` km das coordenadas informadas (busca do app do entregador).
 func GetApprovedSolicitations(c *fiber.Ctx) error {
+	role, err := middlewares.GetUserRoleFromToken(c)
+	if err != nil || role != "delivery_man" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
+	}
+
 	lat := c.Query("latitude")
 	long := c.Query("longitude")
 	limitDistance := c.Query("limitDistance")

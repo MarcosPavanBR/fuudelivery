@@ -4,8 +4,10 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
+	"gorm.io/gorm"
 )
 
 // CreateBatch cria um novo lote de entregas.
@@ -100,6 +102,10 @@ func AssignBatch(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Batch is not active"})
 	}
 
+	if !canBatchAct(c, &batch) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
+	}
+
 	now := time.Now()
 	batch.CourierID = &req.CourierID
 	batch.Status = "delivering"
@@ -130,6 +136,10 @@ func CompleteBatch(c *fiber.Ctx) error {
 
 	if batch.Status != "delivering" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Batch is not in delivering status"})
+	}
+
+	if !canBatchAct(c, &batch) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
 	}
 
 	now := time.Now()
@@ -192,6 +202,10 @@ func AddOrderToBatch(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Batch cannot accept new orders"})
 	}
 
+	if !canBatchAct(c, &batch) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
+	}
+
 	var order models.Order
 	if err := models.DB.First(&order, req.OrderID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Order not found"})
@@ -203,9 +217,9 @@ func AddOrderToBatch(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update order"})
 	}
 
-	// Atualiza contagem do lote
-	batch.TotalOrders++
-	models.DB.Model(&batch).Update("total_orders", batch.TotalOrders)
+	if err := models.DB.Model(&batch).Update("total_orders", gorm.Expr("total_orders + ?", 1)).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update batch count"})
+	}
 
 	return c.JSON(fiber.Map{
 		"message": "Order added to batch successfully",
@@ -231,6 +245,10 @@ func ForceExpireBatch(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Batch already ended"})
 	}
 
+	if !canBatchAct(c, &batch) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
+	}
+
 	now := time.Now()
 	batch.Status = "cancelled"
 	batch.CompletedAt = &now
@@ -246,4 +264,22 @@ func ForceExpireBatch(c *fiber.Ctx) error {
 		"message": "Batch expired and orders released",
 		"batch":   batch,
 	})
+}
+
+// canBatchAct verifica se o usuário pode agir sobre o lote (admin ou dono do estabelecimento).
+func canBatchAct(c *fiber.Ctx, batch *models.Batch) bool {
+	role, err := middlewares.GetUserRoleFromToken(c)
+	if err != nil {
+		return false
+	}
+	if role == "admin" {
+		return true
+	}
+
+	var order models.Order
+	if err := models.DB.Where("batch_id = ?", batch.ID).First(&order).Error; err != nil {
+		return false
+	}
+
+	return canActOnEstablishment(c, int64(order.EstablishmentID))
 }

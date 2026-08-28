@@ -100,11 +100,16 @@ func startRateLimitCleanup() {
 // Valida SigningMethod HMAC (HS256) para evitar ataques de algorithm confusion,
 // consistente com o middleware HTTP (auth_api/app/middlewares/jwt.go).
 func parseWSToken(tokenStr string) (jwt.MapClaims, error) {
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		return nil, fmt.Errorf("JWT secret not configured")
+	}
+
 	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
-		return []byte(os.Getenv("JWT_SECRET")), nil
+		return []byte(secret), nil
 	})
 	if err != nil || !token.Valid {
 		return nil, fmt.Errorf("invalid token")
@@ -1594,9 +1599,22 @@ func main() {
 	}()
 
 	// Start background workers
-	go startQueueListeners()
-	go startRefreshTokenCleanup() // limpa tokens expirados a cada 24h
-	startRateLimitCleanup()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		startQueueListeners()
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		startRefreshTokenCleanup() // limpa tokens expirados a cada 24h
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		startRateLimitCleanup()
+	}()
 
 	// Graceful shutdown
 	port := os.Getenv("PORT")
@@ -1610,7 +1628,10 @@ func main() {
 	go func() {
 		<-c
 		log.Println("Shutting down...")
+		queue.Close()
 		app.ShutdownWithTimeout(10 * time.Second)
+		wg.Wait()
+		log.Println("All background workers stopped")
 	}()
 
 	log.Printf("FUUDELIVERY server starting on port %s", port)

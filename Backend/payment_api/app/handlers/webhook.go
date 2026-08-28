@@ -384,7 +384,7 @@ func ValidateWebhookSignature(body []byte, signature string) bool {
 	expected := hex.EncodeToString(mac.Sum(nil))
 
 	if !hmac.Equal([]byte(expected), []byte(signature)) {
-		log.Printf("[WEBHOOK] HMAC mismatch: expected=%s got=%s...", expected[:16], signature[:min(16, len(signature))])
+		log.Println("[WEBHOOK] HMAC signature mismatch")
 		return false
 	}
 	return true

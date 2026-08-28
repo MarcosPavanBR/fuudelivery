@@ -18,6 +18,7 @@ func ChargeCard(c *fiber.Ctx) error {
 	var req struct {
 		CardToken    string  `json:"card_token"`
 		Amount       float64 `json:"amount"`
+		OrderID      string  `json:"order_id"`
 		Installments int     `json:"installments"`
 		Email        string  `json:"email"`
 		Name         string  `json:"name"`
@@ -31,6 +32,17 @@ func ChargeCard(c *fiber.Ctx) error {
 	if req.CardToken == "" {
 		return c.Status(400).JSON(fiber.Map{"error": "card_token is required"})
 	}
+
+	if req.OrderID == "" {
+		return c.Status(400).JSON(fiber.Map{"error": "order_id is required"})
+	}
+
+	serverTotal, ok := validateChargeAmount(req.OrderID, req.Amount)
+	if !ok {
+		log.Printf("[CARD] Cobrança rejeitada: valor diverge do pedido %s (client=%.2f)", req.OrderID, req.Amount)
+		return c.Status(400).JSON(fiber.Map{"error": "Valor da cobrança não corresponde ao pedido"})
+	}
+	req.Amount = serverTotal
 
 	email := req.Email
 	if email == "" {
@@ -61,7 +73,7 @@ func ChargeCard(c *fiber.Ctx) error {
 
 	apiResp, err := client.CreateCardCharge(chargeReq)
 	if err != nil {
-		log.Printf("Error creating card payment via AbacatePay: %v", err)
+		log.Printf("[CARD] Error creating card payment via AbacatePay: amount=%.2f", req.Amount)
 		return c.Status(500).JSON(fiber.Map{"error": "Card payment failed"})
 	}
 

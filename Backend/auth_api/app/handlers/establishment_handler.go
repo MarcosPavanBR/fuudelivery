@@ -217,7 +217,9 @@ func GetEstablishments(c *fiber.Ctx) error {
 }
 func ListEstablishments(c *fiber.Ctx) error {
 	var establishments []models.Establishment
-	models.DB.Where("open_data IS NOT NULL").Find(&establishments)
+	if err := models.DB.Where("open_data IS NOT NULL").Find(&establishments).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to list establishments"})
+	}
 	return c.JSON(establishments)
 }
 

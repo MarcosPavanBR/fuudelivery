@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/carloshomar/fuudelivery/auth_api/app/dto"
@@ -186,6 +187,22 @@ func UpdateDeliveryManWallet(c *fiber.Ctx) error {
 	deliveryManID := c.Params("id")
 	if deliveryManID == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid delivery man ID"})
+	}
+
+	role, roleErr := middlewares.GetUserRoleFromToken(c)
+	if roleErr != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+	}
+
+	tokenUserID, tokenErr := middlewares.GetUserIDFromToken(c)
+	if role != "admin" {
+		if tokenErr != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+		}
+		dmID, _ := strconv.ParseInt(deliveryManID, 10, 64)
+		if tokenUserID != dmID {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
+		}
 	}
 
 	var req struct {

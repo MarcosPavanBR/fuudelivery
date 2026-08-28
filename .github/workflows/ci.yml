@@ -160,7 +160,7 @@ jobs:
 
       - name: Check formatting
         run: |
-          UNFORMATTED=$(gofmt -l -s Backend/ cmd/)
+          UNFORMATTED=$(gofmt -l -s Backend/ cmd/ pkg/)
           if [ -n "$UNFORMATTED" ]; then
             echo "Files not formatted:"
             echo "$UNFORMATTED"
@@ -396,3 +396,37 @@ jobs:
       - name: Cleanup Docker services
         if: always()
         run: docker rm -f pg-e2e 2>/dev/null || true
+
+  # ──────────────────────────────────────────────
+  # Mobile — TypeScript type-check + tests
+  # ──────────────────────────────────────────────
+  mobile-typecheck:
+    name: Mobile — ${{ matrix.app }} (tsc + jest)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app:
+          - Frontend/AppEntrega
+          - Frontend/AppComida
+          - Frontend/AppRestaurante
+    defaults:
+      run:
+        working-directory: ${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ${{ matrix.app }}/package-lock.json
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: TypeScript type-check
+        run: npx tsc --noEmit
+
+      - name: Run tests
+        run: npx jest --passWithNoTests

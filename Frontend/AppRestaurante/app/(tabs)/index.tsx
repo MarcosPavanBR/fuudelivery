@@ -14,7 +14,7 @@ import {
   RefreshControl,
   Alert,
 } from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect } from "expo-router/react-navigation";
 import { Feather } from "@expo/vector-icons";
 import api from "@/services/api";
 import { useApi } from "@/contexts/ApiContext";

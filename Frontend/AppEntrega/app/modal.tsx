@@ -12,19 +12,17 @@ import {
   ViewAnnotation,
   type CameraRef,
 } from "@maplibre/maplibre-react-native";
-import { useRoute } from "@react-navigation/native";
+import { useLocalSearchParams, useNavigation } from "expo-router";
 import { useEffect, useRef } from "react";
 import helper from "@/helpers/helper";
 import SwipeButtonDelivery from "@/componentes/SwipButton";
 import { useAuthApi } from "@/contexts/AuthContext";
-import { useNavigation } from "expo-router";
 import { MAP_STYLE_URL } from "@/constants/Config";
 
 export default function ModalScreen() {
   const insets = useSafeAreaInsets();
   const nav = useNavigation();
-  const route = useRoute();
-  const { establishment }: any = route.params;
+  const { establishment }: any = useLocalSearchParams();
   const mapViewRef = useRef<CameraRef>(null);
   const { user } = useAuthApi();
 

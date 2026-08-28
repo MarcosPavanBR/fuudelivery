@@ -14,7 +14,7 @@ import axios from "axios";
 import Texts from "@/constants/Texts";
 import { Ionicons } from "@expo/vector-icons";
 import { useCartApi } from "@/contexts/ApiCartContext";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation } from "expo-router";
 
 const Location = () => {
   const insets = useSafeAreaInsets();

@@ -62,18 +62,24 @@ check_config() {
         return
     fi
 
-    file_url=$(sed -n 's/.*API_URL = "\([^"]*\)".*/\1/p' "$config_file" | head -1)
+    # Suporta tanto API_URL hardcoded quanto EXPO_PUBLIC_API_URL via env
+    file_url=$(sed -n 's/.*API_URL = "\([^"]*\)".*/\1/p; s/.*EXPO_PUBLIC_API_URL.*"\(https:\/\/[^"]*\)".*/\1/p' "$config_file" | head -1)
     if [ -z "$file_url" ]; then
-        fail "$app_name: API_URL não encontrada em $config_file"
-        FAILURES=$((FAILURES + 1))
-        return
-    fi
-
-    if [ "$file_url" = "$CANONICAL" ]; then
-        ok "$app_name: config/api.ts OK ($file_url)"
+        # Se não encontrar URL hardcoded, verifica se usa EXPO_PUBLIC_API_URL
+        if grep -q "EXPO_PUBLIC_API_URL" "$config_file"; then
+            ok "$app_name: config/api.ts usa EXPO_PUBLIC_API_URL (URL definida no build)"
+        else
+            fail "$app_name: API_URL/EXPO_PUBLIC_API_URL não encontrada em $config_file"
+            FAILURES=$((FAILURES + 1))
+            return
+        fi
     else
-        fail "$app_name: DIVERGÊNCIA — config/api.ts tem '$file_url', URLS.md diz '$CANONICAL'"
-        FAILURES=$((FAILURES + 1))
+        if [ "$file_url" = "$CANONICAL" ]; then
+            ok "$app_name: config/api.ts OK ($file_url)"
+        else
+            fail "$app_name: DIVERGÊNCIA — config/api.ts tem '$file_url', URLS.md diz '$CANONICAL'"
+            FAILURES=$((FAILURES + 1))
+        fi
     fi
 }
 

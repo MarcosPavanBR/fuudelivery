@@ -103,6 +103,8 @@ api.interceptors.response.use(
         }
 
         processQueue(null, token)
+        // Reset guard: refresh funcionou, pode haver outros 401s legítimos depois
+        hasRedirected = false
 
         originalRequest.headers.Authorization = `Bearer ${token}`
         return api(originalRequest)

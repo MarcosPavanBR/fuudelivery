@@ -115,6 +115,12 @@ func InsertDelivery(c *fiber.Ctx) error {
 		PerKm:           request.PerKm,
 	}
 
+	if newDelivery.EstablishmentID == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "establishmentId is required",
+		})
+	}
+
 	if err := models.CreateOrUpdateDelivery(&newDelivery); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to insert or update delivery data",

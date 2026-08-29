@@ -15,14 +15,25 @@ function Taxes() {
     fixedTaxa: 0,
     perKm: 0,
   });
+  const [loading, setLoading] = useState(true);
 
   const start = async () => {
-    const resp = await deliveryModel.getDelivery(estId);
-    setBody({
-      establishmentId: estId,
-      fixedTaxa: resp?.FixedTaxa ?? 0,
-      perKm: resp?.PerKm ?? 0,
-    });
+    if (!estId) {
+      setLoading(false);
+      return;
+    }
+    try {
+      const resp = await deliveryModel.getDelivery(estId);
+      setBody({
+        establishmentId: estId,
+        fixedTaxa: resp?.FixedTaxa ?? 0,
+        perKm: resp?.PerKm ?? 0,
+      });
+    } catch {
+      // ignora: campos ficam com valor padrão 0
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -34,13 +45,24 @@ function Taxes() {
   const save = async (e) => {
     e.preventDefault();
     if (saving) return; // previne duplo clique
+    if (!estId) {
+      toast.error("Faça login novamente para continuar.");
+      return;
+    }
     setSaving(true);
     try {
-      await deliveryModel.saveDelivery(body);
+      await deliveryModel.saveDelivery({ ...body, establishmentId: estId });
       toast.success(Texts.delivery_update);
     } catch (err) {
-      const msg = err?.response?.data?.error || Texts.delivery_error;
-      toast.error(msg);
+      const serverMsg = err?.response?.data?.error;
+      const status = err?.response?.status;
+      if (status === 401 || status === 403) {
+        toast.error("Sessão expirada. Faça login novamente.");
+      } else if (serverMsg) {
+        toast.error(serverMsg);
+      } else {
+        toast.error(Texts.delivery_error);
+      }
     } finally {
       setSaving(false);
     }
@@ -62,6 +84,12 @@ function Taxes() {
             <h4 className="font-bold text-gray-900">Configurações de Entrega</h4>
           </div>
 
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600" />
+              <span className="ml-3 text-gray-500">Carregando...</span>
+            </div>
+          ) : (
           <form onSubmit={save} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
@@ -101,6 +129,7 @@ function Taxes() {
               </button>
             </div>
           </form>
+          )}
         </div>
       </div>
     </MenuLayout>

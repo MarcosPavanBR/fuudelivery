@@ -25,15 +25,11 @@ async function getOrders(id) {
 }
 
 async function alterStatus(droppableId, draggableId) {
-  try {
-    const { data } = await api.put("/orders/status", {
-      id: draggableId,
-      status: droppableId,
-    });
-    return true;
-  } catch (e) {
-    return false;
-  }
+  const { data } = await api.put("/orders/status", {
+    id: draggableId,
+    status: droppableId,
+  });
+  return true;
 }
 
 export default {

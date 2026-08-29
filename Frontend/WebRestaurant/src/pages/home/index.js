@@ -60,8 +60,9 @@ const Home = () => {
         return e;
       })
     );
-    const ok = await ordersModels.alterStatus(destination.droppableId, draggableId);
-    if (!ok) {
+    try {
+      await ordersModels.alterStatus(destination.droppableId, draggableId);
+    } catch (e) {
       setTasks(previous);
       toast.error("Não foi possível mover o pedido. Tente novamente.");
     }

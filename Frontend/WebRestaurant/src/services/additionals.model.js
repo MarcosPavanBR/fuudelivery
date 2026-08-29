@@ -10,13 +10,8 @@ async function handlerVinculoProdutoAdicional(productID, additionalID) {
 }
 
 async function getAdditionals(id) {
-  try {
-    const { data } = await api.get("/additional/" + id);
-    return data;
-  } catch (e) {
-    console.error(e);
-    return [];
-  }
+  const { data } = await api.get("/additional/" + id);
+  return data;
 }
 
 async function updateAdditional(items, editItem) {

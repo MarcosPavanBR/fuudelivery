@@ -15,15 +15,8 @@ export async function saveDelivery({ establishmentId, fixedTaxa, perKm }) {
 }
 
 export async function getDelivery(establishmentId) {
-  try {
-    const { data } = await api.get(
-      `/delivery/value/${establishmentId}`
-    );
-    return data;
-  } catch (e) {
-    console.error(e);
-    return { fixedTaxa: 0, perKm: 0 };
-  }
+  const { data } = await api.get(`/delivery/value/${establishmentId}`);
+  return data;
 }
 
 export default {

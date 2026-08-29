@@ -3,14 +3,13 @@
 > **📌 Referência central de URLs:** ver `references/URLS.md` — mapa de todos os
 > serviços, endpoints de health, CORS e histórico de correções de URLs.
 
-## Status Atual (Agosto 2026)
+## Status Atual (29 Agosto 2026)
 
 | Servico | URL | Status |
 |---------|-----|--------|
 | API (Monolito) | fuudelivery-api-8y6l.onrender.com | Online |
 | WebRestaurant | fuudelivery-web.onrender.com | Online |
 | WebAdmin | fuudelivery-admin-lv7f.onrender.com | Online |
-| MongoDB Atlas | Cloud | Connected |
 | PostgreSQL (Supabase) | Cloud | Connected |
 | Redis | **Externo** (`*.db.redis.io` — não é serviço Render) | Connected |
 
@@ -18,6 +17,19 @@
 > **removidos (2026-08)**: todas as rotas de pagamento (PIX, cartão, carteira,
 > webhook, split) vivem no monolito `fuudelivery-api`. NÃO provisione esses
 > serviços de novo — qualquer doc que os mencione está desatualizada.
+
+### Segurança (Atualizado 29/08/2026)
+
+| Medida | Status |
+|--------|--------|
+| Sessão HttpOnly (cookies) | ✅ Frontends usam `POST /auth/session` com cookies HttpOnly + Secure + SameSite=None |
+| CSRF protection | ✅ `X-CSRF-Token` header + cookie, retry automático em 403 |
+| localStorage tokens | ❌ Removido — nenhum frontend grava token em localStorage |
+| ChargeCard via gateway router | ✅ Fallback Pagar.me → Asaas → AbacatePay |
+| IDOR no WebSocket | ✅ `wsCanAccessOrder()` antes de HandleChatWebSocket |
+| Rate limiting | ✅ Login 10/min, refresh 30/min, mutações protegidas |
+| CORS | ✅ `Allow-Credentials: true`, 2 origens produção |
+| CSP headers | ✅ `Content-Security-Policy` + `X-Content-Type-Options: nosniff` |
 
 ---
 
@@ -145,18 +157,31 @@ bash scripts/verify-deploy.sh
 
 ## Checklist Pre-Deploy
 
-- [ ] Todos health checks retornam status ok
-- [ ] CI pipeline passa (inclui integração E2E do fluxo PIX)
-- [ ] GitHub Secrets configurados
+- [x] Todos health checks retornam status ok (verificado 29/08)
+- [x] CI pipeline passa (go build + go vet + 54+ testes gateway)
+- [x] Credenciais nao estao no repositorio (.gitignore + HEAD limpo)
+- [x] JWT_SECRET e unico e forte
+- [x] ALLOWED_ORIGINS inclui todas URLs frontend (2 origens produção)
+- [x] Sessão HttpOnly (cookies, não localStorage)
+- [x] CSRF protection (token + cookie)
+- [x] ChargeCard usa gateway router com fallback
+- [ ] API keys dos gateways configuradas (Pagar.me, Asaas, Mercado Pago)
+- [ ] Webhooks registrados nos gateways
 - [ ] UptimeRobot monitors criados
-- [ ] Credenciais nao estao no repositorio
-- [ ] JWT_SECRET e unico e forte
-- [ ] ABACATE_PAY_WEBHOOK_SECRET corresponde ao dashboard
-- [ ] ALLOWED_ORIGINS inclui todas URLs frontend
-- [ ] Docker build funciona
+- [ ] GitHub Secrets configurados (RENDER_API_KEY, etc.)
 - [ ] APKs gerados e testados
 - [ ] Plano do Redis revisado (ver risco acima) se houver volume de pagamentos
 
+### O que falta para 100% produção (só você pode fazer)
+
+| # | Ação | Onde |
+|---|------|------|
+| 1 | Configurar API keys dos gateways | Render Dashboard → Environment |
+| 2 | Registrar webhooks nos gateways | Painel de cada gateway |
+| 3 | Rodar migrations 14-18 no Supabase | `psql` ou Supabase Dashboard |
+| 4 | Confirmar UptimeRobot | uptimerobot.com |
+| 5 | Gerar release v1.0.0 com APKs | `eas build` |
+
 ---
 
-*Ultima atualizacao: 22 de agosto de 2026*
+*Ultima atualizacao: 29 de agosto de 2026*

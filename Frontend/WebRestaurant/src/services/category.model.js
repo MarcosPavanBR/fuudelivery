@@ -2,14 +2,8 @@ import Strings from "../constants/Strings";
 import api from "./api";
 
 async function getCategories(id) {
-  try {
-    const { data } = await api.get("/categories/" + id);
-
-    return data;
-  } catch (e) {
-    console.error(e);
-    return [];
-  }
+  const { data } = await api.get("/categories/" + id);
+  return data;
 }
 
 async function createCategory(items, editItem, establishmentId) {

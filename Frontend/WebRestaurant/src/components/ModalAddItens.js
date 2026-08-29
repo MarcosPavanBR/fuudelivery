@@ -25,12 +25,17 @@ const ModalAddItens = ({
   const [editItem, setEditItem] = useState(null);
 
   const init = async () => {
-    const myid = getUser().id;
-    setItems(
-      isCategory
-        ? await categoryModel.getCategories(myid)
-        : await additionalsModel.getAdditionals(myid)
-    );
+    try {
+      const myid = getUser().id;
+      setItems(
+        isCategory
+          ? await categoryModel.getCategories(myid)
+          : await additionalsModel.getAdditionals(myid)
+      );
+    } catch (e) {
+      console.error("Error loading items:", e);
+      setItems([]);
+    }
   };
 
   async function saveItem() {

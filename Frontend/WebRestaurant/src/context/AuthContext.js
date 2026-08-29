@@ -188,9 +188,13 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Recarrega o estado aberto/fechado quando o user é carregado
+  // (antes rodava no mount antes do user existir, retornando vazio)
   useEffect(() => {
-    refreshOpen();
-  }, []);
+    if (user?.establishment_id) {
+      refreshOpen();
+    }
+  }, [user?.establishment_id]);
 
   return (
     <AuthContext.Provider

@@ -55,6 +55,15 @@ export default function Users() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // Validação client-side: senha mínima 8 caracteres
+    if (!editing && (!formData.password || formData.password.length < 8)) {
+      toast.error("A senha deve ter no mínimo 8 caracteres");
+      return;
+    }
+    if (editing && formData.password && formData.password.length < 8) {
+      toast.error("A senha deve ter no mínimo 8 caracteres");
+      return;
+    }
     try {
       if (editing) {
         await api.put(`/users/${editing.id}`, formData);
@@ -65,7 +74,7 @@ export default function Users() {
       }
       setModalOpen(false);
       loadUsers();
-    } catch (err) { toast.error("Erro ao salvar"); console.error(err); }
+    } catch (err) { const msg = err.response?.data?.error || "Erro ao salvar"; toast.error(msg); console.error(err); }
   };
 
   const handleDelete = async (id) => {
@@ -176,7 +185,7 @@ export default function Users() {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Senha {editing ? "(deixe em branco para nao alterar)" : "*"}</label>
-                <input type="password" name="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:bg-white" placeholder={editing ? "******" : "Minimo 6 caracteres"} />
+                <input type="password" name="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:bg-white" placeholder={editing ? "******" : "Mínimo 8 caracteres"} minLength={editing ? undefined : 8} />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Role *</label>

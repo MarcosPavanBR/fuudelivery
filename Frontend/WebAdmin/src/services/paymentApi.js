@@ -12,29 +12,8 @@ const PAYMENT_BASE_URL =
 const paymentApi = axios.create({
   baseURL: PAYMENT_BASE_URL,
   timeout: 15000,
+  withCredentials: true,
   headers: { "Content-Type": "application/json" },
 });
-
-paymentApi.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem("fuu_admin_token");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
-paymentApi.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem("fuu_admin_token");
-      window.location.href = "/login";
-    }
-    return Promise.reject(error);
-  }
-);
 
 export default paymentApi;

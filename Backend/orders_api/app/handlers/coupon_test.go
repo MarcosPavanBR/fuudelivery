@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/carloshomar/fuudelivery/orders_api/app/dto"
+	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 )
 
 // === Testes de CreateCoupon validation ===

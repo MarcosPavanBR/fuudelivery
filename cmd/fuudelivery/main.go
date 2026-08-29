@@ -1257,6 +1257,9 @@ func setupPaymentRoutes(app *fiber.App, router *gateway.Router) {
 	walletGroup.Post("/topup", protectedRoute, rateLimitMiddleware(20), paymentHandlers.TopUp)
 	walletGroup.Post("/deduct", protectedRoute, rateLimitMiddleware(20), paymentHandlers.DeductFromWallet)
 	walletGroup.Post("/establishment/withdraw", protectedRoute, rateLimitMiddleware(20), paymentHandlers.EstablishmentWithdraw)
+	// Gateway multi-recebimento: criar sub-conta e consultar status
+	walletGroup.Post("/create-recipient", protectedRoute, rateLimitMiddleware(5), paymentHandlers.CreateRecipient)
+	walletGroup.Get("/recipient-status", protectedRoute, paymentHandlers.GetRecipientStatus)
 	paymentGroup.Get("/chargebacks", adminRequired, paymentHandlers.ListChargebacks)
 	paymentGroup.Post("/:id/approve", adminRequired, rateLimitMiddleware(20), paymentHandlers.ApprovePayment)
 	paymentGroup.Post("/:id/reject", adminRequired, rateLimitMiddleware(20), paymentHandlers.RejectPayment)

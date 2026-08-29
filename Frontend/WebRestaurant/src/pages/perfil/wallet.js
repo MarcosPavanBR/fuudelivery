@@ -31,6 +31,24 @@ export default function WalletPage() {
     }
   }, [user]);
 
+  // Verifica status do recipient ao carregar a página
+  useEffect(() => {
+    const fetchRecipientStatus = async () => {
+      try {
+        setLoading(true);
+        const resp = await api.get("/wallets/recipient-status");
+        if (resp.data && resp.data.wallet_id) {
+          setWalletId(resp.data.wallet_id);
+        }
+      } catch {
+        // 404 = não tem recipient ainda (ok)
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchRecipientStatus();
+  }, []);
+
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -41,10 +59,28 @@ export default function WalletPage() {
       return;
     }
 
-    // A funcionalidade de criar conta de recebimento está sendo
-    // migrada do Asaas para o novo sistema multi-gateway (Pagar.me, Asaas, etc.).
-    // Em breve disponível novamente.
-    toast.info("Funcionalidade em migração. Em breve disponível novamente.");
+    try {
+      setCreating(true);
+      const resp = await api.post("/wallets/create-recipient", {
+        name: formData.name,
+        cpf_cnpj: formData.cpf_cnpj,
+        email: formData.email,
+        phone: formData.phone,
+        person_type: formData.person_type,
+      });
+
+      if (resp.data.already_exists) {
+        toast.info("Você já possui uma conta de recebimento ativa.");
+      } else {
+        toast.success("Conta de recebimento criada com sucesso!");
+      }
+      setWalletId(resp.data.wallet_id || resp.data.id);
+    } catch (err) {
+      const msg = err.response?.data?.error || "Erro ao criar conta de recebimento";
+      toast.error(msg);
+    } finally {
+      setCreating(false);
+    }
   };
 
   return (
@@ -193,8 +229,8 @@ export default function WalletPage() {
             </div>
 
             <p className="text-xs mt-4" style={{ color: "var(--text-secondary)" }}>
-              A criação de conta de recebimento será disponibilizada em breve
-              com suporte a múltiplos gateways de pagamento.
+              Crie sua conta de recebimento para receber pagamentos via Pagar.me,
+              Asaas ou outros gateways suportados pela plataforma.
             </p>
           </>
         )}
@@ -211,7 +247,7 @@ export default function WalletPage() {
           Como funciona?
         </h2>
         <ul className="text-sm space-y-2" style={{ color: "var(--text-secondary)" }}>
-          <li>1. Crie sua conta de recebimento (em breve)</li>
+          <li>1. Crie sua conta de recebimento multi-gateway</li>
           <li>2. Quando um cliente paga o pedido, o valor é dividido automaticamente</li>
           <li>3. Sua fatia vai direto para sua conta bancária</li>
           <li>4. A plataforma e o entregador recebem suas partes automaticamente</li>

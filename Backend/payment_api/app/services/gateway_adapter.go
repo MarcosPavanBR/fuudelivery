@@ -249,6 +249,49 @@ func toCents(amount float64) int64 {
 	return int64(amount*100 + 0.5)
 }
 
+// CreateRecipientViaGateway cria uma sub-conta (recebedor) no gateway de pagamento.
+// Usado quando um restaurante ou entregador quer receber splits automaticamente.
+func CreateRecipientViaGateway(ctx context.Context, req *gateway.RecipientRequest) (*gateway.RecipientResponse, bool) {
+	if globalRouter == nil {
+		return nil, false
+	}
+
+	// Seleciona o gateway que suporta split (Pagar.me > Asaas > outro)
+	gw, err := globalRouter.Select(gateway.MethodPIX, true, false)
+	if err != nil {
+		log.Printf("[GATEWAY] Nenhum gateway com split disponível: %v", err)
+		return nil, false
+	}
+
+	resp, err := gw.CreateRecipient(ctx, req)
+	if err != nil {
+		log.Printf("[GATEWAY] CreateRecipient falhou: %v", err)
+		return nil, false
+	}
+
+	return resp, true
+}
+
+// GetRecipientBalanceViaGateway busca saldo de um recebedor no gateway.
+func GetRecipientBalanceViaGateway(ctx context.Context, recipientID string) (available int64, pending int64, ok bool) {
+	if globalRouter == nil {
+		return 0, 0, false
+	}
+
+	gw, err := globalRouter.Select(gateway.MethodPIX, false, false)
+	if err != nil {
+		return 0, 0, false
+	}
+
+	avail, pend, err := gw.GetRecipientBalance(ctx, recipientID)
+	if err != nil {
+		log.Printf("[GATEWAY] GetRecipientBalance falhou: %v", err)
+		return 0, 0, false
+	}
+
+	return avail, pend, true
+}
+
 func init() {
 	go func() {
 		time.Sleep(100 * time.Millisecond)

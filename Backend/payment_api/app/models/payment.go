@@ -8,6 +8,31 @@ import (
 )
 
 // ============================================================================
+// Recipient — Recebedor de splits no gateway de pagamento.
+// Tabela: recipients (sql/14_recipients.sql)
+// ============================================================================
+
+type Recipient struct {
+	ID                  uint      `json:"id" gorm:"primaryKey"`
+	UserType            string    `json:"user_type" gorm:"column:user_type;size:20;not null"`  // establishment | delivery_man
+	UserID              int       `json:"user_id" gorm:"column:user_id;not null"`
+	Gateway             string    `json:"gateway" gorm:"column:gateway;size:20;not null"`     // pagarme | asaas | abacatepay | mercadopago
+	GatewayRecipientID  string    `json:"gateway_recipient_id" gorm:"column:gateway_recipient_id;size:128;not null"`
+	Status              string    `json:"status" gorm:"column:status;size:20;not null;default:'pending'"`
+	BankAccountLast4    string    `json:"bank_account_last4" gorm:"column:bank_account_last4;size:4"`
+	TransferInterval    string    `json:"transfer_interval" gorm:"column:transfer_interval;size:20;default:'daily'"`
+	TransferDay         int       `json:"transfer_day" gorm:"column:transfer_day"`
+	Metadata            string    `json:"metadata" gorm:"column:metadata;type:jsonb;default:'{}'"`
+	CreatedAt           time.Time `json:"created_at" gorm:"column:created_at;not null;default:now()"`
+	UpdatedAt           time.Time `json:"updated_at" gorm:"column:updated_at;not null;default:now()"`
+}
+
+// TableName retorna o nome da tabela no banco de dados.
+func (Recipient) TableName() string {
+	return "recipients"
+}
+
+// ============================================================================
 // Payment — CORTE 4 banco-único: substitui a collection MongoDB "payments".
 //
 // Mapeia a tabela `payments` (sql/03_dominio_pagamentos.sql), que é o
@@ -15,7 +40,7 @@ import (
 // manter o contrato de API com apps e painéis — a única mudança visível
 // é o campo `id`, que passou de hex ObjectID para numérico (string na
 // resposta continua aceitável pois os consumidores tratam como opaco).
-// ============================================================================
+// ==============================================================================
 
 // SplitRule mantém o mesmo shape do documento legado (json tags preservados).
 type SplitRule struct {

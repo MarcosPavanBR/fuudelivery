@@ -20,6 +20,23 @@ const api = axios.create({
 // Export for use by other services that need the base URL
 export const getApiBaseUrl = () => API_BASE_URL;
 
+// Request a short-lived WebSocket ticket (60s) using the current JWT.
+// The ticket avoids sending JWT in the WS query string.
+export async function requestWsTicket() {
+  const token = localStorage.getItem(Strings.token_jwt)
+  if (!token) {
+    throw new Error("No JWT token available")
+  }
+
+  const response = await api.post("/auth/ws-ticket", {}, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+
+  return response.data?.ticket || response.data?.expires_in
+}
+
 // Cookie helper for session-based auth
 function getCookie(name) {
   const value = `; ${document.cookie}`

@@ -289,7 +289,6 @@ func TestApplyCoupon_RaceCondition(t *testing.T) {
 				successCount++
 				mu.Unlock()
 			}
-			req.JSON()
 
 			_, err := app.Test(req)
 			if err == nil {

@@ -26,7 +26,7 @@ func TestGetCSRFToken(t *testing.T) {
 	}
 
 	// Check cookie is set
-	cookie := resp.Headers.Get("Set-Cookie")
+	cookie := resp.Header.Get("Set-Cookie")
 	if !strings.Contains(cookie, "csrf_token=") {
 		t.Errorf("expected Set-Cookie header with csrf_token, got: %s", cookie)
 	}
@@ -53,7 +53,7 @@ func TestGetCSRFTokenCookieLength(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	cookie := resp.Headers.Get("Set-Cookie")
+	cookie := resp.Header.Get("Set-Cookie")
 	// Extract token value
 	parts := strings.Split(cookie, ";")
 	var tokenValue string

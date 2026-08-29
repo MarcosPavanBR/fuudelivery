@@ -10,10 +10,31 @@ const FAKE_TOKEN =
 
 const FAKE_REFRESH = "fake-refresh-token-abc123";
 
+// Mocks hoisted para evitar problemas com vi.mock hoisting
+const { mockPost, mockGet } = vi.hoisted(() => {
+  return {
+    mockPost: vi.fn(),
+    mockGet: vi.fn(),
+  };
+});
+
+vi.mock("./services/api", () => ({
+  default: {
+    post: mockPost,
+    get: mockGet,
+    interceptors: {
+      request: { use: vi.fn() },
+      response: { use: vi.fn() },
+    },
+  },
+}));
+
 // ── Setup / Teardown ───────────────────────────────────────────
 beforeEach(() => {
   localStorage.clear();
   vi.clearAllMocks();
+  mockPost.mockClear();
+  mockGet.mockClear();
 });
 
 // ── 1. Smoke: App monta sem crashar ────────────────────────────
@@ -76,7 +97,6 @@ describe("Login Interaction", () => {
   });
 
   it("chama API POST /users/login ao submeter", async () => {
-    const mockPost = vi.fn();
     mockPost.mockResolvedValueOnce({
       data: { token: FAKE_TOKEN, refresh_token: FAKE_REFRESH },
     });
@@ -101,7 +121,6 @@ describe("Login Interaction", () => {
   });
 
   it("armazena token e refresh token no localStorage após login", async () => {
-    const mockPost = vi.fn();
     mockPost.mockResolvedValueOnce({
       data: { token: FAKE_TOKEN, refresh_token: FAKE_REFRESH },
     });
@@ -128,7 +147,6 @@ describe("Login Interaction", () => {
 // ── 4. Login com erro ──────────────────────────────────────────
 describe("Login Error Handling", () => {
   it("exibe mensagem de erro quando credenciais são inválidas", async () => {
-    const mockPost = vi.fn();
     mockPost.mockRejectedValueOnce({
       response: { status: 401, data: { error: "Unauthorized" } },
     });
@@ -151,7 +169,6 @@ describe("Login Error Handling", () => {
   });
 
   it("limpa erro anterior ao submeter novamente", async () => {
-    const mockPost = vi.fn();
     mockPost
       .mockRejectedValueOnce({
         response: { status: 401, data: { error: "Unauthorized" } },
@@ -193,7 +210,6 @@ describe("Login Error Handling", () => {
 // ── 5. Login redireciona para Dashboard ────────────────────────
 describe("Login Redirect", () => {
   it("redireciona para / após login bem-sucedido", async () => {
-    const mockPost = vi.fn();
     mockPost.mockResolvedValueOnce({
       data: { token: FAKE_TOKEN, refresh_token: FAKE_REFRESH },
     });
@@ -248,7 +264,6 @@ describe("Password Visibility Toggle", () => {
 describe("Authenticated Layout", () => {
   it("mostra sidebar com menu quando autenticado", () => {
     localStorage.setItem("fuu_admin_token", FAKE_TOKEN);
-    const mockGet = vi.fn();
     mockGet.mockResolvedValue({ data: [] });
 
     render(<App />);
@@ -260,7 +275,6 @@ describe("Authenticated Layout", () => {
 
   it("mostra nome do usuário no header", () => {
     localStorage.setItem("fuu_admin_token", FAKE_TOKEN);
-    const mockGet = vi.fn();
     mockGet.mockResolvedValue({ data: [] });
 
     render(<App />);

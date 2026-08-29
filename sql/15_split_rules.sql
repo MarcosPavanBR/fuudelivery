@@ -82,7 +82,7 @@ END
 $$;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON payment_split_rules TO app_backend;
-GRANT USAGE, SELECT ON SEQUENCES IN SCHEMA public TO app_backend;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_backend;
 
 INSERT INTO schema_migrations (version, description)
 VALUES ('15_split_rules', 'Cria tabela payment_split_rules para split automático de pagamentos')

@@ -484,3 +484,4 @@ fuudelivery
 
 # Package lock files for mobile apps
 Frontend/AppRestaurante/package-lock.json
+.env

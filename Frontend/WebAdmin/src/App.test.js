@@ -2,22 +2,6 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import App from "./App";
 
-// ── Mocks ──────────────────────────────────────────────────────
-// Mock completo da API para evitar qualquer chamada HTTP real.
-const mockPost = vi.fn();
-const mockGet = vi.fn();
-
-vi.mock("./services/api", () => ({
-  default: {
-    post: mockPost,
-    get: mockGet,
-    interceptors: {
-      request: { use: vi.fn() },
-      response: { use: vi.fn() },
-    },
-  },
-}));
-
 // Token JWT fake válido (payload = { sub: 1, role: "admin", name: "Test Admin" })
 const FAKE_TOKEN =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9." +
@@ -92,6 +76,7 @@ describe("Login Interaction", () => {
   });
 
   it("chama API POST /users/login ao submeter", async () => {
+    const mockPost = vi.fn();
     mockPost.mockResolvedValueOnce({
       data: { token: FAKE_TOKEN, refresh_token: FAKE_REFRESH },
     });
@@ -116,6 +101,7 @@ describe("Login Interaction", () => {
   });
 
   it("armazena token e refresh token no localStorage após login", async () => {
+    const mockPost = vi.fn();
     mockPost.mockResolvedValueOnce({
       data: { token: FAKE_TOKEN, refresh_token: FAKE_REFRESH },
     });
@@ -142,6 +128,7 @@ describe("Login Interaction", () => {
 // ── 4. Login com erro ──────────────────────────────────────────
 describe("Login Error Handling", () => {
   it("exibe mensagem de erro quando credenciais são inválidas", async () => {
+    const mockPost = vi.fn();
     mockPost.mockRejectedValueOnce({
       response: { status: 401, data: { error: "Unauthorized" } },
     });
@@ -164,6 +151,7 @@ describe("Login Error Handling", () => {
   });
 
   it("limpa erro anterior ao submeter novamente", async () => {
+    const mockPost = vi.fn();
     mockPost
       .mockRejectedValueOnce({
         response: { status: 401, data: { error: "Unauthorized" } },
@@ -205,6 +193,7 @@ describe("Login Error Handling", () => {
 // ── 5. Login redireciona para Dashboard ────────────────────────
 describe("Login Redirect", () => {
   it("redireciona para / após login bem-sucedido", async () => {
+    const mockPost = vi.fn();
     mockPost.mockResolvedValueOnce({
       data: { token: FAKE_TOKEN, refresh_token: FAKE_REFRESH },
     });
@@ -259,6 +248,7 @@ describe("Password Visibility Toggle", () => {
 describe("Authenticated Layout", () => {
   it("mostra sidebar com menu quando autenticado", () => {
     localStorage.setItem("fuu_admin_token", FAKE_TOKEN);
+    const mockGet = vi.fn();
     mockGet.mockResolvedValue({ data: [] });
 
     render(<App />);
@@ -270,6 +260,7 @@ describe("Authenticated Layout", () => {
 
   it("mostra nome do usuário no header", () => {
     localStorage.setItem("fuu_admin_token", FAKE_TOKEN);
+    const mockGet = vi.fn();
     mockGet.mockResolvedValue({ data: [] });
 
     render(<App />);

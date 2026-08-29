@@ -27,7 +27,7 @@ import { useNavigation } from "expo-router";
 import Texts from "@/constants/Texts";
 import api from "@/services/api";
 import Strings from "@/constants/Strings";
-import { useIsFocused } from "expo-router/react-navigation";
+import { useIsFocused } from "@react-navigation/core";
 import { useAuthApi } from "@/contexts/AuthContext";
 import Config, { MAP_STYLE_URL } from "@/constants/Config";
 

@@ -22,7 +22,7 @@ import { useAuthApi } from "@/contexts/AuthContext";
 import helper from "@/helpers/helper";
 import api from "@/services/api";
 import MinimizableModal from "@/componentes/ModalMinimize";
-import { useIsFocused } from "expo-router/react-navigation";
+import { useIsFocused } from "@react-navigation/core";
 import Config, { MAP_STYLE_URL } from "@/constants/Config";
 
 function HomeDelivery() {

@@ -13,7 +13,7 @@ import {
   RefreshControl,
   Image,
 } from "react-native";
-import { useFocusEffect } from "expo-router/react-navigation";
+import { useFocusEffect } from "@react-navigation/core";
 import api from "@/services/api";
 import { useApi } from "@/contexts/ApiContext";
 

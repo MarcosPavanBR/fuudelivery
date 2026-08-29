@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import api from "@/services/api";
 import { useAuthApi } from "@/contexts/AuthContext";
 import Texts from "@/constants/Texts";
-import { useIsFocused } from "expo-router/react-navigation";
+import { useIsFocused } from "@react-navigation/core";
 
 export default function TabTwoScreen() {
   const [orders, setOrders] = useState([]);

@@ -37,7 +37,7 @@ func RegisterEstablishment(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "name, owner_name, email, password, phone e address sao obrigatorios"})
 	}
 	if len(req.Password) < 8 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Password must be at least 6 characters"})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Password must be at least 8 characters"})
 	}
 
 	var existing models.User

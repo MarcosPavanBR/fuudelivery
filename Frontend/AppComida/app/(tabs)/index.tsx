@@ -3,7 +3,7 @@ import { RefreshControl, ScrollView, StyleSheet, Text } from "react-native";
 
 import Colors from "@/constants/Colors";
 import { useNavigation } from "expo-router";
-import { useIsFocused } from "expo-router/react-navigation";
+import { useIsFocused } from "@react-navigation/core";
 import { APP_MODE, APP_MODE_OPTIONS } from "@/config/config";
 import EstablishmentView from "@/components/EstablishmentView";
 import Establishment from "../establishment";

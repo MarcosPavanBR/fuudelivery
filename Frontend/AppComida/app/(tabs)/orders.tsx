@@ -10,7 +10,7 @@ import Colors from "@/constants/Colors";
 import OrderSummary from "@/components/OrderSummary";
 import { useEffect, useRef, useState } from "react";
 import { useApi } from "@/contexts/ApiContext";
-import { useIsFocused } from "expo-router/react-navigation";
+import { useIsFocused } from "@react-navigation/core";
 import Texts from "@/constants/Texts";
 import helpers from "@/helpers/helpers";
 import Strings from "@/constants/Strings";

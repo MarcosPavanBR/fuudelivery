@@ -1,7 +1,7 @@
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 // NativeWind: estilos globais Tailwind (ver tailwind.config.js e global.css)
 import "../global.css";
-import { DarkTheme, DefaultTheme, ThemeProvider } from "expo-router/react-navigation";
+import { DarkTheme, DefaultTheme } from "@react-navigation/native"; import { ThemeProvider } from "@react-navigation/core";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -15,9 +15,6 @@ import { migrateLegacyData } from "@/config/legacyMigration";
 import StackNav from "./nav";
 import { ErrorBoundary as AppErrorBoundary } from "@/components/ErrorBoundary";
 import "react-native-reanimated";
-export {
-  // Catch any errors thrown by the Layout component.
-  ErrorBoundary,
 import * as React from "react";
 
 export const unstable_settings = {

@@ -149,7 +149,7 @@ func CreateUserAdmin(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "name, email e password sao obrigatorios"})
 	}
 	if len(request.Password) < 8 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Password must be at least 6 characters"})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Password must be at least 8 characters"})
 	}
 	if request.Role == "" {
 		request.Role = "client"
@@ -336,7 +336,7 @@ func UpdateUser(c *fiber.Ctx) error {
 	}
 	if request.Password != "" {
 		if len(request.Password) < 8 {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Password must be at least 6 characters"})
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Password must be at least 8 characters"})
 		}
 		hashedPassword, hashErr := bcrypt.GenerateFromPassword([]byte(request.Password), bcrypt.DefaultCost)
 		if hashErr != nil {
@@ -358,7 +358,7 @@ func UpdateUser(c *fiber.Ctx) error {
 
 // ChangePassword altera a senha de um usuario.
 // Verifica que o usuario autenticado e o mesmo da requisicao.
-// Requer a senha atual (para confirmar identidade) e a nova senha (minimo 6 caracteres).
+// Requer a senha atual (para confirmar identidade) e a nova senha (minimo 8 caracteres).
 func ChangePassword(c *fiber.Ctx) error {
 	userID := c.Params("id")
 
@@ -382,7 +382,7 @@ func ChangePassword(c *fiber.Ctx) error {
 	}
 
 	if len(request.NewPassword) < 8 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "New password must be at least 6 characters"})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "New password must be at least 8 characters"})
 	}
 
 	var user models.User

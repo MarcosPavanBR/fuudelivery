@@ -200,7 +200,7 @@ func ResetPassword(c *fiber.Ctx) error {
 	req.Code = strings.ToUpper(strings.TrimSpace(req.Code))
 
 	if len(req.NewPassword) < 8 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Nova senha deve ter pelo menos 6 caracteres"})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Nova senha deve ter pelo menos 8 caracteres"})
 	}
 	if !isValidResetUserType(req.UserType) || req.Code == "" || req.Identifier == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": errInvalidCode})

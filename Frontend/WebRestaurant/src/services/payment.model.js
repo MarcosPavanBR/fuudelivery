@@ -12,7 +12,7 @@ import api from "./api";
 // Saldo + totais do ledger: { available, pending, blocked, total_earned,
 // total_withdrawn, last_updated }
 export const getWallet = async () => {
-  const response = await api.get("/wallet/establishment/balance");
+  const response = await api.get("/wallets/establishment/balance");
   return response.data;
 };
 
@@ -25,14 +25,14 @@ export const getExtract = async (limit = 20, cursor = "") => {
   if (cursor) params.append("cursor", cursor);
 
   const response = await api.get(
-    `/wallet/establishment/transactions?${params.toString()}`
+    `/wallets/establishment/transactions?${params.toString()}`
   );
   return response.data;
 };
 
 // Saque: { amount, destination, method }
 export const requestWithdraw = async (data) => {
-  const response = await api.post("/wallet/establishment/withdraw", {
+  const response = await api.post("/wallets/establishment/withdraw", {
     amount: data.amount,
     destination: data.destination,
     method: data.method,

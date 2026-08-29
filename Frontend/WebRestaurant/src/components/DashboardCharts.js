@@ -24,7 +24,7 @@ const DashboardCharts = ({ establishmentId }) => {
     try {
       // Busca relatório semanal do Payment Service
       const reportRes = await api.get(
-        `/reports/establishment/${establishmentId}?period=week`
+        `/payments/reports/establishment/${establishmentId}?period=week`
       );
       const report = reportRes.data;
 

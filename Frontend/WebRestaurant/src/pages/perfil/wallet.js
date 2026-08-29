@@ -41,23 +41,10 @@ export default function WalletPage() {
       return;
     }
 
-    setCreating(true);
-    try {
-      const res = await api.post("/asaas/wallet/create", formData);
-      const newWalletId = res.data.wallet_id;
-      setWalletId(newWalletId);
-
-      await api.put(
-        `/establishments/${user.establishment_id || user.id}/wallet`,
-        { payment_wallet_id: newWalletId }
-      );
-
-      toast.success("Conta de recebimento criada com sucesso!");
-    } catch (err) {
-      toast.error(err?.response?.data?.error || "Erro ao criar conta");
-    } finally {
-      setCreating(false);
-    }
+    // A funcionalidade de criar conta de recebimento está sendo
+    // migrada do Asaas para o novo sistema multi-gateway (Pagar.me, Asaas, etc.).
+    // Em breve disponível novamente.
+    toast.info("Funcionalidade em migração. Em breve disponível novamente.");
   };
 
   return (
@@ -74,9 +61,9 @@ export default function WalletPage() {
         }}
       >
         <p className="text-sm mb-4" style={{ color: "var(--text-secondary)" }}>
-          Crie sua conta de recebimento no Asaas para receber pagamentos de pedidos
-          diretamente na sua conta bancária. O split de pagamento é feito automaticamente
-          na origem — você recebe apenas a sua fatia.
+          A funcionalidade de criação de conta de recebimento está sendo migrada
+          para o novo sistema multi-gateway. Em breve você poderá criar sua conta
+          e receber pagamentos diretamente na sua conta bancária.
         </p>
 
         {walletId ? (
@@ -206,8 +193,8 @@ export default function WalletPage() {
             </div>
 
             <p className="text-xs mt-4" style={{ color: "var(--text-secondary)" }}>
-              Ao criar a conta, você concorda com os termos de uso do Asaas.
-              A conta é gratuita e sem mensalidade.
+              A criação de conta de recebimento será disponibilizada em breve
+              com suporte a múltiplos gateways de pagamento.
             </p>
           </>
         )}
@@ -224,10 +211,10 @@ export default function WalletPage() {
           Como funciona?
         </h2>
         <ul className="text-sm space-y-2" style={{ color: "var(--text-secondary)" }}>
-          <li>1. Crie sua conta de recebimento (gratuita, sem mensalidade)</li>
+          <li>1. Crie sua conta de recebimento (em breve)</li>
           <li>2. Quando um cliente paga o pedido, o valor é dividido automaticamente</li>
-          <li>3. Sua fatia (85%) vai direto para sua conta bancária</li>
-          <li>4. A plataforma (5%) e o entregador recebem suas partes automaticamente</li>
+          <li>3. Sua fatia vai direto para sua conta bancária</li>
+          <li>4. A plataforma e o entregador recebem suas partes automaticamente</li>
           <li>5. Sem necessidade de PIX manual ou transferência manual</li>
         </ul>
       </div>

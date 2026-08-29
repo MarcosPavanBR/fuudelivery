@@ -36,7 +36,7 @@ const Reports = () => {
     try {
       const establishmentId = user?.establishment?.id || user?.id;
       const { data } = await api.get(
-        `/reports/establishment/${establishmentId}?period=${period}`
+        `/payments/reports/establishment/${establishmentId}?period=${period}`
       );
       setStats(data);
       setLoadError(false);

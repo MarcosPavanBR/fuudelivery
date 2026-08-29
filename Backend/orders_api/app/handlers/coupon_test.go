@@ -4,6 +4,8 @@
 package handlers
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/carloshomar/fuudelivery/orders_api/app/dto"
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
+	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/assert"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -275,12 +278,17 @@ func TestApplyCoupon_RaceCondition(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			app := fiber.New()
-			app.Use(mock.Middleware())
 			app.Post("/coupons/apply", ApplyCoupon)
 
-			req := mock.CreateRequest("POST", "/coupons/apply")
-			req.Request().Header.Set("Content-Type", "application/json")
-			req.Request().Body = []byte(`{"code":"RACE10","user_phone":"+5511999900001","order_id":"order-1","order_value":100}`)
+			req := httptest.NewRequest(http.MethodPost, "/coupons/apply", strings.NewReader(`{"code":"RACE10","user_phone":"+5511999900001","order_id":"order-1","order_value":100}`))
+			req.Header.Set("Content-Type", "application/json")
+
+			_, err := app.Test(req)
+			if err == nil {
+				mu.Lock()
+				successCount++
+				mu.Unlock()
+			}
 			req.JSON()
 
 			_, err := app.Test(req)

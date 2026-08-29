@@ -79,6 +79,9 @@ type Payment struct {
 	MPPaymentID             int64      `gorm:"column:mp_payment_id" json:"mp_payment_id,omitempty"`
 	MPStatus                string     `gorm:"column:mp_status" json:"mp_status,omitempty"`
 	AbacatePayID            string     `gorm:"column:abacatepay_id" json:"abacatepay_id,omitempty"`
+	// Multi-gateway fields (migration 16)
+	Gateway                 string     `gorm:"column:gateway;default:'abacatepay'" json:"gateway,omitempty"`
+	GatewayTxID             string     `gorm:"column:gateway_transaction_id" json:"gateway_transaction_id,omitempty"`
 	CardLastDigits          string     `gorm:"column:card_last_digits" json:"card_last_digits,omitempty"`
 	CardToken               string     `gorm:"column:card_token" json:"card_token,omitempty"` // ⚠ nunca devolver em resposta de API (ver sql/03)
 	Installments            int        `gorm:"column:installments" json:"installments,omitempty"`

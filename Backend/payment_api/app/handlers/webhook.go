@@ -6,12 +6,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"time"
 
 	"github.com/carloshomar/fuudelivery/payment_api/app/models"
 	"github.com/carloshomar/fuudelivery/payment_api/app/services"
+	"github.com/carloshomar/fuudelivery/pkg/gateway"
 	"github.com/carloshomar/fuudelivery/pkg/queue"
 	"github.com/gofiber/fiber/v2"
 )
@@ -397,8 +399,19 @@ func ValidateWebhookSignature(body []byte, signature string) bool {
 }
 
 func HandlePaymentWebhook(c *fiber.Ctx) error {
-	// --- HMAC signature validation (defense-in-depth) ---
 	body := c.Body()
+
+	// ═══ DETECÇÃO MULTI-GATEWAY ═══
+	// O gateway é identificado pelos headers da requisição.
+	// Cada gateway usa um header de assinatura diferente.
+	gatewayName := detectGatewayFromHeaders(c)
+
+	if gatewayName != "" && services.IsGatewayEnabled() {
+		// Caminho novo: usar o adapter multi-gateway
+		return handleGatewayWebhook(c, body, gatewayName)
+	}
+
+	// ═══ CAMINHO LEGADO: AbacatePay ═══
 	signature := c.Get("x-abacatepay-signature")
 	if !ValidateWebhookSignature(body, signature) {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid webhook signature"})
@@ -467,4 +480,221 @@ func HandlePaymentWebhook(c *fiber.Ctx) error {
 		"status":  "processed",
 		"message": "Webhook processed successfully",
 	})
+}
+
+// defaultSplitRules calcula as regras de split de pagamento com base
+// nos percentuais configurados para a zona do estabelecimento.
+// Se platformPct + establishmentPct nao somarem 100%, o excedente
+// vai para customerCredit (cashback).
+func defaultSplitRules(payment *models.Payment, platformPct, establishmentPct float64) []models.SplitRule {
+	total := payment.Amount
+	platformFee := total * (platformPct / 100.0)
+	establishmentAmount := total * (establishmentPct / 100.0)
+	deliveryAmount := payment.DeliveryAmount
+	customerCredit := total - platformFee - establishmentAmount - deliveryAmount
+
+	if customerCredit < 0 {
+		overage := -customerCredit
+		customerCredit = 0
+		establishmentAmount -= overage
+		if establishmentAmount < 0 {
+			overage = -establishmentAmount
+			establishmentAmount = 0
+			platformFee -= overage
+			if platformFee < 0 {
+				platformFee = 0
+			}
+		}
+		log.Printf("[SPLIT] Warning: deliveryAmount=%.2f exceeds available%%, adjusted establishment=%.2f platform=%.2f", deliveryAmount, establishmentAmount, platformFee)
+	}
+
+	rules := []models.SplitRule{
+		{
+			ReceiverID:   0,
+			ReceiverType: "platform",
+			Amount:       platformFee,
+			Percentage:   platformPct,
+		},
+		{
+			ReceiverID:   payment.EstablishmentID,
+			ReceiverType: "establishment",
+			Amount:       establishmentAmount,
+			Percentage:   establishmentPct,
+		},
+	}
+
+	if deliveryAmount > 0 {
+		rules = append(rules, models.SplitRule{
+			ReceiverID:   0,
+			ReceiverType: "deliveryman",
+			Amount:       deliveryAmount,
+			Percentage:   0,
+		})
+	}
+
+	if customerCredit > 0 {
+		rules = append(rules, models.SplitRule{
+			ReceiverID:   payment.CustomerID,
+			ReceiverType: "customer",
+			Amount:       customerCredit,
+			Percentage:   0,
+		})
+	}
+
+	return rules
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MULTI-GATEWAY WEBHOOK HANDLERS
+// ═══════════════════════════════════════════════════════════════
+
+// detectGatewayFromHeaders identifica o gateway pelos headers HTTP.
+// Cada gateway usa um header de assinatura diferente:
+//   - AbacatePay: x-abacatepay-signature
+//   - Pagar.me:   x-pagarme-signature
+//   - Asaas:      access-token
+//   - MercadoPago: x-signature
+func detectGatewayFromHeaders(c *fiber.Ctx) string {
+	if c.Get("x-pagarme-signature") != "" {
+		return "pagarme"
+	}
+	if c.Get("access-token") != "" {
+		return "asaas"
+	}
+	if c.Get("x-signature") != "" {
+		return "mercadopago"
+	}
+	if c.Get("x-abacatepay-signature") != "" {
+		return "abacatepay"
+	}
+	return ""
+}
+
+// handleGatewayWebhook processa webhooks de qualquer gateway registrado.
+// O fluxo é:
+//  1. Validar assinatura via gateway adapter
+//  2. Parsear payload para formato unificado WebhookEvent
+//  3. Buscar pagamento pelo gateway_transaction_id
+//  4. Processar conforme o status (confirm, refund, etc)
+func handleGatewayWebhook(c *fiber.Ctx, body []byte, gatewayName string) error {
+	log.Printf("[WEBHOOK] Recebido de gateway: %s", gatewayName)
+
+	// 1. Validar assinatura via gateway adapter
+	headers := map[string]string{
+		"x-pagarme-signature":  c.Get("x-pagarme-signature"),
+		"access-token":         c.Get("access-token"),
+		"x-signature":          c.Get("x-signature"),
+		"x-abacatepay-signature": c.Get("x-abacatepay-signature"),
+	}
+
+	validatedName, valid := services.ValidateWebhookByGateway(body, headers)
+	if !valid {
+		log.Printf("[WEBHOOK] Assinatura inválida para gateway %s", gatewayName)
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid webhook signature"})
+	}
+	if validatedName != "" {
+		gatewayName = validatedName
+	}
+
+	// 2. Parsear payload para formato unificado
+	event, err := services.ParseGatewayWebhook(c.Context(), gatewayName, body)
+	if err != nil {
+		log.Printf("[WEBHOOK] Erro ao parsear webhook %s: %v", gatewayName, err)
+		return c.Status(400).JSON(fiber.Map{"error": "Failed to parse webhook"})
+	}
+
+	log.Printf("[WEBHOOK] Evento: gateway=%s type=%s txID=%s status=%s",
+		event.Gateway, event.EventType, event.TransactionID, event.Status)
+
+	// 3. Processar conforme o status
+	internalStatus := services.MapGatewayStatus(string(event.Status))
+
+	// Buscar pagamento pelo transaction ID do gateway
+	payment, err := findPaymentByGatewayTransactionID(gatewayName, event.TransactionID)
+	if err != nil {
+		// Fallback: buscar pelo abacatepay_id (legado)
+		payment, err = findPaymentByAbacatePayID(event.TransactionID)
+		if err != nil {
+			log.Printf("[WEBHOOK] Pagamento não encontrado: gateway=%s txID=%s: %v",
+				gatewayName, event.TransactionID, err)
+			return c.Status(200).JSON(fiber.Map{"status": "ignored", "message": "Payment not found"})
+		}
+	}
+
+	// 4. Processar conforme o status
+	switch event.Status {
+	case gateway.StatusPaid, gateway.StatusCaptured:
+		// Confirmar pagamento + split + credito carteira
+		if err := confirmGatewayPayment(payment, event); err != nil {
+			log.Printf("[WEBHOOK] Erro ao confirmar pagamento %d: %v", payment.ID, err)
+			return c.Status(500).JSON(fiber.Map{"error": "Failed to confirm payment"})
+		}
+
+	case gateway.StatusRefunded, gateway.StatusChargeback:
+		// Estorno/chargeback
+		processPaymentRefund(event.TransactionID)
+
+	case gateway.StatusFailed, gateway.StatusExpired, gateway.StatusVoided:
+		updateLocalPaymentStatus(event.TransactionID, internalStatus)
+
+	default:
+		log.Printf("[WEBHOOK] Status ignorado: %s", event.Status)
+	}
+
+	return c.Status(200).JSON(fiber.Map{
+		"status":  "processed",
+		"gateway": gatewayName,
+		"message": "Webhook processed successfully",
+	})
+}
+
+// findPaymentByGatewayTransactionID busca pagamento pelo gateway + txID.
+func findPaymentByGatewayTransactionID(gatewayName, txID string) (*models.Payment, error) {
+	var payment models.Payment
+	err := models.DB.Where("gateway = ? AND gateway_transaction_id = ?",
+		gatewayName, txID).First(&payment).Error
+	if err != nil {
+		return nil, err
+	}
+	return &payment, nil
+}
+
+// confirmGatewayPayment marca pagamento como CONFIRMED e processa split.
+func confirmGatewayPayment(payment *models.Payment, event *gateway.WebhookEvent) error {
+	now := time.Now()
+
+	// Atualizar status
+	updates := map[string]interface{}{
+		"status":       "CONFIRMED",
+		"confirmed_at":  now,
+		"captured_at":   now,
+	}
+	if err := models.DB.Model(payment).Updates(updates).Error; err != nil {
+		return fmt.Errorf("falha ao atualizar pagamento: %w", err)
+	}
+
+	// Processar split se habilitado
+	if os.Getenv("PAYMENT_SPLIT_ENABLED") == "true" {
+		rules := defaultSplitRules(payment, 5.0, 85.0)
+		if err := models.DB.Model(payment).Updates(map[string]interface{}{
+			"split_rules": models.SplitRules(rules),
+			"status":      "SPLIT",
+		}).Error; err != nil {
+			log.Printf("[WEBHOOK] Falha ao salvar split rules: %v", err)
+		}
+
+		// Creditar carteira do estabelecimento
+		credito := establishmentShare(rules)
+		if credito > 0 {
+			log.Printf("[WEBHOOK] Credito estabelecimento %d: R$%.2f (payment=%d)",
+				payment.EstablishmentID, credito, payment.ID)
+		}
+	}
+
+	// Notificar pagamento confirmado
+	publishPaymentApproved(event.TransactionID)
+
+	log.Printf("[WEBHOOK] Pagamento %d confirmado via %s (tx=%s)",
+		payment.ID, event.Gateway, event.TransactionID)
+	return nil
 }

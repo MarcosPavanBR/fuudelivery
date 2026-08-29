@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math"
@@ -18,9 +19,9 @@ func toCents(amount float64) int64 {
 	return int64(math.Round(amount * 100))
 }
 
-// GeneratePIX cria uma cobrança PIX no gateway (AbacatePay) e persiste o
-// pagamento em Postgres (corte 4 — fonte da verdade), com dual-write
-// best-effort no Mongo legado.
+// GeneratePIX cria uma cobrança PIX e persiste o pagamento em Postgres.
+// Suporta multi-gateway: tenta o router (Pagar.me/Asaas/MercadoPago) primeiro,
+// e faz fallback para o AbacatePay legado se o router não estiver disponível.
 func GeneratePIX(c *fiber.Ctx) error {
 	var req dto.PaymentRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -39,6 +40,66 @@ func GeneratePIX(c *fiber.Ctx) error {
 	}
 	req.Amount = serverTotal
 
+	// ═══ CAMINHO NOVO: Multi-gateway ═══
+	if services.IsGatewayEnabled() {
+		gwResult, processed := services.ProcessPaymentViaGateway(context.Background(), services.GatewayPaymentRequest{
+			OrderID:         req.OrderID,
+			CustomerID:      req.CustomerID,
+			CustomerPhone:   req.CustomerPhone,
+			EstablishmentID: req.EstablishmentID,
+			Amount:          req.Amount,
+			DeliveryAmount:  req.DeliveryAmount,
+			Method:          "pix",
+			Description:     description,
+		})
+
+		if processed && gwResult != nil {
+			// Persistir pagamento no Postgres com dados do gateway
+			payment := models.Payment{
+				OrderID:         req.OrderID,
+				CustomerID:      req.CustomerID,
+				CustomerPhone:   req.CustomerPhone,
+				EstablishmentID: req.EstablishmentID,
+				Amount:          req.Amount,
+				DeliveryAmount:  req.DeliveryAmount,
+				Method:          "pix",
+				Status:          "PENDING",
+				PixQRCode:       gwResult.PixQRCode,
+				PixCopyPaste:    gwResult.PixCopyPaste,
+				QRCodeBase64:    gwResult.QRCodeBase64,
+				Gateway:         gwResult.GatewayName,
+				GatewayTxID:     gwResult.GatewayID,
+				CreatedAt:       time.Now(),
+			}
+
+			if err := models.DB.Create(&payment).Error; err != nil {
+				log.Printf("[PIX] Erro ao salvar pagamento no Postgres: %v", err)
+				return c.Status(500).JSON(fiber.Map{"error": "Failed to save payment"})
+			}
+
+			response := dto.PaymentResponse{
+				PaymentID:    payment.IDString(),
+				Status:       "PENDING",
+				PixQRCode:    gwResult.PixQRCode,
+				PixCopyPaste: gwResult.PixCopyPaste,
+				QRCodeBase64: gwResult.QRCodeBase64,
+				Message:      fmt.Sprintf("PIX payment created via %s", gwResult.GatewayName),
+			}
+
+			log.Printf("[PIX] Cobrança criada via %s: order=%s gateway_id=%s",
+				gwResult.GatewayName, req.OrderID, gwResult.GatewayID)
+			return c.Status(201).JSON(response)
+		}
+		// Se o gateway retornou false, usar caminho legado
+	}
+
+	// ═══ CAMINHO LEGADO: AbacatePay direto ═══
+	return generatePIXLegacy(c, req, description)
+}
+
+// generatePIXLegacy é o caminho original usando AbacatePay diretamente.
+// Mantido como fallback quando o router multi-gateway não está configurado.
+func generatePIXLegacy(c *fiber.Ctx, req dto.PaymentRequest, description string) error {
 	client := services.NewAbacatePayClient()
 	chargeReq := services.PIXChargeRequest{}
 	// req.Amount está em REAIS (unidade persistida no Postgres); o gateway

@@ -78,7 +78,7 @@ END
 $$;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON recipients TO app_backend;
-GRANT USAGE, SELECT ON SEQUENCES IN SCHEMA public TO app_backend;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_backend;
 
 INSERT INTO schema_migrations (version, description)
 VALUES ('14_recipients', 'Cria tabela recipients para recebedores multi-gateway (split automático)')

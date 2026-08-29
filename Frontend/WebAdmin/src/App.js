@@ -59,6 +59,11 @@ const ProtectedRoute = ({ children }) => {
     return <Navigate to="/login" replace />;
   }
 
+  // Security: only admin users can access the admin panel.
+  if (user.role !== "admin") {
+    return <Navigate to="/login" replace />;
+  }
+
   return children;
 };
 

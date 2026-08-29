@@ -148,7 +148,7 @@ func CreateUserAdmin(c *fiber.Ctx) error {
 	if request.Name == "" || request.Email == "" || request.Password == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "name, email e password sao obrigatorios"})
 	}
-	if len(request.Password) < 6 {
+	if len(request.Password) < 8 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Password must be at least 6 characters"})
 	}
 	if request.Role == "" {
@@ -247,10 +247,19 @@ func Login(c *fiber.Ctx) error {
 }
 
 func GetUser(c *fiber.Ctx) error {
-
 	userID := c.Params("id")
-	var user models.User
 
+	// Ownership: o usuario so pode ver seu proprio perfil, ou admin ve qualquer um.
+	tokenUserID, err := middlewares.GetUserIDFromToken(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+	}
+	role, _ := middlewares.GetUserRoleFromToken(c)
+	if role != "admin" && fmt.Sprintf("%d", tokenUserID) != userID {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot view another user's profile"})
+	}
+
+	var user models.User
 	if err := models.DB.First(&user, userID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
 	}
@@ -326,7 +335,7 @@ func UpdateUser(c *fiber.Ctx) error {
 		}
 	}
 	if request.Password != "" {
-		if len(request.Password) < 6 {
+		if len(request.Password) < 8 {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Password must be at least 6 characters"})
 		}
 		hashedPassword, hashErr := bcrypt.GenerateFromPassword([]byte(request.Password), bcrypt.DefaultCost)
@@ -372,7 +381,7 @@ func ChangePassword(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to parse request body"})
 	}
 
-	if len(request.NewPassword) < 6 {
+	if len(request.NewPassword) < 8 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "New password must be at least 6 characters"})
 	}
 

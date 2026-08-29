@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 
+	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/auth_api/app/models"
 	"github.com/gofiber/fiber/v2"
 )
@@ -17,10 +18,34 @@ type BusinessHoursRequest struct {
 	BreakEndTime    string `json:"break_end_time,omitempty"`
 }
 
+func verifyOwnership(c *fiber.Ctx, establishmentID uint) error {
+	tokenUserID, err := middlewares.GetUserIDFromToken(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+	}
+	role, _ := middlewares.GetUserRoleFromToken(c)
+	if role == "admin" {
+		return nil // admin can edit any
+	}
+	var authUser models.User
+	if dbErr := models.DB.First(&authUser, tokenUserID).Error; dbErr != nil {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot edit another establishment's data"})
+	}
+	if authUser.EstablishmentID != establishmentID {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot edit another establishment's data"})
+	}
+	return nil
+}
+
 func UpsertBusinessHours(c *fiber.Ctx) error {
 	var req BusinessHoursRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
+	}
+
+	// IDOR protection: verify ownership of the establishment.
+	if err := verifyOwnership(c, req.EstablishmentID); err != nil {
+		return err
 	}
 
 	hours := models.BusinessHours{
@@ -75,6 +100,14 @@ func BulkUpdateBusinessHours(c *fiber.Ctx) error {
 	var reqs []BusinessHoursRequest
 	if err := c.BodyParser(&reqs); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
+	}
+
+	// IDOR protection: verify ownership on the first entry.
+	// All entries must target the same establishment.
+	if len(reqs) > 0 {
+		if err := verifyOwnership(c, reqs[0].EstablishmentID); err != nil {
+			return err
+		}
 	}
 
 	for _, req := range reqs {

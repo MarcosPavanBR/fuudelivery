@@ -376,6 +376,11 @@ func ListOrdersByEstablishmentID(c *fiber.Ctx) error {
 		})
 	}
 
+	// IDOR protection: verify the caller owns this establishment.
+	if !canActOnEstablishment(c, int64(establishmentIDInt)) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot view another establishment's orders"})
+	}
+
 	// Postgres primário (corte 5).
 	var docs []models.OrderDocument
 	if models.DB != nil {

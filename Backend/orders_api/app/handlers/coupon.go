@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/orders_api/app/dto"
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
@@ -327,12 +328,20 @@ func ValidateCouponInternal(req dto.ValidateCouponRequest) dto.ValidateCouponRes
 }
 
 func ListCoupons(c *fiber.Ctx) error {
-	establishmentID := c.Query("establishment_id")
+	// IDOR protection: filter by establishment_id from token, not query param.
+	estID, err := middlewares.GetEstablishmentIDFromToken(c)
+	if err != nil {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Establishment ID not found in token"})
+	}
+	role, _ := middlewares.GetUserRoleFromToken(c)
+	if role != "admin" && estID <= 0 {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "No establishment linked"})
+	}
 
 	var coupons []models.Coupon
 	query := models.DB
-	if establishmentID != "" {
-		query = query.Where("establishment_id = ? OR establishment_id = 0", establishmentID)
+	if role != "admin" {
+		query = query.Where("establishment_id = ?", estID)
 	}
 	query.Order("created_at DESC").Find(&coupons)
 
@@ -347,6 +356,16 @@ func GetCoupon(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Cupom não encontrado"})
 	}
 
+	// IDOR protection: verify ownership.
+	estID, err := middlewares.GetEstablishmentIDFromToken(c)
+	if err != nil {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Establishment ID not found in token"})
+	}
+	role, _ := middlewares.GetUserRoleFromToken(c)
+	if role != "admin" && coupon.EstablishmentID != uint(estID) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot view another establishment's coupon"})
+	}
+
 	return c.JSON(coupon)
 }
 
@@ -356,6 +375,16 @@ func DeleteCoupon(c *fiber.Ctx) error {
 	var coupon models.Coupon
 	if err := models.DB.First(&coupon, id).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Cupom não encontrado"})
+	}
+
+	// IDOR protection: verify ownership.
+	estID, err := middlewares.GetEstablishmentIDFromToken(c)
+	if err != nil {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Establishment ID not found in token"})
+	}
+	role, _ := middlewares.GetUserRoleFromToken(c)
+	if role != "admin" && coupon.EstablishmentID != uint(estID) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot delete another establishment's coupon"})
 	}
 
 	coupon.IsActive = false

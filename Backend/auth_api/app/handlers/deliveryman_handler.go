@@ -143,7 +143,7 @@ func UpdateDeliveryMan(c *fiber.Ctx) error {
 		updates["zone_id"] = *request.ZoneID
 	}
 	if request.Password != "" {
-		if len(request.Password) < 6 {
+		if len(request.Password) < 8 {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Password must be at least 6 characters"})
 		}
 		hashedPassword, hashErr := bcrypt.GenerateFromPassword([]byte(request.Password), bcrypt.DefaultCost)

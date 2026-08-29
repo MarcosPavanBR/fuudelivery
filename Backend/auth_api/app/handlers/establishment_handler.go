@@ -36,7 +36,7 @@ func RegisterEstablishment(c *fiber.Ctx) error {
 	if req.Name == "" || req.OwnerName == "" || req.Email == "" || req.Password == "" || req.Phone == "" || req.Address == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "name, owner_name, email, password, phone e address sao obrigatorios"})
 	}
-	if len(req.Password) < 6 {
+	if len(req.Password) < 8 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Password must be at least 6 characters"})
 	}
 
@@ -228,8 +228,24 @@ func GetUserByEstablishment(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "id not found"})
 	}
-	var user []models.User
 
+	// IDOR protection: verify the caller owns this establishment.
+	tokenUserID, uErr := middlewares.GetUserIDFromToken(c)
+	if uErr != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+	}
+	role, _ := middlewares.GetUserRoleFromToken(c)
+	if role != "admin" {
+		var authUser models.User
+		if dbErr := models.DB.First(&authUser, tokenUserID).Error; dbErr != nil {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot list users of another establishment"})
+		}
+		if authUser.EstablishmentID != uint(establishmentId) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot list users of another establishment"})
+		}
+	}
+
+	var user []models.User
 	if err := models.DB.Select("name", "email", "id", "establishment_id").Where(&models.User{
 		EstablishmentID: uint(establishmentId),
 	}).Find(&user).Error; err != nil {
@@ -245,6 +261,22 @@ func HandlerEstablishmentStatus(c *fiber.Ctx) error {
 	var establishment models.Establishment
 	if err := models.DB.First(&establishment, establishmentID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Establishment not found"})
+	}
+
+	// IDOR protection: verify the caller owns this establishment.
+	tokenUserID, uErr := middlewares.GetUserIDFromToken(c)
+	if uErr != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+	}
+	role, _ := middlewares.GetUserRoleFromToken(c)
+	if role != "admin" {
+		var authUser models.User
+		if dbErr := models.DB.First(&authUser, tokenUserID).Error; dbErr != nil {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot toggle status of another establishment"})
+		}
+		if authUser.EstablishmentID != establishment.ID {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot toggle status of another establishment"})
+		}
 	}
 
 	if establishment.OpenData != nil {

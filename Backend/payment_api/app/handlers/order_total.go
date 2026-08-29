@@ -3,6 +3,7 @@ package handlers
 import (
 	"log"
 
+	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/payment_api/app/models"
 	"github.com/gofiber/fiber/v2"
 )
@@ -66,6 +67,16 @@ func GetPaymentByOrder(c *fiber.Ctx) error {
 	if err := models.DB.Where("order_id = ?", orderID).
 		Order("created_at DESC").First(&payment).Error; err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Nenhuma cobrança encontrada para este pedido"})
+	}
+
+	// IDOR protection: verify the caller can access this payment.
+	// Admin can see anything; restaurant can only see their own establishment's payments.
+	role, _ := middlewares.GetUserRoleFromToken(c)
+	if role != "admin" {
+		tokenEst, err := middlewares.GetEstablishmentIDFromToken(c)
+		if err != nil || tokenEst != payment.EstablishmentID {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot view another establishment's payment"})
+		}
 	}
 
 	return c.JSON(fiber.Map{

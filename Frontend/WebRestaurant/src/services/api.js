@@ -155,12 +155,5 @@ api.interceptors.response.use(
   }
 );
 
-// Gera um ticket de autenticação para WebSocket (anti-replay).
-// O backend expira o ticket em 30s — o cliente deve conectar nesse prazo.
-export async function requestWsTicket() {
-  const res = await api.get("/ws/ticket", { withCredentials: true });
-  return res.data?.ticket;
-}
-
 // API genérica com interceptors já aplicados
 export default api;

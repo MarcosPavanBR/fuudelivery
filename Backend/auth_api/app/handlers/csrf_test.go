@@ -30,14 +30,14 @@ func TestGetCSRFToken(t *testing.T) {
 	if !strings.Contains(cookie, "csrf_token=") {
 		t.Errorf("expected Set-Cookie header with csrf_token, got: %s", cookie)
 	}
-	if !strings.Contains(cookie, "HttpOnly") {
-		t.Errorf("expected HttpOnly flag in cookie, got: %s", cookie)
+	if strings.Contains(cookie, "HttpOnly") {
+		t.Errorf("expected HttpOnly to be absent (frontend needs JS access), got: %s", cookie)
 	}
 	if !strings.Contains(cookie, "SameSite=Strict") {
 		t.Errorf("expected SameSite=Strict in cookie, got: %s", cookie)
 	}
-	if !strings.Contains(cookie, "Secure") {
-		t.Errorf("expected Secure flag in cookie, got: %s", cookie)
+	if !strings.Contains(cookie, "secure") {
+		t.Errorf("expected secure flag in cookie, got: %s", cookie)
 	}
 }
 

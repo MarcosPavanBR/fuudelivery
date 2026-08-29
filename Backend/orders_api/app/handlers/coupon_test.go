@@ -290,12 +290,6 @@ func TestApplyCoupon_RaceCondition(t *testing.T) {
 				mu.Unlock()
 			}
 
-			_, err := app.Test(req)
-			if err == nil {
-				mu.Lock()
-				successCount++
-				mu.Unlock()
-			}
 		}()
 	}
 

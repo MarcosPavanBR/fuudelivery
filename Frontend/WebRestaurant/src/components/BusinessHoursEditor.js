@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import api from "../services/api";
 import { FiClock, FiSave, FiLoader } from "react-icons/fi";
+import { toast } from "react-toastify";
 
 const DAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 
@@ -43,17 +44,29 @@ const BusinessHoursEditor = ({ establishmentId }) => {
   };
 
   const saveHours = async () => {
+    if (saving) return;
+    if (!establishmentId) {
+      toast.error("Faça login novamente para continuar.");
+      return;
+    }
     setSaving(true);
     try {
       await api.post(
         "/establishments/hours/bulk",
         hours.map((h) => ({ ...h, establishment_id: establishmentId }))
       );
-      alert("Horários salvos!");
+      toast.success("Horários salvos com sucesso!");
     } catch (e) {
-      alert("Erro ao salvar");
+      const status = e?.response?.status;
+      if (status === 401 || status === 403) {
+        toast.error("Sessão expirada. Faça login novamente.");
+      } else {
+        const msg = e?.response?.data?.error || "Erro ao salvar horários.";
+        toast.error(msg);
+      }
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   return (

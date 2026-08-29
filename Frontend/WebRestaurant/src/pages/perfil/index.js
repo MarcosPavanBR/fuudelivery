@@ -92,12 +92,28 @@ function Perfil() {
 
   async function submit(e) {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
-    const estId = getUser()?.establishment_id || getUser()?.establishment?.id || getUser()?.sub;
-    const resp = await restaurantModel.updateEstablishment(estId, establishment);
-    if (resp) toast.success(Texts.restaurant_update);
-    else toast.error(Texts.restaurant_error);
-    setLoading(false);
+    try {
+      const estId = getUser()?.establishment_id || getUser()?.establishment?.id || getUser()?.sub;
+      if (!estId) {
+        toast.error("Faça login novamente para continuar.");
+        setLoading(false);
+        return;
+      }
+      await restaurantModel.updateEstablishment(estId, establishment);
+      toast.success(Texts.restaurant_update);
+    } catch (err) {
+      const status = err?.response?.status;
+      if (status === 401 || status === 403) {
+        toast.error("Sessão expirada. Faça login novamente.");
+      } else {
+        const msg = err?.response?.data?.error || Texts.restaurant_error;
+        toast.error(msg);
+      }
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => { init(); }, []);

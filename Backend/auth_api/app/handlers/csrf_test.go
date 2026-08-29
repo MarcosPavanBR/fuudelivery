@@ -30,7 +30,7 @@ func TestGetCSRFToken(t *testing.T) {
 	if !strings.Contains(cookie, "csrf_token=") {
 		t.Errorf("expected Set-Cookie header with csrf_token, got: %s", cookie)
 	}
-	if !strings.Contains(cookie, "HttpOnly") {
+	if strings.Contains(cookie, "HttpOnly") {
 		t.Errorf("expected HttpOnly to be absent (frontend needs JS access), got: %s", cookie)
 	}
 	if !strings.Contains(cookie, "secure") {

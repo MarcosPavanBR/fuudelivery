@@ -478,3 +478,9 @@ fuudelivery
 # Track test files in cmd/fuudelivery/ directory
 !cmd/fuudelivery/
 !cmd/fuudelivery/*.go
+
+# Python venv
+.venv/
+
+# Package lock files for mobile apps
+Frontend/AppRestaurante/package-lock.json

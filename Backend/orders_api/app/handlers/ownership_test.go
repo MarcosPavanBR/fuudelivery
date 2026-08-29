@@ -3,13 +3,15 @@ package handlers
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
+	"time"
 
 	authModels "github.com/carloshomar/fuudelivery/auth_api/app/models"
-	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -22,6 +24,24 @@ func setupTestDB() *gorm.DB {
 	}
 	db.AutoMigrate(&models.Product{}, &models.Category{}, &authModels.Establishment{})
 	return db
+}
+
+func createTestToken(role string, establishmentID int64) string {
+	os.Setenv("JWT_SECRET", "test-secret-key-for-ci")
+	defer os.Unsetenv("JWT_SECRET")
+
+	claims := jwt.MapClaims{
+		"id":              float64(42),
+		"name":            "Test User",
+		"email":           "test@example.com",
+		"role":            role,
+		"establishment_id": establishmentID,
+		"exp":             time.Now().UTC().Add(time.Hour * 24 * 7).Unix(),
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, _ := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
+	return tokenString
 }
 
 func TestCreateProduct_OwnershipCheck(t *testing.T) {
@@ -73,14 +93,13 @@ func TestCanActOnEstablishment(t *testing.T) {
 			app := fiber.New()
 			var result bool
 			app.Get("/test", func(c *fiber.Ctx) error {
-				middlewares.SetTestRole(tt.role)
-				middlewares.SetTestEstablishmentID(tt.tokenEstID)
 				result = canActOnEstablishment(c, tt.estID)
 				return c.SendStatus(200)
 			})
 
+			token := createTestToken(tt.role, tt.tokenEstID)
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
-			req.Header.Set("Authorization", "Bearer token")
+			req.Header.Set("Authorization", "Bearer "+token)
 			_, err := app.Test(req)
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expected, result)

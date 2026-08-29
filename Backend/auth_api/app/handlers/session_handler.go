@@ -1,15 +1,15 @@
 package handlers
 
 import (
-	"log"
 	"errors"
+	"log"
 	"time"
 
-	"github.com/carloshomar/fuudelivery/auth_api/app/models"
 	"github.com/carloshomar/fuudelivery/auth_api/app/dto"
 	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
-	"golang.org/x/crypto/bcrypt"
+	"github.com/carloshomar/fuudelivery/auth_api/app/models"
 	"github.com/gofiber/fiber/v2"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // setAuthCookies define cookies HttpOnly para access e refresh tokens.

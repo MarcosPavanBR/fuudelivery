@@ -10,13 +10,13 @@ type mockGateway struct {
 	name string
 }
 
-func (m *mockGateway) Name() string                                         { return m.name }
-func (m *mockGateway) SupportsMethod(PaymentMethod) bool                    { return true }
-func (m *mockGateway) SupportsSplit() bool                                  { return false }
-func (m *mockGateway) SupportsPreAuth() bool                                { return false }
-func (m *mockGateway) Supports3DS() bool                                    { return false }
-func (m *mockGateway) SupportsEscrow() bool                                 { return false }
-func (m *mockGateway) MaxSplitRecipients() int                              { return 0 }
+func (m *mockGateway) Name() string                      { return m.name }
+func (m *mockGateway) SupportsMethod(PaymentMethod) bool { return true }
+func (m *mockGateway) SupportsSplit() bool               { return false }
+func (m *mockGateway) SupportsPreAuth() bool             { return false }
+func (m *mockGateway) Supports3DS() bool                 { return false }
+func (m *mockGateway) SupportsEscrow() bool              { return false }
+func (m *mockGateway) MaxSplitRecipients() int           { return 0 }
 func (m *mockGateway) CreateTransaction(context.Context, *TransactionRequest) (*TransactionResponse, error) {
 	return &TransactionResponse{Gateway: m.name, Status: StatusPaid}, nil
 }
@@ -24,7 +24,7 @@ func (m *mockGateway) CaptureTransaction(context.Context, string, int64) error {
 func (m *mockGateway) RefundTransaction(context.Context, string, int64) (*RefundResponse, error) {
 	return nil, nil
 }
-func (m *mockGateway) VoidTransaction(context.Context, string) error         { return nil }
+func (m *mockGateway) VoidTransaction(context.Context, string) error { return nil }
 func (m *mockGateway) GetTransactionStatus(context.Context, string) (TransactionStatus, error) {
 	return StatusPaid, nil
 }

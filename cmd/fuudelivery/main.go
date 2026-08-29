@@ -48,14 +48,14 @@ import (
 	orderServices "github.com/carloshomar/fuudelivery/orders_api/app/services"
 
 	// Queue + Health + Upload + Metrics + Search
-	"github.com/carloshomar/fuudelivery/pkg/health"
-	"github.com/carloshomar/fuudelivery/pkg/metrics"
-	"github.com/carloshomar/fuudelivery/pkg/queue"
 	"github.com/carloshomar/fuudelivery/pkg/gateway"
 	"github.com/carloshomar/fuudelivery/pkg/gateway/abacatepay"
 	"github.com/carloshomar/fuudelivery/pkg/gateway/asaas"
 	"github.com/carloshomar/fuudelivery/pkg/gateway/mercadopago"
 	"github.com/carloshomar/fuudelivery/pkg/gateway/pagarme"
+	"github.com/carloshomar/fuudelivery/pkg/health"
+	"github.com/carloshomar/fuudelivery/pkg/metrics"
+	"github.com/carloshomar/fuudelivery/pkg/queue"
 	"github.com/carloshomar/fuudelivery/pkg/search"
 	"github.com/carloshomar/fuudelivery/pkg/upload"
 )
@@ -1506,9 +1506,8 @@ func main() {
 		AllowOriginsFunc: isLocalDevOrigin,
 		AllowCredentials: true,
 		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
-		AllowHeaders: "Origin,Content-Type,Accept,Authorization,X-CSRF-Token",
+		AllowHeaders:     "Origin,Content-Type,Accept,Authorization,X-CSRF-Token",
 	}))
-
 
 	// Content Security Policy — previne execução de scripts arbitrários.
 	app.Use(func(c *fiber.Ctx) error {
@@ -1564,10 +1563,10 @@ func main() {
 			"service": "fuudelivery",
 			"version": "1.0.0",
 			"checks": fiber.Map{
-				"postgres":        postgresCheck,
-				"redis":           redisCheck,
-				"redis_geo":       redisGeoCheck,
-				"batches":         batchesCheck,
+				"postgres":         postgresCheck,
+				"redis":            redisCheck,
+				"redis_geo":        redisGeoCheck,
+				"batches":          batchesCheck,
 				"payment_gateways": gatewaysCheck,
 			},
 			"time": time.Now().UTC(),

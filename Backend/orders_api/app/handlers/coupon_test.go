@@ -251,13 +251,13 @@ func TestApplyCoupon_RaceCondition(t *testing.T) {
 	models.DB = db
 
 	coupon := models.Coupon{
-		Code:        "RACE10",
-		DiscountType: "PERCENTAGE",
+		Code:          "RACE10",
+		DiscountType:  "PERCENTAGE",
 		DiscountValue: 10,
-		MaxUses:     2,
-		IsActive:     true,
-		StartDate:    time.Now().Add(-time.Hour),
-		ExpiryDate:   time.Now().Add(time.Hour),
+		MaxUses:       2,
+		IsActive:      true,
+		StartDate:     time.Now().Add(-time.Hour),
+		ExpiryDate:    time.Now().Add(time.Hour),
 	}
 	models.DB.Create(&coupon)
 

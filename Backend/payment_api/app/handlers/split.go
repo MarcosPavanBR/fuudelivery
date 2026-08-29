@@ -5,8 +5,8 @@ import (
 	"strconv"
 
 	"github.com/carloshomar/fuudelivery/payment_api/app/dto"
-	"github.com/carloshomar/fuudelivery/payment_api/app/services"
 	"github.com/carloshomar/fuudelivery/payment_api/app/models"
+	"github.com/carloshomar/fuudelivery/payment_api/app/services"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -34,10 +34,10 @@ func ProcessSplit(c *fiber.Ctx) error {
 	rules := req.Rules
 	if len(rules) == 0 {
 		splitResult, err := services.CalculateSplitRules(&payment, 5.0, 85.0)
-	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid split configuration"})
-	}
-	rules = splitResult.Rules
+		if err != nil {
+			return c.Status(400).JSON(fiber.Map{"error": "Invalid split configuration"})
+		}
+		rules = splitResult.Rules
 	}
 
 	var totalSplit float64

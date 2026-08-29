@@ -55,11 +55,11 @@ func TestGetByEstablishmentId_ErrorCheck(t *testing.T) {
 
 func TestCanActOnEstablishment(t *testing.T) {
 	tests := []struct {
-		name        string
-		role        string
-		estID       int64
-		tokenEstID  int64
-		expected    bool
+		name       string
+		role       string
+		estID      int64
+		tokenEstID int64
+		expected   bool
 	}{
 		{"admin can access any", "admin", 1, 2, true},
 		{"restaurant owns establishment", "restaurant", 1, 1, true},

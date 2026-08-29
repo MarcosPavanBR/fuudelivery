@@ -581,9 +581,9 @@ func handleGatewayWebhook(c *fiber.Ctx, body []byte, gatewayName string) error {
 
 	// 1. Validar assinatura via gateway adapter
 	headers := map[string]string{
-		"x-pagarme-signature":  c.Get("x-pagarme-signature"),
-		"access-token":         c.Get("access-token"),
-		"x-signature":          c.Get("x-signature"),
+		"x-pagarme-signature":    c.Get("x-pagarme-signature"),
+		"access-token":           c.Get("access-token"),
+		"x-signature":            c.Get("x-signature"),
 		"x-abacatepay-signature": c.Get("x-abacatepay-signature"),
 	}
 
@@ -666,8 +666,8 @@ func confirmGatewayPayment(payment *models.Payment, event *gateway.WebhookEvent)
 	// Atualizar status
 	updates := map[string]interface{}{
 		"status":       "CONFIRMED",
-		"confirmed_at":  now,
-		"captured_at":   now,
+		"confirmed_at": now,
+		"captured_at":  now,
 	}
 	if err := models.DB.Model(payment).Updates(updates).Error; err != nil {
 		return fmt.Errorf("falha ao atualizar pagamento: %w", err)

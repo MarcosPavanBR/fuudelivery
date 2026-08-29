@@ -63,22 +63,22 @@ func (s *SplitRules) Scan(src interface{}) error {
 }
 
 type Payment struct {
-	ID                      int64      `gorm:"primaryKey;column:id" json:"id"`
-	OrderID                 string     `gorm:"column:order_id" json:"order_id"`
-	CustomerID              int64      `gorm:"column:customer_id" json:"customer_id"`
-	CustomerPhone           string     `gorm:"column:customer_phone" json:"customer_phone,omitempty"`
-	EstablishmentID         int64      `gorm:"column:establishment_id" json:"establishment_id"`
-	Amount                  float64    `gorm:"column:amount" json:"amount"`
-	DeliveryAmount          float64    `gorm:"column:delivery_amount" json:"delivery_amount,omitempty"`
-	Method                  string     `gorm:"column:method" json:"method"`
-	Status                  string     `gorm:"column:status" json:"status"`
-	PixQRCode               string     `gorm:"column:pix_qr_code" json:"pix_qr_code,omitempty"`
-	PixCopyPaste            string     `gorm:"column:pix_copy_paste" json:"pix_copy_paste,omitempty"`
-	QRCodeBase64            string     `gorm:"column:qr_code_base64" json:"qr_code_base64,omitempty"`
-	TicketURL               string     `gorm:"column:ticket_url" json:"ticket_url,omitempty"`
-	MPPaymentID             int64      `gorm:"column:mp_payment_id" json:"mp_payment_id,omitempty"`
-	MPStatus                string     `gorm:"column:mp_status" json:"mp_status,omitempty"`
-	AbacatePayID            string     `gorm:"column:abacatepay_id" json:"abacatepay_id,omitempty"`
+	ID              int64   `gorm:"primaryKey;column:id" json:"id"`
+	OrderID         string  `gorm:"column:order_id" json:"order_id"`
+	CustomerID      int64   `gorm:"column:customer_id" json:"customer_id"`
+	CustomerPhone   string  `gorm:"column:customer_phone" json:"customer_phone,omitempty"`
+	EstablishmentID int64   `gorm:"column:establishment_id" json:"establishment_id"`
+	Amount          float64 `gorm:"column:amount" json:"amount"`
+	DeliveryAmount  float64 `gorm:"column:delivery_amount" json:"delivery_amount,omitempty"`
+	Method          string  `gorm:"column:method" json:"method"`
+	Status          string  `gorm:"column:status" json:"status"`
+	PixQRCode       string  `gorm:"column:pix_qr_code" json:"pix_qr_code,omitempty"`
+	PixCopyPaste    string  `gorm:"column:pix_copy_paste" json:"pix_copy_paste,omitempty"`
+	QRCodeBase64    string  `gorm:"column:qr_code_base64" json:"qr_code_base64,omitempty"`
+	TicketURL       string  `gorm:"column:ticket_url" json:"ticket_url,omitempty"`
+	MPPaymentID     int64   `gorm:"column:mp_payment_id" json:"mp_payment_id,omitempty"`
+	MPStatus        string  `gorm:"column:mp_status" json:"mp_status,omitempty"`
+	AbacatePayID    string  `gorm:"column:abacatepay_id" json:"abacatepay_id,omitempty"`
 	// Multi-gateway fields (migration 16)
 	Gateway                 string     `gorm:"column:gateway;default:'abacatepay'" json:"gateway,omitempty"`
 	GatewayTxID             string     `gorm:"column:gateway_transaction_id" json:"gateway_transaction_id,omitempty"`

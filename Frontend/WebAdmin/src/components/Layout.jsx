@@ -95,6 +95,7 @@ export default function Layout() {
                 <NavLink
                   to={item.path}
                   end={item.path === "/"}
+                  onClick={() => setMobileMenuOpen(false)}
                   className={({ isActive }) =>
                     "relative flex items-center gap-2 px-4 py-2 rounded-r-xl transition-all duration-200 group " +
                     (isActive
@@ -139,8 +140,8 @@ export default function Layout() {
         <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/80 backdrop-blur-sm overflow-hidden">
           <div className="flex items-center justify-between px-6 py-4">
             <div className="flex items-center gap-4">
-              <button onClick={() => setSidebarOpen(!sidebarOpen)} className="lg:hidden p-2 rounded-xl hover:bg-gray-100 transition-colors">
-                <FiMenu className="h-6 w-6 text-gray-700" />
+              <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="lg:hidden p-2 rounded-xl hover:bg-gray-100 transition-colors">
+                {mobileMenuOpen ? <FiX className="h-6 w-6 text-gray-700" /> : <FiMenu className="h-6 w-6 text-gray-700" />}
               </button>
               <button onClick={() => setSidebarOpen(!sidebarOpen)} className="hidden lg:flex p-2 rounded-xl hover:bg-gray-100 transition-colors">
                 {sidebarOpen ? <FiChevronLeft className="h-5 w-5 text-gray-500" /> : <FiMenu className="h-5 w-5 text-gray-500" />}

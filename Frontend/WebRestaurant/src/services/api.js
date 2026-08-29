@@ -46,18 +46,30 @@ function getCookie(name) {
 }
 
 let csrfTokenCache = null;
+let csrfFetchPromise = null; // single-flight: evita múltiplas chamadas simultâneas
 
-// Garante que o cookie csrf_token existe antes de mutações.
-// Usa cache em memória para evitar chamadas recursivas ao /csrf-token
-// dentro do interceptor de request (que chamaria api.get → outro interceptor → loop).
+// Garante que temos um CSRF token válido antes de mutações (POST/PUT/DELETE).
+// Usa axios PURO (sem interceptor) para evitar recursão.
+// O cookie SameSite=None pode não ser enviado cross-origin, então sempre
+// buscamos o token via response body e cacheamos em memória.
 function ensureCsrfToken() {
-  const cached = getCookie("csrf_token") || csrfTokenCache;
-  if (cached) return Promise.resolve(cached);
-  // Busca uma vez e cacheia — se falhar, retorna null (mutações seguirão sem CSRF header)
-  return api.get("/csrf-token", { withCredentials: true }).then(res => {
-    csrfTokenCache = res.data?.csrf_token || null;
-    return csrfTokenCache;
-  }).catch(() => null);
+  // 1. Retorna do cache se existe
+  if (csrfTokenCache) return Promise.resolve(csrfTokenCache);
+  // 2. Single-flight: se já está buscando, reusa a promise
+  if (csrfFetchPromise) return csrfFetchPromise;
+  // 3. Busca com axios puro (sem interceptor) + withCredentials para setar cookie
+  csrfFetchPromise = axios
+    .get(`${API_BASE_URL}/csrf-token`, { withCredentials: true })
+    .then((res) => {
+      const token = res.data?.csrf_token || null;
+      if (token) csrfTokenCache = token;
+      return token;
+    })
+    .catch(() => null)
+    .finally(() => {
+      csrfFetchPromise = null;
+    });
+  return csrfFetchPromise;
 }
 
 api.interceptors.request.use(
@@ -79,6 +91,13 @@ api.interceptors.request.use(
       const csrfToken = await ensureCsrfToken()
       if (csrfToken) {
         config.headers["X-CSRF-Token"] = csrfToken
+      } else {
+        // CSRF fetch falhou — tenta uma vez mais limpando o cache
+        csrfTokenCache = null;
+        const retryToken = await ensureCsrfToken()
+        if (retryToken) {
+          config.headers["X-CSRF-Token"] = retryToken
+        }
       }
     }
     return config
@@ -123,6 +142,21 @@ api.interceptors.response.use(
 
     // Ignora erros de rede (sem response)
     if (!error.response) return Promise.reject(error);
+
+    // ── CSRF 403 retry ────────────────────────────────────
+    // Se 403 CSRF, limpa cache e tenta com token novo
+    if (error.response.status === 403 && !originalRequest._csrfRetry) {
+      const errMsg = error.response.data?.error || ""
+      if (errMsg.toLowerCase().includes("csrf")) {
+        originalRequest._csrfRetry = true
+        csrfTokenCache = null // limpa cache para buscar novo token
+        const newToken = await ensureCsrfToken()
+        if (newToken) {
+          originalRequest.headers["X-CSRF-Token"] = newToken
+          return api(originalRequest)
+        }
+      }
+    }
 
     // ── Refresh single-flight ─────────────────────────────
     // Se 401 e não é request de refresh/login e não é retry

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	authModels "github.com/carloshomar/fuudelivery/auth_api/app/models"
 	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
@@ -19,7 +20,7 @@ func setupTestDB() *gorm.DB {
 	if err != nil {
 		panic("failed to connect test database")
 	}
-	db.AutoMigrate(&models.Product{}, &models.Category{}, &models.Establishment{})
+	db.AutoMigrate(&models.Product{}, &models.Category{}, &authModels.Establishment{})
 	return db
 }
 

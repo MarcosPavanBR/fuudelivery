@@ -1273,9 +1273,6 @@ func setupPaymentRoutes(app *fiber.App, router *gateway.Router) {
 	// Status da cobrança por pedido (polling do app do cliente pós-PIX).
 	paymentGroup.Get("/order/:order_id", protectedRoute, rateLimitMiddleware(30), paymentHandlers.GetPaymentByOrder)
 	paymentGroup.Get("/reports/establishment/:id", protectedRoute, paymentHandlers.GetEstablishmentReport)
-	paymentGroup.Post("/asaas/wallet/create", protectedRoute, rateLimitMiddleware(20), paymentHandlers.CreateAsaasWallet)
-	paymentGroup.Get("/asaas/wallet/:walletId/status", protectedRoute, paymentHandlers.GetAsaasWalletStatus)
-	paymentGroup.Post("/asaas/payment/split", protectedRoute, rateLimitMiddleware(20), paymentHandlers.CreateAsaasSplitPayment)
 }
 
 func setupSponsoredRoutes(app *fiber.App) {

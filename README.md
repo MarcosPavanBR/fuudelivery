@@ -177,7 +177,7 @@ fuudelivery/
 │   ├── auth_api/             # Usuários, clientes, estabelecimentos, entregadores, zonas, assinaturas, refresh tokens
 │   ├── orders_api/           # Pedidos, produtos, categorias, adicionais, cupons, fidelidade, reviews, pickup-code
 │   ├── delivery_api/         # Solicitações de entrega, extrato; Dispatch Engine (matching, auto-calibração, split decay)
-│   ├── payment_api/          # PIX/Cartão (AbacatePay), carteiras, chargebacks, split, webhook, Asaas wallet
+│   ├── payment_api/          # PIX/Cartão (multi-gateway), carteiras, split, webhook, gateway adapter
 │   ├── chat_api/             # Chat por pedido via WebSocket
 │   └── storage/supabase.go   # Upload de imagens (Supabase Storage)
 ├── cmd/
@@ -204,7 +204,7 @@ fuudelivery/
 │   ├── WebRestaurant/        # React 19 + Vite 6 + Tailwind 4 — kanban, cardápio, carteira, PWA
 │   └── WebAdmin/             # React 19 + Vite 6 + Tailwind 4 — dashboard, pedidos, financeiro
 ├── legacy/PaymentPanel/      # Painel standalone arquivado (substituído pelo Financeiro do WebAdmin)
-├── sql/                      # 13 migrações SQL versionadas + run_all.sh (ver seção Banco de Dados)
+├── sql/                      # 17 migrações SQL versionadas + run_all.sh (ver seção Banco de Dados)
 ├── scripts/                  # Build APKs, deploy VPS, seeds, migrações, checks de CI (28 itens)
 ├── docs/                     # Arquitetura, banco de dados, deploy, segurança, FAQ, changelog
 ├── references/               # Docs internos (URLs, roadmap, gaps, testes, release notes)
@@ -225,12 +225,14 @@ Os módulos Go individuais seguem a convenção `app/{handlers,models,routes,dto
 
 ## Banco de Dados
 
-- **PostgreSQL único (Supabase)** com GORM AutoMigrate no startup + 16 migrações SQL versionadas em `sql/` aplicadas via `sql/run_all.sh` (controle pela tabela `schema_migrations`):
+- **PostgreSQL único (Supabase)** com GORM AutoMigrate no startup + 17 migrações SQL versionadas em `sql/` aplicadas via `sql/run_all.sh` (controle pela tabela `schema_migrations`):
   - `00_role_e_controle_migracoes` — role `app_backend` com least privilege + controle de migrações
   - `01–04` — domínios: pedidos, entrega, pagamentos (carteiras, ledger, chargebacks, payout), chat
   - `05_audit_log` + `06_rls_seguranca` — trilha de auditoria e Row Level Security
   - `07–11` — tabelas órfãs, reparos legado, ledger kinds, idempotência financeira, refresh tokens
+  - `12–13` — refresh tokens, password reset tokens
   - `14–16` — **multi-gateway**: recipients (sub-contas), split_rules (divisão de valores), colunas gateway na tabela payments
+  - `17` — dead-letter queue persistente (dispatch engine)
 - Dicionário completo de tabelas: [`docs/banco-de-dados.md`](docs/banco-de-dados.md)
 - Regras para alterar o schema (obrigatórias): [`skills/fuudelivery-banco-unico/SKILL.md`](skills/fuudelivery-banco-unico/SKILL.md)
 - Migração Mongo → Postgres: rode os binários `cmd/etl-orders` e `cmd/etl-payments` (idempotentes)
@@ -338,7 +340,7 @@ cd Frontend/WebRestaurant && npm test
 cd Frontend/WebAdmin && npm test
 ```
 
-- **35 arquivos de teste Go** distribuídos em Backend (26), cmd (6) e pkg (3), incluindo E2E de checkout, webhook HMAC, rate limiting com Redis e fluxo completo de pedido.
+- **40+ arquivos de teste Go** distribuídos em Backend (26), cmd (6) e pkg (8 — incluindo 4 gateways com 54 testes), incluindo E2E de checkout, webhook HMAC, rate limiting com Redis e fluxo completo de pedido.
 - Integração usa **testcontainers-go** (postgres/mongodb) localmente; no CI, containers `mongo:7` e `postgres:16-alpine` via variáveis `MONGO_TEST_URI`/`POSTGRES_TEST_URI`.
 - Mobile usa jest-expo com `--passWithNoTests`.
 - Cobertura planejada e status: [`references/testes-ci.md`](references/testes-ci.md).

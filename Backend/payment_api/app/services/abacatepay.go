@@ -84,25 +84,6 @@ type CardChargeResponse struct {
 	LastDigits   string  `json:"last_digits"`
 }
 
-type BoletoChargeRequest struct {
-	Amount      float64 `json:"amount"`
-	Description string  `json:"description"`
-	Customer    struct {
-		Name  string `json:"name"`
-		Email string `json:"email"`
-		CPF   string `json:"cpf"`
-	} `json:"customer"`
-	ExpiresIn int `json:"expires_in_days"`
-}
-
-type BoletoChargeResponse struct {
-	ID         string `json:"id"`
-	Status     string `json:"status"`
-	BoletoURL  string `json:"boleto_url"`
-	BoletoCode string `json:"boleto_code"`
-	ExpiresAt  string `json:"expires_at"`
-}
-
 type WebhookRegistration struct {
 	URL    string   `json:"url"`
 	Events []string `json:"events"`
@@ -247,20 +228,6 @@ func (c *AbacatePayClient) CreateCardCharge(req CardChargeRequest) (*CardChargeR
 	}
 
 	var resp CardChargeResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return nil, err
-	}
-
-	return &resp, nil
-}
-
-func (c *AbacatePayClient) CreateBoletoCharge(req BoletoChargeRequest) (*BoletoChargeResponse, error) {
-	body, err := c.doRequest("POST", "/charge/boleto", req)
-	if err != nil {
-		return nil, err
-	}
-
-	var resp BoletoChargeResponse
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, err
 	}

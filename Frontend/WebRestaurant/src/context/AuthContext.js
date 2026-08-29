@@ -65,9 +65,10 @@ export const AuthProvider = ({ children }) => {
   }, [user]);
   const { sendJsonMessage, lastMessage } = useWebSocket(wsUrl, {
     enabled: !!wsUrl && !!user?.sub,
-    reconnectInterval: 1000,
+    // Backoff exponencial: 3s → 6s → 12s → 24s → 48s (evita thundering herd)
+    reconnectInterval: (attempt) => Math.min(3000 * Math.pow(2, attempt), 48000),
     retryOnError: true,
-    reconnectAttempts: 5,
+    reconnectAttempts: 8,
     onReconnectStop: () => {
       setFMode(true);
     },

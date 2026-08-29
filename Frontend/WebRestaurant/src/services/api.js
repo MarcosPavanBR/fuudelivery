@@ -45,18 +45,31 @@ function getCookie(name) {
   return null
 }
 
+let csrfTokenCache = null;
+
 // Garante que o cookie csrf_token existe antes de mutações.
-async function ensureCsrfToken() {
-  let token = getCookie("csrf_token")
-  if (!token) {
-    const res = await api.get("/csrf-token", { withCredentials: true })
-    token = res.data?.csrf_token
-  }
-  return token
+// Usa cache em memória para evitar chamadas recursivas ao /csrf-token
+// dentro do interceptor de request (que chamaria api.get → outro interceptor → loop).
+function ensureCsrfToken() {
+  const cached = getCookie("csrf_token") || csrfTokenCache;
+  if (cached) return Promise.resolve(cached);
+  // Busca uma vez e cacheia — se falhar, retorna null (mutações seguirão sem CSRF header)
+  return api.get("/csrf-token", { withCredentials: true }).then(res => {
+    csrfTokenCache = res.data?.csrf_token || null;
+    return csrfTokenCache;
+  }).catch(() => null);
 }
 
 api.interceptors.request.use(
   async (config) => {
+    // Não aplica CSRF a requests de auth (login, refresh, csrf-token) — eles não precisam
+    const url = config.url || "";
+    const isAuthOrCsrf = url.includes("/auth/") || url.includes("/csrf-token") || url.includes("/csrf_token");
+    if (isAuthOrCsrf) {
+      config.withCredentials = true;
+      return config;
+    }
+
     const withCredentials = config.withCredentials !== false
     if (withCredentials) {
       config.withCredentials = true
@@ -76,6 +89,7 @@ api.interceptors.request.use(
 // Controle de refresh em andamento para evitar chamadas duplicadas
 let isRefreshing = false;
 let failedQueue = [];
+let hasRedirected = false;
 
 const processQueue = (error, token) => {
   failedQueue.forEach(({ resolve, reject }) => {
@@ -86,12 +100,20 @@ const processQueue = (error, token) => {
 };
 
 const logoutAndRedirect = async () => {
+  // Guard: só redireciona uma vez para evitar loop infinito de reloads
+  if (hasRedirected) return;
+  hasRedirected = true;
   try {
+    localStorage.removeItem(Strings.token_jwt);
+    localStorage.removeItem(Strings.refresh_token);
     await api.post("/auth/session/logout", {}, { withCredentials: true })
   } catch {
     // ignore
   }
-  window.location.href = "/"
+  // Redireciona para / (landing page) sem reload forçado quando possível
+  if (window.location.pathname !== "/") {
+    window.location.href = "/";
+  }
 };
 
 api.interceptors.response.use(
@@ -99,13 +121,18 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
+    // Ignora erros de rede (sem response)
+    if (!error.response) return Promise.reject(error);
+
     // ── Refresh single-flight ─────────────────────────────
-    // Se 401 e não é request de refresh/login e token existe
+    // Se 401 e não é request de refresh/login e não é retry
     const isAuthUrl = originalRequest.url?.includes("/auth/") || false
     const isRefreshUrl = originalRequest.url?.includes("/auth/session/refresh") || false
+    const isRetry = originalRequest._retry === true
 
-    if (error.response?.status === 401 && !isAuthUrl && !isRefreshUrl && !isRefreshing) {
+    if (error.response.status === 401 && !isAuthUrl && !isRefreshUrl && !isRefreshing && !isRetry) {
       isRefreshing = true
+      originalRequest._retry = true
 
       try {
         const refreshResponse = await api.post("/auth/session/refresh", {}, { withCredentials: true })
@@ -127,6 +154,13 @@ api.interceptors.response.use(
     return Promise.reject(error)
   }
 );
+
+// Gera um ticket de autenticação para WebSocket (anti-replay).
+// O backend expira o ticket em 30s — o cliente deve conectar nesse prazo.
+export async function requestWsTicket() {
+  const res = await api.get("/ws/ticket", { withCredentials: true });
+  return res.data?.ticket;
+}
 
 // API genérica com interceptors já aplicados
 export default api;

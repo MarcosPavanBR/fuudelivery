@@ -39,6 +39,7 @@ api.interceptors.request.use(
 
 let isRefreshing = false;
 let failedQueue = [];
+let hasRedirected = false;
 
 const processQueue = (error, token) => {
   failedQueue.forEach(({ resolve, reject }) => {
@@ -49,12 +50,21 @@ const processQueue = (error, token) => {
 };
 
 const logoutAndRedirect = async () => {
+  // Guard: só redireciona uma vez para evitar loop infinito de reloads
+  if (hasRedirected) return;
+  hasRedirected = true;
   try {
+    localStorage.removeItem("fuu_admin_token");
+    localStorage.removeItem("fuu_admin_refresh_token");
     await api.post("/auth/session/logout", {}, { withCredentials: true })
   } catch {
     // ignore
   }
-  window.location.href = "/"
+  // Usa React Router navigate via path变化 para não recarregar toda a página.
+  // Fallback para window.location apenas se o SPA já estiver no /login
+  if (window.location.pathname !== "/login") {
+    window.location.href = "/login";
+  }
 };
 
 api.interceptors.response.use(
@@ -62,11 +72,17 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
+    // Ignora erros de rede (sem response) — não tenta refresh
+    if (!error.response) return Promise.reject(error);
+
     const isAuthUrl = originalRequest.url?.includes("/auth/") || false
     const isRefreshUrl = originalRequest.url?.includes("/auth/session/refresh") || false
+    // Não tenta refresh em requisições que já falharam com refresh
+    const isRetry = originalRequest._retry === true
 
-    if (error.response?.status === 401 && !isAuthUrl && !isRefreshUrl && !isRefreshing) {
+    if (error.response.status === 401 && !isAuthUrl && !isRefreshUrl && !isRefreshing && !isRetry) {
       isRefreshing = true
+      originalRequest._retry = true
 
       try {
         const refreshToken = localStorage.getItem("fuu_admin_refresh_token")

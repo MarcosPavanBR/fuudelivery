@@ -31,12 +31,12 @@ func createTestToken(role string, establishmentID int64) string {
 	defer os.Unsetenv("JWT_SECRET")
 
 	claims := jwt.MapClaims{
-		"id":              float64(42),
-		"name":            "Test User",
-		"email":           "test@example.com",
-		"role":            role,
+		"id":               float64(42),
+		"name":             "Test User",
+		"email":            "test@example.com",
+		"role":             role,
 		"establishment_id": establishmentID,
-		"exp":             time.Now().UTC().Add(time.Hour * 24 * 7).Unix(),
+		"exp":              time.Now().UTC().Add(time.Hour * 24 * 7).Unix(),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

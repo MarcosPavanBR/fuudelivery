@@ -20,8 +20,8 @@ func GetCSRFToken(c *fiber.Ctx) error {
 	c.Cookie(&fiber.Cookie{
 		Name:     "csrf_token",
 		Value:    csrfToken,
-		HTTPOnly: false, // frontend precisa ler via JS
-		Secure:   true,  // HTTPS only em produção
+		HTTPOnly: false,  // frontend precisa ler via JS
+		Secure:   true,   // HTTPS only em produção
 		SameSite: "None", // cross-origin: frontend e API em domínios diferentes
 		Path:     "/",
 		MaxAge:   86400, // 24h

@@ -29,11 +29,21 @@ function Taxes() {
     start();
   }, []);
 
+  const [saving, setSaving] = useState(false);
+
   const save = async (e) => {
     e.preventDefault();
-    const resp = await deliveryModel.saveDelivery(body);
-    if (resp) toast.success(Texts.delivery_update);
-    else toast.error(Texts.delivery_error);
+    if (saving) return; // previne duplo clique
+    setSaving(true);
+    try {
+      await deliveryModel.saveDelivery(body);
+      toast.success(Texts.delivery_update);
+    } catch (err) {
+      const msg = err?.response?.data?.error || Texts.delivery_error;
+      toast.error(msg);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -84,6 +94,7 @@ function Taxes() {
               <button
                 type="submit"
                 className="btn btn-primary"
+                disabled={saving}
               >
                 <FiSave className="h-5 w-5" />
                 Salvar

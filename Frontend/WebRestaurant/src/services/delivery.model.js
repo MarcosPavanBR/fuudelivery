@@ -7,10 +7,10 @@ export async function saveDelivery({ establishmentId, fixedTaxa, perKm }) {
       fixedTaxa: parseFloat(fixedTaxa),
       perKm: parseFloat(perKm),
     });
-    return true;
+    return data;
   } catch (e) {
-    console.error(e);
-    return false;
+    console.error("[delivery] saveDelivery error:", e?.response?.status, e?.response?.data || e.message);
+    throw e;
   }
 }
 

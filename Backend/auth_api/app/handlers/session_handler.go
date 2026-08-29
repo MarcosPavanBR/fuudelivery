@@ -3,12 +3,14 @@ package handlers
 import (
 	"errors"
 	"log"
+	"os"
 	"time"
 
 	"github.com/carloshomar/fuudelivery/auth_api/app/dto"
 	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/auth_api/app/models"
 	"github.com/gofiber/fiber/v2"
+	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -23,7 +25,7 @@ func setAuthCookies(c *fiber.Ctx, accessToken, refreshToken string) {
 		Value:    accessToken,
 		HTTPOnly: true,
 		Secure:   true,
-		SameSite: "strict",
+		SameSite: "None",
 		MaxAge:   accessMaxAge,
 		Path:     "/",
 	})
@@ -33,7 +35,7 @@ func setAuthCookies(c *fiber.Ctx, accessToken, refreshToken string) {
 		Value:    refreshToken,
 		HTTPOnly: true,
 		Secure:   true,
-		SameSite: "strict",
+		SameSite: "None",
 		MaxAge:   refreshMaxAge,
 		Path:     "/",
 	})
@@ -47,7 +49,7 @@ func clearAuthCookies(c *fiber.Ctx) {
 		Value:    "",
 		HTTPOnly: true,
 		Secure:   true,
-		SameSite: "strict",
+		SameSite: "None",
 		MaxAge:   -1,
 		Path:     "/",
 	})
@@ -57,7 +59,7 @@ func clearAuthCookies(c *fiber.Ctx) {
 		Value:    "",
 		HTTPOnly: true,
 		Secure:   true,
-		SameSite: "strict",
+		SameSite: "None",
 		MaxAge:   -1,
 		Path:     "/",
 	})
@@ -171,6 +173,54 @@ func SessionRefresh(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{
 		"message": "Token refreshed successfully",
+		"user": fiber.Map{
+			"id":               user.ID,
+			"name":             user.Name,
+			"email":            user.Email,
+			"phone":            user.Phone,
+			"role":             user.Role,
+			"establishment_id": user.EstablishmentID,
+		},
+	})
+}
+
+// SessionMe retorna os dados do usuário logado a partir do cookie access_token.
+// GET /auth/session/me — usado pelo frontend para restaurar o estado após
+// page refresh (cookies HttpOnly não são legíveis via JS).
+func SessionMe(c *fiber.Ctx) error {
+	accessToken := c.Cookies("access_token")
+	if accessToken == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Not authenticated"})
+	}
+
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "JWT secret not configured"})
+	}
+
+	token, err := jwt.Parse(accessToken, func(token *jwt.Token) (interface{}, error) {
+		return []byte(secret), nil
+	})
+	if err != nil || !token.Valid {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid session"})
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid session claims"})
+	}
+
+	idFloat, ok := claims["id"].(float64)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "User ID not found in session"})
+	}
+
+	var user models.User
+	if err := models.DB.First(&user, int64(idFloat)).Error; err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "User not found"})
+	}
+
+	return c.JSON(fiber.Map{
 		"user": fiber.Map{
 			"id":               user.ID,
 			"name":             user.Name,

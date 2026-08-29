@@ -11,7 +11,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// ChargeCard cobra diretamente um cartão tokenizado no gateway (AbacatePay).
+// ChargeCard cobra diretamente um cartão tokenizado via gateway router.
+// Usa o router multi-gateway com fallback automático (Pagar.me → Asaas → AbacatePay).
 // Não persiste pagamento — é uma cobrança avulsa (o fluxo de pedidos usa
 // ProcessPayment, que grava em Postgres com dual-write).
 func ChargeCard(c *fiber.Ctx) error {
@@ -47,6 +48,31 @@ func ChargeCard(c *fiber.Ctx) error {
 		installments = 1
 	}
 
+	// ═══ CAMINHO NOVO: Multi-gateway com fallback ═══
+	if services.IsGatewayEnabled() {
+		result, ok := services.ProcessPaymentViaGateway(c.Context(), services.GatewayPaymentRequest{
+			OrderID:       fmt.Sprintf("charge_%d", time.Now().UnixMilli()),
+			Amount:        req.Amount,
+			Method:        "credit",
+			CardToken:     req.CardToken,
+			Installments:  installments,
+			CustomerName:  name,
+			CustomerEmail: email,
+			Description:   "Pagamento cartao avulso",
+		})
+		if ok && result != nil {
+			return c.Status(200).JSON(fiber.Map{
+				"charge_id":    result.GatewayID,
+				"status":       result.Status,
+				"installments": result.Installments,
+				"last_digits":  result.CardLastDigits,
+				"gateway":      result.GatewayName,
+				"message":      fmt.Sprintf("Card payment processed via %s", result.GatewayName),
+			})
+		}
+	}
+
+	// ═══ CAMINHO LEGADO: AbacatePay direto (quando gateway não disponível) ═══
 	client := services.NewAbacatePayClient()
 	chargeReq := services.CardChargeRequest{
 		Amount:       req.Amount,
@@ -70,7 +96,8 @@ func ChargeCard(c *fiber.Ctx) error {
 		"status":       apiResp.Status,
 		"installments": apiResp.Installments,
 		"last_digits":  apiResp.LastDigits,
-		"message":      "Card payment processed via AbacatePay",
+		"gateway":      "abacatepay",
+		"message":      "Card payment processed via AbacatePay (legacy)",
 	})
 }
 

@@ -8,6 +8,7 @@ const API_BASE_URL =
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 15000,
+  withCredentials: true, // Envia cookies HttpOnly em todas as requisições
   headers: {
     "Content-Type": "application/json",
   },
@@ -16,23 +17,55 @@ const api = axios.create({
 export const getApiBaseUrl = () => API_BASE_URL;
 
 function getCookie(name) {
-  const value = `; ${document.cookie}`
-  const parts = value.split(`; ${name}=`)
-  if (parts.length === 2) return parts.pop().split(";").shift()
-  return null
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return parts.pop().split(";").shift();
+  return null;
+}
+
+let csrfTokenCache = null;
+let csrfFetchPromise = null;
+
+function ensureCsrfToken() {
+  if (csrfTokenCache) return Promise.resolve(csrfTokenCache);
+  if (csrfFetchPromise) return csrfFetchPromise;
+  csrfFetchPromise = axios
+    .get(`${API_BASE_URL}/csrf-token`, { withCredentials: true })
+    .then((res) => {
+      const token = res.data?.csrf_token || null;
+      if (token) csrfTokenCache = token;
+      return token;
+    })
+    .catch(() => null)
+    .finally(() => {
+      csrfFetchPromise = null;
+    });
+  return csrfFetchPromise;
 }
 
 api.interceptors.request.use(
-  (config) => {
-    const withCredentials = config.withCredentials !== false
-    if (withCredentials) {
-      config.withCredentials = true
+  async (config) => {
+    const url = config.url || "";
+    const isAuthOrCsrf =
+      url.includes("/auth/") || url.includes("/csrf-token");
+    if (isAuthOrCsrf) {
+      return config;
     }
-    const csrfToken = getCookie("csrf_token")
-    if (csrfToken && ["post", "put", "delete", "patch"].includes((config.method || "get").toLowerCase())) {
-      config.headers["X-CSRF-Token"] = csrfToken
+
+    const method = (config.method || "get").toLowerCase();
+    if (["post", "put", "delete", "patch"].includes(method)) {
+      const csrfToken = await ensureCsrfToken();
+      if (csrfToken) {
+        config.headers["X-CSRF-Token"] = csrfToken;
+      } else {
+        csrfTokenCache = null;
+        const retryToken = await ensureCsrfToken();
+        if (retryToken) {
+          config.headers["X-CSRF-Token"] = retryToken;
+        }
+      }
     }
-    return config
+    return config;
   },
   (error) => Promise.reject(error)
 );
@@ -50,18 +83,13 @@ const processQueue = (error, token) => {
 };
 
 const logoutAndRedirect = async () => {
-  // Guard: só redireciona uma vez para evitar loop infinito de reloads
   if (hasRedirected) return;
   hasRedirected = true;
   try {
-    localStorage.removeItem("fuu_admin_token");
-    localStorage.removeItem("fuu_admin_refresh_token");
-    await api.post("/auth/session/logout", {}, { withCredentials: true })
+    await api.post("/auth/session/logout", {});
   } catch {
     // ignore
   }
-  // Usa React Router navigate via path变化 para não recarregar toda a página.
-  // Fallback para window.location apenas se o SPA já estiver no /login
   if (window.location.pathname !== "/login") {
     window.location.href = "/login";
   }
@@ -72,52 +100,55 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // Ignora erros de rede (sem response) — não tenta refresh
     if (!error.response) return Promise.reject(error);
 
-    const isAuthUrl = originalRequest.url?.includes("/auth/") || false
-    const isRefreshUrl = originalRequest.url?.includes("/auth/session/refresh") || false
-    // Não tenta refresh em requisições que já falharam com refresh
-    const isRetry = originalRequest._retry === true
-
-    if (error.response.status === 401 && !isAuthUrl && !isRefreshUrl && !isRefreshing && !isRetry) {
-      isRefreshing = true
-      originalRequest._retry = true
-
-      try {
-        const refreshToken = localStorage.getItem("fuu_admin_refresh_token")
-        if (!refreshToken) {
-          throw new Error("no refresh token")
+    // ── CSRF 403 retry ────────────────────────────────────
+    if (error.response.status === 403 && !originalRequest._csrfRetry) {
+      const errMsg = error.response.data?.error || "";
+      if (errMsg.toLowerCase().includes("csrf")) {
+        originalRequest._csrfRetry = true;
+        csrfTokenCache = null;
+        const newToken = await ensureCsrfToken();
+        if (newToken) {
+          originalRequest.headers["X-CSRF-Token"] = newToken;
+          return api(originalRequest);
         }
-
-        const refreshResponse = await api.post("/auth/refresh", {
-          refresh_token: refreshToken,
-        })
-        const { token, refresh_token } = refreshResponse.data
-
-        if (token) {
-          localStorage.setItem("fuu_admin_token", token)
-        }
-        if (refresh_token) {
-          localStorage.setItem("fuu_admin_refresh_token", refresh_token)
-        }
-
-        processQueue(null, token)
-        // Reset guard: refresh funcionou, pode haver outros 401s legítimos depois
-        hasRedirected = false
-
-        originalRequest.headers.Authorization = `Bearer ${token}`
-        return api(originalRequest)
-      } catch (refreshError) {
-        processQueue(refreshError, null)
-        logoutAndRedirect()
-        return Promise.reject(refreshError)
-      } finally {
-        isRefreshing = false
       }
     }
 
-    return Promise.reject(error)
+    // ── Session refresh single-flight ──────────────────────
+    const isAuthUrl = originalRequest.url?.includes("/auth/") || false;
+    const isRefreshUrl =
+      originalRequest.url?.includes("/auth/session/refresh") || false;
+    const isRetry = originalRequest._retry === true;
+
+    if (
+      error.response.status === 401 &&
+      !isAuthUrl &&
+      !isRefreshUrl &&
+      !isRefreshing &&
+      !isRetry
+    ) {
+      isRefreshing = true;
+      originalRequest._retry = true;
+
+      try {
+        // Session refresh: backend lê refresh_token do cookie HttpOnly
+        const refreshResponse = await api.post("/auth/session/refresh", {});
+        processQueue(null, refreshResponse.data);
+        hasRedirected = false;
+
+        return api(originalRequest);
+      } catch (refreshError) {
+        processQueue(refreshError, null);
+        logoutAndRedirect();
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
+    return Promise.reject(error);
   }
 );
 

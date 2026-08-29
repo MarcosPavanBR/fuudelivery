@@ -1,57 +1,52 @@
 import React, { createContext, useState, useContext, useEffect } from "react";
 import api from "../services/api";
 
-const TOKEN_KEY = "fuu_admin_token";
-const REFRESH_KEY = "fuu_admin_refresh_token";
-
 const AuthContext = createContext();
-
-const decodePayload = (token) => {
-  const payload = JSON.parse(atob(token.split(".")[1]));
-  return payload;
-};
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // ── Restaurar sessão após page refresh ──────────────────────
   useEffect(() => {
-    const token = localStorage.getItem(TOKEN_KEY);
-    if (token) {
+    let cancelled = false;
+    async function restoreSession() {
       try {
-        setUser(decodePayload(token));
-      } catch (e) {
-        localStorage.removeItem(TOKEN_KEY);
-        localStorage.removeItem(REFRESH_KEY);
+        const { data } = await api.get("/auth/session/me", { withCredentials: true });
+        if (!cancelled && data?.user) {
+          setUser(data.user);
+        }
+      } catch {
+        setUser(null);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     }
-    setLoading(false);
+    restoreSession();
+    return () => { cancelled = true; };
   }, []);
 
+  // ── Login via sessão HttpOnly ──────────────────────────────
   const login = async (email, password) => {
-    const response = await api.post("/users/login", { email, password });
-    const token = response.data.token;
-    localStorage.setItem(TOKEN_KEY, token);
-    // Access token dura 15 min; o refresh (30 dias) mantém a sessão viva.
-    if (response.data.refresh_token) {
-      localStorage.setItem(REFRESH_KEY, response.data.refresh_token);
+    const response = await api.post(
+      "/auth/session",
+      { email, password },
+      { withCredentials: true }
+    );
+    const userData = response.data?.user;
+    if (userData) {
+      setUser(userData);
     }
-    setUser(decodePayload(token));
-    return token;
+    return response.data;
   };
 
+  // ── Logout ─────────────────────────────────────────────────
   const logout = async () => {
-    // Revoga o refresh token no servidor antes de limpar local.
-    const refreshToken = localStorage.getItem(REFRESH_KEY);
-    if (refreshToken) {
-      try {
-        await api.post("/auth/logout", { refresh_token: refreshToken });
-      } catch (e) {
-        // segue com logout local mesmo se o servidor falhar
-      }
+    try {
+      await api.post("/auth/session/logout", {}, { withCredentials: true });
+    } catch (e) {
+      // segue com logout local
     }
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(REFRESH_KEY);
     setUser(null);
   };
 

@@ -1062,6 +1062,7 @@ func setupAuthRoutes(app *fiber.App) {
 	app.Post("/auth/session", rateLimitMiddleware(10), authHandlers.SessionLogin)
 	app.Post("/auth/session/refresh", rateLimitMiddleware(30), authHandlers.SessionRefresh)
 	app.Post("/auth/session/logout", rateLimitMiddleware(10), authHandlers.SessionLogout)
+	app.Get("/auth/session/me", authHandlers.SessionMe)
 	// Ticket de curta duração (60s) para WebSockets: o JWT fica SÓ no header
 	// Authorization desta chamada e o WS conecta com ?ticket= — nada de JWT
 	// na query string (vazava em logs de proxy). Ver resolveWSTicket.

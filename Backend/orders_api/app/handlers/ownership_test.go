@@ -41,16 +41,73 @@ func createTestToken(role string, establishmentID int64) string {
 	return tokenString
 }
 
-func TestCreateProduct_OwnershipCheck(t *testing.T) {
+func createExpiredToken(role string, establishmentID int64) string {
+	claims := jwt.MapClaims{
+		"id":               float64(42),
+		"name":             "Test User",
+		"email":            "test@example.com",
+		"role":             role,
+		"establishment_id": establishmentID,
+		"exp":              time.Now().UTC().Add(-time.Hour).Unix(), // expired 1h ago
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, _ := token.SignedString([]byte("test-secret-key-for-ci"))
+	return tokenString
+}
+
+// --- HTTP-level ownership tests (using app.Test for real request/response) ---
+
+func TestCreateProduct_NoAuth(t *testing.T) {
 	db := setupTestDB()
 	models.DB = db
 
 	app := fiber.New()
 	app.Post("/products", CreateProduct)
 
-	// Test 1: admin should succeed
+	// No Authorization header → should be rejected
 	req := httptest.NewRequest(http.MethodPost, "/products", strings.NewReader(`{"name":"Pizza","price":25.0,"establishment_id":1}`))
-	req.Header.Set("Authorization", "Bearer admin-token")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	assert.NoError(t, err)
+	assert.Contains(t, []int{fiber.StatusUnauthorized, fiber.StatusForbidden}, resp.StatusCode)
+}
+
+func TestCreateProduct_ExpiredToken(t *testing.T) {
+	db := setupTestDB()
+	models.DB = db
+
+	os.Setenv("JWT_SECRET", "test-secret-key-for-ci")
+	defer os.Unsetenv("JWT_SECRET")
+
+	app := fiber.New()
+	app.Post("/products", CreateProduct)
+
+	token := createExpiredToken("admin", 1)
+	req := httptest.NewRequest(http.MethodPost, "/products", strings.NewReader(`{"name":"Pizza","price":25.0,"establishment_id":1}`))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	assert.NoError(t, err)
+	assert.Contains(t, []int{fiber.StatusUnauthorized, fiber.StatusForbidden}, resp.StatusCode)
+}
+
+func TestCreateProduct_ClientRole(t *testing.T) {
+	db := setupTestDB()
+	models.DB = db
+
+	os.Setenv("JWT_SECRET", "test-secret-key-for-ci")
+	defer os.Unsetenv("JWT_SECRET")
+
+	app := fiber.New()
+	app.Post("/products", CreateProduct)
+
+	// Client role should NOT be able to create products
+	token := createTestToken("client", 1)
+	req := httptest.NewRequest(http.MethodPost, "/products", strings.NewReader(`{"name":"Pizza","price":25.0,"establishment_id":1}`))
+	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req)
@@ -58,19 +115,21 @@ func TestCreateProduct_OwnershipCheck(t *testing.T) {
 	assert.Equal(t, fiber.StatusForbidden, resp.StatusCode)
 }
 
-func TestGetByEstablishmentId_ErrorCheck(t *testing.T) {
+func TestGetProducts_EmptyEstablishment(t *testing.T) {
 	db := setupTestDB()
 	models.DB = db
 
 	app := fiber.New()
 	app.Get("/establishments/:establishmentId/products", GetByEstablishmentId)
 
-	req := httptest.NewRequest(http.MethodGet, "/establishments/1/products", nil)
+	// No auth needed for GET (permissive), returns empty array
+	req := httptest.NewRequest(http.MethodGet, "/establishments/999/products", nil)
 	resp, err := app.Test(req)
 	assert.NoError(t, err)
-	// Handler returns 200 with empty array when no products exist
 	assert.Equal(t, fiber.StatusOK, resp.StatusCode)
 }
+
+// --- canActOnEstablishment unit tests ---
 
 func TestCanActOnEstablishment(t *testing.T) {
 	tests := []struct {
@@ -84,6 +143,8 @@ func TestCanActOnEstablishment(t *testing.T) {
 		{"restaurant owns establishment", "restaurant", 1, 1, true},
 		{"restaurant does not own", "restaurant", 1, 2, false},
 		{"client cannot access", "client", 1, 1, false},
+		{"delivery cannot access", "delivery", 1, 1, false},
+		{"admin with zero est ID", "admin", 0, 0, true},
 	}
 
 	for _, tt := range tests {
@@ -106,4 +167,22 @@ func TestCanActOnEstablishment(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+func TestCanActOnEstablishment_NoToken(t *testing.T) {
+	os.Setenv("JWT_SECRET", "test-secret-key-for-ci")
+	defer os.Unsetenv("JWT_SECRET")
+
+	app := fiber.New()
+	var result bool
+	app.Get("/test", func(c *fiber.Ctx) error {
+		result = canActOnEstablishment(c, 1)
+		return c.SendStatus(200)
+	})
+
+	// No token → should return false (not authenticated)
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	_, err := app.Test(req)
+	assert.NoError(t, err)
+	assert.False(t, result)
 }

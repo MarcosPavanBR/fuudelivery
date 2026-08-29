@@ -475,3 +475,6 @@ backups/
 .pg-embed/
 tmp/
 fuudelivery
+# Track test files in cmd/fuudelivery/ directory
+!cmd/fuudelivery/
+!cmd/fuudelivery/*.go

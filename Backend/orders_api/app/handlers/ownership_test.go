@@ -1,12 +1,14 @@
 package handlers
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/mock"
 	"github.com/stretchr/testify/assert"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -26,17 +28,14 @@ func TestCreateProduct_OwnershipCheck(t *testing.T) {
 	models.DB = db
 
 	app := fiber.New()
-	app.Use(mock.Middleware())
 	app.Post("/products", CreateProduct)
 
 	// Test 1: admin should succeed
-	adminCtx := mock.CreateRequest("POST", "/products")
-	adminCtx.Request().Header.Set("Authorization", "Bearer admin-token")
-	adminCtx.Request().Header.Set("Content-Type", "application/json")
-	adminCtx.Request().Body = []byte(`{"name":"Pizza","price":25.0,"establishment_id":1}`)
-	adminCtx.JSON()
+	req := httptest.NewRequest(http.MethodPost, "/products", strings.NewReader(`{"name":"Pizza","price":25.0,"establishment_id":1}`))
+	req.Header.Set("Authorization", "Bearer admin-token")
+	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := app.Test(adminCtx)
+	resp, err := app.Test(req)
 	assert.NoError(t, err)
 	assert.Equal(t, fiber.StatusForbidden, resp.StatusCode)
 }
@@ -48,7 +47,7 @@ func TestGetByEstablishmentId_ErrorCheck(t *testing.T) {
 	app := fiber.New()
 	app.Get("/establishments/:establishmentId/products", GetByEstablishmentId)
 
-	req := mock.CreateRequest("GET", "/establishments/1/products")
+	req := httptest.NewRequest(http.MethodGet, "/establishments/1/products", nil)
 	resp, err := app.Test(req)
 	assert.NoError(t, err)
 	assert.Equal(t, fiber.StatusInternalServerError, resp.StatusCode)
@@ -70,13 +69,19 @@ func TestCanActOnEstablishment(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := mock.CreateRequest("GET", "/test")
-			c.Request().Header.Set("Authorization", "Bearer token")
+			app := fiber.New()
+			var result bool
+			app.Get("/test", func(c *fiber.Ctx) error {
+				middlewares.SetTestRole(tt.role)
+				middlewares.SetTestEstablishmentID(tt.tokenEstID)
+				result = canActOnEstablishment(c, tt.estID)
+				return c.SendStatus(200)
+			})
 
-			middlewares.SetTestRole(tt.role)
-			middlewares.SetTestEstablishmentID(tt.tokenEstID)
-
-			result := canActOnEstablishment(c, tt.estID)
+			req := httptest.NewRequest(http.MethodGet, "/test", nil)
+			req.Header.Set("Authorization", "Bearer token")
+			_, err := app.Test(req)
+			assert.NoError(t, err)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

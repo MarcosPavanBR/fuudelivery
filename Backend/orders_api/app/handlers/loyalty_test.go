@@ -4,13 +4,15 @@
 package handlers
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 
 	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/mock"
 	"github.com/stretchr/testify/assert"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -329,13 +331,10 @@ func TestRedeemPoints_RaceCondition(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			app := fiber.New()
-			app.Use(mock.Middleware())
 			app.Post("/loyalty/redeem", RedeemPoints)
 
-			req := mock.CreateRequest("POST", "/loyalty/redeem")
-			req.Request().Header.Set("Content-Type", "application/json")
-			req.Request().Body = []byte(`{"user_phone":"+5511999900001","points":10,"order_id":"order-1"}`)
-			req.JSON()
+			req := httptest.NewRequest(http.MethodPost, "/loyalty/redeem", strings.NewReader(`{"user_phone":"+5511999900001","points":10,"order_id":"order-1"}`))
+			req.Header.Set("Content-Type", "application/json")
 
 			_, err := app.Test(req)
 			if err == nil {

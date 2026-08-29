@@ -160,6 +160,9 @@ func canActOnEstablishment(c *fiber.Ctx, establishmentID int64) bool {
 	if role == "admin" {
 		return true
 	}
+	if role != "restaurant" {
+		return false
+	}
 	tokenEstID, eErr := middlewares.GetEstablishmentIDFromToken(c)
 	if eErr != nil {
 		return false

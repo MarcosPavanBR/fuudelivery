@@ -1,6 +1,6 @@
 -- ============================================================================
 -- FUUDELIVERY — Dead-letter queue persistente (dispatch engine)
--- 17 — Tabela unmatched_orders (pedidos que não encontraram entregador)
+-- 18 — Tabela unmatched_orders (pedidos que não encontraram entregador)
 -- ============================================================================
 -- POR QUE ESTE SCRIPT EXISTE:
 --   A DLQ do motor de matching vivia só na memória. Se o dyno do Render dorme
@@ -85,5 +85,5 @@ GRANT USAGE, SELECT ON SEQUENCES IN SCHEMA public TO app_backend;
 GRANT SELECT, INSERT, UPDATE, DELETE ON unmatched_orders TO service_role;
 
 INSERT INTO schema_migrations (version, description)
-VALUES ('17_unmatched_orders', 'Cria unmatched_orders (DLQ persistente do dispatch engine), com auditoria e RLS app_backend')
+VALUES ('18_unmatched_orders', 'Cria unmatched_orders (DLQ persistente do dispatch engine), com auditoria e RLS app_backend')
 ON CONFLICT (version) DO NOTHING;

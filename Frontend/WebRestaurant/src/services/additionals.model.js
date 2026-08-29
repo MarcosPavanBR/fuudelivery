@@ -2,16 +2,11 @@ import Strings from "../constants/Strings";
 import api from "./api";
 
 async function handlerVinculoProdutoAdicional(productID, additionalID) {
-  try {
-    const { data } = await api.post("/additional/product", {
-      productID: parseInt(productID),
-      additionalID: parseInt(additionalID),
-    });
-    return true;
-  } catch (e) {
-    console.error(e);
-    return false;
-  }
+  const { data } = await api.post("/additional/product", {
+    productID: parseInt(productID),
+    additionalID: parseInt(additionalID),
+  });
+  return true;
 }
 
 async function getAdditionals(id) {
@@ -25,50 +20,27 @@ async function getAdditionals(id) {
 }
 
 async function updateAdditional(items, editItem) {
-  try {
-    const body = { ...editItem, Price: parseFloat(editItem.Price ?? 0) };
-    const { data } = await api.put(
-      "/additional/" + editItem.ID,
-      body
-    );
-    const finalItem = items.map((e) => {
-      if (e.ID === editItem.ID) {
-        return data;
-      }
-      return e;
-    });
-    return finalItem;
-  } catch (e) {
-    console.error(e);
-    return false;
-  }
+  const body = { ...editItem, Price: parseFloat(editItem.Price ?? 0) };
+  const { data } = await api.put(
+    "/additional/" + editItem.ID,
+    body
+  );
+  return items.map((e) => (e.ID === editItem.ID ? data : e));
 }
 
 async function createAdditional(items, editItem, establishmentId) {
-  try {
-    const body = {
-      ...editItem,
-      EstablishmentId: establishmentId,
-      Price: parseFloat(editItem.Price ?? 0),
-    };
-    const { data } = await api.post("/additional", body);
-
-    return [data, ...items.filter((e) => e.ID && e.ID !== Strings.id_default)];
-  } catch (e) {
-    console.error(e);
-    return false;
-  }
+  const body = {
+    ...editItem,
+    EstablishmentId: establishmentId,
+    Price: parseFloat(editItem.Price ?? 0),
+  };
+  const { data } = await api.post("/additional", body);
+  return [data, ...items.filter((e) => e.ID && e.ID !== Strings.id_default)];
 }
 
 async function deleteAdditional(items, id) {
-  try {
-    const { data } = await api.delete("/additional/" + id);
-
-    return [...items.filter((e) => e.ID !== id)];
-  } catch (e) {
-    console.error(e);
-    return false;
-  }
+  await api.delete("/additional/" + id);
+  return [...items.filter((e) => e.ID !== id)];
 }
 
 export default {

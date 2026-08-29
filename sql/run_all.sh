@@ -66,7 +66,7 @@ run "13_password_reset_tokens.sql"
 run "14_recipients.sql"
 run "15_split_rules.sql"
 run "16_payments_gateway_columns.sql"
-run "17_unmatched_orders.sql"
+run "18_unmatched_orders.sql"
 run "07_auditoria_tabelas_orfas.sql"
 run "08_testes.sql"
 

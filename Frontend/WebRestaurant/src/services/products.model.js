@@ -1,14 +1,8 @@
 import api from "./api";
 
 async function deleteProduct(id) {
-  try {
-    const { data } = await api.delete("/products/delete/" + id);
-
-    return true;
-  } catch (e) {
-    console.error(e);
-    return false;
-  }
+  await api.delete("/products/delete/" + id);
+  return true;
 }
 
 async function getProducts(id) {

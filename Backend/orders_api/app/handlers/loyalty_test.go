@@ -12,7 +12,6 @@ import (
 
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 

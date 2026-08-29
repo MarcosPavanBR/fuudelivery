@@ -58,11 +58,13 @@ const BusinessHoursEditor = ({ establishmentId }) => {
       toast.success("Horários salvos com sucesso!");
     } catch (e) {
       const status = e?.response?.status;
-      if (status === 401 || status === 403) {
+      const serverMsg = e?.response?.data?.error;
+      if (status === 401) {
         toast.error("Sessão expirada. Faça login novamente.");
+      } else if (status === 403) {
+        toast.error(serverMsg || "Erro de segurança. Recarregue a página e tente novamente.");
       } else {
-        const msg = e?.response?.data?.error || "Erro ao salvar horários.";
-        toast.error(msg);
+        toast.error(serverMsg || "Erro ao salvar horários.");
       }
     } finally {
       setSaving(false);

@@ -105,11 +105,13 @@ function Perfil() {
       toast.success(Texts.restaurant_update);
     } catch (err) {
       const status = err?.response?.status;
-      if (status === 401 || status === 403) {
+      const serverMsg = err?.response?.data?.error;
+      if (status === 401) {
         toast.error("Sessão expirada. Faça login novamente.");
+      } else if (status === 403) {
+        toast.error(serverMsg || "Erro de segurança. Recarregue a página e tente novamente.");
       } else {
-        const msg = err?.response?.data?.error || Texts.restaurant_error;
-        toast.error(msg);
+        toast.error(serverMsg || Texts.restaurant_error);
       }
     } finally {
       setLoading(false);

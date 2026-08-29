@@ -56,8 +56,10 @@ function Taxes() {
     } catch (err) {
       const serverMsg = err?.response?.data?.error;
       const status = err?.response?.status;
-      if (status === 401 || status === 403) {
+      if (status === 401) {
         toast.error("Sessão expirada. Faça login novamente.");
+      } else if (status === 403) {
+        toast.error(serverMsg || "Erro de segurança. Recarregue a página e tente novamente.");
       } else if (serverMsg) {
         toast.error(serverMsg);
       } else {

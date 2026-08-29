@@ -9,6 +9,9 @@ import {
   FiX,
   FiUpload,
   FiLoader,
+  FiLock,
+  FiEye,
+  FiEyeOff,
 } from "react-icons/fi";
 import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
@@ -229,6 +232,50 @@ export default function ProfileSettings() {
   const handleCancel = () => {
     setForm(original);
     setErrors(INITIAL_ERRORS);
+  };
+
+  /* ---------- Password Change State ---------- */
+  const [pwdForm, setPwdForm] = useState({ current: "", newPwd: "", confirm: "" });
+  const [pwdErrors, setPwdErrors] = useState({});
+  const [pwdSaving, setPwdSaving] = useState(false);
+  const [showPwdCurrent, setShowPwdCurrent] = useState(false);
+  const [showPwdNew, setShowPwdNew] = useState(false);
+
+  const validatePwd = () => {
+    const e = {};
+    if (!pwdForm.current) e.current = "Senha atual é obrigatória.";
+    if (!pwdForm.newPwd) {
+      e.newPwd = "Nova senha é obrigatória.";
+    } else if (pwdForm.newPwd.length < 8) {
+      e.newPwd = "A nova senha deve ter no mínimo 8 caracteres.";
+    } else if (pwdForm.newPwd === pwdForm.current) {
+      e.newPwd = "A nova senha deve ser diferente da atual.";
+    }
+    if (pwdForm.newPwd && pwdForm.confirm !== pwdForm.newPwd) {
+      e.confirm = "As senhas não conferem.";
+    }
+    setPwdErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handlePwdSubmit = async (e) => {
+    e.preventDefault();
+    if (!validatePwd()) return;
+    setPwdSaving(true);
+    try {
+      await api.put(`/users/${user?.id}/password`, {
+        current_password: pwdForm.current,
+        new_password: pwdForm.newPwd,
+      });
+      setPwdForm({ current: "", newPwd: "", confirm: "" });
+      setPwdErrors({});
+      toast.success("Senha alterada com sucesso!");
+    } catch (err) {
+      const msg = err?.response?.data?.error || "Erro ao alterar senha. Tente novamente.";
+      toast.error(msg);
+    } finally {
+      setPwdSaving(false);
+    }
   };
 
   const hasChanges =
@@ -452,6 +499,106 @@ export default function ProfileSettings() {
               <>
                 <FiSave className="w-4 h-4" />
                 Salvar alterações
+              </>
+            )}
+          </button>
+        </div>
+      </form>
+
+      {/* ---------- Seção: Alterar Senha ---------- */}
+      <form onSubmit={handlePwdSubmit} className="card p-8 space-y-6">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">
+            Segurança
+          </p>
+          <h2 className="text-lg font-bold text-gray-900 tracking-tight">
+            Alterar Senha
+          </h2>
+        </div>
+
+        {/* Senha Atual */}
+        <div className="space-y-2">
+          <label htmlFor="pwd-current" className="block text-xs font-semibold text-gray-500 uppercase mb-2 tracking-wide">
+            Senha atual <span className="text-fuu-red">*</span>
+          </label>
+          <div className="relative">
+            <FiLock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              id="pwd-current"
+              type={showPwdCurrent ? "text" : "password"}
+              value={pwdForm.current}
+              onChange={(e) => { setPwdForm(p => ({ ...p, current: e.target.value })); if (pwdErrors.current) setPwdErrors(p => ({ ...p, current: "" })); }}
+              placeholder="Digite sua senha atual"
+              className={`input pl-10 pr-10 ${pwdErrors.current ? "is-invalid" : ""}`}
+              autoComplete="current-password"
+            />
+            <button type="button" onClick={() => setShowPwdCurrent(v => !v)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              {showPwdCurrent ? <FiEyeOff className="w-4 h-4" /> : <FiEye className="w-4 h-4" />}
+            </button>
+          </div>
+          {pwdErrors.current && <p className="text-xs text-red-600 font-medium">{pwdErrors.current}</p>}
+        </div>
+
+        {/* Nova Senha */}
+        <div className="space-y-2">
+          <label htmlFor="pwd-new" className="block text-xs font-semibold text-gray-500 uppercase mb-2 tracking-wide">
+            Nova senha <span className="text-fuu-red">*</span>
+          </label>
+          <div className="relative">
+            <FiLock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              id="pwd-new"
+              type={showPwdNew ? "text" : "password"}
+              value={pwdForm.newPwd}
+              onChange={(e) => { setPwdForm(p => ({ ...p, newPwd: e.target.value })); if (pwdErrors.newPwd) setPwdErrors(p => ({ ...p, newPwd: "" })); }}
+              placeholder="Mínimo 8 caracteres"
+              className={`input pl-10 pr-10 ${pwdErrors.newPwd ? "is-invalid" : ""}`}
+              autoComplete="new-password"
+              minLength={8}
+            />
+            <button type="button" onClick={() => setShowPwdNew(v => !v)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              {showPwdNew ? <FiEyeOff className="w-4 h-4" /> : <FiEye className="w-4 h-4" />}
+            </button>
+          </div>
+          {pwdErrors.newPwd && <p className="text-xs text-red-600 font-medium">{pwdErrors.newPwd}</p>}
+        </div>
+
+        {/* Confirmar Senha */}
+        <div className="space-y-2">
+          <label htmlFor="pwd-confirm" className="block text-xs font-semibold text-gray-500 uppercase mb-2 tracking-wide">
+            Confirmar nova senha <span className="text-fuu-red">*</span>
+          </label>
+          <div className="relative">
+            <FiLock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              id="pwd-confirm"
+              type="password"
+              value={pwdForm.confirm}
+              onChange={(e) => { setPwdForm(p => ({ ...p, confirm: e.target.value })); if (pwdErrors.confirm) setPwdErrors(p => ({ ...p, confirm: "" })); }}
+              placeholder="Repita a nova senha"
+              className={`input pl-10 ${pwdErrors.confirm ? "is-invalid" : ""}`}
+              autoComplete="new-password"
+            />
+          </div>
+          {pwdErrors.confirm && <p className="text-xs text-red-600 font-medium">{pwdErrors.confirm}</p>}
+        </div>
+
+        {/* Ações */}
+        <div className="flex justify-end pt-4 border-t border-gray-100">
+          <button
+            type="submit"
+            disabled={pwdSaving || !pwdForm.current || !pwdForm.newPwd || !pwdForm.confirm}
+            className="btn btn-primary disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {pwdSaving ? (
+              <>
+                <FiLoader className="w-4 h-4 animate-spin" />
+                Alterando...
+              </>
+            ) : (
+              <>
+                <FiLock className="w-4 h-4" />
+                Alterar senha
               </>
             )}
           </button>

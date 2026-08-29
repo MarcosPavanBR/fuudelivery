@@ -46,8 +46,8 @@ const ChangePasswordPage = () => {
       return;
     }
 
-    if (form.newPassword.length < 6) {
-      setError("A nova senha deve ter pelo menos 6 caracteres.");
+    if (form.newPassword.length < 8) {
+      setError("A nova senha deve ter pelo menos 8 caracteres.");
       return;
     }
 
@@ -158,7 +158,7 @@ const ChangePasswordPage = () => {
                   type={showNew ? "text" : "password"}
                   required
                   className={inputClass}
-                  placeholder="Mínimo 6 caracteres"
+                  placeholder="Mínimo 8 caracteres"
                   value={form.newPassword}
                   onChange={handleChange}
                 />

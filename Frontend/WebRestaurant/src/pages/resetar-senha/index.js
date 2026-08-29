@@ -45,8 +45,8 @@ const ResetarSenhaPage = () => {
       setError("Informe o código recebido do suporte");
       return;
     }
-    if (newPassword.length < 6) {
-      setError("A nova senha deve ter pelo menos 6 caracteres");
+    if (newPassword.length < 8) {
+      setError("A nova senha deve ter pelo menos 8 caracteres");
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -265,7 +265,7 @@ const ResetarSenhaPage = () => {
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Mínimo 6 caracteres"
+                  placeholder="Mínimo 8 caracteres"
                   className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
                 />
               </div>

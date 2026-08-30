@@ -1,6 +1,6 @@
 module github.com/carloshomar/fuudelivery/pkg/queue
 
-go 1.23
+go 1.25
 
 require (
 	github.com/alicebob/miniredis/v2 v2.38.0

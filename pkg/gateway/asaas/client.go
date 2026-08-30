@@ -5,20 +5,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"log"
+	"net/http"
 	"os"
 	"time"
-
 )
 
 // Client é o cliente HTTP para a API do Asaas.
 type Client struct {
-	baseURL     string
-	apiKey      string
-	httpClient  *http.Client
-	maxRetries  int
-	retryDelay  time.Duration
+	baseURL    string
+	apiKey     string
+	httpClient *http.Client
+	maxRetries int
+	retryDelay time.Duration
 }
 
 // NewClient cria um novo cliente Asaas.

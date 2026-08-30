@@ -53,33 +53,40 @@ ok "URL canônica (URLS.md): $CANONICAL"
 # A fonte única centralizada. O valor de API_URL deve ser idêntico.
 check_config() {
     local app_name="$1"
-    local config_file="$2"
-    local file_url
+    local app_dir="$2"
+    local file_url=""
 
-    if [ ! -f "$config_file" ]; then
-        fail "$app_name: $config_file não encontrado"
-        FAILURES=$((FAILURES + 1))
-        return
+    # Procura em .env.production primeiro (fonte canônica atual)
+    local env_file="$app_dir/.env.production"
+    if [ -f "$env_file" ]; then
+        file_url=$(sed -n 's/^EXPO_PUBLIC_API_URL=\(.*\)/\1/p' "$env_file" | head -1)
     fi
 
-    file_url=$(sed -n 's/.*API_URL = "\([^"]*\)".*/\1/p' "$config_file" | head -1)
+    # Fallback: procura em config/api.ts (padrão antigo)
     if [ -z "$file_url" ]; then
-        fail "$app_name: API_URL não encontrada em $config_file"
+        local config_file="$app_dir/config/api.ts"
+        if [ -f "$config_file" ]; then
+            file_url=$(sed -n 's/.*API_URL = "\([^"]*\)".*/\1/p' "$config_file" | head -1)
+        fi
+    fi
+
+    if [ -z "$file_url" ]; then
+        fail "$app_name: EXPO_PUBLIC_API_URL não encontrada em $app_dir"
         FAILURES=$((FAILURES + 1))
         return
     fi
 
     if [ "$file_url" = "$CANONICAL" ]; then
-        ok "$app_name: config/api.ts OK ($file_url)"
+        ok "$app_name: URL OK ($file_url)"
     else
-        fail "$app_name: DIVERGÊNCIA — config/api.ts tem '$file_url', URLS.md diz '$CANONICAL'"
+        fail "$app_name: DIVERGÊNCIA — tem '$file_url', URLS.md diz '$CANONICAL'"
         FAILURES=$((FAILURES + 1))
     fi
 }
 
-check_config "AppComida"  "$ROOT_DIR/Frontend/AppComida/config/api.ts"
-check_config "AppEntrega" "$ROOT_DIR/Frontend/AppEntrega/config/api.ts"
-check_config "AppRestaurante" "$ROOT_DIR/Frontend/AppRestaurante/config/api.ts"
+check_config "AppComida"  "$ROOT_DIR/Frontend/AppComida"
+check_config "AppEntrega" "$ROOT_DIR/Frontend/AppEntrega"
+check_config "AppRestaurante" "$ROOT_DIR/Frontend/AppRestaurante"
 
 # ─── 3. Varredura de URLs hardcoded divergentes ──────────────
 # Qualquer referência a onrender.com nos sources dos apps deve ser a

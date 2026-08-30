@@ -7,7 +7,7 @@ import (
 
 	"github.com/carloshomar/fuudelivery/payment_api/app/dto"
 	"github.com/carloshomar/fuudelivery/payment_api/app/models"
-	
+
 	"github.com/carloshomar/fuudelivery/pkg/gateway"
 	"github.com/gofiber/fiber/v2"
 )
@@ -74,14 +74,14 @@ func ChargeCard(c *fiber.Ctx) error {
 	}
 
 	gatewayReq := &gateway.TransactionRequest{
-		OrderID:         0, // ChargeCard é avulsa, sem pedido interno
-		Amount:          int64(req.Amount * 100),
-		Currency:        "BRL",
-		PaymentMethod:   gateway.MethodCreditCard,
-		CustomerEmail:   email,
-		CustomerName:    name,
-		CustomerDoc:     req.CPF,
-		CustomerPhone:   req.Phone,
+		OrderID:       0, // ChargeCard é avulsa, sem pedido interno
+		Amount:        int64(req.Amount * 100),
+		Currency:      "BRL",
+		PaymentMethod: gateway.MethodCreditCard,
+		CustomerEmail: email,
+		CustomerName:  name,
+		CustomerDoc:   req.CPF,
+		CustomerPhone: req.Phone,
 		CardData: &gateway.CardData{
 			Token:        req.CardToken,
 			Installments: installments,
@@ -139,14 +139,14 @@ func ProcessPayment(c *fiber.Ctx) error {
 		}
 
 		gatewayReq := &gateway.TransactionRequest{
-			OrderID:        0,
-			Amount:         int64(req.Amount * 100),
-			Currency:       "BRL",
-			PaymentMethod:  gateway.MethodCreditCard,
-			CustomerEmail:  email,
-			CustomerName:   req.CustomerName,
-			CustomerDoc:    "",
-			CustomerPhone:  req.CustomerPhone,
+			OrderID:       0,
+			Amount:        int64(req.Amount * 100),
+			Currency:      "BRL",
+			PaymentMethod: gateway.MethodCreditCard,
+			CustomerEmail: email,
+			CustomerName:  req.CustomerName,
+			CustomerDoc:   "",
+			CustomerPhone: req.CustomerPhone,
 			CardData: &gateway.CardData{
 				Token:        req.CardToken,
 				Installments: installments,
@@ -193,9 +193,9 @@ func ProcessPayment(c *fiber.Ctx) error {
 		}
 
 		response := dto.PaymentResponse{
-			PaymentID:    payment.IDString(),
-			Status:       paymentStatus,
-			Message:      fmt.Sprintf("Payment processed via %s", resp.Gateway),
+			PaymentID: payment.IDString(),
+			Status:    paymentStatus,
+			Message:   fmt.Sprintf("Payment processed via %s", resp.Gateway),
 		}
 
 		return c.Status(201).JSON(response)
@@ -203,7 +203,7 @@ func ProcessPayment(c *fiber.Ctx) error {
 
 	if req.Method == "pix" {
 		gatewayReq := &gateway.TransactionRequest{
-			OrderID:        parseOrderID(req.OrderID),
+			OrderID:       parseOrderID(req.OrderID),
 			Amount:        int64(req.Amount * 100),
 			Currency:      "BRL",
 			PaymentMethod: gateway.MethodPIX,

@@ -1,6 +1,6 @@
 module github.com/carloshomar/fuudelivery/cmd/etl-payments
 
-go 1.23
+go 1.25
 
 require (
 	github.com/carloshomar/fuudelivery/payment_api v0.0.0

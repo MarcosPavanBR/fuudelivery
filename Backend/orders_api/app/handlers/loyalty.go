@@ -11,7 +11,7 @@ import (
 	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
-	
+
 	"gorm.io/gorm/clause"
 )
 

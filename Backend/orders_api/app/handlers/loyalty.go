@@ -237,6 +237,12 @@ func EarnPointsForOrder(userPhone, orderID string, orderValue float64) error {
 }
 
 func RedeemPoints(c *fiber.Ctx) error {
+	// Extract authenticated user's phone from JWT token
+	tokenPhone, err := middlewares.GetUserPhoneFromToken(c)
+	if err != nil {
+		return c.Status(401).JSON(fiber.Map{"error": "Invalid token"})
+	}
+
 	var req struct {
 		UserPhone string `json:"user_phone"`
 		Points    int    `json:"points"`
@@ -245,6 +251,30 @@ func RedeemPoints(c *fiber.Ctx) error {
 
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
+	}
+
+	// Use token phone if not provided, or validate it matches the token
+	if req.UserPhone == "" {
+		req.UserPhone = tokenPhone
+	}
+	if req.UserPhone != tokenPhone {
+		return c.Status(403).JSON(fiber.Map{"error": "Cannot redeem points for another user"})
+	}
+
+	// Validate points is positive
+	if req.Points <= 0 {
+		return c.Status(400).JSON(fiber.Map{"error": "Os pontos devem ser um valor positivo"})
+	}
+
+	// Validate points is a multiple of 10
+	if req.Points%10 != 0 {
+		return c.Status(400).JSON(fiber.Map{"error": "Os pontos devem ser múltiplos de 10"})
+	}
+
+	// Apply reasonable upper bound (10,000 points = 1,000 currency units discount)
+	const maxPointsPerRedemption = 10000
+	if req.Points > maxPointsPerRedemption {
+		return c.Status(400).JSON(fiber.Map{"error": "O máximo de pontos por resgate é 10.000"})
 	}
 
 	tx := models.DB.Begin()
@@ -259,10 +289,6 @@ func RedeemPoints(c *fiber.Ctx) error {
 
 	if loyalty.Points < req.Points {
 		return c.Status(400).JSON(fiber.Map{"error": "Pontos insuficientes"})
-	}
-
-	if req.Points%10 != 0 {
-		return c.Status(400).JSON(fiber.Map{"error": "Os pontos devem ser múltiplos de 10"})
 	}
 
 	discountValue := float64(req.Points / 10)

@@ -1,6 +1,6 @@
 module github.com/carloshomar/fuudelivery/delivery_api
 
-go 1.25.0
+go 1.23
 
 require (
 	github.com/carloshomar/fuudelivery/auth_api v0.0.0

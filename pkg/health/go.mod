@@ -1,6 +1,6 @@
 module github.com/carloshomar/fuudelivery/pkg/health
 
-go 1.25.0
+go 1.23
 
 require (
 	github.com/go-redis/redis/v8 v8.11.5

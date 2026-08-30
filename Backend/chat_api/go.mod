@@ -1,6 +1,6 @@
 module github.com/carloshomar/fuudelivery/chat_api
 
-go 1.25.0
+go 1.23
 
 require (
 	github.com/gofiber/contrib/websocket v1.3.4

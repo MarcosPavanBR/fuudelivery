@@ -18,12 +18,14 @@ func setupTestDB() *gorm.DB {
 	if err != nil {
 		return nil
 	}
-	// Migra todas as tabelas necessárias para os testes
 	db.AutoMigrate(
-		&models.Product{}, 
-		&models.Category{}, 
-		&models.Coupon{}, 
-		&models.CouponUsage{}, 
+		&models.Product{},
+		&models.Category{},
+		&models.Additional{},
+		&models.AdditionalProducts{},
+		&models.CategoryProducts{},
+		&models.Coupon{},
+		&models.CouponUsage{},
 		&models.LoyaltyPoints{},
 		&models.LoyaltyTransaction{},
 		&models.Order{},
@@ -68,6 +70,5 @@ func TestGetByEstablishmentId_ErrorCheck(t *testing.T) {
 	req := httptest.NewRequest("GET", "/establishments/1/products", nil)
 	resp, err := app.Test(req, -1)
 	assert.NoError(t, err)
-	// Should return 200 with empty array when no products exist
-	assert.Equal(t, fiber.StatusOK, resp.StatusCode)
+	assert.Equal(t, fiber.StatusOK, resp.StatusCode) // empty DB returns 200 with []
 }

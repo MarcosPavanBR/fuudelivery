@@ -373,6 +373,21 @@ func ListOrdersByEstablishmentID(c *fiber.Ctx) error {
 		})
 	}
 
+	// Authorization: only admin or establishment owner can list orders
+	role, roleErr := middlewares.GetUserRoleFromToken(c)
+	if roleErr != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+	}
+
+	if role != "admin" {
+		tokenEstID, estErr := middlewares.GetEstablishmentIDFromToken(c)
+		if estErr != nil || tokenEstID != int64(establishmentIDInt) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "Cannot access orders from another establishment",
+			})
+		}
+	}
+
 	// Postgres primário (corte 5).
 	var docs []models.OrderDocument
 	if models.DB != nil {
@@ -408,6 +423,33 @@ func ListOrdersByEstablishmentIDAndPhone(c *fiber.Ctx) error {
 	phoneNumber, err := url.QueryUnescape(phoneNumberEncoded)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Número de telefone inválido"})
+	}
+
+	// Authorization: verify caller can access this establishment+phone combination
+	role, roleErr := middlewares.GetUserRoleFromToken(c)
+	if roleErr != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+	}
+
+	tokenPhone, phoneErr := middlewares.GetUserPhoneFromToken(c)
+	if phoneErr != nil && role != "admin" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+	}
+
+	// Admin can access any establishment+phone
+	if role != "admin" {
+		// Non-admin must either:
+		// 1. Own the establishment (restaurant role), OR
+		// 2. Be querying their own phone number
+		tokenEstID, estErr := middlewares.GetEstablishmentIDFromToken(c)
+		ownsEstablishment := (estErr == nil && tokenEstID == int64(establishmentIDInt))
+		ownsPhone := (tokenPhone == phoneNumber)
+
+		if !ownsEstablishment && !ownsPhone {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "Cannot access orders from another establishment or phone",
+			})
+		}
 	}
 
 	var docs []models.OrderDocument

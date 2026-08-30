@@ -23,6 +23,9 @@ func getPaymentRouter(c *fiber.Ctx) (*gateway.Router, error) {
 
 // ChargeCard cobra um cartão usando o PaymentRouter (fallback chain + circuit breaker).
 // Não persiste pagamento — é uma cobrança avulsa.
+//
+// Autorização: valida que o usuário autenticado (JWT) é o dono do pedido
+// antes de criar a cobrança. Usa o total do pedido de order_documents.
 func ChargeCard(c *fiber.Ctx) error {
 	var req struct {
 		CardToken    string  `json:"card_token"`
@@ -46,12 +49,29 @@ func ChargeCard(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "order_id is required"})
 	}
 
-	serverTotal, ok := validateChargeAmount(req.OrderID, req.Amount)
-	if !ok {
-		log.Printf("[CARD] Cobrança rejeitada: valor diverge do pedido %s (client=%.2f)", req.OrderID, req.Amount)
-		return c.Status(400).JSON(fiber.Map{"error": "Valor da cobrança não corresponde ao pedido"})
+	// Valida que o usuário autenticado é o dono do pedido e carrega os dados
+	// autorizativos (establishment_id, customer_id, order_total, etc.).
+	orderData, err := authorizeAndLoadOrder(c, req.OrderID)
+	if err != nil {
+		if err == ErrUnauthorizedPayment {
+			log.Printf("[CARD] Authorization failed for order %s: user does not own order", req.OrderID)
+			return c.Status(403).JSON(fiber.Map{"error": "Acesso negado: você não é o dono deste pedido"})
+		}
+		if err == ErrOrderNotFound {
+			log.Printf("[CARD] Order %s not found", req.OrderID)
+			return c.Status(404).JSON(fiber.Map{"error": "Pedido não encontrado"})
+		}
+		if err == ErrOrderAlreadyPaid {
+			log.Printf("[CARD] Order %s already has a confirmed payment", req.OrderID)
+			return c.Status(409).JSON(fiber.Map{"error": "Este pedido já foi pago"})
+		}
+		log.Printf("[CARD] Failed to authorize order %s: %v", req.OrderID, err)
+		return c.Status(500).JSON(fiber.Map{"error": "Erro ao validar pedido"})
 	}
-	req.Amount = serverTotal
+
+	// Usa o total do pedido extraído de order_documents (fonte da verdade).
+	// Ignora completamente o amount enviado pelo cliente.
+	amount := orderData.OrderTotal
 
 	email := req.Email
 	if email == "" {
@@ -75,13 +95,13 @@ func ChargeCard(c *fiber.Ctx) error {
 
 	gatewayReq := &gateway.TransactionRequest{
 		OrderID:         0, // ChargeCard é avulsa, sem pedido interno
-		Amount:          int64(req.Amount * 100),
+		Amount:          int64(amount * 100),
 		Currency:        "BRL",
 		PaymentMethod:   gateway.MethodCreditCard,
 		CustomerEmail:   email,
 		CustomerName:    name,
 		CustomerDoc:     req.CPF,
-		CustomerPhone:   req.Phone,
+		CustomerPhone:   orderData.CustomerPhone,
 		CardData: &gateway.CardData{
 			Token:        req.CardToken,
 			Installments: installments,
@@ -93,9 +113,12 @@ func ChargeCard(c *fiber.Ctx) error {
 
 	resp, err := router.CreateTransactionWithFallback(c.Context(), gatewayReq)
 	if err != nil {
-		log.Printf("[CARD] Error creating card payment via router: amount=%.2f err=%v", req.Amount, err)
+		log.Printf("[CARD] Error creating card payment via router: amount=%.2f err=%v", amount, err)
 		return c.Status(500).JSON(fiber.Map{"error": "Card payment failed"})
 	}
+
+	log.Printf("[CARD] ChargeCard for order %s: customer=%d establishment=%d amount=%.2f",
+		req.OrderID, orderData.CustomerID, orderData.EstablishmentID, amount)
 
 	return c.Status(200).JSON(fiber.Map{
 		"charge_id":    resp.GatewayID,
@@ -109,10 +132,34 @@ func ChargeCard(c *fiber.Ctx) error {
 
 // ProcessPayment cria a cobrança (cartão ou PIX) e persiste o pagamento em
 // Postgres (corte 4 — fonte da verdade), com dual-write best-effort no Mongo.
+//
+// Autorização: valida que o usuário autenticado (JWT) é o dono do pedido
+// antes de criar a cobrança. Os IDs de cliente/estabelecimento são extraídos
+// de order_documents (fonte da verdade) — nunca confia no request body.
 func ProcessPayment(c *fiber.Ctx) error {
 	var req dto.PaymentRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
+	}
+
+	// Valida que o usuário autenticado é o dono do pedido e carrega os dados
+	// autorizativos (establishment_id, customer_id, order_total, etc.).
+	orderData, err := authorizeAndLoadOrder(c, req.OrderID)
+	if err != nil {
+		if err == ErrUnauthorizedPayment {
+			log.Printf("[CARD] Authorization failed for order %s: user does not own order", req.OrderID)
+			return c.Status(403).JSON(fiber.Map{"error": "Acesso negado: você não é o dono deste pedido"})
+		}
+		if err == ErrOrderNotFound {
+			log.Printf("[CARD] Order %s not found", req.OrderID)
+			return c.Status(404).JSON(fiber.Map{"error": "Pedido não encontrado"})
+		}
+		if err == ErrOrderAlreadyPaid {
+			log.Printf("[CARD] Order %s already has a confirmed payment", req.OrderID)
+			return c.Status(409).JSON(fiber.Map{"error": "Este pedido já foi pago"})
+		}
+		log.Printf("[CARD] Failed to authorize order %s: %v", req.OrderID, err)
+		return c.Status(500).JSON(fiber.Map{"error": "Erro ao validar pedido"})
 	}
 
 	email := req.CustomerEmail
@@ -120,12 +167,9 @@ func ProcessPayment(c *fiber.Ctx) error {
 		email = "cliente@email.com"
 	}
 
-	serverTotal, ok := validateChargeAmount(req.OrderID, req.Amount)
-	if !ok {
-		log.Printf("[CARD] Cobrança rejeitada: valor diverge do pedido %s (client=%.2f)", req.OrderID, req.Amount)
-		return c.Status(400).JSON(fiber.Map{"error": "Valor da cobrança não corresponde ao pedido"})
-	}
-	req.Amount = serverTotal
+	// Usa o total do pedido extraído de order_documents (fonte da verdade).
+	// Ignora completamente o amount enviado pelo cliente.
+	amount := orderData.OrderTotal
 
 	router, err := getPaymentRouter(c)
 	if err != nil {
@@ -140,13 +184,13 @@ func ProcessPayment(c *fiber.Ctx) error {
 
 		gatewayReq := &gateway.TransactionRequest{
 			OrderID:        0,
-			Amount:         int64(req.Amount * 100),
+			Amount:         int64(amount * 100),
 			Currency:       "BRL",
 			PaymentMethod:  gateway.MethodCreditCard,
 			CustomerEmail:  email,
 			CustomerName:   req.CustomerName,
 			CustomerDoc:    "",
-			CustomerPhone:  req.CustomerPhone,
+			CustomerPhone:  orderData.CustomerPhone,
 			CardData: &gateway.CardData{
 				Token:        req.CardToken,
 				Installments: installments,
@@ -172,13 +216,14 @@ func ProcessPayment(c *fiber.Ctx) error {
 			paymentStatus = "REFUSED"
 		}
 
+		// Usa os IDs autorizativos de order_documents (nunca confia no request body).
 		payment := models.Payment{
 			OrderID:         req.OrderID,
-			CustomerID:      req.CustomerID,
-			CustomerPhone:   req.CustomerPhone,
-			EstablishmentID: req.EstablishmentID,
-			Amount:          req.Amount,
-			DeliveryAmount:  req.DeliveryAmount,
+			CustomerID:      orderData.CustomerID,
+			CustomerPhone:   orderData.CustomerPhone,
+			EstablishmentID: orderData.EstablishmentID,
+			Amount:          amount,
+			DeliveryAmount:  orderData.DeliveryAmount,
 			Method:          req.Method,
 			Status:          paymentStatus,
 			Installments:    installments,
@@ -192,6 +237,9 @@ func ProcessPayment(c *fiber.Ctx) error {
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to save payment"})
 		}
 
+		log.Printf("[CARD] Payment created for order %s: customer=%d establishment=%d amount=%.2f status=%s",
+			req.OrderID, orderData.CustomerID, orderData.EstablishmentID, amount, paymentStatus)
+
 		response := dto.PaymentResponse{
 			PaymentID:    payment.IDString(),
 			Status:       paymentStatus,
@@ -204,13 +252,13 @@ func ProcessPayment(c *fiber.Ctx) error {
 	if req.Method == "pix" {
 		gatewayReq := &gateway.TransactionRequest{
 			OrderID:        parseOrderID(req.OrderID),
-			Amount:        int64(req.Amount * 100),
+			Amount:        int64(amount * 100),
 			Currency:      "BRL",
 			PaymentMethod: gateway.MethodPIX,
 			CustomerEmail: email,
 			CustomerName:  req.CustomerName,
 			CustomerDoc:   "",
-			CustomerPhone: req.CustomerPhone,
+			CustomerPhone: orderData.CustomerPhone,
 			Capture:       true,
 		}
 
@@ -220,13 +268,14 @@ func ProcessPayment(c *fiber.Ctx) error {
 			return c.Status(500).JSON(fiber.Map{"error": "PIX payment failed"})
 		}
 
+		// Usa os IDs autorizativos de order_documents (nunca confia no request body).
 		payment := models.Payment{
 			OrderID:         req.OrderID,
-			CustomerID:      req.CustomerID,
-			CustomerPhone:   req.CustomerPhone,
-			EstablishmentID: req.EstablishmentID,
-			Amount:          req.Amount,
-			DeliveryAmount:  req.DeliveryAmount,
+			CustomerID:      orderData.CustomerID,
+			CustomerPhone:   orderData.CustomerPhone,
+			EstablishmentID: orderData.EstablishmentID,
+			Amount:          amount,
+			DeliveryAmount:  orderData.DeliveryAmount,
 			Method:          "pix",
 			Status:          "PENDING",
 			PixCopyPaste:    resp.PIXCopyPaste,
@@ -239,6 +288,9 @@ func ProcessPayment(c *fiber.Ctx) error {
 			log.Printf("[PIX] Erro ao salvar pagamento no Postgres: %v", err)
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to save payment"})
 		}
+
+		log.Printf("[PIX] Payment created for order %s: customer=%d establishment=%d amount=%.2f",
+			req.OrderID, orderData.CustomerID, orderData.EstablishmentID, amount)
 
 		response := dto.PaymentResponse{
 			PaymentID:    payment.IDString(),

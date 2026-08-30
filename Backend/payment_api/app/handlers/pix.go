@@ -21,30 +21,48 @@ func toCents(amount float64) int64 {
 // GeneratePIX cria uma cobrança PIX no gateway (AbacatePay) e persiste o
 // pagamento em Postgres (corte 4 — fonte da verdade), com dual-write
 // best-effort no Mongo legado.
+//
+// Autorização: valida que o usuário autenticado (JWT) é o dono do pedido
+// antes de criar a cobrança. Os IDs de cliente/estabelecimento são extraídos
+// de order_documents (fonte da verdade) — nunca confia no request body.
 func GeneratePIX(c *fiber.Ctx) error {
 	var req dto.PaymentRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
+	// Valida que o usuário autenticado é o dono do pedido e carrega os dados
+	// autorizativos (establishment_id, customer_id, order_total, etc.).
+	orderData, err := authorizeAndLoadOrder(c, req.OrderID)
+	if err != nil {
+		if err == ErrUnauthorizedPayment {
+			log.Printf("[PIX] Authorization failed for order %s: user does not own order", req.OrderID)
+			return c.Status(403).JSON(fiber.Map{"error": "Acesso negado: você não é o dono deste pedido"})
+		}
+		if err == ErrOrderNotFound {
+			log.Printf("[PIX] Order %s not found", req.OrderID)
+			return c.Status(404).JSON(fiber.Map{"error": "Pedido não encontrado"})
+		}
+		if err == ErrOrderAlreadyPaid {
+			log.Printf("[PIX] Order %s already has a confirmed payment", req.OrderID)
+			return c.Status(409).JSON(fiber.Map{"error": "Este pedido já foi pago"})
+		}
+		log.Printf("[PIX] Failed to authorize order %s: %v", req.OrderID, err)
+		return c.Status(500).JSON(fiber.Map{"error": "Erro ao validar pedido"})
+	}
+
 	description := fmt.Sprintf("Pedido %s", req.OrderID)
 
-	// O valor cobrado é o total recalculado no servidor na criação do pedido —
-	// nunca o amount enviado pelo cliente (que poderia pagar R$0,01 por um
-	// pedido de R$100,00).
-	serverTotal, ok := validateChargeAmount(req.OrderID, req.Amount)
-	if !ok {
-		log.Printf("[PIX] Cobrança rejeitada: valor diverge do pedido %s (client=%.2f)", req.OrderID, req.Amount)
-		return c.Status(400).JSON(fiber.Map{"error": "Valor da cobrança não corresponde ao pedido"})
-	}
-	req.Amount = serverTotal
+	// Usa o total do pedido extraído de order_documents (fonte da verdade).
+	// Ignora completamente o amount enviado pelo cliente.
+	amount := orderData.OrderTotal
 
 	client := services.NewAbacatePayClient()
 	chargeReq := services.PIXChargeRequest{}
-	// req.Amount está em REAIS (unidade persistida no Postgres); o gateway
+	// amount está em REAIS (unidade persistida no Postgres); o gateway
 	// AbacatePay espera CENTAVOS (int64). Sem esta conversão um pedido de
 	// R$100,00 gerava uma cobrança de R$1,00 (subcobrança).
-	chargeReq.Data.Amount = toCents(req.Amount)
+	chargeReq.Data.Amount = toCents(amount)
 	chargeReq.Data.Description = description
 	chargeReq.Data.ExternalID = req.OrderID
 	// customer é opcional para PIX; se enviado, TODOS os campos (incl. taxId/CPF
@@ -58,13 +76,14 @@ func GeneratePIX(c *fiber.Ctx) error {
 	}
 
 	// ID é BIGSERIAL no Postgres — preenchido automaticamente pelo Create.
+	// Usa os IDs autorizativos de order_documents (nunca confia no request body).
 	payment := models.Payment{
 		OrderID:         req.OrderID,
-		CustomerID:      req.CustomerID,
-		CustomerPhone:   req.CustomerPhone,
-		EstablishmentID: req.EstablishmentID,
-		Amount:          req.Amount,
-		DeliveryAmount:  req.DeliveryAmount,
+		CustomerID:      orderData.CustomerID,
+		CustomerPhone:   orderData.CustomerPhone,
+		EstablishmentID: orderData.EstablishmentID,
+		Amount:          amount,
+		DeliveryAmount:  orderData.DeliveryAmount,
 		Method:          "pix",
 		Status:          "PENDING",
 		PixQRCode:       apiResp.QRCode,
@@ -78,6 +97,9 @@ func GeneratePIX(c *fiber.Ctx) error {
 		log.Printf("[PIX] Erro ao salvar pagamento no Postgres: %v", err)
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to save payment"})
 	}
+
+	log.Printf("[PIX] Payment created for order %s: customer=%d establishment=%d amount=%.2f",
+		req.OrderID, orderData.CustomerID, orderData.EstablishmentID, amount)
 
 	response := dto.PaymentResponse{
 		PaymentID:    payment.IDString(),

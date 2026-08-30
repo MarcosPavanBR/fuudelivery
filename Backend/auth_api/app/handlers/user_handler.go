@@ -296,6 +296,18 @@ func UpdateUser(c *fiber.Ctx) error {
 
 	role, _ := middlewares.GetUserRoleFromToken(c)
 	isAdmin := role == "admin"
+	
+	// Validate entity type to prevent cross-table identity confusion
+	entityType, entityErr := middlewares.GetEntityTypeFromToken(c)
+	if entityErr != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token: entity type not found"})
+	}
+	
+	// Only users (not clients or deliverymen) can update user records
+	if !isAdmin && entityType != "user" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Invalid token type for this operation"})
+	}
+	
 	if tokenUserID != int64(reqUserID) && !isAdmin {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot update another user's account"})
 	}

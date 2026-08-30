@@ -6,6 +6,7 @@ package handlers
 import (
 	"encoding/json"
 
+	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -15,6 +16,26 @@ func RepeatOrder(c *fiber.Ctx) error {
 	doc, err := findOrderByLegacyID(orderID)
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Order not found"})
+	}
+
+	// Authorization: verify caller owns this order or is admin
+	role, roleErr := middlewares.GetUserRoleFromToken(c)
+	if roleErr != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+	}
+
+	if role != "admin" {
+		tokenPhone, phoneErr := middlewares.GetUserPhoneFromToken(c)
+		if phoneErr != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+		}
+
+		// Non-admin users can only repeat their own orders
+		if doc.UserPhone != tokenPhone {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "Cannot repeat another user's order",
+			})
+		}
 	}
 
 	// O payload completo (cart + establishment) está no JSONB; extraímos

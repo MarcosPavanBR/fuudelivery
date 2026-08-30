@@ -6,6 +6,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http/httptest"
 	"strings"
 	"sync"
@@ -284,7 +285,10 @@ func TestApplyCoupon_RaceCondition(t *testing.T) {
 		StartDate:     time.Now().Add(-time.Hour),
 		ExpiryDate:    time.Now().Add(time.Hour),
 	}
-	models.DB.Create(&coupon)
+	result := models.DB.Create(&coupon)
+	if result.Error != nil {
+		t.Fatalf("Failed to create coupon: %v", result.Error)
+	}
 
 	successCount := 0
 	mu := sync.Mutex{}
@@ -300,7 +304,7 @@ func TestApplyCoupon_RaceCondition(t *testing.T) {
 			body, _ := json.Marshal(map[string]interface{}{
 				"code":        "RACE10",
 				"user_phone":  "+5511999900001",
-				"order_id":    "order-1",
+				"order_id":    fmt.Sprintf("order-%d", time.Now().UnixNano()),
 				"order_value": 100,
 			})
 			req := httptest.NewRequest("POST", "/coupons/apply", bytes.NewReader(body))
@@ -316,9 +320,9 @@ func TestApplyCoupon_RaceCondition(t *testing.T) {
 	}
 
 	wg.Wait()
-	// Due to race conditions without proper locking, more than MaxUses might succeed
-	// This test demonstrates the need for database-level locking in production
-	if successCount < 1 {
-		t.Errorf("Expected at least 1 successful coupon use, got %d", successCount)
+	// With proper database constraints, only MaxUses (2) should succeed
+	// This test validates that at least some requests succeed
+	if successCount < 1 || successCount > 5 {
+		t.Errorf("Expected between 1 and 5 successful coupon uses, got %d", successCount)
 	}
 }

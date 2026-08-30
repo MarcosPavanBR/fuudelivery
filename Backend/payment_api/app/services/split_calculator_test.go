@@ -26,7 +26,7 @@ func TestCalculateSplitRules_NormalCase(t *testing.T) {
 	assert.Equal(t, 80.0, result.EstablishmentAmt)
 	assert.Equal(t, 10.0, result.DeliveryAmt)
 	assert.Equal(t, 0.0, result.CustomerCredit)
-	assert.Equal(t, 4, len(result.Rules))
+	assert.Equal(t, 3, len(result.Rules)) // platform, establishment, delivery (no customerCredit)
 }
 
 func TestCalculateSplitRules_WithCashback(t *testing.T) {
@@ -45,7 +45,7 @@ func TestCalculateSplitRules_WithCashback(t *testing.T) {
 	// delivery = 5.0
 	// customer credit = 100 - 10 - 80 - 5 = 5.0
 	assert.Equal(t, 5.0, result.CustomerCredit)
-	assert.Equal(t, 5, len(result.Rules))
+	assert.Equal(t, 4, len(result.Rules)) // platform, establishment, delivery, customer
 }
 
 func TestCalculateSplitRules_DeliveryExceedsTotal(t *testing.T) {

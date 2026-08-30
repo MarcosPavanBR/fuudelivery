@@ -36,8 +36,20 @@ func CalculateSplitRules(payment *models.Payment, platformPct, establishmentPct 
 
 	platformFee := total * (platformPct / 100.0)
 	establishmentAmount := total * (establishmentPct / 100.0)
-	customerCredit := total - platformFee - establishmentAmount - deliveryAmount
 
+	// Garante que platformFee + establishment + delivery nunca exceda o total.
+	// Se o delivery consome parte do bolo, o establishment absorve a diferença
+	// (nunca o platform, que é taxa fixa).
+	allocated := platformFee + establishmentAmount + deliveryAmount
+	if allocated > total {
+		overage := allocated - total
+		establishmentAmount -= overage
+		if establishmentAmount < 0 {
+			establishmentAmount = 0
+		}
+	}
+
+	customerCredit := total - platformFee - establishmentAmount - deliveryAmount
 	if customerCredit < 0 {
 		customerCredit = 0
 	}

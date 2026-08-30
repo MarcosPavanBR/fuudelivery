@@ -74,6 +74,19 @@ func updateLocalPaymentStatus(abacatepayID string, status string) {
 	}
 }
 
+// defaultSplitRules calcula as regras de split padrão usando o services layer.
+// Usado pelo webhook e testes E2E para manter a lógica centralizada em um único lugar.
+func defaultSplitRules(payment *models.Payment, platformPct, establishmentPct float64) []models.SplitRule {
+	result, err := services.CalculateSplitRules(payment, platformPct, establishmentPct)
+	if err != nil {
+		// Fallback: plataforma cobra 100% (não deveria acontecer em produção)
+		return []models.SplitRule{
+			{ReceiverID: 0, ReceiverType: "platform", Amount: payment.Amount, Percentage: 100},
+		}
+	}
+	return result.Rules
+}
+
 // establishmentShare soma o valor destinado ao estabelecimento nas split
 // rules (receiver_type == "establishment"). É o crédito que precisa ser
 // revertido na carteira quando o pagamento é estornado.

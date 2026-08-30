@@ -4,10 +4,17 @@
 package handlers
 
 import (
+	"bytes"
+	"encoding/json"
+	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/carloshomar/fuudelivery/orders_api/app/dto"
+	"github.com/carloshomar/fuudelivery/orders_api/app/models"
+	"github.com/gofiber/fiber/v2"
 )
 
 // === Testes de CreateCoupon validation ===
@@ -247,16 +254,19 @@ func TestCouponValidation_Messages(t *testing.T) {
 
 func TestApplyCoupon_RaceCondition(t *testing.T) {
 	db := setupTestDB()
+	if db == nil {
+		t.Skip("SQLite unavailable (needs CGO)")
+	}
 	models.DB = db
 
 	coupon := models.Coupon{
-		Code:        "RACE10",
-		DiscountType: "PERCENTAGE",
+		Code:          "RACE10",
+		DiscountType:  "PERCENTAGE",
 		DiscountValue: 10,
-		MaxUses:     2,
-		IsActive:     true,
-		StartDate:    time.Now().Add(-time.Hour),
-		ExpiryDate:   time.Now().Add(time.Hour),
+		MaxUses:       2,
+		IsActive:      true,
+		StartDate:     time.Now().Add(-time.Hour),
+		ExpiryDate:    time.Now().Add(time.Hour),
 	}
 	models.DB.Create(&coupon)
 
@@ -269,15 +279,18 @@ func TestApplyCoupon_RaceCondition(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			app := fiber.New()
-			app.Use(mock.Middleware())
 			app.Post("/coupons/apply", ApplyCoupon)
 
-			req := mock.CreateRequest("POST", "/coupons/apply")
-			req.Request().Header.Set("Content-Type", "application/json")
-			req.Request().Body = []byte(`{"code":"RACE10","user_phone":"+5511999900001","order_id":"order-1","order_value":100}`)
-			req.JSON()
+			body, _ := json.Marshal(map[string]interface{}{
+				"code":        "RACE10",
+				"user_phone":  "+5511999900001",
+				"order_id":    "order-1",
+				"order_value": 100,
+			})
+			req := httptest.NewRequest("POST", "/coupons/apply", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
 
-			_, err := app.Test(req)
+			_, err := app.Test(req, -1)
 			if err == nil {
 				mu.Lock()
 				successCount++

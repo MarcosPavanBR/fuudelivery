@@ -37,7 +37,7 @@ jobs:
         with:
           # FIXADO: "stable" passou a resolver Go 1.27 e quebrou pgx
           # (connection reset) + govulncheck v1.1.4. Alinhar com go.work/go.mod.
-          go-version: "1.25.x"
+          go-version: "1.23.x"
 
       - name: Go mod tidy
         run: go mod tidy
@@ -69,7 +69,7 @@ jobs:
         with:
           # FIXADO: "stable" passou a resolver Go 1.27 e quebrou pgx
           # (connection reset) + govulncheck v1.1.4. Alinhar com go.work/go.mod.
-          go-version: "1.25.x"
+          go-version: "1.23.x"
 
       - name: Start Docker services (Postgres)
         run: |
@@ -121,7 +121,7 @@ jobs:
         with:
           # FIXADO: "stable" passou a resolver Go 1.27 e quebrou pgx
           # (connection reset) + govulncheck v1.1.4. Alinhar com go.work/go.mod.
-          go-version: "1.25.x"
+          go-version: "1.23.x"
 
       - name: Start Docker service (Postgres)
         # Mesmo padrão comprovado do job e2e-delivery: "docker run" cru +
@@ -156,7 +156,7 @@ jobs:
         with:
           # FIXADO: "stable" passou a resolver Go 1.27 e quebrou pgx
           # (connection reset) + govulncheck v1.1.4. Alinhar com go.work/go.mod.
-          go-version: "1.25.x"
+          go-version: "1.23.x"
 
       - name: Check formatting
         run: |
@@ -198,7 +198,7 @@ jobs:
         with:
           # FIXADO: "stable" passou a resolver Go 1.27 e quebrou pgx
           # (connection reset) + govulncheck v1.1.4. Alinhar com go.work/go.mod.
-          go-version: "1.25.x"
+          go-version: "1.23.x"
 
       - name: Install govulncheck
         # v1.1.4 compativel com Go 1.24+ (v1.2.0+ exige go >= 1.25)
@@ -374,7 +374,7 @@ jobs:
       # FIXADO em 1.25.x, igual aos demais jobs (ver comentário na matriz go-modules).
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25.x"
+          go-version: "1.23.x"
           cache-dependency-path: cmd/fuudelivery/go.sum
 
       - name: Start Docker services (Postgres)

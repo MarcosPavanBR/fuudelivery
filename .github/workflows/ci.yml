@@ -37,6 +37,7 @@ jobs:
         with:
           # Alinhar com go.work/go.mod (1.25). govulncheck exige 1.25+.
           go-version: "1.25.x"
+          cache-dependency-path: ${{ matrix.module }}/go.sum
 
       - name: Go mod tidy
         run: go mod tidy

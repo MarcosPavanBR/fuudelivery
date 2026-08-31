@@ -5,8 +5,8 @@ import (
 	"log"
 	"time"
 
-	"gorm.io/gorm"
 	"github.com/redis/go-redis/v9"
+	"gorm.io/gorm"
 )
 
 // OutboxProcessor processa eventos pendentes e publica em Redis Streams
@@ -118,9 +118,9 @@ func (p *OutboxProcessor) ProcessDeadLetterQueue(ctx context.Context, maxRetry i
 		if event.RetryCount < maxRetry {
 			// Reset para reprocessamento manual
 			p.db.Model(&event).Updates(map[string]interface{}{
-				"processed_at": nil,
+				"processed_at":  nil,
 				"processing_at": nil,
-				"retry_count": event.RetryCount + 1,
+				"retry_count":   event.RetryCount + 1,
 			})
 		}
 	}

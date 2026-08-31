@@ -3,9 +3,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import App from "./App";
 
 // ── Mocks ──────────────────────────────────────────────────────
-// Mock completo da API para evitar qualquer chamada HTTP real.
-const mockPost = vi.fn();
-const mockGet = vi.fn();
+// Mock completo da API — vi.hoisted garante que as variaveis existem quando o vi.mock (hoisted) roda.
+const { mockPost, mockGet } = vi.hoisted(() => ({
+  mockPost: vi.fn(),
+  mockGet: vi.fn(),
+}));
 
 vi.mock("./services/api", () => ({
   default: {

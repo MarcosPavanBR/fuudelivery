@@ -112,4 +112,10 @@ api.interceptors.response.use(
 );
 
 // API genérica com interceptors já aplicados
+// WebSocket ticket: trocado via HTTP antes do upgrade.
+export async function requestWsTicket() {
+  const res = await api.get("/ws/ticket", { withCredentials: true });
+  return res.data.ticket;
+}
+
 export default api;

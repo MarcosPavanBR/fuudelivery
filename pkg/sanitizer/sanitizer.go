@@ -9,31 +9,31 @@ import (
 var (
 	// CPF: 000.000.000-00 ou 00000000000
 	cpfRegex = regexp.MustCompile(`\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b`)
-	
+
 	// CNPJ: 00.000.000/0000-00 ou 00000000000000
 	cnpjRegex = regexp.MustCompile(`\b\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}\b`)
-	
+
 	// Cartão de crédito: 16 dígitos com ou sem separadores
 	cardRegex = regexp.MustCompile(`\b(?:\d{4}[- ]?){3}\d{4}\b`)
-	
+
 	// Telefone: (00) 00000-0000 ou 00000000000
 	phoneRegex = regexp.MustCompile(`\b\(?\d{2}\)?[- ]?\d{4,5}[- ]?\d{4}\b`)
-	
+
 	// Email
 	emailRegex = regexp.MustCompile(`\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b`)
-	
+
 	// Chaves API (padrões comuns)
 	apiKeyRegex = regexp.MustCompile(`(?i)(api[_-]?key|apikey|secret[_-]?key|access[_-]?token)[\"']?\s*[:=]\s*[\"']?[A-Za-z0-9_-]{16,}`)
-	
+
 	// Connection strings
 	connectionStringRegex = regexp.MustCompile(`(?i)(postgres|mongodb|redis|mysql)://[^:\s]+:[^@\s]+@`)
 )
 
 // LogSanitizer remove ou mascara dados sensíveis de strings antes de logar
 type LogSanitizer struct {
-	maskChar   string
-	showLast   int
-	showFirst  int
+	maskChar  string
+	showLast  int
+	showFirst int
 }
 
 // NewLogSanitizer cria nova instância com configurações padrão
@@ -84,7 +84,7 @@ func (s *LogSanitizer) Sanitize(input string) string {
 		if len(parts) == 2 {
 			user := parts[0]
 			domain := parts[1]
-			
+
 			maskedUser := s.maskString(user)
 			return maskedUser + "@" + domain
 		}
@@ -124,7 +124,7 @@ func (s *LogSanitizer) maskString(input string) string {
 	}
 
 	var result strings.Builder
-	
+
 	// Adiciona caracteres iniciais se configurado
 	if s.showFirst > 0 && len(input) > s.showFirst {
 		result.WriteString(input[:s.showFirst])
@@ -132,7 +132,7 @@ func (s *LogSanitizer) maskString(input string) string {
 	} else {
 		result.WriteString(strings.Repeat(s.maskChar, len(input)-s.showLast))
 	}
-	
+
 	// Adiciona últimos caracteres
 	if s.showLast > 0 {
 		result.WriteString(input[len(input)-s.showLast:])
@@ -179,15 +179,15 @@ func SanitizeEmail(email string) string {
 	if len(parts) != 2 {
 		return "***@***"
 	}
-	
+
 	user := parts[0]
 	domain := parts[1]
-	
+
 	if len(user) > 2 {
 		user = user[:1] + strings.Repeat("*", len(user)-2) + user[len(user)-1:]
 	} else {
 		user = "**"
 	}
-	
+
 	return user + "@" + domain
 }

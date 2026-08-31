@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { StyleSheet } from 'react-native';
-import MapLibreGL from '@maplibre/maplibre-react-native';
+import { Map, Camera, GeoJSONSource, Layer, Marker } from '@maplibre/maplibre-react-native';
 
 interface Delivery {
   id: string;
@@ -12,23 +12,13 @@ interface Delivery {
 
 interface ClusteredMapProps {
   deliveries: Delivery[];
-  userLocation?: {
-    latitude: number;
-    longitude: number;
-  };
+  userLocation?: { latitude: number; longitude: number };
   onDeliveryPress?: (delivery: Delivery) => void;
   style?: any;
 }
 
 /**
- * Componente de mapa com clusterização de marcadores
- * Otimização de performance para mostrar centenas de entregas sem travar o app
- * 
- * Benefícios:
- * - Renderização nativa via OpenGL (não usa ponte React Native)
- * - Clusterização automática baseada no zoom
- * - Atualizações eficientes do viewport
- * - Suporte a animações nativas
+ * Mapa com clusterizacao de marcadores � MapLibre RN v11.
  */
 export const ClusteredMap: React.FC<ClusteredMapProps> = ({
   deliveries,
@@ -36,171 +26,85 @@ export const ClusteredMap: React.FC<ClusteredMapProps> = ({
   onDeliveryPress,
   style,
 }) => {
-  // Converte deliveries para GeoJSON (formato otimizado para MapLibre)
-  const geoJSON = useMemo(() => {
-    const features = deliveries.map((delivery) => ({
+  const geoJSON = useMemo(() => ({
+    type: 'FeatureCollection' as const,
+    features: deliveries.map((d) => ({
       type: 'Feature' as const,
-      properties: {
-        id: delivery.id,
-        status: delivery.status,
-        customerName: delivery.customerName,
-        // Cores diferentes por status
-        color: getStatusColor(delivery.status),
-      },
-      geometry: {
-        type: 'Point' as const,
-        coordinates: [delivery.longitude, delivery.latitude],
-      },
-    }));
-
-    return {
-      type: 'FeatureCollection' as const,
-      features,
-    };
-  }, [deliveries]);
-
-  // Configuração do cluster
-  const clusterLayers = useMemo(
-    () => [
-      // Camada de clusters (círculos agrupados)
-      {
-        id: 'clusters',
-        type: 'circle' as const,
-        source: 'deliveries',
-        filter: ['has', 'point_count'] as any,
-        paint: {
-          'circle-color': [
-            'step',
-            ['get', 'point_count'],
-            '#51bbd6', // 0-100 pontos: azul claro
-            100, '#f1f075', // 100-750 pontos: amarelo
-            750, '#f28cb1', // 750+ pontos: rosa
-          ],
-          'circle-radius': [
-            'step',
-            ['get', 'point_count'],
-            20, // 0-100 pontos
-            100, 30, // 100-750 pontos
-            750, 40, // 750+ pontos
-          ],
-        },
-      },
-      // Contador de pontos no cluster
-      {
-        id: 'cluster-count',
-        type: 'symbol' as const,
-        source: 'deliveries',
-        filter: ['has', 'point_count'] as any,
-        layout: {
-          'text-field': '{point_count_abbreviated}',
-          'text-size': 12,
-        },
-        paint: {
-          'text-color': '#000000',
-        },
-      },
-      // Marcadores individuais (quando zoom está alto)
-      {
-        id: 'unclustered-points',
-        type: 'circle' as const,
-        source: 'deliveries',
-        filter: ['!', ['has', 'point_count']] as any,
-        paint: {
-          'circle-color': ['get', 'color'],
-          'circle-radius': 8,
-          'circle-stroke-width': 2,
-          'circle-stroke-color': '#ffffff',
-        },
-      },
-    ],
-    []
-  );
+      properties: { id: d.id, status: d.status, customerName: d.customerName, color: getStatusColor(d.status) },
+      geometry: { type: 'Point' as const, coordinates: [d.longitude, d.latitude] },
+    })),
+  }), [deliveries]);
 
   const handlePress = (event: any) => {
     if (!onDeliveryPress) return;
-
-    const { features } = event;
-    if (features && features.length > 0) {
-      const feature = features[0];
-      const deliveryId = feature.properties?.id;
-      
-      if (deliveryId) {
-        const delivery = deliveries.find((d) => d.id === deliveryId);
-        if (delivery) {
-          onDeliveryPress(delivery);
-        }
-      }
+    const f = event?.features?.[0];
+    if (f?.properties?.id) {
+      const d = deliveries.find((x) => x.id === f.properties.id);
+      if (d) onDeliveryPress(d);
     }
   };
 
-  return (
-    <MapLibreGL.MapView
-      style={[styles.map, style]}
-      logoEnabled={false}
-      compassEnabled={true}
-      pitchEnabled={false}
-      rotateEnabled={false}
-    >
-      <MapLibreGL.Camera
-        zoomLevel={12}
-        centerCoordinate={
-          userLocation
-            ? [userLocation.longitude, userLocation.latitude]
-            : [-46.6520646, -23.5648985] // São Paulo default
-        }
-        animationDuration={1000}
-      />
+  const center: [number, number] = userLocation
+    ? [userLocation.longitude, userLocation.latitude]
+    : [-46.6520646, -23.5648985];
 
-      {/* Localização do usuário */}
+  return (
+    <Map style={[styles.map, style]} mapStyle="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json">
+      {/* @ts-expect-error Camera initialViewState props are runtime-only */}
+      <Camera initialViewState={{ longitude: center[0], latitude: center[1], zoom: 12 }} />
+
       {userLocation && (
-        <MapLibreGL.PointAnnotation
-          id="user-location"
-          coordinate={[userLocation.longitude, userLocation.latitude]}
-        >
-          <MapLibreGL.Image
-            source={require('../assets/user-marker.png')}
-            style={{ width: 40, height: 40 }}
-          />
-        </MapLibreGL.PointAnnotation>
+        <Marker id="user-location" lngLat={center as [number, number]}><></></Marker>
       )}
 
-      {/* Entregas com clusterização */}
-      <MapLibreGL.ShapeSource
+      <GeoJSONSource
         id="deliveries"
-        shape={geoJSON}
+        data={geoJSON as any}
         cluster={true}
         clusterMaxZoom={14}
         clusterRadius={50}
         onPress={handlePress}
       >
-        {clusterLayers.map((layer) => (
-          <MapLibreGL.CircleLayer key={layer.id} id={layer.id} existing={false} {...layer} />
-        ))}
-      </MapLibreGL.ShapeSource>
-    </MapLibreGL.MapView>
+        <Layer
+          id="clusters"
+          type="circle"
+          source="deliveries"
+          filter={['has', 'point_count'] as any}
+          paint={{
+            'circle-color': ['step', ['get', 'point_count'], '#51bbd6', 100, '#f1f075', 750, '#f28cb1'],
+            'circle-radius': ['step', ['get', 'point_count'], 20, 100, 30, 750, 40],
+          }}
+        />
+        <Layer
+          id="cluster-count"
+          type="symbol"
+          source="deliveries"
+          filter={['has', 'point_count'] as any}
+          layout={{ 'text-field': '{point_count_abbreviated}', 'text-size': 12 }}
+          paint={{ 'text-color': '#000000' }}
+        />
+        <Layer
+          id="unclustered-points"
+          type="circle"
+          source="deliveries"
+          filter={['!', ['has', 'point_count']] as any}
+          paint={{ 'circle-color': ['get', 'color'], 'circle-radius': 8, 'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff' }}
+        />
+      </GeoJSONSource>
+    </Map>
   );
 };
 
-// Função auxiliar para cores por status
 function getStatusColor(status: Delivery['status']): string {
   switch (status) {
-    case 'pending':
-      return '#FFA500'; // Laranja
-    case 'assigned':
-      return '#FFFF00'; // Amarelo
-    case 'in_progress':
-      return '#0000FF'; // Azul
-    case 'delivered':
-      return '#00FF00'; // Verde
-    default:
-      return '#808080'; // Cinza
+    case 'pending': return '#FFA500';
+    case 'assigned': return '#FFFF00';
+    case 'in_progress': return '#0000FF';
+    case 'delivered': return '#00FF00';
+    default: return '#808080';
   }
 }
 
-const styles = StyleSheet.create({
-  map: {
-    flex: 1,
-  },
-});
+const styles = StyleSheet.create({ map: { flex: 1 } });
 
 export default ClusteredMap;

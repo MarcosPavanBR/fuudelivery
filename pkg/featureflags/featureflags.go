@@ -11,20 +11,20 @@ import (
 
 // FeatureFlag representa uma flag de funcionalidade
 type FeatureFlag struct {
-	Name        string                 `json:"name"`
-	Enabled     bool                   `json:"enabled"`
-	RolloutPercent int                 `json:"rollout_percent"` // 0-100
-	AllowedUsers []string              `json:"allowed_users"`   // Lista branca de user IDs
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	ExpiresAt   *time.Time             `json:"expires_at,omitempty"`
+	Name           string                 `json:"name"`
+	Enabled        bool                   `json:"enabled"`
+	RolloutPercent int                    `json:"rollout_percent"` // 0-100
+	AllowedUsers   []string               `json:"allowed_users"`   // Lista branca de user IDs
+	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+	ExpiresAt      *time.Time             `json:"expires_at,omitempty"`
 }
 
 // FeatureFlagManager gerencia feature flags com Redis para distribuição
 type FeatureFlagManager struct {
-	redis      *redis.Client
-	cache      sync.Map // Cache local para performance
-	prefix     string
-	cacheTTL   time.Duration
+	redis    *redis.Client
+	cache    sync.Map // Cache local para performance
+	prefix   string
+	cacheTTL time.Duration
 }
 
 // NewFeatureFlagManager cria novo gerenciador de feature flags

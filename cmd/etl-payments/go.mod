@@ -1,6 +1,6 @@
 module github.com/carloshomar/fuudelivery/cmd/etl-payments
 
-go 1.25
+go 1.25.0
 
 require (
 	github.com/carloshomar/fuudelivery/payment_api v0.0.0
@@ -9,6 +9,7 @@ require (
 )
 
 require (
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/golang/snappy v1.0.0 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect

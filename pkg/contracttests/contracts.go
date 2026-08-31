@@ -10,30 +10,30 @@ import (
 // Contrato de API para criação de pedido
 // Garante que mudanças no backend não quebrem frontend/mobile
 type CreateOrderContract struct {
-	RestaurantID  string          `json:"restaurant_id"`
-	CustomerID    string          `json:"customer_id"`
-	Items         []OrderItem     `json:"items"`
-	DeliveryAddress Address       `json:"delivery_address"`
-	PaymentMethod string          `json:"payment_method"`
-	TotalAmount   float64         `json:"total_amount"`
+	RestaurantID    string      `json:"restaurant_id"`
+	CustomerID      string      `json:"customer_id"`
+	Items           []OrderItem `json:"items"`
+	DeliveryAddress Address     `json:"delivery_address"`
+	PaymentMethod   string      `json:"payment_method"`
+	TotalAmount     float64     `json:"total_amount"`
 }
 
 type OrderItem struct {
-	ProductID string `json:"product_id"`
-	Name      string `json:"name"`
-	Quantity  int    `json:"quantity"`
+	ProductID string  `json:"product_id"`
+	Name      string  `json:"name"`
+	Quantity  int     `json:"quantity"`
 	Price     float64 `json:"price"`
 }
 
 type Address struct {
-	Street     string `json:"street"`
-	Number     string `json:"number"`
-	Neighborhood string `json:"neighborhood"`
-	City       string `json:"city"`
-	State      string `json:"state"`
-	ZipCode    string `json:"zip_code"`
-	Latitude   float64 `json:"latitude"`
-	Longitude  float64 `json:"longitude"`
+	Street       string  `json:"street"`
+	Number       string  `json:"number"`
+	Neighborhood string  `json:"neighborhood"`
+	City         string  `json:"city"`
+	State        string  `json:"state"`
+	ZipCode      string  `json:"zip_code"`
+	Latitude     float64 `json:"latitude"`
+	Longitude    float64 `json:"longitude"`
 }
 
 // TestCreateOrderContract valida o contrato de criação de pedido
@@ -51,14 +51,14 @@ func TestCreateOrderContract(t *testing.T) {
 				},
 			},
 			DeliveryAddress: Address{
-				Street:     "Rua das Flores",
-				Number:     "123",
+				Street:       "Rua das Flores",
+				Number:       "123",
 				Neighborhood: "Jardins",
-				City:       "São Paulo",
-				State:      "SP",
-				ZipCode:    "01234-567",
-				Latitude:   -23.5648985,
-				Longitude:  -46.6520646,
+				City:         "São Paulo",
+				State:        "SP",
+				ZipCode:      "01234-567",
+				Latitude:     -23.5648985,
+				Longitude:    -46.6520646,
 			},
 			PaymentMethod: "credit_card",
 			TotalAmount:   91.80,
@@ -97,7 +97,7 @@ func TestCreateOrderContract(t *testing.T) {
 
 		jsonBytes, err := json.Marshal(contract)
 		assert.NoError(t, err)
-		
+
 		var decoded CreateOrderContract
 		err = json.Unmarshal(jsonBytes, &decoded)
 		assert.NoError(t, err)
@@ -107,12 +107,12 @@ func TestCreateOrderContract(t *testing.T) {
 
 // Contrato de resposta de erro padronizada
 type ErrorResponseContract struct {
-	Error       string                 `json:"error"`
-	Message     string                 `json:"message"`
-	ErrorCode   string                 `json:"error_code"`
-	Details     map[string]interface{} `json:"details,omitempty"`
-	TraceID     string                 `json:"trace_id"`
-	Timestamp   string                 `json:"timestamp"`
+	Error     string                 `json:"error"`
+	Message   string                 `json:"message"`
+	ErrorCode string                 `json:"error_code"`
+	Details   map[string]interface{} `json:"details,omitempty"`
+	TraceID   string                 `json:"trace_id"`
+	Timestamp string                 `json:"timestamp"`
 }
 
 func TestErrorResponseContract(t *testing.T) {
@@ -122,7 +122,7 @@ func TestErrorResponseContract(t *testing.T) {
 			Message:   "Invalid payment method",
 			ErrorCode: "PAYMENT_001",
 			Details: map[string]interface{}{
-				"field": "payment_method",
+				"field":   "payment_method",
 				"allowed": []string{"credit_card", "debit_card", "pix"},
 			},
 			TraceID:   "abc123-def456",
@@ -131,7 +131,7 @@ func TestErrorResponseContract(t *testing.T) {
 
 		jsonBytes, err := json.Marshal(response)
 		assert.NoError(t, err)
-		
+
 		var decoded ErrorResponseContract
 		err = json.Unmarshal(jsonBytes, &decoded)
 		assert.NoError(t, err)
@@ -152,10 +152,10 @@ type QueueEventContract struct {
 }
 
 type MetadataContract struct {
-	TraceID   string `json:"trace_id"`
-	UserID    string `json:"user_id"`
-	Source    string `json:"source"`
-	Version   string `json:"version"`
+	TraceID string `json:"trace_id"`
+	UserID  string `json:"user_id"`
+	Source  string `json:"source"`
+	Version string `json:"version"`
 }
 
 func TestQueueEventContract(t *testing.T) {
@@ -180,7 +180,7 @@ func TestQueueEventContract(t *testing.T) {
 
 		jsonBytes, err := json.Marshal(event)
 		assert.NoError(t, err)
-		
+
 		var decoded QueueEventContract
 		err = json.Unmarshal(jsonBytes, &decoded)
 		assert.NoError(t, err)
@@ -191,14 +191,14 @@ func TestQueueEventContract(t *testing.T) {
 
 // Contrato de webhook de pagamento
 type PaymentWebhookContract struct {
-	Gateway         string  `json:"gateway"`
-	ExternalPaymentID string `json:"external_payment_id"`
-	OrderID         string  `json:"order_id"`
-	Status          string  `json:"status"`
-	Amount          float64 `json:"amount"`
-	PaidAt          string  `json:"paid_at,omitempty"`
-	Signature       string  `json:"signature"`
-	Timestamp       int64   `json:"timestamp"`
+	Gateway           string  `json:"gateway"`
+	ExternalPaymentID string  `json:"external_payment_id"`
+	OrderID           string  `json:"order_id"`
+	Status            string  `json:"status"`
+	Amount            float64 `json:"amount"`
+	PaidAt            string  `json:"paid_at,omitempty"`
+	Signature         string  `json:"signature"`
+	Timestamp         int64   `json:"timestamp"`
 }
 
 func TestPaymentWebhookContract(t *testing.T) {
@@ -206,17 +206,17 @@ func TestPaymentWebhookContract(t *testing.T) {
 		webhook := PaymentWebhookContract{
 			Gateway:           "pagarme",
 			ExternalPaymentID: "pay_external_789",
-			OrderID:          "order_123",
-			Status:           "paid",
-			Amount:           91.80,
-			PaidAt:           "2026-08-30T18:05:00Z",
-			Signature:        "sha256=abc123...",
-			Timestamp:        1693418700,
+			OrderID:           "order_123",
+			Status:            "paid",
+			Amount:            91.80,
+			PaidAt:            "2026-08-30T18:05:00Z",
+			Signature:         "sha256=abc123...",
+			Timestamp:         1693418700,
 		}
 
 		jsonBytes, err := json.Marshal(webhook)
 		assert.NoError(t, err)
-		
+
 		var decoded PaymentWebhookContract
 		err = json.Unmarshal(jsonBytes, &decoded)
 		assert.NoError(t, err)

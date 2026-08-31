@@ -9,7 +9,8 @@
         "./*"
       ]
     },
-    "allowJs": false
+    "allowJs": false,
+    "skipLibCheck": true
   },
   "include": [
     "**/*.ts",

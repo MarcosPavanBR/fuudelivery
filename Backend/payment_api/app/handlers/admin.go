@@ -220,7 +220,14 @@ func ApprovePayment(c *fiber.Ctx) error {
 	// duplicados são barrados pelo UNIQUE uq_wallet_txns_credit_ref.
 	var payment models.Payment
 	if err := models.DB.First(&payment, paymentID).Error; err == nil && payment.AbacatePayID != "" {
-		go publishPaymentApproved(payment.AbacatePayID)
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("[ADMIN] Panic in publishPaymentApproved goroutine: %v", r)
+				}
+			}()
+			publishPaymentApproved(payment.AbacatePayID)
+		}()
 	} else if err != nil {
 		log.Printf("[ADMIN] Aprovado %s mas falha ao recarregar pagamento p/ split: %v", id, err)
 	}

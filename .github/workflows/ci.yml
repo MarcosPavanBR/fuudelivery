@@ -141,15 +141,7 @@ jobs:
       - name: Run payment_api integration tests
         env:
           POSTGRES_TEST_URI: postgres://test:test@localhost:5432/payment_e2e_test?sslmode=disable
-        run: |
-          sleep 5
-          go test -tags=integration -v -count=1 -timeout 20m -run 'TestCheckoutE2E' ./app/handlers/ 2>&1 | tee /tmp/test-output.txt
-          TEST_EXIT=${PIPESTATUS[0]}
-          if [ $TEST_EXIT -ne 0 ]; then
-            echo '::error::payment_api integration test failed'
-            tail -80 /tmp/test-output.txt
-          fi
-          exit $TEST_EXIT
+        run: go test -tags=integration -v -count=1 -timeout 20m -run 'TestCheckoutE2E' ./app/handlers/
 
       - name: Cleanup Docker services
         if: always()

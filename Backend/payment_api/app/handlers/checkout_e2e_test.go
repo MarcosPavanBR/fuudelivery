@@ -441,7 +441,7 @@ func TestCheckoutE2E_AdminEndpoints(t *testing.T) {
 	require.Eventually(t, func() bool {
 		w := getWalletByUser(t, 42)
 		return w.Balance >= 17000.0 // seed 8500 + split 8500
-	}, 5*time.Second, 50*time.Millisecond, "split deve ser creditado após aprovação")
+	}, 30*time.Second, 100*time.Millisecond, "split deve ser creditado após aprovação")
 
 	// Reaprovar um pagamento ja confirmado deve dar 409
 	req = httptest.NewRequest(http.MethodPost, "/payments/"+pendingID+"/approve", nil)

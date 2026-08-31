@@ -28,8 +28,8 @@ import (
 
 	authModels "github.com/carloshomar/fuudelivery/auth_api/app/models"
 	paymentModels "github.com/carloshomar/fuudelivery/payment_api/app/models"
-	"github.com/gofiber/fiber/v2"
 	"github.com/carloshomar/fuudelivery/pkg/gateway"
+	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"golang.org/x/crypto/bcrypt"

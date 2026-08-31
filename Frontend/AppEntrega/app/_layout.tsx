@@ -15,10 +15,11 @@ import { migrateLegacyData } from "@/config/legacyMigration";
 import StackNav from "./nav";
 import { ErrorBoundary as AppErrorBoundary } from "@/components/ErrorBoundary";
 import "react-native-reanimated";
+import * as React from "react";
 export {
   // Catch any errors thrown by the Layout component.
-  ErrorBoundary,
-import * as React from "react";
+  AppErrorBoundary as ErrorBoundary,
+};
 
 export const unstable_settings = {
   // Ensure that reloading on `/modal` keeps a back button present.

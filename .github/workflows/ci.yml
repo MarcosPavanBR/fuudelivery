@@ -423,4 +423,4 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Run tests
-        run: npx jest --passWithNoTests
+        run: npx jest --passWithNoTests --forceExit

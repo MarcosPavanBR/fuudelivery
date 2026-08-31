@@ -440,7 +440,6 @@ func TestCheckoutE2E_AdminEndpoints(t *testing.T) {
 	w := getWalletByUser(t, 42)
 	require.InDelta(t, 17000.0, w.Balance, 0.01, "seed 8500 + split 8500")
 
-
 	// Reaprovar um pagamento ja confirmado deve dar 409
 	req = httptest.NewRequest(http.MethodPost, "/payments/"+pendingID+"/approve", nil)
 	resp, err = app.Test(req, -1)
@@ -505,7 +504,7 @@ func TestCheckoutE2E_AdminEndpoints(t *testing.T) {
 	// o split do estabelecimento — 3º lançamento no ledger do user 42.
 	w5001 := seedWallet(t, 5001, "customer", 150.0)
 	w42 := getWalletByUser(t, 42)
-	now := time.Now()
+	now = time.Now()
 	seedLedger(t, w5001.ID, "credit", "", 100.0, 150.0, "charge-ledger-001",
 		"Wallet top-up via confirmed payment", now.Add(-2*time.Hour))
 	seedLedger(t, w42.ID, "debit", "", 85.0, 115.0, "charge-e2e-refund-001",

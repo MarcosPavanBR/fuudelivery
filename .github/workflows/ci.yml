@@ -48,6 +48,8 @@ jobs:
         run: go vet ./...
 
       - name: Test
+        env:
+          CGO_ENABLED: "1"
         run: go test ./... -count=1 -timeout 60s
 
   # ──────────────────────────────────────────────

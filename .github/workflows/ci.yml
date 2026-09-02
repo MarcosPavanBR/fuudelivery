@@ -142,15 +142,22 @@ jobs:
         env:
           POSTGRES_TEST_URI: postgres://test:test@localhost:5432/payment_e2e_test?sslmode=disable
         run: |
-          set +e
           go test -tags=integration -v -count=1 -timeout 20m -run 'TestCheckoutE2E' ./app/handlers/ 2>&1 | tee /tmp/test-output.txt
           TEST_EXIT=${PIPESTATUS[0]}
-          echo "=== TEST EXIT CODE: $TEST_EXIT ==="
-          if [ $TEST_EXIT -ne 0 ]; then
-            echo "=== FULL TEST OUTPUT ==="
-            cat /tmp/test-output.txt
-          fi
+          echo "test_exit=$TEST_EXIT" >> "$GITHUB_OUTPUT"
           exit $TEST_EXIT
+
+      - name: Write test output to step summary
+        if: always()
+        run: |
+          if [ -f /tmp/test-output.txt ]; then
+            echo '## payment_api integration test output' >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            tail -300 /tmp/test-output.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '## No test output captured' >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Upload test output
         if: failure()

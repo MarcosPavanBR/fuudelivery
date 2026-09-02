@@ -145,12 +145,20 @@ jobs:
           set +e
           go test -tags=integration -v -count=1 -timeout 20m -run 'TestCheckoutE2E' ./app/handlers/ 2>&1 | tee /tmp/test-output.txt
           TEST_EXIT=${PIPESTATUS[0]}
-          set -e
+          echo "=== TEST EXIT CODE: $TEST_EXIT ==="
           if [ $TEST_EXIT -ne 0 ]; then
-            echo '=== TEST FAILED - last 100 lines ==='
-            tail -100 /tmp/test-output.txt
+            echo "=== FULL TEST OUTPUT ==="
+            cat /tmp/test-output.txt
           fi
           exit $TEST_EXIT
+
+      - name: Upload test output
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: payment-api-test-output
+          path: /tmp/test-output.txt
+          retention-days: 3
 
       - name: Cleanup Docker services
         if: always()

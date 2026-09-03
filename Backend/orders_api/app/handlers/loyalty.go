@@ -237,6 +237,11 @@ func EarnPointsForOrder(userPhone, orderID string, orderValue float64) error {
 }
 
 func RedeemPoints(c *fiber.Ctx) error {
+	tokenPhone, err := middlewares.GetUserPhoneFromToken(c)
+	if err != nil {
+		return c.Status(401).JSON(fiber.Map{"error": "Invalid token"})
+	}
+
 	var req struct {
 		UserPhone string `json:"user_phone"`
 		Points    int    `json:"points"`
@@ -245,6 +250,13 @@ func RedeemPoints(c *fiber.Ctx) error {
 
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
+	}
+
+	if req.UserPhone == "" {
+		req.UserPhone = tokenPhone
+	}
+	if req.UserPhone != tokenPhone {
+		return c.Status(403).JSON(fiber.Map{"error": "Cannot redeem points for another user"})
 	}
 
 	tx := models.DB.Begin()

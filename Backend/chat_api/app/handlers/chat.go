@@ -81,7 +81,15 @@ func removeClientFromRoom(orderID string, conn *websocket.Conn) {
 
 	room.Mu.Lock()
 	delete(room.Clients, conn)
+	empty := len(room.Clients) == 0
 	room.Mu.Unlock()
+
+	// Clean up empty rooms to prevent memory leak.
+	if empty {
+		roomsMu.Lock()
+		delete(rooms, orderID)
+		roomsMu.Unlock()
+	}
 }
 
 func broadcastToRoom(orderID string, sender *websocket.Conn, message []byte) {

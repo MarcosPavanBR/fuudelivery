@@ -60,6 +60,14 @@ func updateLocalPaymentStatus(abacatepayID string, status string) {
 		return
 	}
 
+	// Idempotency: skip if payment is already at the target status or beyond.
+	// Prevents double-update on webhook replay (e.g., CONFIRMED->CONFIRMED
+	// overwriting confirmed_at, or REFUNDED->REFUNDED re-debiting wallet).
+	if payment.Status == status {
+		log.Printf("[WEBHOOK] Payment %s already %s, skipping update", abacatepayID, status)
+		return
+	}
+
 	updates := map[string]interface{}{"status": status}
 	switch status {
 	case "paid", "CONFIRMED":

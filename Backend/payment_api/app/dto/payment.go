@@ -34,14 +34,6 @@ type PIXGenerateResponse struct {
 	ExpiresIn int    `json:"expires_in"`
 }
 
-type CardTokenizeRequest struct {
-	CardNumber     string `json:"card_number"`
-	CardHolderName string `json:"card_holder_name"`
-	ExpMonth       int    `json:"exp_month"`
-	ExpYear        int    `json:"exp_year"`
-	CardCVV        string `json:"card_cvv"`
-}
-
 type WalletTopUpRequest struct {
 	UserID    int64   `json:"user_id"`
 	Amount    float64 `json:"amount"`

@@ -234,6 +234,12 @@ func RespondToReview(c *fiber.Ctx) error {
 func GetUserReviews(c *fiber.Ctx) error {
 	phone := c.Params("phone")
 
+	tokenPhone, phoneErr := middlewares.GetUserPhoneFromToken(c)
+	role, roleErr := middlewares.GetUserRoleFromToken(c)
+	if phoneErr != nil || roleErr != nil || (role != "admin" && tokenPhone != phone) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
+	}
+
 	var reviews []models.Review
 	models.DB.Where("user_phone = ?", phone).
 		Order("created_at desc").

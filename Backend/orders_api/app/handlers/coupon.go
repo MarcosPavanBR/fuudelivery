@@ -178,15 +178,6 @@ func ApplyCoupon(c *fiber.Ctx) error {
 
 	request.Code = strings.ToUpper(strings.TrimSpace(request.Code))
 
-	validateReq := dto.ValidateCouponRequest{
-		Code:      request.Code,
-		UserPhone: request.UserPhone,
-	}
-	validateResp := ValidateCouponInternal(validateReq)
-	if !validateResp.Valid {
-		return c.JSON(validateResp)
-	}
-
 	tx := models.DB.Begin()
 	defer tx.Rollback()
 
@@ -229,11 +220,22 @@ func ApplyCoupon(c *fiber.Ctx) error {
 		}
 	}
 
+	// Compute discount from coupon data inside the transaction (no TOCTOU).
+	var discountAmount float64
+	switch coupon.DiscountType {
+	case "PERCENTAGE":
+		discountAmount = request.OrderValue * (coupon.DiscountValue / 100)
+	case "FIXED":
+		discountAmount = coupon.DiscountValue
+	case "FREE_DELIVERY":
+		discountAmount = 0
+	}
+
 	usage := models.CouponUsage{
 		CouponID:       coupon.ID,
 		UserPhone:      request.UserPhone,
 		OrderID:        request.OrderID,
-		DiscountAmount: validateResp.DiscountAmount,
+		DiscountAmount: discountAmount,
 		UsedAt:         time.Now(),
 	}
 
@@ -252,10 +254,9 @@ func ApplyCoupon(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"success":         true,
 		"message":         "Cupom aplicado com sucesso",
-		"discount_type":   validateResp.DiscountType,
-		"discount_value":  validateResp.DiscountValue,
-		"discount_amount": validateResp.DiscountAmount,
-		"final_value":     validateResp.FinalValue,
+		"discount_type":   coupon.DiscountType,
+		"discount_value":  coupon.DiscountValue,
+		"discount_amount": discountAmount,
 	})
 }
 

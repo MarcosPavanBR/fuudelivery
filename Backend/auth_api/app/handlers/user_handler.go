@@ -2,6 +2,7 @@
 package handlers
 
 import (
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"log"
@@ -247,10 +248,24 @@ func Login(c *fiber.Ctx) error {
 }
 
 func GetUser(c *fiber.Ctx) error {
-
 	userID := c.Params("id")
-	var user models.User
 
+	tokenUserID, err := middlewares.GetUserIDFromToken(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+	}
+
+	var reqUserID uint
+	if _, scanErr := fmt.Sscanf(userID, "%d", &reqUserID); scanErr != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid user ID"})
+	}
+
+	role, _ := middlewares.GetUserRoleFromToken(c)
+	if tokenUserID != int64(reqUserID) && role != "admin" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot view another user's profile"})
+	}
+
+	var user models.User
 	if err := models.DB.First(&user, userID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
 	}
@@ -283,7 +298,6 @@ func UpdateUser(c *fiber.Ctx) error {
 		Role            string `json:"role"`
 		Status          string `json:"status"`
 		EstablishmentID uint   `json:"establishment_id"`
-		Password        string `json:"password"`
 	}
 	if err := c.BodyParser(&request); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to parse request body"})
@@ -324,16 +338,6 @@ func UpdateUser(c *fiber.Ctx) error {
 		if request.EstablishmentID != 0 {
 			updates["establishment_id"] = request.EstablishmentID
 		}
-	}
-	if request.Password != "" {
-		if len(request.Password) < 6 {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Password must be at least 6 characters"})
-		}
-		hashedPassword, hashErr := bcrypt.GenerateFromPassword([]byte(request.Password), bcrypt.DefaultCost)
-		if hashErr != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to hash password"})
-		}
-		updates["password"] = string(hashedPassword)
 	}
 
 	if len(updates) == 0 {
@@ -451,7 +455,7 @@ func BootstrapAdmin(c *fiber.Ctx) error {
 	if req.Email == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "email é obrigatório"})
 	}
-	if req.Secret != bootstrapSecret {
+	if subtle.ConstantTimeCompare([]byte(req.Secret), []byte(bootstrapSecret)) != 1 {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Invalid secret"})
 	}
 

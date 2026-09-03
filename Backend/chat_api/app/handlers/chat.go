@@ -85,9 +85,15 @@ func removeClientFromRoom(orderID string, conn *websocket.Conn) {
 	room.Mu.Unlock()
 
 	// Clean up empty rooms to prevent memory leak.
+	// Re-check under room.Mu inside roomsMu to close the TOCTOU window:
+	// another goroutine may have added a client between our unlock and this lock.
 	if empty {
 		roomsMu.Lock()
-		delete(rooms, orderID)
+		room.Mu.Lock()
+		if len(room.Clients) == 0 {
+			delete(rooms, orderID)
+		}
+		room.Mu.Unlock()
 		roomsMu.Unlock()
 	}
 }

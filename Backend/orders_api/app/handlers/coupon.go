@@ -220,6 +220,10 @@ func ApplyCoupon(c *fiber.Ctx) error {
 		}
 	}
 
+	if request.OrderValue < coupon.MinOrderValue {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Valor mínimo do pedido não atingido"})
+	}
+
 	// Compute discount from coupon data inside the transaction (no TOCTOU).
 	var discountAmount float64
 	switch coupon.DiscountType {

@@ -4,12 +4,12 @@
 > do repositório naquele momento (`master` em `cc2132c`, 213 commits). Os problemas
 > descritos abaixo (CI falhando, commits não pushados etc.) **já foram resolvidos**;
 > não use este documento como retrato do estado atual — consulte o README e o CI.
-> As menções históricas a `Backend/Payment` referem-se a código que foi arquivado e
+> As menções históricas a `Backend/payment_api (monolith)` referem-se a código que foi arquivado e
 > removido do repositório — todo o código de pagamento ativo vive em `payment_api`.
 
-> ⚠️ **`Backend/Payment` foi arquivado e removido do repositório.** Todo o código
+> ⚠️ **`Backend/payment_api (monolith)` foi arquivado e removido do repositório.** Todo o código
 > de pagamento ativo vive em `payment_api` (embutido no monolito `cmd/fuudelivery`).
-> As menções a `Backend/Payment` neste documento são **históricas** — não edite,
+> As menções a `Backend/payment_api (monolith)` neste documento são **históricas** — não edite,
 > não busque e não rode comandos apontando para esse diretório.
 > Auditoria feita em 10/08/2026 sobre o estado real do repositório (`master` local em `cc2132c`,
 > 213 commits). Nada aqui é suposição — cada item foi verificado no código, no git ou no CI.
@@ -33,7 +33,7 @@
 - **Fila `pkg/queue`**: Redis Streams com consumer group, retry (3x), **DLQ**, reclaim pós-crash e fallback em memória. ✓
 - **WebSocket fila→cliente**: a ponte acabou de ser ligada (`c343a2c`) — `order_updates`/`delivery_updates`/`payment_updates` agora notificam o cliente conectado em `/ws/:id` com retry/DLQ. **Mas ninguém publica em `order_updates`/`payment_updates` ainda** (o webhook publica em `payments`/`orders`) → a ponte está pronta, faltam os publishers.
 - **Webhook AbacatePay**: re-verifica o status do charge na API da AbacatePay (não confia no body) ✓; **não valida HMAC** `x-abacatepay-signature` (defesa em profundidade ausente).
-- **Backend/Payment** (deploy separado `fuudelivery-payment`): risk engine (score 0-100, ≥40 aprovação manual), approvals, chargebacks, wallets — 7 arquivos de teste. Rota `GET /` de índice já existe.
+- **Backend/payment_api (monolith)** (deploy separado `fuudelivery-payment`): risk engine (score 0-100, ≥40 aprovação manual), approvals, chargebacks, wallets — 7 arquivos de teste. Rota `GET /` de índice já existe.
 - **Microserviços** (`auth_api`, `orders_api`, `delivery_api`, `payment_api`, `chat_api`): são a biblioteca do monolito (importados via `replace` no workspace). Ainda têm `main.go` próprios que **ninguém deploya** (render.yaml só sobe monólito + Payment). Código vivo, caminho de deploy morto.
 - **Inconsistência de module path**: o monólito importa os microserviços como `github.com/carloshomar/vercardapio/...` (fork original), enquanto `pkg/*` usa `github.com/carloshomar/fuudelivery/...`. Funciona por causa dos `replace`, mas é resíduo de rebranding.
 

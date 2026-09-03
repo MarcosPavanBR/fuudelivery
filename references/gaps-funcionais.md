@@ -1,9 +1,9 @@
 # Gaps Funcionais — FuuDelivery
 
 
-> ⚠️ **`Backend/Payment` foi arquivado e removido do repositório.** Todo o código
+> ⚠️ **`Backend/payment_api (monolith)` foi arquivado e removido do repositório.** Todo o código
 > de pagamento ativo vive em `payment_api` (embutido no monolito `cmd/fuudelivery`).
-> As menções a `Backend/Payment` neste documento são **históricas** — não edite,
+> As menções a `Backend/payment_api (monolith)` neste documento são **históricas** — não edite,
 > não busque e não rode comandos apontando para esse diretório.
 ## TODOs (resolvidos ✅)
 
@@ -13,7 +13,7 @@
 
 **Solução implementada**: `publishToPaymentQueue()` em `payment_api/app/handlers/webhook.go`
 - Quando o webhook do AbacatePay confirma um pagamento, publica em fila Redis
-- O `PaymentConsumer` no `Backend/Payment` consome a mensagem e credita na carteira do restaurante
+- O `PaymentConsumer` no `Backend/payment_api (monolith)` consome a mensagem e credita na carteira do restaurante
 - Fila migrada de RabbitMQ para Redis (2026-07-31)
 - Se Redis não estiver configurado, a mensagem é ignorada silenciosamente
 
@@ -49,7 +49,7 @@
 **Solução implementada**: `.github/workflows/ci.yml`
 - Matrix strategy para testar 7 módulos Go em paralelo
 - Fail-fast: false para não parar se um módulo falhar
-- Módulos: cmd/fuudelivery, Backend/Payment, auth_api, payment_api, orders_api, delivery_api, chat_api
+- Módulos: cmd/fuudelivery, Backend/payment_api (monolith), auth_api, payment_api, orders_api, delivery_api, chat_api
 
 ### 5. Vulnerability scanning no CI ✅
 
@@ -71,7 +71,7 @@
 
 **Resolvido em**: 2026-07-26
 
-**Solução implementada**: `Backend/Payment/services/integration_test.go`
+**Solução implementada**: `Backend/payment_api (monolith)/services/integration_test.go`
 - Testes com MongoDB real via testcontainers
 - Cobre: happy path, idempotência, saldo insuficiente, créditos concorrentes, múltiplos pagamentos
 
@@ -85,14 +85,14 @@
 
 ---
 
-## Duplicação: payment_api vs Backend/Payment
+## Duplicação: payment_api vs Backend/payment_api (monolith)
 
 ### O que existe
 
 | Módulo | Localização | Banco | Escopo |
 |---|---|---|---|
 | `payment_api` | `Backend/payment_api/` | PostgreSQL (Supabase) | Processamento de pagamento (criar, webhook AbacatePay) |
-| `Payment` | `Backend/Payment` | MongoDB (Atlas) | Painel de aprovação, carteiras, score de risco, chargebacks, relatórios |
+| `Payment` | `Backend/payment_api (monolith)` | MongoDB (Atlas) | Painel de aprovação, carteiras, score de risco, chargebacks, relatórios |
 
 ### Documentação da separação
 

@@ -1,9 +1,9 @@
 # Segurança — FuuDelivery
 
 
-> ⚠️ **`Backend/Payment` foi arquivado e removido do repositório.** Todo o código
+> ⚠️ **`Backend/payment_api (monolith)` foi arquivado e removido do repositório.** Todo o código
 > de pagamento ativo vive em `payment_api` (embutido no monolito `cmd/fuudelivery`).
-> As menções a `Backend/Payment` neste documento são **históricas** — não edite,
+> As menções a `Backend/payment_api (monolith)` neste documento são **históricas** — não edite,
 > não busque e não rode comandos apontando para esse diretório.
 > **Última atualização:** 2026-07-31
 
@@ -171,7 +171,7 @@ Rate limiting está ativo em dois locais:
    - `/admin/bootstrap` — 3 req/min por IP
    - `/payments/webhook` — 100 req/min por IP
 
-2. **Payment Service** (`Backend/Payment/middleware/ratelimit.go`): Token bucket para:
+2. **Payment Service** (`Backend/payment_api (monolith)/middleware/ratelimit.go`): Token bucket para:
    - Login: 5 req/min por IP
    - Pagamento: 10 req/min por user
 
@@ -193,7 +193,7 @@ Rate limiting está ativo em dois locais:
 
 O CI agora usa matrix strategy para rodar govulncheck em paralelo para todos os 7 módulos:
 - cmd/fuudelivery
-- Backend/Payment
+- Backend/payment_api (monolith)
 - Backend/auth_api
 - Backend/payment_api
 - Backend/orders_api

@@ -1,9 +1,9 @@
 # 🔗 FuuDelivery — Referência de URLs (Produção)
 
 
-> ⚠️ **`Backend/Payment` foi arquivado e removido do repositório.** Todo o código
+> ⚠️ **`Backend/payment_api (monolith)` foi arquivado e removido do repositório.** Todo o código
 > de pagamento ativo vive em `payment_api` (embutido no monolito `cmd/fuudelivery`).
-> As menções a `Backend/Payment` neste documento são **históricas** — não edite,
+> As menções a `Backend/payment_api (monolith)` neste documento são **históricas** — não edite,
 > não busque e não rode comandos apontando para esse diretório.
 > ⚠️ **Os serviços Render `fuudelivery-payment` e `fuudelivery-payment-panel`
 > foram REMOVIDOS (2026-08).** Qualquer URL `fuudelivery-payment*.onrender.com`

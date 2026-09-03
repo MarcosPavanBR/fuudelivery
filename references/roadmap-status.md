@@ -1,9 +1,9 @@
 # Roadmap de Modernização — Status (FuuDelivery 2.0)
 
 
-> ⚠️ **`Backend/Payment` foi arquivado e removido do repositório.** Todo o código
+> ⚠️ **`Backend/payment_api (monolith)` foi arquivado e removido do repositório.** Todo o código
 > de pagamento ativo vive em `payment_api` (embutido no monolito `cmd/fuudelivery`).
-> As menções a `Backend/Payment` neste documento são **históricas** — não edite,
+> As menções a `Backend/payment_api (monolith)` neste documento são **históricas** — não edite,
 > não busque e não rode comandos apontando para esse diretório.
 Status verificado contra o código em **03/08/2026**. Este documento registra o
 que foi concluído em cada fase do roadmap de modernização (`fuudelivery-modernization`).
@@ -32,7 +32,7 @@ que foi concluído em cada fase do roadmap de modernização (`fuudelivery-moder
 | Item | Status |
 |---|---|
 | Fila → Redis Streams + consumer groups + retry + DLQ + reclaim | ✅ `pkg/queue` (XAdd/XReadGroup/XAck/XClaim) |
-| `SubscribeFunc` com retry/DLQ no Payment Service | ✅ `Backend/Payment/queue/redis_queue.go` |
+| `SubscribeFunc` com retry/DLQ no Payment Service | ✅ `Backend/payment_api (monolith)/queue/redis_queue.go` |
 | Métricas em formato Prometheus (`GET /metrics`) | ✅ `cmd/fuudelivery/pkg/metrics` + contadores no `pkg/queue` |
 | OpenTelemetry (exportação OTLP) | ⏳ SDK não configurado — depende de collector/endpoint (ver nota) |
 

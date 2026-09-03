@@ -44,7 +44,7 @@ steps:
 
 #### Go (Payment Service — arquivado)
 
-> ⚠️ `Backend/Payment` foi **arquivado e removido** do repositório. Os testes
+> ⚠️ `Backend/payment_api (monolith)` foi **arquivado e removido** do repositório. Os testes
 > daquele serviço (risk scoring, carteiras, chargebacks) não rodam mais no CI;
 > os fluxos equivalentes vivem em `payment_api` (embutido no monolito).
 

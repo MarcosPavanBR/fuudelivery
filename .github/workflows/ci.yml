@@ -136,28 +136,64 @@ jobs:
           echo "Service ready."
 
       - name: Compile integration test
+        env:
+          GOWORK: "off"
         run: go test -tags=integration -c -o /dev/null ./app/handlers/
+
+      - name: Wait for Postgres to settle
+        run: |
+          echo "Waiting 5s for Postgres..."
+          sleep 5
+          docker exec pg-pay pg_isready -U test
 
       - name: Run payment_api integration tests
         env:
           POSTGRES_TEST_URI: postgres://test:test@localhost:5432/payment_e2e_test?sslmode=disable
         run: |
+          set +e  # Don't exit on first error — capture everything
+          echo "=== DEBUG: Environment ==="
+          echo "Go version: $(go version)"
+          echo "Docker ps:"
+          docker ps --format "table {{.Names}}	{{.Status}}	{{.Ports}}"
+          echo "Docker logs pg-pay (last 5 lines):"
+          docker logs pg-pay --tail 5 2>&1 || echo "(no logs)"
+          echo "POSTGRES_TEST_URI=$POSTGRES_TEST_URI"
+          echo "GOWORK=${GOWORK:-<not set>}"
+          echo "=== END DEBUG ==="
+          echo ""
+          echo "=== Running integration tests ==="
           go test -tags=integration -v -count=1 -timeout 20m -run 'TestCheckoutE2E' ./app/handlers/ 2>&1 | tee /tmp/test-output.txt
           TEST_EXIT=${PIPESTATUS[0]}
+          echo ""
+          echo "=== Test exit code: $TEST_EXIT ==="
           echo "test_exit=$TEST_EXIT" >> "$GITHUB_OUTPUT"
           exit $TEST_EXIT
 
       - name: Write test output to step summary
         if: always()
         run: |
+          echo '## payment_api integration test output' >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo '### Environment' >> "$GITHUB_STEP_SUMMARY"
+          echo '| Variable | Value |' >> "$GITHUB_STEP_SUMMARY"
+          echo '|----------|-------|' >> "$GITHUB_STEP_SUMMARY"
+          echo "| Go | $(go version) |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| GOWORK | \${GOWORK:-not set} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| POSTGRES_TEST_URI | \$POSTGRES_TEST_URI |" >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo '### Docker Postgres status' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          docker ps --format "table {{.Names}}	{{.Status}}	{{.Ports}}" >> "$GITHUB_STEP_SUMMARY" 2>&1
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo '### Test output (full)' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
           if [ -f /tmp/test-output.txt ]; then
-            echo '## payment_api integration test output' >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            tail -300 /tmp/test-output.txt >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            cat /tmp/test-output.txt >> "$GITHUB_STEP_SUMMARY"
           else
-            echo '## No test output captured' >> "$GITHUB_STEP_SUMMARY"
+            echo "No test output file found"
           fi
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload test output
         if: failure()

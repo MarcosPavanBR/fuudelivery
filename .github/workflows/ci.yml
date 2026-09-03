@@ -173,6 +173,13 @@ jobs:
         if: always()
         run: |
           echo '## payment_api integration test output' >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo '### Docker Postgres logs' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          docker logs pg-pay --tail 20 2>&1 >> "$GITHUB_STEP_SUMMARY" || echo "(container not available)"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo '### Test output' >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           if [ -f /tmp/test-output.txt ]; then
             cat /tmp/test-output.txt >> "$GITHUB_STEP_SUMMARY"

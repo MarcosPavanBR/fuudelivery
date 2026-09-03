@@ -173,20 +173,6 @@ jobs:
         if: always()
         run: |
           echo '## payment_api integration test output' >> "$GITHUB_STEP_SUMMARY"
-          echo '' >> "$GITHUB_STEP_SUMMARY"
-          echo '### Environment' >> "$GITHUB_STEP_SUMMARY"
-          echo '| Variable | Value |' >> "$GITHUB_STEP_SUMMARY"
-          echo '|----------|-------|' >> "$GITHUB_STEP_SUMMARY"
-          echo "| Go | $(go version) |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| GOWORK | \${GOWORK:-not set} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| POSTGRES_TEST_URI | \$POSTGRES_TEST_URI |" >> "$GITHUB_STEP_SUMMARY"
-          echo '' >> "$GITHUB_STEP_SUMMARY"
-          echo '### Docker Postgres status' >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          docker ps --format "table {{.Names}}	{{.Status}}	{{.Ports}}" >> "$GITHUB_STEP_SUMMARY" 2>&1
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          echo '' >> "$GITHUB_STEP_SUMMARY"
-          echo '### Test output (full)' >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           if [ -f /tmp/test-output.txt ]; then
             cat /tmp/test-output.txt >> "$GITHUB_STEP_SUMMARY"

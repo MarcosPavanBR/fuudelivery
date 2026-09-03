@@ -335,8 +335,8 @@ func TestCheckoutE2E_SmallOrderNoNegativeSplit(t *testing.T) {
 		totalSplit += r.Amount
 	}
 	// delivery=7.00 > amount=5.00: o ajuste zera platform/establishment e
-	// o total fica igual a taxa de entrega (nunca excede, nunca fica negativo).
-	require.InDelta(t, 7.00, totalSplit, 0.01)
+	// o total fica igual ao valor do pagamento (nunca excede, nunca fica negativo).
+	require.InDelta(t, 5.00, totalSplit, 0.01)
 }
 
 // Teste 4: Canais de fila alinhados

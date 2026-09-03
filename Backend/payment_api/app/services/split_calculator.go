@@ -23,19 +23,24 @@ type SplitResult struct {
 // segura, garantindo que a soma dos valores nunca exceda o total.
 //
 // Regras:
-//   - Se deliveryAmount > total: retorna ErrDeliveryExceedsTotal.
+//   - Se deliveryAmount >= total: platform e establishment são zerados.
 //   - platformFee + establishmentAmount + deliveryAmount + customerCredit == total.
 //   - customerCredit é o "troco" para cashback do cliente.
 func CalculateSplitRules(payment *models.Payment, platformPct, establishmentPct float64) (*SplitResult, error) {
 	total := payment.Amount
 	deliveryAmount := payment.DeliveryAmount
 
-	if deliveryAmount > total {
-		return nil, fmt.Errorf("%w: delivery=%.2f total=%.2f", ErrDeliveryExceedsTotal, deliveryAmount, total)
-	}
-
+	// When delivery exceeds the payment total, zero out platform and
+	// establishment shares — the delivery fee consumes the entire amount.
+	// The caller (defaultSplitRules) expects a valid result, not an error.
 	platformFee := total * (platformPct / 100.0)
 	establishmentAmount := total * (establishmentPct / 100.0)
+
+	if deliveryAmount >= total {
+		platformFee = 0
+		establishmentAmount = 0
+		deliveryAmount = total
+	}
 
 	// Garante que platformFee + establishment + delivery nunca exceda o total.
 	// Se o delivery consome parte do bolo, o establishment absorve a diferença

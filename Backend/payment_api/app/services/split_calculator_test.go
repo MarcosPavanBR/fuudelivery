@@ -55,10 +55,27 @@ func TestCalculateSplitRules_DeliveryExceedsTotal(t *testing.T) {
 		CustomerID:     42,
 	}
 
+	// When delivery > amount, platform and establishment are zeroed out.
+	// The function no longer returns an error — instead it adjusts the split
+	// so that the total never exceeds the payment amount.
 	result, err := CalculateSplitRules(payment, 10, 80)
-	assert.Error(t, err)
-	assert.Nil(t, result)
-	assert.ErrorIs(t, err, ErrDeliveryExceedsTotal)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+
+	// platform and establishment should be zero
+	assert.Equal(t, 0.0, result.PlatformFee)
+	assert.Equal(t, 0.0, result.EstablishmentAmt)
+
+	// delivery is clamped to payment amount
+	assert.Equal(t, 50.0, result.DeliveryAmt)
+	assert.Equal(t, 0.0, result.CustomerCredit)
+
+	// total of all rules should equal payment amount
+	total := 0.0
+	for _, r := range result.Rules {
+		total += r.Amount
+	}
+	assert.InDelta(t, 50.0, total, 0.01)
 }
 
 func TestCalculateSplitRules_ZeroDelivery(t *testing.T) {

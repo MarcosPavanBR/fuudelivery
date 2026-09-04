@@ -1426,7 +1426,7 @@ func validateRequiredEnv() {
 	// Reject known JWT_SECRET placeholders — they allow token forgery
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret != "" {
-		nknownPlaceholders := []string{
+		knownPlaceholders := []string{
 			"change-this-to-a-random-64-char-string",
 			"change-me",
 			"secret",

@@ -140,6 +140,14 @@ func reverseWalletCredit(userID int64, amount float64, abacatepayID, description
 		return false
 	}
 
+	// Idempotency: skip if this reference was already debited. Prevents
+	// double-debit on concurrent REFUNDED webhooks (debits have no DB-level
+	// unique constraint like credits do).
+	if models.HasLedgerEntry(models.DB, abacatepayID, "debit") {
+		log.Printf("[REFUND] Debit already exists for %s, skipping", abacatepayID)
+		return true
+	}
+
 	wallet, err := ensureWalletSeeded(models.DB, userID, walletTypeForUser(userID))
 	if err != nil {
 		log.Printf("[REFUND] Carteira do usuário %d NAO debitada em %.2f (falha ao carregar carteira): %v", userID, amount, err)
@@ -172,6 +180,13 @@ func processPaymentRefund(abacatepayID string) {
 	payment, err := findPaymentByAbacatePayID(abacatepayID)
 	if err != nil {
 		log.Printf("[REFUND] Payment not found for AbacatePay ID %s: %v", abacatepayID, err)
+		return
+	}
+
+	// Idempotency guard: skip if already refunded. Prevents double-debit
+	// on webhook replay and duplicate queue messages.
+	if payment.Status == "REFUNDED" {
+		log.Printf("[REFUND] Payment %s already REFUNDED, skipping", abacatepayID)
 		return
 	}
 
@@ -476,12 +491,18 @@ func HandlePaymentWebhook(c *fiber.Ctx) error {
 		// Estorno/chargeback: reverte créditos da carteira, notifica via fila
 		// e marca o pagamento como REFUNDED.
 		processPaymentRefund(chargeID)
+	} else if abacatepayStatus == "CONFIRMED" {
+		// Only confirm if not already refunded — prevents late CONFIRMED
+		// webhooks from re-crediting a refunded payment.
+		payment, pErr := findPaymentByAbacatePayID(chargeID)
+		if pErr == nil && payment.Status == "REFUNDED" {
+			log.Printf("[WEBHOOK] Ignoring CONFIRMED for already REFUNDED payment %s", chargeID)
+			return c.Status(200).JSON(fiber.Map{"status": "ignored", "message": "payment already refunded"})
+		}
+		updateLocalPaymentStatus(chargeID, abacatepayStatus)
+		publishPaymentApproved(chargeID)
 	} else {
 		updateLocalPaymentStatus(chargeID, abacatepayStatus)
-	}
-
-	if abacatepayStatus == "CONFIRMED" {
-		publishPaymentApproved(chargeID)
 	}
 
 	return c.Status(200).JSON(fiber.Map{

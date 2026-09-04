@@ -12,6 +12,11 @@ import (
 )
 
 func ListAllDeliveryMen(c *fiber.Ctx) error {
+	role, err := middlewares.GetUserRoleFromToken(c)
+	if err != nil || role != "admin" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Admin access required"})
+	}
+
 	var deliveryMen []models.DeliveryMan
 	if err := models.DB.Find(&deliveryMen).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to query delivery men"})

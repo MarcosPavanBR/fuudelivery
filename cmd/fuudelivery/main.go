@@ -186,12 +186,9 @@ func resolveWSTicket(queryToken, queryTicket string) (jwt.MapClaims, error) {
 		}
 		return t.Claims, nil
 	}
-	// Caminho legado: JWT na query string (deprecated)
-	if queryToken != "" {
-		log.Println("[WS] DEPRECATED: JWT in query string; use POST /auth/ws-ticket instead")
-		return parseWSToken(queryToken)
-	}
-	return nil, fmt.Errorf("authentication required: provide ?ticket= or ?token=")
+	// JWT in query string removed for security (leaks in proxy logs).
+	// All clients must use POST /auth/ws-ticket to get a short-lived ticket.
+	return nil, fmt.Errorf("authentication required: use POST /auth/ws-ticket first")
 }
 
 // cleanupWSTickets remove tickets expirados periodicamente (1/min).

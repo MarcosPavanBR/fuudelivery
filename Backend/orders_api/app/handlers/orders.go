@@ -167,15 +167,25 @@ func canActOnEstablishment(c *fiber.Ctx, establishmentID int64) bool {
 	return tokenEstID == establishmentID
 }
 
-// isValidOrderTransition limita os status aceitos em PUT /orders/status.
-// (REQUEST_APPROVE é o pedido do cliente reabrindo aprovação; os demais são
-// transições do restaurante.)
-func isValidOrderTransition(status string) bool {
-	switch status {
-	case "REQUEST_APPROVE", "APPROVED", "DENIED", "PREPARING", "DONE", "CANCELLED":
-		return true
+// isValidOrderTransition valida a transicao FROM->TO de status do pedido.
+// Bloqueia transicoes ilegais como CANCELLED->DONE ou FINISHED->PREPARING.
+var validTransitions = map[string]map[string]bool{
+	"AWAIT_APPROVE":     {"APPROVED": true, "DENIED": true, "CANCELLED": true},
+	"REQUEST_APPROVE":   {"APPROVED": true, "DENIED": true, "CANCELLED": true},
+	"APPROVED":          {"PREPARING": true, "CANCELLED": true},
+	"PREPARING":         {"DONE": true, "CANCELLED": true},
+	"DONE":              {"IN_ROUTE_DELIVERY": true, "FINISHED": true},
+	"IN_ROUTE_DELIVERY": {"FINISHED": true},
+	"SCHEDULED":         {"APPROVED": true, "DENIED": true, "CANCELLED": true},
+	// DENIED, CANCELLED, FINISHED are terminal -- no outgoing transitions.
+}
+
+func isValidOrderTransition(fromStatus, toStatus string) bool {
+	allowed, ok := validTransitions[fromStatus]
+	if !ok {
+		return false
 	}
-	return false
+	return allowed[toStatus]
 }
 
 // GetEstablishment busca direto no Postgres (mesma base do auth_api, pool já
@@ -246,9 +256,9 @@ func UpdateOrderStatus(c *fiber.Ctx, sendMessageToClient func(clientID int64, me
 		})
 	}
 
-	if !isValidOrderTransition(requestBody.Status) {
+	if !isValidOrderTransition(doc.Status, requestBody.Status) {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Status inválido",
+			"error": fmt.Sprintf("Transição %s→%s não permitida", doc.Status, requestBody.Status),
 		})
 	}
 

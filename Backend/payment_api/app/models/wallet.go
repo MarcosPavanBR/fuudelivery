@@ -175,14 +175,14 @@ func AdjustWalletBalance(db *gorm.DB, userID int64, userType, txnType, kind stri
 // referência? Usado pelo webhook.go (crédito de split) para não duplicar num
 // reprocesso do webhook — segunda camada além da constraint única
 // uq_wallet_txns_credit_ref em AdjustWalletBalance.
-func HasLedgerEntry(db *gorm.DB, referenceID, txnType string) bool {
+func HasLedgerEntry(db *gorm.DB, referenceID, txnType string, userID int64) bool {
 	var count int64
 	err := db.Model(&WalletTxn{}).
 		Joins("JOIN wallets ON wallets.id = wallet_transactions.wallet_id").
-		Where("wallet_transactions.reference_id = ? AND wallet_transactions.type = ?", referenceID, txnType).
+		Where("wallet_transactions.reference_id = ? AND wallet_transactions.type = ? AND wallets.user_id = ?", referenceID, txnType, userID).
 		Count(&count).Error
 	if err != nil {
-		log.Printf("[LEDGER] WARNING: falha ao checar idempotência ref=%s: %v", referenceID, err)
+		log.Printf("[LEDGER] WARNING: falha ao checar idempotência ref=%s user=%d: %v", referenceID, userID, err)
 		return false // em caso de erro, permite tentar (comportamento fail-open igual ao legado)
 	}
 	return count > 0

@@ -143,7 +143,7 @@ func reverseWalletCredit(userID int64, amount float64, abacatepayID, description
 	// Idempotency: skip if this reference was already debited. Prevents
 	// double-debit on concurrent REFUNDED webhooks (debits have no DB-level
 	// unique constraint like credits do).
-	if models.HasLedgerEntry(models.DB, abacatepayID, "debit") {
+	if models.HasLedgerEntry(models.DB, abacatepayID, "debit", userID) {
 		log.Printf("[REFUND] Debit already exists for %s, skipping", abacatepayID)
 		return true
 	}

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/orders_api/app/dto"
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
@@ -332,6 +333,11 @@ func ValidateCouponInternal(req dto.ValidateCouponRequest) dto.ValidateCouponRes
 }
 
 func ListCoupons(c *fiber.Ctx) error {
+	role, roleErr := middlewares.GetUserRoleFromToken(c)
+	if roleErr != nil || (role != "admin" && role != "establishment") {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Admin or establishment access required"})
+	}
+
 	establishmentID := c.Query("establishment_id")
 
 	var coupons []models.Coupon
@@ -438,6 +444,18 @@ func CalculateDiscount(c *fiber.Ctx) error {
 	var coupon models.Coupon
 	if err := models.DB.Where("code = ?", request.Code).First(&coupon).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Cupom não encontrado"})
+	}
+
+	// Validate coupon before computing discount.
+	if !coupon.IsActive {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cupom está inativo"})
+	}
+	now := time.Now()
+	if now.Before(coupon.StartDate) || now.After(coupon.ExpiryDate) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cupom expirado ou ainda não válido"})
+	}
+	if coupon.MaxUses > 0 && coupon.UsedCount >= coupon.MaxUses {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Cupom atingiu o limite máximo de usos"})
 	}
 
 	var discountAmount float64

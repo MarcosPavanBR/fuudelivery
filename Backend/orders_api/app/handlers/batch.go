@@ -98,22 +98,28 @@ func AssignBatch(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Batch not found"})
 	}
 
-	if batch.Status != "active" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Batch is not active"})
-	}
-
 	if !canBatchAct(c, &batch) {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
 	}
 
+	// Atomic assign: WHERE status='active' prevents TOCTOU race between
+	// two concurrent assign requests.
 	now := time.Now()
-	batch.CourierID = &req.CourierID
-	batch.Status = "delivering"
-	batch.StartedAt = &now
-
-	if err := models.DB.Save(&batch).Error; err != nil {
+	result := models.DB.Model(&models.Batch{}).
+		Where("id = ? AND status = ?", id, "active").
+		Updates(map[string]interface{}{
+			"courier_id": &req.CourierID,
+			"status":     "delivering",
+			"started_at": now,
+		})
+	if result.Error != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to assign batch"})
 	}
+	if result.RowsAffected == 0 {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Batch is no longer active (already assigned or completed)"})
+	}
+	// Reload for response
+	models.DB.First(&batch, id)
 
 	return c.JSON(fiber.Map{
 		"message": "Batch assigned successfully",

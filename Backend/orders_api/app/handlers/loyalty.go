@@ -135,7 +135,12 @@ func EarnPoints(c *fiber.Ctx) error {
 	}
 
 	multiplier := getPointsMultiplier(loyalty.Tier)
-	pointsEarned := int(math.Floor(orderValue)) * multiplier
+	orderTotal := int(math.Floor(orderValue))
+	if orderTotal <= 0 || orderTotal > 1000000 {
+		log.Printf("[LOYALTY] Order value out of range: %.2f", orderValue)
+		return c.Status(400).JSON(fiber.Map{"error": "Valor do pedido fora do range permitido"})
+	}
+	pointsEarned := orderTotal * multiplier
 
 	loyalty.Points += pointsEarned
 	loyalty.TotalOrders++
@@ -267,6 +272,10 @@ func RedeemPoints(c *fiber.Ctx) error {
 		Where("user_phone = ?", req.UserPhone).
 		First(&loyalty).Error; err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Usuário não encontrado"})
+	}
+
+	if req.Points <= 0 {
+		return c.Status(400).JSON(fiber.Map{"error": "Points must be positive"})
 	}
 
 	if loyalty.Points < req.Points {

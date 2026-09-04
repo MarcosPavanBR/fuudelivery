@@ -1,0 +1,307 @@
+openapi: 3.0.3
+info:
+  title: FuuDelivery API
+  version: 1.0.0
+  description: API do sistema de delivery FuuDelivery
+  contact:
+    name: FuuDelivery Team
+
+servers:
+  - url: https://fuudelivery-api-8y6l.onrender.com
+    description: Production
+
+tags:
+  - name: Auth
+    description: Autenticação e sessões
+  - name: Users
+    description: Gestão de usuários
+  - name: Establishments
+    description: Restaurantes e estabelecimentos
+  - name: Orders
+    description: Pedidos e status
+  - name: Payments
+    description: Pagamentos e cobranças
+  - name: Delivery
+    description: Rastreamento e entregas
+  - name: Loyalty
+    description: Programa de fidelidade
+  - name: Health
+    description: Verificação de saúde
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Verifica saúde do serviço
+      responses:
+        "200":
+          description: Serviço saudável
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  checks:
+                    type: object
+                    properties:
+                      postgres: { type: object, properties: { status: { type: string } } }
+                      redis: { type: object, properties: { status: { type: string } } }
+                      redis_geo: { type: object, properties: { status: { type: string } } }
+                      batches: { type: object, properties: { status: { type: string } } }
+
+  /ping:
+    get:
+      tags: [Health]
+      summary: Ping simples
+      responses:
+        "200":
+          description: OK
+
+  /establishments:
+    get:
+      tags: [Establishments]
+      summary: Lista todos os estabelecimentos
+      responses:
+        "200":
+          description: Lista de estabelecimentos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: integer }
+                    name: { type: string }
+                    lat: { type: number }
+                    long: { type: number }
+
+  /establishments/{id}:
+    get:
+      tags: [Establishments]
+      summary: Detalhes de um estabelecimento
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Detalhes do estabelecimento
+        "404":
+          description: Não encontrado
+
+  /users/register:
+    post:
+      tags: [Auth]
+      summary: Cria novo usuário cliente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                email: { type: string, format: email }
+                password: { type: string }
+                phone: { type: string }
+      responses:
+        "201":
+          description: Usuário criado
+        "400":
+          description: Dados invválidos
+
+  /users/login:
+    post:
+      tags: [Auth]
+      summary: Login de usuário
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        "200":
+          description: Login realizado, retorna token
+        "401":
+          description: Credenciais inválidas
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Renova token de acesso
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token: { type: string }
+      responses:
+        "200":
+          description: Novo token de acesso
+        "401":
+          description: Refresh token inválido
+
+  /orders:
+    post:
+      tags: [Orders]
+      summary: Cria novo pedido
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                establishment_id: { type: integer }
+                items:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      product_id: { type: integer }
+                      quantity: { type: integer }
+                delivery_address: { type: string }
+      responses:
+        "201":
+          description: Pedido criado
+        "401":
+          description: Não autenticado
+
+  /payments/order/{order_id}:
+    get:
+      tags: [Payments]
+      summary: Status da cobrança de um pedido
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Status do pagamento
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  order_id: { type: string }
+                  status: { type: string }
+                  amount: { type: number }
+                  payment_method: { type: string }
+        "403":
+          description: Não autorizado (participante inválido)
+        "404":
+          description: Pagamento não encontrado
+
+  /payments/webhook:
+    post:
+      tags: [Payments]
+      summary: Webhook de pagamento externo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Webhook processado
+        "403":
+          description: Assinatura inválida
+
+  /loyalty/balance/{phone}:
+    get:
+      tags: [Loyalty]
+      summary: Saldo de pontos de fidelidade
+      parameters:
+        - name: phone
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Saldo de pontos
+        "403":
+          description: Não autorizado
+
+  /loyalty/earn:
+    post:
+      tags: [Loyalty]
+      summary: Concede pontos por pedido
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_phone: { type: string }
+                order_id: { type: string }
+                points: { type: integer }
+                order_value: { type: number }
+      responses:
+        "201":
+          description: Pontos concedidos
+        "403":
+          description: Não autorizado
+
+  /loyalty/redeem:
+    post:
+      tags: [Loyalty]
+      summary: Resgata pontos para desconto
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_phone: { type: string }
+                points: { type: integer }
+                order_id: { type: string }
+      responses:
+        "201":
+          description: Pontos resgatados
+        "403":
+          description: Não autorizado
+
+  /delivery/location:
+    post:
+      tags: [Delivery]
+      summary: Atualiza posição do entregador
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lat: { type: number }
+                lng: { type: number }
+                name: { type: string }
+      responses:
+        "200":
+          description: Posição atualizada
+
+securitySchemes:
+  bearerAuth:
+    type: http
+    scheme: bearer
+    bearerFormat: JWT

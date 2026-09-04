@@ -53,6 +53,26 @@ func validateChargeAmount(orderID string, clientAmount float64) (float64, bool) 
 	return serverTotal, true
 }
 
+// canViewOrderPayment decide quem pode consultar o status/valor de uma
+// cobrança (auditoria de segurança — achado #3: vazamento de dados de
+// pagamento de pedidos alheios):
+//   - admin: qualquer cobrança;
+//   - cliente dono do pedido (phone do token == customer_phone);
+//   - estabelecimento dono da cobrança (establishment_id do token).
+//
+// Entregador atribuído e demais papéis ficam de fora (sem vazamento).
+func canViewOrderPayment(role string, tokenPhone string, phoneErr error, tokenEstID int64, estErr error, customerPhone string, establishmentID int64) bool {
+	if role == "admin" {
+		return true
+	}
+	isCustomer := phoneErr == nil && tokenPhone != "" && customerPhone == tokenPhone
+	if isCustomer {
+		return true
+	}
+	isEstablishment := estErr == nil && tokenEstID == establishmentID
+	return isEstablishment
+}
+
 // GetPaymentByOrder devolve o status da cobrança mais recente de um pedido.
 // Usado pelo app do cliente para confirmar o pagamento do PIX (polling) sem
 // confiar num botão "já paguei".
@@ -75,20 +95,10 @@ func GetPaymentByOrder(c *fiber.Ctx) error {
 	if rErr != nil {
 		return c.Status(403).JSON(fiber.Map{"error": "Invalid token"})
 	}
-	if role == "admin" {
-		// Admin can view any payment
-	} else {
-		// Check if user is the customer (phone matches)
-		tokenPhone, phoneErr := middlewares.GetUserPhoneFromToken(c)
-		isCustomer := phoneErr == nil && tokenPhone != "" && payment.CustomerPhone == tokenPhone
-
-		// Check if user is the establishment owner
-		tokenEstID, estErr := middlewares.GetEstablishmentIDFromToken(c)
-		isEstablishment := estErr == nil && tokenEstID == int64(payment.EstablishmentID)
-
-		if !isCustomer && !isEstablishment {
-			return c.Status(403).JSON(fiber.Map{"error": "Forbidden"})
-		}
+	tokenPhone, phoneErr := middlewares.GetUserPhoneFromToken(c)
+	tokenEstID, estErr := middlewares.GetEstablishmentIDFromToken(c)
+	if !canViewOrderPayment(role, tokenPhone, phoneErr, tokenEstID, estErr, payment.CustomerPhone, payment.EstablishmentID) {
+		return c.Status(403).JSON(fiber.Map{"error": "Forbidden"})
 	}
 
 	return c.JSON(fiber.Map{

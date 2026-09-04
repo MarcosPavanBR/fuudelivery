@@ -1403,6 +1403,26 @@ func setupChatRoutes(app *fiber.App) {
 	})
 }
 
+// isKnownJWTSecretPlaceholder retorna true se o segredo for um dos placeholders
+// públicos/conhecidos (ex.: copiado do .env.example). Aceitar um desses como
+// chave HMAC permitiria forjar qualquer token — inclusive role=admin.
+func isKnownJWTSecretPlaceholder(secret string) bool {
+	knownPlaceholders := []string{
+		"change-this-to-a-random-64-char-string",
+		"change-me",
+		"secret",
+		"your-secret-key",
+		"super-secret",
+		"123456",
+	}
+	for _, placeholder := range knownPlaceholders {
+		if secret == placeholder {
+			return true
+		}
+	}
+	return false
+}
+
 // validateRequiredEnv verifica se as variaveis de ambiente essenciais estao presentes.
 // Em producao, falha rapidamente (exit) se algo critico estiver faltando:
 // com JWT_SECRET vazio os tokens passam a ser assinados/validados com chave
@@ -1426,18 +1446,8 @@ func validateRequiredEnv() {
 	// Reject known JWT_SECRET placeholders — they allow token forgery
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret != "" {
-		knownPlaceholders := []string{
-			"change-this-to-a-random-64-char-string",
-			"change-me",
-			"secret",
-			"your-secret-key",
-			"super-secret",
-			"123456",
-		}
-		for _, placeholder := range knownPlaceholders {
-			if jwtSecret == placeholder {
-				log.Fatalf("[ENV] CRITICAL: JWT_SECRET is a known placeholder (%q). Generate a real secret: openssl rand -hex 32", placeholder)
-			}
+		if isKnownJWTSecretPlaceholder(jwtSecret) {
+			log.Fatalf("[ENV] CRITICAL: JWT_SECRET is a known placeholder (%q). Generate a real secret: openssl rand -hex 32", jwtSecret)
 		}
 		if len(jwtSecret) < 32 {
 			log.Printf("[ENV] WARNING: JWT_SECRET is only %d chars — recommended minimum is 32", len(jwtSecret))

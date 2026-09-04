@@ -223,6 +223,17 @@ func ListEstablishments(c *fiber.Ctx) error {
 	return c.JSON(establishments)
 }
 
+// canManageEstablishment decide se o usuário autenticado pode operar sobre o
+// estabelecimento alvo. Admin gerencia qualquer um; os demais papéis apenas o
+// próprio estabelecimento (establishment_id do token == id alvo). eErr vem de
+// GetEstablishmentIDFromToken — usuário sem vínculo a estabelecimento não passa.
+func canManageEstablishment(role string, tokenEstID int64, eErr error, targetID uint) bool {
+	if role == "admin" {
+		return true
+	}
+	return eErr == nil && tokenEstID == int64(targetID)
+}
+
 func GetUserByEstablishment(c *fiber.Ctx) error {
 	establishmentId, err := c.ParamsInt("id")
 	if err != nil {
@@ -234,11 +245,9 @@ func GetUserByEstablishment(c *fiber.Ctx) error {
 	if rErr != nil {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Invalid token"})
 	}
-	if role != "admin" {
-		tokenEstID, eErr := middlewares.GetEstablishmentIDFromToken(c)
-		if eErr != nil || tokenEstID != int64(establishmentId) {
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
-		}
+	tokenEstID, eErr := middlewares.GetEstablishmentIDFromToken(c)
+	if !canManageEstablishment(role, tokenEstID, eErr, uint(establishmentId)) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
 	}
 
 	var user []models.User
@@ -265,11 +274,9 @@ func HandlerEstablishmentStatus(c *fiber.Ctx) error {
 	if rErr != nil {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Invalid token"})
 	}
-	if role != "admin" {
-		tokenEstID, eErr := middlewares.GetEstablishmentIDFromToken(c)
-		if eErr != nil || tokenEstID != int64(establishment.ID) {
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
-		}
+	tokenEstID, eErr := middlewares.GetEstablishmentIDFromToken(c)
+	if !canManageEstablishment(role, tokenEstID, eErr, establishment.ID) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
 	}
 
 	if establishment.OpenData != nil {

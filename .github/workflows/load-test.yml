@@ -1,0 +1,31 @@
+# Load test — k6 (sob demanda)
+#
+# NÃO roda no CI Gate: o job atinge a API de produção e por isso é
+# exclusivamente manual (workflow_dispatch) com um agendamento semanal
+# opcional. Um push comum nunca dispara carga contra o Render.
+#
+# Como executar:
+#   gh workflow run load-test.yml --repo MarcosPavanBR/fuudelivery
+#   (ou Actions → Load Test — k6 (manual) → Run workflow)
+
+name: Load Test — k6 (manual)
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Dom 06:00 UTC — opcional; remova se não quiser carga recorrente
+    - cron: '0 6 * * 0'
+
+jobs:
+  load-test:
+    name: Load Test — k6
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run k6 load test
+        uses: grafana/k6-action@v0.3.1
+        with:
+          filename: scripts/load-test/k6.js
+        env:
+          API_URL: https://fuudelivery-api-8y6l.onrender.com

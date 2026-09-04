@@ -18,6 +18,41 @@ func CreateCoupon(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Erro ao fazer parsing do corpo da requisição"})
 	}
 
+	// Authorization: Extract role and establishment from token
+	role, err := middlewares.GetUserRoleFromToken(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+	}
+
+	userID, err := middlewares.GetUserIDFromToken(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+	}
+
+	// Only admin or restaurant role can create coupons
+	if role != "admin" && role != "restaurant" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Apenas administradores e restaurantes podem criar cupons"})
+	}
+
+	// Validate establishment ownership
+	if role == "restaurant" {
+		tokenEstablishmentID, err := middlewares.GetEstablishmentIDFromToken(c)
+		if err != nil {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Estabelecimento não encontrado no token"})
+		}
+
+		// Restaurant users can only create coupons for their own establishment
+		if request.EstablishmentID == 0 {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Restaurantes não podem criar cupons globais"})
+		}
+
+		if uint(tokenEstablishmentID) != request.EstablishmentID {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Você só pode criar cupons para seu próprio estabelecimento"})
+		}
+	}
+
+	// Admin can create global coupons (EstablishmentID = 0) or establishment-specific coupons
+
 	request.Code = strings.ToUpper(strings.TrimSpace(request.Code))
 	if request.Code == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Código do cupom é obrigatório"})
@@ -61,6 +96,7 @@ func CreateCoupon(c *fiber.Ctx) error {
 		StartDate:       startDate,
 		ExpiryDate:      expiryDate,
 		EstablishmentID: request.EstablishmentID,
+		CreatedBy:       uint(userID),
 	}
 
 	if err := models.DB.Create(&coupon).Error; err != nil {
@@ -340,11 +376,36 @@ func ListCoupons(c *fiber.Ctx) error {
 
 	establishmentID := c.Query("establishment_id")
 
+	// Authorization: Extract role and establishment from token
+	role, err := middlewares.GetUserRoleFromToken(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+	}
+
 	var coupons []models.Coupon
 	query := models.DB
-	if establishmentID != "" {
-		query = query.Where("establishment_id = ? OR establishment_id = 0", establishmentID)
+
+	if role == "admin" {
+		// Admin can list all coupons or filter by establishment
+		if establishmentID != "" {
+			query = query.Where("establishment_id = ? OR establishment_id = 0", establishmentID)
+		}
+	} else if role == "restaurant" {
+		// Restaurant users can only list their own establishment's coupons and global coupons
+		tokenEstablishmentID, err := middlewares.GetEstablishmentIDFromToken(c)
+		if err != nil {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Estabelecimento não encontrado no token"})
+		}
+		query = query.Where("establishment_id = ? OR establishment_id = 0", tokenEstablishmentID)
+	} else {
+		// Other roles (client, deliverer) can only see global coupons or coupons for a specific establishment they're ordering from
+		if establishmentID != "" {
+			query = query.Where("establishment_id = ? OR establishment_id = 0", establishmentID)
+		} else {
+			query = query.Where("establishment_id = 0")
+		}
 	}
+
 	query.Order("created_at DESC").Find(&coupons)
 
 	return c.JSON(coupons)
@@ -358,6 +419,31 @@ func GetCoupon(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Cupom não encontrado"})
 	}
 
+	// Authorization: Extract role and establishment from token
+	role, err := middlewares.GetUserRoleFromToken(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+	}
+
+	// Admin can view any coupon
+	if role == "admin" {
+		return c.JSON(coupon)
+	}
+
+	// Restaurant users can only view their own establishment's coupons or global coupons
+	if role == "restaurant" {
+		tokenEstablishmentID, err := middlewares.GetEstablishmentIDFromToken(c)
+		if err != nil {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Estabelecimento não encontrado no token"})
+		}
+		if coupon.EstablishmentID != 0 && coupon.EstablishmentID != uint(tokenEstablishmentID) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Você não tem permissão para visualizar este cupom"})
+		}
+		return c.JSON(coupon)
+	}
+
+	// Other roles can only view global coupons or coupons for establishments they're interacting with
+	// For simplicity, allow viewing any coupon (validation happens during application)
 	return c.JSON(coupon)
 }
 
@@ -368,6 +454,36 @@ func DeleteCoupon(c *fiber.Ctx) error {
 	if err := models.DB.First(&coupon, id).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Cupom não encontrado"})
 	}
+
+	// Authorization: Extract role and establishment from token
+	role, err := middlewares.GetUserRoleFromToken(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+	}
+
+	// Only admin or restaurant role can delete coupons
+	if role != "admin" && role != "restaurant" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Apenas administradores e restaurantes podem desativar cupons"})
+	}
+
+	// Restaurant users can only delete their own establishment's coupons
+	if role == "restaurant" {
+		tokenEstablishmentID, err := middlewares.GetEstablishmentIDFromToken(c)
+		if err != nil {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Estabelecimento não encontrado no token"})
+		}
+
+		// Restaurant users cannot delete global coupons
+		if coupon.EstablishmentID == 0 {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Você não tem permissão para desativar cupons globais"})
+		}
+
+		if coupon.EstablishmentID != uint(tokenEstablishmentID) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Você só pode desativar cupons do seu próprio estabelecimento"})
+		}
+	}
+
+	// Admin can delete any coupon (global or establishment-specific)
 
 	coupon.IsActive = false
 	if err := models.DB.Save(&coupon).Error; err != nil {

@@ -59,7 +59,9 @@ func TestWebhookReplay_Idempotent(t *testing.T) {
 	seen := make(map[string]bool)
 	app := newSecTestApp()
 	app.Post("/webhook", func(c *fiber.Ctx) error {
-		var r struct{ ID string `json:"id"` }
+		var r struct {
+			ID string `json:"id"`
+		}
 		c.BodyParser(&r)
 		if seen[r.ID] {
 			return c.JSON(fiber.Map{"error": "duplicate"})

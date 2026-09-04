@@ -102,6 +102,46 @@ func EarnPoints(c *fiber.Ctx) error {
 		return c.Status(403).JSON(fiber.Map{"error": "Cannot earn points for another user"})
 	}
 
+	// Verify order ownership: the order must belong to the authenticated user.
+	// Extract user phone from the JSONB payload using PostgreSQL's JSON operators.
+	var orderDoc struct {
+		UserPhone string
+		Status    string
+	}
+	err = models.DB.Raw(
+		`SELECT payload->'user'->>'phone' AS user_phone,
+		        status
+		 FROM order_documents WHERE legacy_id = ? LIMIT 1`, req.OrderID).Scan(&orderDoc).Error
+	if err != nil {
+		log.Printf("[LOYALTY] Failed to lookup order %s: %v", req.OrderID, err)
+		return c.Status(400).JSON(fiber.Map{"error": "Pedido não encontrado"})
+	}
+	if orderDoc.UserPhone != req.UserPhone {
+		log.Printf("[LOYALTY] Order ownership mismatch: order %s belongs to %s, not %s", 
+			req.OrderID, orderDoc.UserPhone, req.UserPhone)
+		return c.Status(403).JSON(fiber.Map{"error": "Este pedido não pertence a você"})
+	}
+
+	// Verify order is not cancelled
+	if orderDoc.Status == "CANCELLED" || orderDoc.Status == "DENIED" {
+		log.Printf("[LOYALTY] Order %s is cancelled/denied (status=%s)", req.OrderID, orderDoc.Status)
+		return c.Status(400).JSON(fiber.Map{"error": "Não é possível ganhar pontos de pedidos cancelados"})
+	}
+
+	// Verify payment: the order must have a CONFIRMED payment.
+	// The payments table is in the same PostgreSQL database (monolith architecture).
+	var paymentStatus struct {
+		Status string
+		Amount float64
+	}
+	err = models.DB.Raw(
+		`SELECT status, amount FROM payments WHERE order_id = ? AND status = 'CONFIRMED' LIMIT 1`,
+		req.OrderID).Scan(&paymentStatus).Error
+	if err != nil || paymentStatus.Status != "CONFIRMED" {
+		log.Printf("[LOYALTY] No confirmed payment found for order %s", req.OrderID)
+		return c.Status(400).JSON(fiber.Map{"error": "Pedido não possui pagamento confirmado"})
+	}
+
 	orderValue, ok := lookupServerOrderTotal(req.OrderID)
 	if !ok {
 		return c.Status(400).JSON(fiber.Map{"error": "Pedido inválido ou sem total calculado"})

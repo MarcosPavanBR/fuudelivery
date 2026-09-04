@@ -111,6 +111,12 @@ func computeOrderTotal(cart []dto.CartItem, deliveryValue float64, establishment
 	if deliveryValue < 0 {
 		return 0, fmt.Errorf("valor de entrega inválido")
 	}
+	// Limite superior razoável para valor de entrega: R$ 500,00
+	// Previne inflação arbitrária do total do pedido via deliveryValue
+	const maxDeliveryValue = 500.0
+	if deliveryValue > maxDeliveryValue {
+		return 0, fmt.Errorf("valor de entrega excede o limite máximo de R$ %.2f", maxDeliveryValue)
+	}
 	if len(cart) == 0 {
 		return 0, fmt.Errorf("carrinho vazio")
 	}

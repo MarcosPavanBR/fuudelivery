@@ -129,11 +129,12 @@ func generateClientJWT(client *models.Client) (string, error) {
 	expirationTime := time.Now().UTC().Add(time.Hour * 24 * 7).Unix()
 
 	claims := jwt.MapClaims{
-		"id":    client.ID,
-		"name":  client.Name,
-		"phone": client.Phone,
-		"role":  "client",
-		"exp":   expirationTime,
+		"id":          client.ID,
+		"name":        client.Name,
+		"phone":       client.Phone,
+		"role":        "client",
+		"exp":         expirationTime,
+		"entity_type": "client",
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

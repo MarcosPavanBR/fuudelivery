@@ -64,13 +64,14 @@ func GenerateJWT(user *models.User, establishment *models.Establishment) (string
 	expirationTime := time.Now().UTC().Add(15 * time.Minute).Unix()
 
 	claims := jwt.MapClaims{
-		"id":         user.ID,
-		"name":       user.Name,
-		"email":      user.Email,
-		"role":       user.Role,
-		"phone":      user.Phone,
-		"avatar_url": user.AvatarURL,
-		"exp":        expirationTime,
+		"id":          user.ID,
+		"name":        user.Name,
+		"email":       user.Email,
+		"role":        user.Role,
+		"phone":       user.Phone,
+		"avatar_url":  user.AvatarURL,
+		"exp":         expirationTime,
+		"entity_type": "user",
 	}
 
 	if establishment != nil {
@@ -287,11 +288,13 @@ func GenerateJWTDeliveryMan(user *models.DeliveryMan) (string, error) {
 	expirationTime := time.Now().UTC().Add(ACCESS_TOKEN_DURATION).Unix()
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"id":    user.ID,
-		"name":  user.Name,
-		"email": user.Email,
-		"phone": user.Phone,
-		"exp":   expirationTime,
+		"id":          user.ID,
+		"name":        user.Name,
+		"email":       user.Email,
+		"phone":       user.Phone,
+		"exp":         expirationTime,
+		"entity_type": "deliveryman",
+		"role":        "deliveryman",
 	})
 
 	tokenString, err := token.SignedString([]byte(secret))
@@ -300,4 +303,25 @@ func GenerateJWTDeliveryMan(user *models.DeliveryMan) (string, error) {
 	}
 
 	return tokenString, nil
+}
+
+// GetEntityTypeFromToken extrai o tipo de entidade do token JWT.
+// Retorna "user", "client", "deliveryman" ou erro se não encontrado.
+func GetEntityTypeFromToken(c *fiber.Ctx) (string, error) {
+	token, err := ValidateJWT(c)
+	if err != nil {
+		return "", err
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return "", fiber.NewError(fiber.StatusUnauthorized, "Invalid token claims")
+	}
+
+	entityType, ok := claims["entity_type"].(string)
+	if !ok || entityType == "" {
+		return "", fiber.NewError(fiber.StatusUnauthorized, "Entity type not found in token")
+	}
+
+	return entityType, nil
 }

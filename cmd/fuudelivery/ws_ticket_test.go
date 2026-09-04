@@ -116,7 +116,7 @@ func TestResolveWSTicket_EmptyArgs(t *testing.T) {
 	}
 }
 
-func TestResolveWSTicket_DeprecatedTokenFallback(t *testing.T) {
+func TestResolveWSTicket_DeprecatedTokenRejected(t *testing.T) {
 	t.Setenv("JWT_SECRET", "test-secret-key-for-ws-ticket")
 	t.Setenv("JWT_EXPIRATION_HOURS", "1")
 
@@ -125,15 +125,11 @@ func TestResolveWSTicket_DeprecatedTokenFallback(t *testing.T) {
 		"role": "delivery_man",
 	})
 
-	// Passar JWT diretamente no arg "token" (caminho deprecated)
-	claims, err := resolveWSTicket(jwtToken, "")
-	if err != nil {
-		t.Fatalf("deprecated token fallback falhou: %v", err)
-	}
-
-	userID, ok := claims["id"].(float64)
-	if !ok || int64(userID) != 99 {
-		t.Fatalf("claims id errado: %v", claims["id"])
+	// JWT in query string was removed for security (proxy log leak).
+	// resolveWSTicket should reject it even when a valid JWT is passed.
+	_, err := resolveWSTicket(jwtToken, "")
+	if err == nil {
+		t.Fatal("expected error for deprecated JWT-in-query-string, got nil")
 	}
 }
 

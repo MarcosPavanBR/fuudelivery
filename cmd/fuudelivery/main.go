@@ -1548,6 +1548,18 @@ func main() {
 		batchesCheck := health.BatchCheck(ordersModels.DB)
 		gatewaysCheck := health.GatewayCheck()
 
+		// On cold start (DB not yet initialized), return 200 so Render health
+		// checks pass during the DB initialization window (up to 125s).
+		if models.DB == nil {
+			return c.Status(200).JSON(fiber.Map{
+				"status":  "starting",
+				"service": "fuudelivery",
+				"version": "1.0.0",
+				"message": "database initializing, please retry",
+				"time":    time.Now().UTC(),
+			})
+		}
+
 		// Critical checks: Postgres + at least one payment gateway.
 		criticalStatus := health.OverallStatus(postgresCheck, gatewaysCheck)
 		// All checks: includes Redis, batches and gateways

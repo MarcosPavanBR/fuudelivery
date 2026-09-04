@@ -51,7 +51,7 @@ Fork do [vercardapio/appdelivery](https://github.com/carloshomar/appdelivery) es
 ├─────────────────┬─────────────────┬─────────────────────────────────┤
 │ AppComida       │ AppEntrega      │ AppRestaurante                  │
 │ React Native    │ React Native    │ React Native                    │
-│ (Expo SDK 54)   │ (Expo SDK 54)   │ (Expo SDK 54)                   │
+│ (Expo SDK 57)   │ (Expo SDK 57)   │ (Expo SDK 57)                   │
 │ App do Cliente  │ App Entregador  │ App do Restaurante              │
 ├─────────────────┴─────────────────┼─────────────────────────────────┤
 │ WebRestaurant                     │ WebAdmin                        │

@@ -1,11 +1,10 @@
 # Roadmap de Modernização — Status (FuuDelivery 2.0)
 
 
-> ⚠️ **`Backend/payment_api (monolith)` foi arquivado e removido do repositório.** Todo o código
-> de pagamento ativo vive em `payment_api` (embutido no monolito `cmd/fuudelivery`).
-> As menções a `Backend/payment_api (monolith)` neste documento são **históricas** — não edite,
-> não busque e não rode comandos apontando para esse diretório.
-Status verificado contra o código em **03/08/2026**. Este documento registra o
+> ⚠️ **`Backend/Payment` (arquivado) foi removido.** Todo o código de pagamento ativo vive em
+> `Backend/payment_api` (embutido no monolito `cmd/fuudelivery`). As menções históricas neste
+> documento são referências — não edite, não busque e não rode comandos contra o diretório antigo.
+Status verificado contra o código em **04/09/2026**. Este documento registra o
 que foi concluído em cada fase do roadmap de modernização (`fuudelivery-modernization`).
 
 ## Fase 0 — Rebranding ✅
@@ -20,7 +19,7 @@ que foi concluído em cada fase do roadmap de modernização (`fuudelivery-moder
 
 | Item | Status |
 |---|---|
-| Expo SDK 51 → 54+ (AppComida e AppEntrega) | ✅ `expo ~54.0.0`, RN 0.81.5, React 19.1.0 |
+| Expo SDK 51 → 57 (AppComida, AppEntrega, AppRestaurante) | ✅ `expo ~57.0.0`, RN 0.86.3, React 19.1.0 |
 | New Architecture (`newArchEnabled`) | ✅ `true` nos dois apps |
 | MMKV no lugar de AsyncStorage (AppComida) | ✅ `config/storage.ts` + `react-native-mmkv ~4.3.2` |
 | Remoção de AsyncStorage não usado (AppEntrega) | ✅ dependência removida do package.json |

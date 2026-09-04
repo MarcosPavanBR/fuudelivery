@@ -391,8 +391,18 @@ jobs:
 
       - name: Run npm audit
         # --omit=dev ignora devDependencies; --audit-level=critical so falha
-        # em vulnerabilidades criticas (moderate/high sao reportadas mas nao bloqueiam)
-        run: npm audit --omit=dev --audit-level=critical
+        # em vulnerabilidades criticas (moderate/high sao reportadas mas nao bloqueiam).
+        # Retry 3x com backoff: o registry.npmjs.org retorna 503 intermitente.
+        run: |
+          for attempt in 1 2 3; do
+            if npm audit --omit=dev --audit-level=critical; then
+              exit 0
+            fi
+            echo "Attempt $attempt failed, waiting 15s..."
+            sleep 15
+          done
+          echo "All 3 attempts failed"
+          exit 1
 
   # ──────────────────────────────────────────────
   # Shell scripts — portabilidade + bugs comuns

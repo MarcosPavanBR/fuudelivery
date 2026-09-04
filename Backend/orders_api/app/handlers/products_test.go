@@ -56,7 +56,6 @@ func TestUpdateProduct_InvalidPayload(t *testing.T) {
 	}
 }
 
-
 func TestCreateMultProducts_InvalidPayload(t *testing.T) {
 	app := newTestApp()
 	app.Post("/products/multi-create", CreateMultProducts)

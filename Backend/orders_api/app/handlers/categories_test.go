@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"net/http/httptest"
 	"testing"
-
 )
 
 func TestCreateCategories_InvalidPayload(t *testing.T) {

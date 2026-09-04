@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2034,SC2038,SC2155  # min_version (param p/ checagem), find|xargs, var=$(...) separadas
 set -euo pipefail
 
 # ============================================================

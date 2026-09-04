@@ -228,6 +228,19 @@ func GetUserByEstablishment(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "id not found"})
 	}
+
+	// Ownership check: admin can access any, others only their own
+	role, rErr := middlewares.GetUserRoleFromToken(c)
+	if rErr != nil {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Invalid token"})
+	}
+	if role != "admin" {
+		tokenEstID, eErr := middlewares.GetEstablishmentIDFromToken(c)
+		if eErr != nil || tokenEstID != int64(establishmentId) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
+		}
+	}
+
 	var user []models.User
 
 	if err := models.DB.Select("name", "email", "id", "establishment_id").Where(&models.User{
@@ -245,6 +258,18 @@ func HandlerEstablishmentStatus(c *fiber.Ctx) error {
 	var establishment models.Establishment
 	if err := models.DB.First(&establishment, establishmentID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Establishment not found"})
+	}
+
+	// Ownership check: admin can toggle any, others only their own
+	role, rErr := middlewares.GetUserRoleFromToken(c)
+	if rErr != nil {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Invalid token"})
+	}
+	if role != "admin" {
+		tokenEstID, eErr := middlewares.GetEstablishmentIDFromToken(c)
+		if eErr != nil || tokenEstID != int64(establishment.ID) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
+		}
 	}
 
 	if establishment.OpenData != nil {

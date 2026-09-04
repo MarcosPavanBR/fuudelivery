@@ -1271,7 +1271,7 @@ func setupPaymentRoutes(app *fiber.App, router *gateway.Router) {
 	paymentGroup.Get("/order/:order_id", protectedRoute, rateLimitMiddleware(30), paymentHandlers.GetPaymentByOrder)
 	paymentGroup.Get("/reports/establishment/:id", protectedRoute, paymentHandlers.GetEstablishmentReport)
 	paymentGroup.Post("/asaas/wallet/create", protectedRoute, rateLimitMiddleware(20), paymentHandlers.CreateAsaasWallet)
-	paymentGroup.Get("/asaas/wallet/:walletId/status", protectedRoute, paymentHandlers.GetAsaasWalletStatus)
+	paymentGroup.Get("/asaas/wallet/:walletId/status", adminRequired, paymentHandlers.GetAsaasWalletStatus)
 	paymentGroup.Post("/asaas/payment/split", protectedRoute, rateLimitMiddleware(20), paymentHandlers.CreateAsaasSplitPayment)
 }
 
@@ -1421,6 +1421,27 @@ func validateRequiredEnv() {
 			log.Fatalf("[ENV] Encerrando: variaveis criticas ausentes em producao (%v)", critical)
 		}
 		log.Println("[ENV] Configuracao incompleta — seguindo em modo dev.")
+	}
+
+	// Reject known JWT_SECRET placeholders — they allow token forgery
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret != "" {
+		nknownPlaceholders := []string{
+			"change-this-to-a-random-64-char-string",
+			"change-me",
+			"secret",
+			"your-secret-key",
+			"super-secret",
+			"123456",
+		}
+		for _, placeholder := range knownPlaceholders {
+			if jwtSecret == placeholder {
+				log.Fatalf("[ENV] CRITICAL: JWT_SECRET is a known placeholder (%q). Generate a real secret: openssl rand -hex 32", placeholder)
+			}
+		}
+		if len(jwtSecret) < 32 {
+			log.Printf("[ENV] WARNING: JWT_SECRET is only %d chars — recommended minimum is 32", len(jwtSecret))
+		}
 	}
 
 	// Em producao, valida tambem as de pagamento

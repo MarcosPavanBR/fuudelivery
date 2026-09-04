@@ -3,6 +3,7 @@ package handlers
 import (
 	"log"
 
+	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/payment_api/app/models"
 	"github.com/gofiber/fiber/v2"
 )
@@ -66,6 +67,28 @@ func GetPaymentByOrder(c *fiber.Ctx) error {
 	if err := models.DB.Where("order_id = ?", orderID).
 		Order("created_at DESC").First(&payment).Error; err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Nenhuma cobrança encontrada para este pedido"})
+	}
+
+	// Participant validation: only the customer, establishment owner, assigned
+	// deliveryman, or admin can view payment status.
+	role, rErr := middlewares.GetUserRoleFromToken(c)
+	if rErr != nil {
+		return c.Status(403).JSON(fiber.Map{"error": "Invalid token"})
+	}
+	if role == "admin" {
+		// Admin can view any payment
+	} else {
+		// Check if user is the customer (phone matches)
+		tokenPhone, phoneErr := middlewares.GetUserPhoneFromToken(c)
+		isCustomer := phoneErr == nil && tokenPhone != "" && payment.CustomerPhone == tokenPhone
+
+		// Check if user is the establishment owner
+		tokenEstID, estErr := middlewares.GetEstablishmentIDFromToken(c)
+		isEstablishment := estErr == nil && tokenEstID == int64(payment.EstablishmentID)
+
+		if !isCustomer && !isEstablishment {
+			return c.Status(403).JSON(fiber.Map{"error": "Forbidden"})
+		}
 	}
 
 	return c.JSON(fiber.Map{

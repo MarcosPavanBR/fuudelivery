@@ -1399,6 +1399,21 @@ func setupChatRoutes(app *fiber.App) {
 		if tokenUserID != urlUserID {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot mark messages as read for another user"})
 		}
+		// Autorização por recurso: só participantes do pedido podem marcar
+		// mensagens como lidas — mesma regra do POST /chat/message (IDOR).
+		token, tErr := middlewares.ValidateJWT(c)
+		if tErr != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+		}
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token claims"})
+		}
+		orderID := c.Params("orderId")
+		if !wsCanAccessOrder(claims, orderID) {
+			log.Printf("[CHAT IDOR] MarkAsRead denied: order=%s user=%d", orderID, tokenUserID)
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "You are not a participant of this order"})
+		}
 		return chatHandlers.MarkAsRead(c)
 	})
 }
@@ -1551,21 +1566,13 @@ func main() {
 		return c.Next()
 	})
 
-	// CSRF protection — valida token em mutações.
-	app.Use(func(c *fiber.Ctx) error {
-		method := c.Method()
-		if method == "GET" || method == "OPTIONS" || method == "HEAD" {
-			return c.Next()
-		}
-		csrfToken := c.Get("X-CSRF-Token")
-		if csrfToken == "" {
-			csrfToken = c.Cookies("csrf_token")
-		}
-		if csrfToken == "" || len(csrfToken) < 32 {
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "CSRF token missing or invalid"})
-		}
-		return c.Next()
-	})
+	// CSRF protection — double-submit cookie: em mutações de browser
+	// (cookie csrf_token/access_token presentes), o header X-CSRF-Token
+	// precisa igualar o cookie. Um site malicioso consegue fazer o browser
+	// enviar o cookie, mas não consegue ler o valor para colocar no header —
+	// ataque bloqueado. Requisições Bearer-only (apps mobile) e webhooks de
+	// gateway ficam fora do escopo. Implementação/testes: cmd/fuudelivery/csrf.go
+	app.Use(csrfMiddleware)
 
 	// Health check — reuses the Redis client from the queue singleton
 	// HTTP 503 when Postgres is down OR no payment gateway is configured.

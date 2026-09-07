@@ -275,7 +275,7 @@ func (g *MercadoPagoGateway) ParseWebhook(body []byte) (*gateway.WebhookEvent, e
 	respBody, err := g.client.get(path)
 	if err == nil {
 		_ = json.Unmarshal(respBody, &payment)
-		amount = int64(payment.TransactionAmount * 100)
+		amount = gateway.ToCents(payment.TransactionAmount)
 		status = mapMPStatus(payment.Status)
 		cardBrand = payment.CardBrand
 		cardLast4 = payment.CardLastFour

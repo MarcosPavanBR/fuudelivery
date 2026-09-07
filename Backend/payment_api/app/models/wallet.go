@@ -79,14 +79,20 @@ func GetOrCreateWallet(db *gorm.DB, userID int64, userType string) (*Wallet, err
 	return wallet, nil
 }
 
-// AdjustWalletBalance aplica um crédito ou débito ATOMICAMENTE:
-// abre transação, trava a linha da carteira (SELECT ... FOR UPDATE),
-// valida saldo no débito, atualiza e insere o lançamento no ledger.
-// Toda movimentação de dinheiro DEVE passar por aqui — nunca atualize
 // ErrDuplicateCredit indica que já existe lançamento de crédito para a
 // referência (violacao de uq_wallet_txns_credit_ref) — o crédito já foi
 // aplicado antes e a operação atual é um replay idempotente.
 var ErrDuplicateCredit = errors.New("lançamento de crédito duplicado para a referência")
+
+// ErrDuplicateDebit é o equivalente para débitos (violacao de
+// uq_wallet_txns_debit_ref, criado em sql/18_debit_idempotency.sql). O
+// débito já foi aplicado antes; quem chamou deve responder de forma
+// idempotente em vez de tratar como erro de servidor.
+//
+// Atenção: aquele índice é parcial e exclui referência vazia (string de
+// comprimento zero), então um débito sem referência NÃO é protegido —
+// passar referenceID vazio desliga a idempotência silenciosamente.
+var ErrDuplicateDebit = errors.New("lançamento de débito duplicado para a referência")
 
 // isUniqueViolation detecta erro 23505 do Postgres, opcionalmente filtrando
 // pelo nome da constraint.
@@ -98,6 +104,10 @@ func isUniqueViolation(err error, constraint string) bool {
 	return false
 }
 
+// AdjustWalletBalance aplica um crédito ou débito ATOMICAMENTE:
+// abre transação, trava a linha da carteira (SELECT ... FOR UPDATE),
+// valida saldo no débito, atualiza e insere o lançamento no ledger.
+// Toda movimentação de dinheiro DEVE passar por aqui — nunca atualize
 // balance direto com UPDATE solto.
 //
 // referenceID identifica a origem (payment_id ou order_id) e é usado como
@@ -158,6 +168,14 @@ func AdjustWalletBalance(db *gorm.DB, userID int64, userType, txnType, kind stri
 			// inteira (incluindo o UPDATE do saldo) é desfeita pelo rollback.
 			if txnType == "credit" && isUniqueViolation(err, "uq_wallet_txns_credit_ref") {
 				return ErrDuplicateCredit
+			}
+			// Mesmo caso para débito (saque/dedução reenviados): o índice
+			// uq_wallet_txns_debit_ref barra o segundo lançamento e o
+			// rollback desfaz o UPDATE do saldo, então o dinheiro não sai
+			// duas vezes. Sem este mapeamento o erro subia cru e virava 500,
+			// fazendo um retry legítimo parecer falha de servidor.
+			if txnType == "debit" && isUniqueViolation(err, "uq_wallet_txns_debit_ref") {
+				return ErrDuplicateDebit
 			}
 			return err
 		}

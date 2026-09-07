@@ -1,10 +1,13 @@
 package handlers
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
@@ -12,6 +15,28 @@ import (
 	"github.com/carloshomar/fuudelivery/payment_api/app/models"
 	"github.com/gofiber/fiber/v2"
 )
+
+// withdrawRefPrefix isola as referências de saque no ledger. Sem prefixo, uma
+// chave de idempotência de saque poderia colidir com um order_id usado como
+// referência por DeductFromWallet — o índice uq_wallet_txns_debit_ref é
+// global por reference_id, não por tipo de operação.
+const withdrawRefPrefix = "wd:"
+
+// withdrawDedupWindow é a janela do fallback de idempotência para clientes
+// que não mandam Idempotency-Key. Curta de propósito: pega duplo clique e
+// retry automático, sem bloquear um segundo saque legítimo do mesmo valor
+// para a mesma chave PIX minutos depois.
+const withdrawDedupWindow = 60 * time.Second
+
+// derivedWithdrawKey monta uma chave determinística por janela de tempo.
+// Duas requisições idênticas dentro da mesma janela produzem a mesma chave e
+// a segunda esbarra no índice de idempotência.
+func derivedWithdrawKey(estID int64, amount float64, destination string, now time.Time) string {
+	bucket := now.Unix() / int64(withdrawDedupWindow.Seconds())
+	raw := fmt.Sprintf("%d|%.2f|%s|%d", estID, amount, destination, bucket)
+	sum := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(sum[:16])
+}
 
 // ============================================================================
 // Carteiras — corte 4: todas as movimentações passam por
@@ -162,6 +187,14 @@ func DeductFromWallet(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot deduct from another user's wallet"})
 	}
 
+	// order_id é a chave de idempotência do débito. Vazio significa cair fora
+	// do índice parcial uq_wallet_txns_debit_ref e permitir débito duplicado
+	// no mesmo pedido — além de gerar lançamento sem origem rastreável no
+	// ledger. Melhor recusar do que debitar sem proteção.
+	if strings.TrimSpace(req.OrderID) == "" {
+		return c.Status(400).JSON(fiber.Map{"error": "order_id é obrigatório para debitar da carteira"})
+	}
+
 	walletType := walletTypeForUser(req.UserID)
 	newWallet, dErr := models.AdjustWalletBalance(
 		models.DB, req.UserID, walletType,
@@ -172,6 +205,23 @@ func DeductFromWallet(c *fiber.Ctx) error {
 	)
 	if dErr == models.ErrInsufficientBalance {
 		return c.Status(400).JSON(fiber.Map{"error": "Insufficient balance or wallet not found"})
+	}
+	if errors.Is(dErr, models.ErrDuplicateDebit) {
+		// Replay do mesmo pedido: o saldo não foi debitado de novo (rollback).
+		// Responde sucesso com o saldo atual em vez de 500.
+		log.Printf("[WALLET] Deduct idempotente (replay): user=%d order=%s", req.UserID, req.OrderID)
+		wallet, wErr := models.GetOrCreateWallet(models.DB, req.UserID, walletType)
+		if wErr != nil {
+			log.Printf("[WALLET] Replay de deduct: falha ao ler saldo: user=%d: %v", req.UserID, wErr)
+			return c.Status(500).JSON(fiber.Map{"error": "Failed to deduct from wallet"})
+		}
+		return c.Status(200).JSON(fiber.Map{
+			"user_id":         req.UserID,
+			"balance":         wallet.Balance,
+			"amount_deducted": req.Amount,
+			"message":         "Amount deducted successfully",
+			"idempotent":      true,
+		})
 	}
 	if dErr != nil {
 		log.Printf("[WALLET] Deduct failed: user=%d: %v", req.UserID, dErr)
@@ -325,9 +375,10 @@ func EstablishmentWithdraw(c *fiber.Ctx) error {
 	}
 
 	var req struct {
-		Amount      float64 `json:"amount"`
-		Destination string  `json:"destination"`
-		Method      string  `json:"method"`
+		Amount         float64 `json:"amount"`
+		Destination    string  `json:"destination"`
+		Method         string  `json:"method"`
+		IdempotencyKey string  `json:"idempotency_key"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
@@ -343,16 +394,47 @@ func EstablishmentWithdraw(c *fiber.Ctx) error {
 		req.Method = "PIX"
 	}
 
+	// Chave de idempotência: sem ela o saque passava "" como reference_id e
+	// ficava FORA do índice parcial uq_wallet_txns_debit_ref (que exclui
+	// referência vazia) — duplo submit sacava duas vezes, limitado só pelo
+	// saldo. Cliente novo manda Idempotency-Key; cliente antigo cai no
+	// fallback derivado, que barra o duplo clique acidental sem impedir um
+	// segundo saque legítimo depois da janela.
+	idemKey := strings.TrimSpace(c.Get("Idempotency-Key"))
+	if idemKey == "" {
+		idemKey = strings.TrimSpace(req.IdempotencyKey)
+	}
+	if idemKey == "" {
+		idemKey = derivedWithdrawKey(estID, req.Amount, req.Destination, time.Now())
+	}
+
 	description := fmt.Sprintf("Saque via %s para %s", req.Method, req.Destination)
 	newWallet, dErr := models.AdjustWalletBalance(
 		models.DB, estID, "establishment",
 		"debit", "withdrawal", req.Amount,
-		"", // saques não têm referência de pagamento
+		withdrawRefPrefix+idemKey,
 		description,
 		req.Destination,
 	)
 	if dErr == models.ErrInsufficientBalance {
 		return c.Status(400).JSON(fiber.Map{"error": "Saldo insuficiente para este saque"})
+	}
+	if errors.Is(dErr, models.ErrDuplicateDebit) {
+		// Replay: este saque já foi registrado antes. O rollback da transação
+		// garantiu que o saldo não foi debitado de novo, então a resposta
+		// correta é sucesso com o saldo atual — não 500. Mesmo formato do
+		// caminho feliz, mais um marcador pra facilitar depuração.
+		log.Printf("[WALLET] Saque idempotente (replay): establishment=%d key=%s", estID, idemKey)
+		wallet, wErr := models.GetOrCreateWallet(models.DB, estID, "establishment")
+		if wErr != nil {
+			log.Printf("[WALLET] Replay de saque: falha ao ler saldo: establishment=%d: %v", estID, wErr)
+			return c.Status(500).JSON(fiber.Map{"error": "Falha ao processar saque"})
+		}
+		return c.JSON(fiber.Map{
+			"message":    "Saque solicitado com sucesso",
+			"balance":    wallet.Balance,
+			"idempotent": true,
+		})
 	}
 	if dErr != nil {
 		log.Printf("[WALLET] Saque falhou: establishment=%d: %v", estID, dErr)

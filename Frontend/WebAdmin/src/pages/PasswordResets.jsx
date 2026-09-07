@@ -19,7 +19,7 @@ const userTypeOptions = [
     icon: FiTruck,
     color: "text-green-600",
   },
-  { value: "user", label: "Restaurante/Admin", icon: FiShield, color: "text-purple-600" },
+  { value: "user", label: "Estabelecimento/Admin", icon: FiShield, color: "text-purple-600" },
 ];
 
 export default function PasswordResets() {
@@ -76,8 +76,7 @@ export default function PasswordResets() {
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-2">
           <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center"
-            style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
+            className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-fuu-red to-fuu-red-dark"
           >
             <FiKey className="h-5 w-5 text-white" />
           </div>
@@ -164,7 +163,7 @@ export default function PasswordResets() {
               onChange={(e) => setIdentifier(e.target.value)}
               placeholder={
                 userType === "user"
-                  ? "Email ou telefone do restaurante"
+                  ? "Email ou telefone do estabelecimento"
                   : "Telefone do usuário"
               }
               className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
@@ -176,12 +175,9 @@ export default function PasswordResets() {
           <button
             type="submit"
             disabled={loading || !identifier.trim()}
-            className="w-full py-3 px-4 rounded-xl font-semibold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{
-              background: loading
-                ? "#9CA3AF"
-                : "linear-gradient(135deg, #DC2626, #B91C1C)",
-            }}
+            className={`w-full py-3 px-4 rounded-xl font-semibold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+              loading ? "bg-gray-400" : "bg-gradient-to-br from-fuu-red to-fuu-red-dark"
+            }`}
           >
             {loading ? (
               <span className="flex items-center justify-center gap-2">

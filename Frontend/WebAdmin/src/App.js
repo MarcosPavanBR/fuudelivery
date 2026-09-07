@@ -9,7 +9,6 @@ const Establishments = lazy(() => import("./pages/Establishments.jsx"));
 const Users = lazy(() => import("./pages/Users.jsx"));
 const Orders = lazy(() => import("./pages/Orders.jsx"));
 const DeliveryMen = lazy(() => import("./pages/DeliveryMen.jsx"));
-const Payments = lazy(() => import("./pages/Payments.jsx"));
 const Financeiro = lazy(() => import("./pages/Financeiro.jsx"));
 const Settings = lazy(() => import("./pages/Settings.jsx"));
 const PasswordResets = lazy(() => import("./pages/PasswordResets.jsx"));
@@ -30,7 +29,7 @@ class ErrorBoundary extends Component {
     if (this.state.hasError) {
       return (
         <div style={{ padding: 40, fontFamily: "monospace", background: "#fff", minHeight: "100vh" }}>
-          <h1 style={{ color: "#DC2626" }}>Erro na aplicação</h1>
+          <h1 className="text-fuu-red">Erro na aplicação</h1>
           <pre style={{ whiteSpace: "pre-wrap", marginTop: 16, color: "#333" }}>
             {this.state.error?.message}
           </pre>
@@ -50,7 +49,7 @@ const ProtectedRoute = ({ children }) => {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <FiLoader className="animate-spin h-8 w-8" style={{ color: "#DC2626" }} />
+        <FiLoader className="animate-spin h-8 w-8 text-fuu-red" />
       </div>
     );
   }
@@ -68,7 +67,7 @@ function AppRoutes() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <FiLoader className="animate-spin h-8 w-8" style={{ color: "#DC2626" }} />
+        <FiLoader className="animate-spin h-8 w-8 text-fuu-red" />
       </div>
     );
   }
@@ -89,7 +88,7 @@ function AppRoutes() {
         <Route path="/users" element={<Users />} />
         <Route path="/orders" element={<Orders />} />
         <Route path="/delivery-men" element={<DeliveryMen />} />
-        <Route path="/payments" element={<Payments />} />
+        <Route path="/payments" element={<Navigate to="/financeiro" replace />} />
         <Route path="/financeiro" element={<Financeiro />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/password-resets" element={<PasswordResets />} />
@@ -108,7 +107,7 @@ export default function App() {
           <Suspense
             fallback={
               <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                <FiLoader className="animate-spin h-8 w-8" style={{ color: "#DC2626" }} />
+                <FiLoader className="animate-spin h-8 w-8 text-fuu-red" />
               </div>
             }
           >

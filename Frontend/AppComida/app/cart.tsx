@@ -25,6 +25,24 @@ import { MaterialIcons } from "@expo/vector-icons";
 import PaymentComponent from "@/components/PaymentComponent";
 import { useApi } from "@/contexts/ApiContext";
 
+// Mesmo cálculo do OrderSummaryWithTotal: item.Price + adicionais x quantidade.
+// Módulo-level (não preso ao componente) para poder ser testado sem
+// renderizar a tela — ver app/__tests__/cart.test.ts.
+export function calculateSubtotal(items: any[]): number {
+  return items.reduce((sum, entry) => {
+    const additionalsSum = (entry.additionals || []).reduce(
+      (acc: number, additionalId: number | string) => {
+        const additional = (entry.item?.Additional || []).find(
+          (a: any) => a.ID === additionalId
+        );
+        return acc + (additional?.Price || 0);
+      },
+      0
+    );
+    return sum + entry.quantity * ((entry.item?.Price || 0) + additionalsSum);
+  }, 0);
+}
+
 const cart = () => {
   const { setHiddenCart, cart, paymentMethod, submitCart, distance, deliveryValue, establishment } =
     useCartApi();
@@ -41,22 +59,6 @@ const cart = () => {
 
   const nav = useNavigation();
   const insets = useSafeAreaInsets();
-
-  // Mesmo cálculo do OrderSummaryWithTotal: item.Price + adicionais x quantidade.
-  function calculateSubtotal(items: any[]): number {
-    return items.reduce((sum, entry) => {
-      const additionalsSum = (entry.additionals || []).reduce(
-        (acc: number, additionalId: number | string) => {
-          const additional = (entry.item?.Additional || []).find(
-            (a: any) => a.ID === additionalId
-          );
-          return acc + (additional?.Price || 0);
-        },
-        0
-      );
-      return sum + entry.quantity * ((entry.item?.Price || 0) + additionalsSum);
-    }, 0);
-  }
 
   async function generatePix(orderId: string, user: any): Promise<boolean> {
     const amount = calculateSubtotal(cart) + (deliveryValue || 0);

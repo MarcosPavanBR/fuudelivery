@@ -45,6 +45,7 @@ jobs:
       - name: Build APK (Gradle)
         run: |
           echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1g" >> android/gradle.properties
+          echo "expo.inlineModules.watchedDirectories=[]" >> android/gradle.properties
           cd android
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon --stacktrace

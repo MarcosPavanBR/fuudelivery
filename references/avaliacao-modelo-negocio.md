@@ -1,8 +1,30 @@
 # Avaliacao do Modelo de Negocio - FuuDelivery
 
 > **Documento de Avaliacao Estrategica**
-> Plataforma Cooperativa de Delivery de Alimentos
+> Plataforma de Delivery de Alimentos
 > Ultima atualizacao: Julho 2026
+
+---
+
+> ## ⚠️ Decisão (2026-09-07): NÃO é modelo cooperativo
+>
+> O dono do projeto decidiu que o FuuDelivery **não** vai operar como
+> cooperativa — sem "cooperados", sem governança democrática/assembleia,
+> sem distribuição de sobras. É uma plataforma de delivery comum.
+>
+> **O que continua valendo** deste documento: a análise de mercado, o
+> comparativo de taxas contra iFood/Rappi/99Food/UberEats, e a estrutura
+> de taxa por zona com decaimento (3%→12% ao amadurecer a praça) — isso é
+> só uma política de preço promocional pra atrair os primeiros
+> restaurantes, não depende de cooperativa pra existir.
+>
+> **O que NÃO vale mais**: qualquer trecho abaixo que fale de "cooperado"
+> como dono do sistema, votação/assembleia, distribuição de lucro aos
+> cooperados, ou enquadramento legal via Lei das Cooperativas (seção 3 e
+> partes da seção 5). Trate como histórico, não como direção atual. Isso
+> nunca chegou a ser implementado no produto (confirmado: nenhuma menção a
+> "cooperado" existe em nenhum dos 5 frontends nem no backend), então não
+> há código pra reverter — só a leitura do documento que muda.
 
 ---
 
@@ -10,7 +32,7 @@
 
 1. [Analise de Mercado](#1-analise-de-mercado)
 2. [Comparativo de Taxas](#2-comparativo-de-taxas)
-3. [Modelo Cooperativo - Analise](#3-modelo-cooperativo---analise)
+3. [Posicionamento: a Menor Taxa do Mercado](#3-posicionamento-a-menor-taxa-do-mercado)
 4. [Estrutura de Taxas Detalhada](#4-estrutura-de-taxas-detalhada)
 5. [Proposta de Valor por Persona](#5-proposta-de-valor-por-persona)
 6. [Viabilidade Financeira](#6-viabilidade-financeira)
@@ -47,14 +69,13 @@ O mercado de delivery de alimentos no Brasil ultrapassa **R$ 50 bilhoes por ano*
 
 ### Gap de Mercado
 
-**Nenhuma plataforma cooperativa de baixa taxa existe no Brasil para delivery de alimentos.**
+**Nenhuma plataforma de baixa taxa existe no Brasil para delivery de alimentos.**
 
 Esse gap representa uma oportunidade significativa:
 
 - Restaurantes pagam entre 27% e 33% de taxa ao iFood, o que representa uma parcela enorme de sua margem de lucro (tipicamente 10-20% no setor de alimentacao).
 - Entregadores operam como trabalhadores autonomos sem protecao trabalhista, beneficios ou voz nas politicas da plataforma.
-- Nao existe modelo onde os proprios participantes (restaurantes e entregadores) sejam donos do sistema e compartilhem dos lucros.
-- O modelo cooperativo, historicamente forte no Brasil (cooperativas de credito, agricolas, de trabalho), ainda nao foi aplicado ao delivery de alimentos de forma robusta e tecnologicamente moderna.
+- Nao existe hoje uma plataforma nacional posicionada explicitamente como "a de menor taxa" — o mercado compete por marca e cobertura, nao por preco.
 
 ---
 
@@ -68,7 +89,7 @@ Esse gap representa uma oportunidade significativa:
 | **Rappi** | 25-30% | Variavel | Corporativo | Flexivel |
 | **99Food** | 20-25% | Variavel | Corporativo | -- |
 | **UberEats** | 25-30% | Variavel | Corporativo | -- |
-| **FuuDelivery** | **5-12%** | **Fixa por zona** | **Cooperativo** | **Livre** |
+| **FuuDelivery** | **5-12%** | **Fixa por zona** | **Menor taxa do mercado** | **Livre** |
 
 ### Analise Detalhada por Plataforma
 
@@ -97,7 +118,7 @@ Esse gap representa uma oportunidade significativa:
 #### FuuDelivery
 - **Taxa restaurante**: **5-12%**, dependendo da maturidade da zona de operacao.
 - **Taxa entregador**: Fixa por zona (R$ 5-15 por entrega), previsivel e transparente.
-- **Modelo**: **Cooperativo** - restaurantes e entregadores sao cooperados e donos do sistema.
+- **Modelo**: plataforma direta, posicionada explicitamente como a de **menor taxa do mercado**.
 - **Contrato**: **Livre** - sem exclusividade, sem multa, sem fidelidade obrigatoria.
 
 ### Economia Comparativa
@@ -115,11 +136,11 @@ Para um restaurante com faturamento mensal de R$ 30.000 via delivery:
 
 ---
 
-## 3. Modelo Cooperativo - Analise
+## 3. Posicionamento: a Menor Taxa do Mercado
 
-### O que e um Modelo Cooperativo?
+### A tese central
 
-O modelo cooperativo e uma forma de organizacao economica popular onde os usuarios (cooperados) sao simultaneamente proprietarios e beneficiarios do servico. No contexto do FuuDelivery, **restaurantes e entregadores sao cooperados** - eles nao sao apenas "parceiros" ou "fornecedores", mas sim donos coletivos do sistema.
+O FuuDelivery compete numa frente só, sem meio-termo: **ser o delivery completo com a menor taxa do mercado**. Não é cooperativa, não tem cooperado, não tem assembleia — é uma plataforma comum, com uma decisão de preço agressiva como diferencial competitivo. As taxas de zona (3% inicial, subindo até 12% conforme a praça amadurece — ver seção 4) são um ponto de partida sugerido, não um teto fixo: o objetivo declarado é manter a menor taxa possível em qualquer estágio, revisitando os números conforme o caixa permitir.
 
 ### Vantagens
 
@@ -128,30 +149,19 @@ O modelo cooperativo e uma forma de organizacao economica popular onde os usuari
 - Para um restaurante medio, isso pode significar **R$ 5.000-8.000 por mes** a mais no lucro.
 - Essa economia pode ser investida em qualidade dos ingredientes, expansao, ou reducao de precos ao consumidor.
 
-#### 2. Propriedade Coletiva do Sistema
-- Restaurantes e entregadores nao sao apenas usuarios - sao **donos do sistema**.
-- Decisoes sobre taxas, funcionalidades e politicas sao tomadas democraticamente entre os cooperados.
-- Lucros excedentes sao distribuidos entre os cooperados, nao para acionistas corporativos.
-
-#### 3. Transparencia Total via Codigo Aberto
+#### 2. Transparencia Total via Codigo Aberto
 - O FuuDelivery e um projeto **open source sob licenca MIT**.
 - Qualquer pessoa pode auditar o codigo, verificar como os dados sao tratados e validar os algoritmos de precificacao.
 - Nao ha "caixa preta" - a transparencia e total em relacao a operacao tecnica e financeira.
 
-#### 4. Alinhamento com Legislacao Trabalhista Brasileira
-- O modelo cooperativo e **reconhecido pela legislacao brasileira** (Lei 5.764/1971 - Lei das Cooperativas).
-- Entregadores cooperados possuem **protecao trabalhista** como cooperados, nao como autonomeos informais.
-- Isso resolve em parte a questao da "pejotizacao" que atormenta o setor, onde plataformas como iFood tratam entregadores como micro-empresarios sem direitos.
-
-#### 5. Sem Exclusividade
+#### 3. Sem Exclusividade
 - Restaurantes podem estar simultaneamente no FuuDelivery, iFood, Rappi e qualquer outra plataforma.
 - Isso reduz o risco de adesao: o restaurante nao precisa "abandonar" o iFood para testar o FuuDelivery.
 - A competicao entre plataformas beneficia o restaurante, que pode escolher a melhor opcao.
 
-#### 6. Controle de Dados pelos Usuarios
-- No modelo corporativo, os dados (de pedidos, precos, volumes, comportamento de clientes) sao propriedade da plataforma.
-- No FuuDelivery, **os dados sao controlados pelos proprios cooperados**.
-- Isso e especialmente relevante no contexto de **soberania tecnologica** e protecao de dados pessoais (LGPD).
+#### 4. Protecao de Dados
+- Dados de pedidos, precos, volumes e comportamento de clientes tratados com foco em minimizacao e LGPD — sem venda a terceiros.
+- Soberania tecnologica: infraestrutura e dados nacionais, sem dependencia de decisao de matriz estrangeira sobre o produto.
 
 ### Desafios
 
@@ -164,17 +174,15 @@ O modelo cooperativo e uma forma de organizacao economica popular onde os usuari
 - iFood investe centenas de milhoes em marketing, patrocinios (Brasileirao, etc.) e promocoes agressivas.
 - Rappi tem investidores do SoftBank financiando custo de aquisicao.
 - FuuDelivery opera com orcamento praticamente zero para marketing.
-- **Estrategia recomendada**: Marketing organico, boca-a-boca, parcerias com associacoes de restaurantes, e marketing de conteudo (educacao sobre o modelo cooperativo).
+- **Estrategia recomendada**: Marketing organico, boca-a-boca, parcerias com associacoes de restaurantes, e marketing de conteudo — o argumento é o preço, não uma narrativa institucional.
 
-#### 3. Governanca Cooperativa
-- Modelos cooperativos historicamente sofrem com **problemas de governanca**: decisoes lentas, conflitos entre cooperados, baixa participacao em assembleias.
-- A escalabilidade democratica e um desafio real: como tomar decisoes rapidas com centenas de cooperados?
-- **Estrategia recomendada**: Implementar mecanismos de governanca claros desde o inicio, com delegacao de poderes para comites eleitos e votacao digital para decisoes de menor impacto.
+#### 3. Sustentabilidade da Taxa Baixa
+- Manter a menor taxa do mercado por tempo indefinido exige disciplina de custo operacional (ver seção 6) — a margem some rápido se a infraestrutura ou o suporte crescerem mais rápido que a receita.
+- **Estrategia recomendada**: revisar a rampa de decaimento por zona com base em dado real de custo, não só em cronograma fixo — subir a taxa só quando o caixa da praça exigir, nunca antes.
 
 #### 4. Educacao do Mercado
-- A maioria dos restaurantes e entregadores nao conhece o modelo cooperativo no contexto de tecnologia.
-- E necessario **educar o mercado** sobre beneficios do modelo, como funciona a cooperativa, e por que e vantajoso.
-- **Estrategia recomendada**: Materiais educativos, workshops presenciais e virtuais, e incentivo boca-a-boca entre cooperados satisfeitos.
+- A maioria dos restaurantes ainda não considera trocar de plataforma de delivery, mesmo pagando taxa alta — inércia, não falta de insatisfação.
+- **Estrategia recomendada**: Materiais comparativos diretos (economia em R$/mês, não em %), demonstração ao vivo, e prova social de quem já migrou.
 
 #### 5. Manutencao de Software Open Source
 - Software open source requer uma **comunidade ativa** para manutencao, correcao de bugs e evolucao.
@@ -255,7 +263,7 @@ Para zonas novas, a plataforma implementa um mecanismo gradual de aumento de tax
 | **Sistema de cupons e fidelidade** | Ferramentas integradas para reter clientes e criar promocoes |
 | **Listagens patrocinadas** | Opcao de destaque na busca para aumentar visibilidade |
 | **Sem exclusividade** | Liberdade total para estar em multiplas plataformas simultaneamente |
-| **Propriedade do sistema** | Como cooperado, o restaurante tem voz nas decisoes da plataforma |
+| **Taxa em queda com o volume** | Quanto mais o restaurante vende, menor a taxa cobrada pela plataforma |
 | **Codigo aberto** | Transparencia total sobre como o sistema opera e trata seus dados |
 
 **Dor principal resolvida**: Um restaurante que paga R$ 9.000/mes para o iFood pode passar a pagar R$ 2.400/mes no FuuDelivery, economizando R$ 6.600/mes - suficiente para contratar um funcionario adicional ou investir em qualidade.
@@ -268,10 +276,10 @@ Para zonas novas, a plataforma implementa um mecanismo gradual de aumento de tax
 | **Mapa com entregas disponiveis** | Interface com mapa mostrando pedidos aguardando entregador |
 | **Extrato de ganhos** | Historico completo de entregas e rendimentos, acessivel a qualquer momento |
 | **GPS tracking automatico** | Rastreamento integrado sem necessidade de apps adicionais |
-| **Sem intermediarios** | Como cooperado, o entregador e dono do sistema, nao um "peao de plataforma" |
+| **Sem intermediarios** | Repasse direto e transparente, sem camadas escondidas de comissao |
 | **Flexibilidade de horario** | Trabalha quando quiser, sem obrigacao de turnos minimos |
-| **Protecao trabalhista** | Modelo cooperativo reconhecido pela legislacao brasileira |
-| **Participacao nos lucros** | Cooperados tem direito a distribuicao de sobras liquidas |
+| **Taxa menor que a media do mercado** | O entregador fica com uma fatia maior do valor da entrega |
+| **Transparencia total** | O entregador ve exatamente como o valor da entrega e dividido |
 
 **Dor principal resolvida**: Entregadores do iFood frequentemente reclamam de falta de transparencia no algoritmo, reducao unilateral de bonus, e ausencia de direitos trabalhistas. O FuuDelivery oferece previsibilidade, transparencia e dignidade.
 
@@ -381,7 +389,7 @@ Para zonas novas, a plataforma implementa um mecanismo gradual de aumento de tax
 | **Stack tecnica moderna** | Go (backend), React Native (mobile) - performance e produtividade |
 | **Split automatico** | Divisao automatica de pagamentos sem intervencao manual |
 | **Sistema de lealdade completo** | Cashback, pontos e beneficios para reter clientes |
-| **Modelo cooperativo** | Alinhado com cultura brasileira de cooperativas e legislacao vigente |
+| **Menor taxa do mercado** | Posicionamento claro e defensavel: ninguem cobra menos |
 
 ### Fraquezas (Weaknesses)
 
@@ -400,9 +408,9 @@ Para zonas novas, a plataforma implementa um mecanismo gradual de aumento de tax
 |-------------|-----------|
 | **Mercado de R$50+ bilhoes em crescimento** | Fatia minima (0.01%) = R$ 5M/ano de receita |
 | **Insatisfacao com taxas do iFood** | Base de restaurantes descontentes pronta para migrar |
-| **Movimento cooperativista crescente** | Cooperativas ganham relevancia no Brasil pos-crise |
+| **Pressao popular por taxas justas** | Consumidores e restaurantes cada vez mais atentos ao peso das taxas de delivery |
 | **Soberania Tecnologica** | Dados nacionais protegidos, sem vazamento para corporacoes estrangeiras |
-| **Legislacao trabalhista favoravel** | Cooperativas sao reconhecidas e incentivadas pela lei brasileira |
+| **Codigo aberto como diferencial** | Auditabilidade da taxa cobrada gera confianca que concorrentes fechados nao tem |
 | **PIX como padrao de pagamento** | Infraestrutura nacional que elimina intermediarios de pagamento |
 | **Expansao para cidades medias** | Mercado sub-atendido pelo iFood com menor competitividade |
 
@@ -410,9 +418,9 @@ Para zonas novas, a plataforma implementa um mecanismo gradual de aumento de tax
 
 | Ameaca | Probabilidade | Impacto | Mitigacao |
 |--------|-------------|---------|-----------|
-| **iFood baixar taxas** | Media | Alto | Diferencial cooperativo vai alem de precos |
-| **Rappi/UberEats copiarem modelo** | Baixa | Alto | First-mover advantage + comunidade cooperada |
-| **Regulamentacao do setor** | Media | Medio | Modelo cooperativo ja em conformidade legal |
+| **iFood baixar taxas** | Media | Alto | Estrutura de custo enxuta permite acompanhar qualquer queda e continuar mais barato |
+| **Rappi/UberEats copiarem modelo** | Baixa | Alto | First-mover advantage + codigo aberto dificulta copia sem o mesmo compromisso de transparencia |
+| **Regulamentacao do setor** | Media | Medio | Modelo de plataforma convencional, sem exposicao regulatoria especifica de cooperativas |
 | **Dificuldade com restaurantes grandes** | Alta | Medio | Foco em restaurantes pequenos/medios primeiro |
 | **Dependencia de AbacatePay** | Media | Alto | Implementar gateways alternativos (Mercado Pago, PagSeguro) |
 | **Mudancas no PIX** | Baixa | Medio | PIX e infraestrutura nacional, estavel |
@@ -528,15 +536,6 @@ Para zonas novas, a plataforma implementa um mecanismo gradual de aumento de tax
 | Avaliacao media dos entregadores | > 4.5/5 |
 | Uptime da plataforma | > 99.5% |
 
-### Metricas de Saude do Cooperativismo
-
-| Metrica | Meta |
-|---------|------|
-| Cooperados ativos | > 70% dos registrados |
-| Participacao em assembleias/ votacoes | > 40% |
-| Cooperados que indicaram outro cooperado | > 30% |
-| Net Promoter Score dos cooperados | > 60 |
-
 ---
 
 ## 10. Conclusao e Recomendacoes
@@ -547,7 +546,7 @@ Para zonas novas, a plataforma implementa um mecanismo gradual de aumento de tax
 
 1. **Diferencial de preco massivo**: 5-12% vs 27-33% do iFood nao e uma melhoria incremental - e uma **disrupcao de 70% no custo** para restaurantes. Isso e suficiente para justificar a migracao mesmo com o custo de adaptacao a uma nova plataforma.
 
-2. **Modelo cooperativo alinhado com o Brasil**: O Brasil tem historia solida com cooperativas (Sicob, Unicred, cooperativas agricolas). O modelo nao e exotico - e culturalmente relevante e legalmente suportado.
+2. **Posicionamento claro e defensavel**: ser o delivery completo com a menor taxa do mundo e uma mensagem simples de comunicar e dificil de copiar sem abrir mao de margem - a taxa e ponto de partida sugerido (5-12%), nao um teto fixo, o que da liberdade para ajustar por zona e por volume.
 
 3. **Infraestrutura tecnica solida**: A stack moderna (Go, React Native, MongoDB, Supabase) e escalavel e de baixo custo operacional. A margem bruta de ~95% e excepcional para qualquer setor.
 
@@ -570,17 +569,17 @@ Para zonas novas, a plataforma implementa um mecanismo gradual de aumento de tax
 
 #### Curto Prazo (3-6 meses)
 4. **Notificacoes push**: Implementar para manter clientes engajados.
-5. **Marketing organico**: Conteudo educativo sobre cooperativismo e economia para restaurantes.
+5. **Marketing organico**: Conteudo educativo sobre economia de taxas e transparencia para restaurantes.
 6. **Parcerias locais**: Associacoes de restaurantes, sindicatos, comercio de bairro.
 
 #### Medio Prazo (6-12 meses)
 7. **Gateway alternativo**: Implementar Mercado Pago ou PagSeguro para reduzir dependencia do AbacatePay.
-8. **Programa de indicacao**: Incentivar cooperados a trazer novos membros.
+8. **Programa de indicacao**: Incentivar restaurantes e entregadores a trazer novos membros.
 9. **Expansao multi-cidade**: Replicar o modelo em segunda cidade com playbook documentado.
 
 ### Mensagem Final
 
-> O FuuDelivery nao e apenas uma plataforma de delivery - e um **movimento de cooperativismo digital** que pode transformar a relacao entre restaurantes, entregadores e clientes no Brasil. O mercado e enorme (R$ 50+ bilhoes), a dor dos participantes e real (taxas abusivas, falta de direitos), e a solucao e tecnica e financeiramente solida. O desafio e executar: construir a comunidade, atrair os primeiros cooperados, e provar que um modelo mais justo tambem e mais lucrativo.
+> O FuuDelivery e o delivery completo com a menor taxa do mundo. O mercado e enorme (R$ 50+ bilhoes), a dor dos participantes e real (taxas abusivas cobradas pelo iFood e concorrentes), e a solucao e tecnica e financeiramente solida. O desafio e executar: ganhar os primeiros restaurantes e entregadores com uma taxa que ninguem mais consegue cobrir, e provar que cobrar menos tambem e mais lucrativo em escala.
 
 ---
 

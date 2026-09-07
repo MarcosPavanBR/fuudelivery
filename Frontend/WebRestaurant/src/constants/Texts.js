@@ -57,4 +57,14 @@ export default {
     " Faça as configurações do seu cardápio, suportando também adicionais e categorias.",
   taxes_desc:
     "Faça as configurações de delivery do seu restaurante, para que o entregador consiga fazer a entrega com base nos seus preços.",
+  comissao_plataforma: "Comissão da Plataforma",
+  comissao_desc:
+    "Essa é a taxa que a FuuDelivery cobra em cada pedido — sem mensalidade, sem taxa de adesão.",
+  taxa_atual_plataforma: "Taxa atual da plataforma",
+  sua_parte_pedido: "Sua parte por pedido",
+  comissao_sem_zona:
+    "Sua região ainda não tem uma faixa de comissão configurada — está sendo aplicada a taxa padrão.",
+  comissao_no_target: "Você já está na taxa final para esta região.",
+  comissao_meta_final: "Meta final",
+  ultimo_ajuste: "Último ajuste",
 };

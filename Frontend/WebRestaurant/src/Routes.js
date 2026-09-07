@@ -25,11 +25,19 @@ const RouteFallback = () => (
 );
 
 export default function PrivateRoute() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const location = useLocation();
 
   // Rotas públicas (acessíveis sem login)
   const publicRoutes = ["/cadastrar-restaurante", "/resetar-senha"];
+
+  // A sessão agora vem de um cookie HttpOnly — restaurá-la exige uma
+  // chamada ao backend (GET /auth/session), não é mais instantâneo como
+  // era decodificar o JWT do localStorage. Sem este loading, um usuário
+  // já logado veria a tela de login piscar a cada reload de página.
+  if (loading && !publicRoutes.includes(location.pathname)) {
+    return <RouteFallback />;
+  }
 
   // Se não está autenticado e não é rota pública, mostra login
   if (!user && !publicRoutes.includes(location.pathname)) {

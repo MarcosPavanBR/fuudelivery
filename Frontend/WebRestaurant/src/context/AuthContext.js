@@ -1,9 +1,6 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from "react";
 import api, { getApiBaseUrl, requestWsTicket } from "../services/api";
 
-import Strings from "../constants/Strings";
-import { jwtDecode } from "jwt-decode";
-
 import useWebSocket from "react-use-websocket";
 
 const AuthContext = createContext();
@@ -41,30 +38,23 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     let cancelled = false;
     async function connectWs() {
-      if (!user?.sub) return;
+      if (!user?.id) return;
       try {
         const ticket = await requestWsTicket();
         if (!cancelled) {
-          setWsUrl(getWsBaseUrl() + "/ws/" + user.sub + "?ticket=" + ticket);
+          setWsUrl(getWsBaseUrl() + "/ws/" + user.id + "?ticket=" + ticket);
         }
       } catch {
-        // Fallback para JWT na query string (deprecated) se o ticket falhar
-        if (!cancelled) {
-          setWsUrl(
-            getWsBaseUrl() +
-              "/ws/" +
-              user.sub +
-              "?token=" +
-              localStorage.getItem(Strings.token_jwt)
-          );
-        }
+        // Sem fallback de token na query string: o access token vive num
+        // cookie HttpOnly e não é mais legível pelo JS. Sem ticket, não há
+        // como conectar — a tela segue funcional via polling/REST.
       }
     }
     connectWs();
     return () => { cancelled = true; };
   }, [user]);
   const { sendJsonMessage, lastMessage } = useWebSocket(wsUrl, {
-    enabled: !!wsUrl && !!user?.sub,
+    enabled: !!wsUrl && !!user?.id,
     reconnectInterval: 1000,
     retryOnError: true,
     reconnectAttempts: 5,
@@ -79,16 +69,7 @@ export const AuthProvider = ({ children }) => {
     },
   });
 
-  const getUser = useCallback(() => {
-    const storedToken = localStorage.getItem(Strings.token_jwt);
-
-    if (storedToken) {
-      const decodedToken = jwtDecode(storedToken);
-
-      return decodedToken;
-    }
-    return null;
-  }, []);
+  const getUser = useCallback(() => user, [user]);
 
   const sendSocketMessage = (type, data) => {
     sendJsonMessage({
@@ -97,21 +78,31 @@ export const AuthProvider = ({ children }) => {
     });
   };
 
+  // Restaura a sessão a partir do cookie HttpOnly no load da página — o
+  // access token não é mais legível no cliente, então quem sabe se (e
+  // quem) está logado é sempre o backend, via GET /auth/session.
   useEffect(() => {
-    try {
-      const decodedToken = getUser();
-      setUser(decodedToken);
-      if (decodedToken?.establishment) {
-        sendSocketMessage("connect", {
-          id: decodedToken.establishment.id,
-          name: decodedToken.establishment.name,
-        });
-      }
-    } catch (e) {
-      console.error(e);
-    }
-
-    setLoading(false);
+    let cancelled = false;
+    api
+      .get("/auth/session")
+      .then(({ data }) => {
+        if (cancelled) return;
+        setUser(data.user);
+        if (data.user?.establishment) {
+          sendSocketMessage("connect", {
+            id: data.user.establishment.id,
+            name: data.user.establishment.name,
+          });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setUser(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -128,97 +119,30 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const response = await api.post("users/login", {
+      const response = await api.post("/auth/session", {
         email,
         password,
       });
-      const { token, refresh_token } = response.data;
-      const decoded = jwtDecode(token);
-      setUser(decoded);
-
-      localStorage.setItem(Strings.token_jwt, token);
-      if (refresh_token) {
-        localStorage.setItem(Strings.refresh_token, refresh_token);
-      }
+      setUser(response.data.user);
     } catch (error) {
       console.error("Erro ao fazer login:", error);
       throw error;
     }
   };
 
-  // Renova o access token usando o refresh token.
-  // Chamado automaticamente quando o token está perto de expirar.
-  const refreshAccessToken = useCallback(async () => {
-    const storedRefreshToken = localStorage.getItem(Strings.refresh_token);
-    if (!storedRefreshToken) return false;
-
-    try {
-      const response = await api.post("auth/refresh", {
-        refresh_token: storedRefreshToken,
-      });
-      const { token, refresh_token } = response.data;
-      const decoded = jwtDecode(token);
-      setUser(decoded);
-      localStorage.setItem(Strings.token_jwt, token);
-      if (refresh_token) {
-        localStorage.setItem(Strings.refresh_token, refresh_token);
-      }
-      return true;
-    } catch (error) {
-      console.error("Failed to refresh token:", error);
-      // Refresh token inválido — fazer logout
-      localStorage.removeItem(Strings.token_jwt);
-      localStorage.removeItem(Strings.refresh_token);
-      setUser(null);
-      return false;
-    }
-  }, []);
-
-  // Agenda o refresh automático do token antes de expirar.
-  // Roda sempre que o user muda (login) ou o token é renovado.
-  useEffect(() => {
-    if (!user) return;
-
-    const token = localStorage.getItem(Strings.token_jwt);
-    if (!token) return;
-
-    try {
-      const decoded = jwtDecode(token);
-      if (!decoded.exp) return;
-
-      const nowSec = Date.now() / 1000;
-      const expiresInMs = (decoded.exp - nowSec) * 1000;
-
-      // Renova 2 minutos antes de expirar
-      const refreshMs = Math.max(expiresInMs - 2 * 60 * 1000, 10 * 1000);
-
-      const timer = setTimeout(() => {
-        refreshAccessToken();
-      }, refreshMs);
-
-      return () => clearTimeout(timer);
-    } catch (e) {
-      // token inválido — ignora
-    }
-  }, [user, refreshAccessToken]);
-
   // Função para fazer logout
   const logout = useCallback(async () => {
-    const storedRefreshToken = localStorage.getItem(Strings.refresh_token);
-    if (storedRefreshToken) {
-      try {
-        await api.post("auth/logout", { refresh_token: storedRefreshToken });
-      } catch (e) {
-        // ignora erro de logout no servidor
-      }
+    try {
+      await api.post("/auth/session/logout");
+    } catch (e) {
+      // ignora erro de logout no servidor
     }
-    localStorage.removeItem(Strings.token_jwt);
-    localStorage.removeItem(Strings.refresh_token);
     setUser(null);
   }, []);
 
   const refreshOpen = async () => {
-    // O establishment do dono vem do claim aninhado do JWT
+    // O establishment do dono vem do próprio objeto de usuário (ver
+    // GET/POST /auth/session no backend).
     const id = getUser()?.establishment?.id;
     if (!id) return;
 
@@ -233,9 +157,12 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Roda de novo quando a sessão termina de carregar (a leitura do usuário
+  // agora é assíncrona — no primeiro mount o establishment ainda não existe).
   useEffect(() => {
     refreshOpen();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.establishment?.id]);
 
   return (
     <AuthContext.Provider
@@ -262,4 +189,3 @@ export const AuthProvider = ({ children }) => {
 
 // Crie um hook personalizado para acessar o contexto de autenticação
 export const useAuth = () => useContext(AuthContext);
-

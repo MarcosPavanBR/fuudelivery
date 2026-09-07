@@ -63,6 +63,44 @@ func clearAuthCookies(c *fiber.Ctx) {
 	})
 }
 
+// sessionUserJSON monta a mesma representação de usuário exposta pelo login,
+// pelo refresh e por /auth/session (GET) — precisa ficar em paridade com os
+// claims do JWT (ver GenerateJWT) porque o frontend usava decodePayload/
+// jwtDecode no token antes da migração para cookie HttpOnly, e agora lê só
+// esta resposta.
+func sessionUserJSON(user *models.User, establishment *models.Establishment) fiber.Map {
+	out := fiber.Map{
+		"id":               user.ID,
+		"name":             user.Name,
+		"email":            user.Email,
+		"phone":            user.Phone,
+		"role":             user.Role,
+		"avatar_url":       user.AvatarURL,
+		"establishment_id": user.EstablishmentID,
+	}
+	if establishment != nil {
+		out["establishment_name"] = establishment.Name
+		out["establishment"] = fiber.Map{
+			"id":   establishment.ID,
+			"name": establishment.Name,
+		}
+	}
+	return out
+}
+
+// loadEstablishmentForUser carrega o estabelecimento do usuário, se houver.
+// Retorna (nil, nil) quando o usuário não tem estabelecimento associado.
+func loadEstablishmentForUser(user *models.User) (*models.Establishment, error) {
+	if user.EstablishmentID == 0 {
+		return nil, nil
+	}
+	var establishment models.Establishment
+	if err := models.DB.Where("id = ?", user.EstablishmentID).First(&establishment).Error; err != nil {
+		return nil, err
+	}
+	return &establishment, nil
+}
+
 // SessionLogin faz login e retorna tokens via cookies HttpOnly.
 // POST /auth/session {email, password}
 func SessionLogin(c *fiber.Ctx) error {
@@ -80,13 +118,9 @@ func SessionLogin(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Incorrect credentials"})
 	}
 
-	var establishmentPtr *models.Establishment
-	if user.EstablishmentID != 0 {
-		var establishment models.Establishment
-		if err := models.DB.Where("id = ?", user.EstablishmentID).First(&establishment).Error; err != nil {
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Incorrect credentials"})
-		}
-		establishmentPtr = &establishment
+	establishmentPtr, err := loadEstablishmentForUser(&user)
+	if err != nil {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Incorrect credentials"})
 	}
 
 	accessToken, refreshToken, jwtError := createTokenPair(&user, establishmentPtr)
@@ -98,15 +132,32 @@ func SessionLogin(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{
 		"message": "Login successful",
-		"user": fiber.Map{
-			"id":               user.ID,
-			"name":             user.Name,
-			"email":            user.Email,
-			"phone":            user.Phone,
-			"role":             user.Role,
-			"establishment_id": user.EstablishmentID,
-		},
+		"user":    sessionUserJSON(&user, establishmentPtr),
 	})
+}
+
+// SessionMe retorna o usuário autenticado atual, a partir do cookie
+// (ou header Authorization) já validado por ValidateJWT — sem isso o
+// frontend não tem como saber quem está logado depois de um reload de
+// página, já que o access token deixou de ser legível por JS (HttpOnly).
+// GET /auth/session
+func SessionMe(c *fiber.Ctx) error {
+	userID, err := middlewares.GetUserIDFromToken(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Not authenticated"})
+	}
+
+	var user models.User
+	if err := models.DB.First(&user, userID).Error; err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Not authenticated"})
+	}
+
+	establishmentPtr, err := loadEstablishmentForUser(&user)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to load establishment"})
+	}
+
+	return c.JSON(fiber.Map{"user": sessionUserJSON(&user, establishmentPtr)})
 }
 
 // SessionLogout limpa os cookies de autenticação e revoga o refresh token.
@@ -154,13 +205,9 @@ func SessionRefresh(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "User not found"})
 	}
 
-	var establishmentPtr *models.Establishment
-	if user.EstablishmentID != 0 {
-		var establishment models.Establishment
-		if err := models.DB.Where("id = ?", user.EstablishmentID).First(&establishment).Error; err == nil {
-			establishmentPtr = &establishment
-		}
-	}
+	// Não falha o refresh se o estabelecimento não puder ser carregado —
+	// o access token novo ainda é válido sem esse claim opcional.
+	establishmentPtr, _ := loadEstablishmentForUser(&user)
 
 	accessToken, err := middlewares.GenerateJWT(&user, establishmentPtr)
 	if err != nil {
@@ -171,13 +218,6 @@ func SessionRefresh(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{
 		"message": "Token refreshed successfully",
-		"user": fiber.Map{
-			"id":               user.ID,
-			"name":             user.Name,
-			"email":            user.Email,
-			"phone":            user.Phone,
-			"role":             user.Role,
-			"establishment_id": user.EstablishmentID,
-		},
+		"user":    sessionUserJSON(&user, establishmentPtr),
 	})
 }

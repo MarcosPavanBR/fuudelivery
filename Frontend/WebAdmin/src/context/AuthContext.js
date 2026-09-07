@@ -1,57 +1,45 @@
 import React, { createContext, useState, useContext, useEffect } from "react";
 import api from "../services/api";
 
-const TOKEN_KEY = "fuu_admin_token";
-const REFRESH_KEY = "fuu_admin_refresh_token";
-
 const AuthContext = createContext();
-
-const decodePayload = (token) => {
-  const payload = JSON.parse(atob(token.split(".")[1]));
-  return payload;
-};
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Sessão vive num cookie HttpOnly (setado por /auth/session) — não dá
+  // pra ler o token no JS, então a única forma de saber quem está logado
+  // num reload de página é perguntar ao backend.
   useEffect(() => {
-    const token = localStorage.getItem(TOKEN_KEY);
-    if (token) {
-      try {
-        setUser(decodePayload(token));
-      } catch (e) {
-        localStorage.removeItem(TOKEN_KEY);
-        localStorage.removeItem(REFRESH_KEY);
-      }
-    }
-    setLoading(false);
+    let cancelled = false;
+    api
+      .get("/auth/session")
+      .then(({ data }) => {
+        if (!cancelled) setUser(data.user);
+      })
+      .catch(() => {
+        if (!cancelled) setUser(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const login = async (email, password) => {
-    const response = await api.post("/users/login", { email, password });
-    const token = response.data.token;
-    localStorage.setItem(TOKEN_KEY, token);
-    // Access token dura 15 min; o refresh (30 dias) mantém a sessão viva.
-    if (response.data.refresh_token) {
-      localStorage.setItem(REFRESH_KEY, response.data.refresh_token);
-    }
-    setUser(decodePayload(token));
-    return token;
+    const response = await api.post("/auth/session", { email, password });
+    setUser(response.data.user);
+    return response.data.user;
   };
 
   const logout = async () => {
-    // Revoga o refresh token no servidor antes de limpar local.
-    const refreshToken = localStorage.getItem(REFRESH_KEY);
-    if (refreshToken) {
-      try {
-        await api.post("/auth/logout", { refresh_token: refreshToken });
-      } catch (e) {
-        // segue com logout local mesmo se o servidor falhar
-      }
+    try {
+      await api.post("/auth/session/logout");
+    } catch (e) {
+      // segue com logout local mesmo se o servidor falhar
     }
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(REFRESH_KEY);
     setUser(null);
   };
 

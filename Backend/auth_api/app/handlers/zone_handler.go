@@ -4,9 +4,56 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/auth_api/app/models"
 	"github.com/gofiber/fiber/v2"
 )
+
+// GetMyZoneFee retorna a taxa de comissão atual do estabelecimento do
+// usuário autenticado (nunca aceita um ID pelo path — resolve sempre pelo
+// establishment_id do próprio token, então não tem como um restaurante
+// consultar a taxa de outro). Sem enquadramento de cooperativa: é só o
+// fato — taxa atual, taxa alvo, e quando ela pode subir de novo.
+// GET /establishments/me/zone
+func GetMyZoneFee(c *fiber.Ctx) error {
+	establishmentID, err := middlewares.GetEstablishmentIDFromToken(c)
+	if err != nil {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Usuário não está associado a um estabelecimento"})
+	}
+
+	zone, err := models.GetZoneByEstablishment(uint(establishmentID))
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao consultar a zona"})
+	}
+
+	// Sem zona atribuída (ou zona inativa): usa os defaults documentados
+	// em models.GetZoneSplitConfig — taxa fixa, sem rampa.
+	if zone == nil {
+		return c.JSON(fiber.Map{
+			"has_zone":                  false,
+			"current_platform_pct":      5.0,
+			"current_establishment_pct": 85.0,
+			"at_target":                 true,
+		})
+	}
+
+	atTarget := zone.SplitCurrentPlatformPct >= zone.SplitTargetPlatformPct
+
+	return c.JSON(fiber.Map{
+		"has_zone":                  true,
+		"zone_name":                 zone.Name,
+		"city":                      zone.City,
+		"current_platform_pct":      zone.SplitCurrentPlatformPct,
+		"current_establishment_pct": zone.SplitCurrentEstablishmentPct,
+		"target_platform_pct":       zone.SplitTargetPlatformPct,
+		"target_establishment_pct":  zone.SplitTargetEstablishmentPct,
+		"step_months":               zone.SplitStepMonths,
+		"step_platform_pct":         zone.SplitStepPlatformPct,
+		"min_monthly_orders":        zone.SplitMinMonthlyOrders,
+		"last_adjusted_at":          zone.SplitLastAdjustedAt,
+		"at_target":                 atTarget,
+	})
+}
 
 // ListZones retorna todas as zonas ativas.
 // GET /api/zones

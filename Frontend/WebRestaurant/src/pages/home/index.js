@@ -7,9 +7,15 @@ import { useAuth } from "../../context/AuthContext";
 import Texts from "../../constants/Texts";
 import ordersModels from "../../services/orders.models";
 
+// Precisa espelhar exatamente as transições que o backend aceita
+// (validTransitions em Backend/orders_api/app/handlers/orders.go) — sem a
+// coluna PREPARING, arrastar de "Aceito" pra "Pronto" pedia APPROVED->DONE
+// direto, que o backend sempre rejeitava: o restaurante ficava sem
+// nenhuma forma de marcar um pedido aceito como pronto.
 const columns = [
   { id: "AWAIT_APPROVE", title: "Em análise", background: "linear-gradient(135deg, #DC2626, #FF6B35)" },
-  { id: "APPROVED", title: "Em produção", background: "linear-gradient(135deg, #F59E0B, #FBBF24)" },
+  { id: "APPROVED", title: "Aceito", background: "linear-gradient(135deg, #3B82F6, #60A5FA)" },
+  { id: "PREPARING", title: "Em preparo", background: "linear-gradient(135deg, #F59E0B, #FBBF24)" },
   { id: "DONE", title: "Pronto p/ entrega", background: "linear-gradient(135deg, #10B981, #34D399)" },
 ];
 

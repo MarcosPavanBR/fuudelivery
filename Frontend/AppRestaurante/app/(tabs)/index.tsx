@@ -38,6 +38,48 @@ const statusColors: Record<string, { bg: string; text: string; label: string }> 
   cancelled: { bg: "#FEE2E2", text: "#B91C1C", label: "Cancelado" },
 };
 
+// ─── Máquina de estado do pedido (extraída pra ser testável sem renderizar
+// a tela — ver __tests__/index.test.js) ───
+
+// Badge de status com fallback pra status desconhecido — nunca deixa a
+// tela sem cor/label mesmo se o backend mandar um status novo que o app
+// ainda não conhece.
+export function resolveOrderStatus(status: string): { bg: string; text: string; label: string } {
+  return statusColors[status] || { bg: "#F3F4F6", text: "#374151", label: status };
+}
+
+// Que ações o restaurante pode tomar em cada status. Espelha exatamente as
+// condições que controlam os botões na tela — uma mudança acidental aqui
+// (ex: permitir "aceitar" de novo num pedido já em preparo) quebra o teste
+// em vez de vazar pra produção como pedido duplicado/preparado 2x.
+export type OrderAction = "accept" | "reject" | "ready";
+
+export function getAvailableActions(status: string): OrderAction[] {
+  if (status === "pending") return ["accept", "reject"];
+  if (status === "preparing") return ["ready"];
+  return [];
+}
+
+// Transição de status disparada por cada ação — único lugar que sabe pra
+// qual status uma ação leva, em vez de string mágica espalhada nos handlers.
+export const ACTION_TO_STATUS: Record<OrderAction, string> = {
+  accept: "preparing",
+  reject: "cancelled",
+  ready: "ready",
+};
+
+// Atualização otimista da lista local após confirmar no backend — só o
+// pedido alvo muda; os demais precisam sair exatamente iguais (regressão
+// possível: usar índice em vez de id, ou re-mapear todo mundo pro mesmo
+// status).
+export function applyStatusUpdate<T extends { id: number; status: string }>(
+  orders: T[],
+  orderId: number,
+  newStatus: string
+): T[] {
+  return orders.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o));
+}
+
 export default function OrdersScreen() {
   const { getUserData } = useApi();
   const user = getUserData();
@@ -72,9 +114,7 @@ export default function OrdersScreen() {
   const updateStatus = async (orderId: number, newStatus: string) => {
     try {
       await api.patch(`/orders/${orderId}/status`, { status: newStatus });
-      setOrders((prev) =>
-        prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
-      );
+      setOrders((prev) => applyStatusUpdate(prev, orderId, newStatus));
     } catch (e) {
       Alert.alert("Erro", "Falha ao atualizar status do pedido.");
     }
@@ -86,13 +126,13 @@ export default function OrdersScreen() {
       `Aceitar pedido #${order.id} de R$ ${order.total?.toFixed(2)}?`,
       [
         { text: "Cancelar", style: "cancel" },
-        { text: "Aceitar", onPress: () => updateStatus(order.id, "preparing") },
+        { text: "Aceitar", onPress: () => updateStatus(order.id, ACTION_TO_STATUS.accept) },
       ]
     );
   };
 
   const handleReady = (order: Order) => {
-    updateStatus(order.id, "ready");
+    updateStatus(order.id, ACTION_TO_STATUS.ready);
   };
 
   const handleReject = (order: Order) => {
@@ -101,13 +141,14 @@ export default function OrdersScreen() {
       `Rejeitar pedido #${order.id}?`,
       [
         { text: "Cancelar", style: "cancel" },
-        { text: "Rejeitar", style: "destructive", onPress: () => updateStatus(order.id, "cancelled") },
+        { text: "Rejeitar", style: "destructive", onPress: () => updateStatus(order.id, ACTION_TO_STATUS.reject) },
       ]
     );
   };
 
   const renderOrder = ({ item }: { item: Order }) => {
-    const status = statusColors[item.status] || { bg: "#F3F4F6", text: "#374151", label: item.status };
+    const status = resolveOrderStatus(item.status);
+    const actions = getAvailableActions(item.status);
     const customerName = item.user?.nome || item.user?.name || "Cliente";
     const time = item.createdAt
       ? new Date(item.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
@@ -127,19 +168,19 @@ export default function OrdersScreen() {
         <Text style={styles.orderTotal}>R$ {item.total?.toFixed(2) || "0,00"}</Text>
 
         <View style={styles.actions}>
-          {item.status === "pending" && (
-            <>
-              <TouchableOpacity style={styles.rejectBtn} onPress={() => handleReject(item)}>
-                <Feather name="x" size={16} color="#B91C1C" />
-                <Text style={styles.rejectText}>Rejeitar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.acceptBtn} onPress={() => handleAccept(item)}>
-                <Feather name="check" size={16} color="#FFF" />
-                <Text style={styles.acceptText}>Aceitar</Text>
-              </TouchableOpacity>
-            </>
+          {actions.includes("reject") && (
+            <TouchableOpacity style={styles.rejectBtn} onPress={() => handleReject(item)}>
+              <Feather name="x" size={16} color="#B91C1C" />
+              <Text style={styles.rejectText}>Rejeitar</Text>
+            </TouchableOpacity>
           )}
-          {item.status === "preparing" && (
+          {actions.includes("accept") && (
+            <TouchableOpacity style={styles.acceptBtn} onPress={() => handleAccept(item)}>
+              <Feather name="check" size={16} color="#FFF" />
+              <Text style={styles.acceptText}>Aceitar</Text>
+            </TouchableOpacity>
+          )}
+          {actions.includes("ready") && (
             <TouchableOpacity style={styles.readyBtn} onPress={() => handleReady(item)}>
               <Feather name="check" size={16} color="#FFF" />
               <Text style={styles.readyText}>Pronto</Text>

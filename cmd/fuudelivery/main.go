@@ -1245,6 +1245,47 @@ func paymentRouterMiddleware(router *gateway.Router) fiber.Handler {
 	}
 }
 
+// buildPaymentGateways monta a cadeia de fallback só com gateways realmente
+// utilizáveis, na ordem de preferência: pagarme -> asaas -> abacatepay ->
+// mercadopago.
+//
+// Duas regras:
+//
+//  1. Construtor que retorna erro é PULADO. abacatepay e mercadopago devolvem
+//     (nil, err) sem credencial; registrar esse nil causaria panic no
+//     CreateTransaction (ver comentário no chamador sobre typed nil).
+//  2. pagarme e asaas nunca falham na construção — sobem mesmo com a chave
+//     vazia. Sem a env de credencial eles só rendem um 401 por tentativa,
+//     gastando um round-trip da cadeia de fallback à toa, então também
+//     ficam de fora.
+func buildPaymentGateways() []gateway.Gateway {
+	var gws []gateway.Gateway
+
+	add := func(name, credEnv string, build func() (gateway.Gateway, error)) {
+		if credEnv != "" && os.Getenv(credEnv) == "" {
+			log.Printf("[GATEWAY] %s fora da cadeia: %s não configurada", name, credEnv)
+			return
+		}
+		gw, err := build()
+		if err != nil {
+			log.Printf("[GATEWAY] %s fora da cadeia: %v", name, err)
+			return
+		}
+		gws = append(gws, gw)
+		log.Printf("[GATEWAY] %s registrado na cadeia de fallback", name)
+	}
+
+	add("pagarme", "PAGARME_API_KEY", func() (gateway.Gateway, error) { return pagarme.NewGateway() })
+	add("asaas", "ASAAS_API_KEY", func() (gateway.Gateway, error) { return asaas.NewGateway() })
+	add("abacatepay", "ABACATE_PAY_API_KEY", func() (gateway.Gateway, error) { return abacatepay.NewGateway() })
+	add("mercadopago", "MERCADOPAGO_ACCESS_TOKEN", func() (gateway.Gateway, error) { return mercadopago.NewGateway() })
+
+	if len(gws) == 0 {
+		log.Printf("[GATEWAY] ATENÇÃO: nenhum gateway de pagamento configurado — cobranças vão falhar")
+	}
+	return gws
+}
+
 func setupPaymentRoutes(app *fiber.App, router *gateway.Router) {
 	paymentGroup := app.Group("/payments", paymentRouterMiddleware(router))
 	walletGroup := app.Group("/wallets", paymentRouterMiddleware(router))
@@ -1656,12 +1697,18 @@ func main() {
 	setupDispatchRoutes(app)
 	setupSponsoredRoutes(app)
 	setupSubscriptionRoutes(app)
-	// Initialize payment gateway router with fallback chain
-	pagarmeGW, _ := pagarme.NewGateway()
-	asaasGW, _ := asaas.NewGateway()
-	abacatepayGW, _ := abacatepay.NewGateway()
-	mpGW, _ := mercadopago.NewGateway()
-	paymentRouter = gateway.NewRouter(pagarmeGW, asaasGW, abacatepayGW, mpGW)
+	// Initialize payment gateway router with fallback chain.
+	//
+	// Os erros dos construtores NÃO podem ser descartados. abacatepay e
+	// mercadopago retornam (nil, err) quando falta credencial; passar esse
+	// ponteiro nil direto pro NewRouter (que recebe a interface Gateway)
+	// cria um "typed nil": a interface guarda (tipo=*XGateway, valor=nil) e
+	// portanto é != nil. O gateway entra no roteador, SupportsMethod até
+	// funciona (receiver nil), mas CreateTransaction desreferencia g.client
+	// e dá panic — abortando a cadeia de fallback inteira. Por isso a
+	// checagem é no erro, antes da conversão pra interface: um `if gw != nil`
+	// depois de virar interface não pegaria.
+	paymentRouter = gateway.NewRouter(buildPaymentGateways()...)
 	paymentRouter.SetStrategy(gateway.StrategyOrdered)
 	setupPaymentRoutes(app, paymentRouter)
 	setupChatRoutes(app)

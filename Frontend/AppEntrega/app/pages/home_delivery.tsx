@@ -25,6 +25,34 @@ import MinimizableModal from "@/componentes/ModalMinimize";
 import { useIsFocused } from "expo-router/react-navigation";
 import Config, { MAP_STYLE_URL } from "@/constants/Config";
 
+// ─── Lógica pura do rastreamento (extraída pra ser testável sem GPS nem
+// renderizar o mapa — ver __tests__/home_delivery.test.ts) ───
+
+// has-active pode devolver o pedido como array ou como objeto único (e às
+// vezes [] / payload parcial) — já derrubou a tela com TypeError antes
+// (order[0].location.coords em cima de undefined).
+export function getCurrentOrder(inWork: any): any {
+  return Array.isArray(inWork.order) ? inWork.order[0] : inWork.order;
+}
+
+// Corpo das duas chamadas de GPS: /delivery/location (rastreamento ao vivo
+// do cliente, só faz sentido com um pedido ativo) e /dispatch/location
+// (sempre enviado, mantém o motor de despacho ciente da posição).
+export function buildGpsPayloads(
+  orderId: string | number | undefined,
+  coords: { latitude: number; longitude: number }
+): {
+  deliveryLocation: { lat: number; lng: number; order_id: string } | null;
+  dispatchLocation: { lat: number; lng: number; status: string };
+} {
+  return {
+    deliveryLocation: orderId
+      ? { lat: coords.latitude, lng: coords.longitude, order_id: String(orderId) }
+      : null,
+    dispatchLocation: { lat: coords.latitude, lng: coords.longitude, status: "busy" },
+  };
+}
+
 function HomeDelivery() {
   const mapViewRef = useRef<CameraRef>(null);
 
@@ -59,9 +87,7 @@ function HomeDelivery() {
     }
     // Guard: has-active pode devolver [] / payload parcial — antes,
     // order[0].location.coords derrubava a tela com TypeError.
-    const firstOrder: any = Array.isArray(inWork.order)
-      ? inWork.order[0]
-      : inWork.order;
+    const firstOrder: any = getCurrentOrder(inWork);
     if (!firstOrder?.location?.coords || !firstOrder?.establishment) {
       return;
     }
@@ -126,27 +152,14 @@ function HomeDelivery() {
       const loc = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
       });
-      const current: any = Array.isArray(inWorkRef.current.order)
-        ? inWorkRef.current.order[0]
-        : inWorkRef.current.order;
+      const current: any = getCurrentOrder(inWorkRef.current);
       const orderId = current?.order_id;
+      const { deliveryLocation, dispatchLocation } = buildGpsPayloads(orderId, loc.coords);
 
-      if (orderId) {
-        api
-          .post("/delivery/location", {
-            lat: loc.coords.latitude,
-            lng: loc.coords.longitude,
-            order_id: String(orderId),
-          })
-          .catch(() => {});
+      if (deliveryLocation) {
+        api.post("/delivery/location", deliveryLocation).catch(() => {});
       }
-      api
-        .post("/dispatch/location", {
-          lat: loc.coords.latitude,
-          lng: loc.coords.longitude,
-          status: "busy",
-        })
-        .catch(() => {});
+      api.post("/dispatch/location", dispatchLocation).catch(() => {});
     } catch (e) {
       // Silencioso: GPS pode falhar pontualmente (sinal, permissão).
     }

@@ -26,6 +26,56 @@ interface DeliveryLocation {
   timestamp: number;
 }
 
+// ─── Lógica pura do rastreamento ao vivo (extraída pra ser testável sem
+// abrir uma conexão WebSocket de verdade — ver __tests__/LiveTrackingReadonly.test.ts) ───
+
+// Mensagens que não são de localização (keepalive, outros tipos de evento,
+// payload não-JSON) devem ser ignoradas sem quebrar a conexão.
+export function parseLocationMessage(raw: string): DeliveryLocation | null {
+  try {
+    const data = JSON.parse(raw);
+    if (data?.type === "location" && data?.payload) {
+      return data.payload as DeliveryLocation;
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Loop de reconexão limitado — sem isso, um servidor fora do ar por muito
+// tempo (comum no free tier) mantinha o app tentando reconectar a cada 5s
+// indefinidamente, drenando bateria.
+export function shouldReconnect(attempts: number, maxAttempts: number): boolean {
+  return attempts < maxAttempts;
+}
+
+// Centro do mapa por prioridade: posição ao vivo do entregador > destino
+// (endereço do cliente) > origem (estabelecimento) > fallback fixo — nunca
+// undefined, o que faria o mapa quebrar ao montar sem nenhum dos três.
+export function resolveMapCenter(params: {
+  deliveryLocation: DeliveryLocation | null;
+  destinationLat?: number;
+  destinationLng?: number;
+  originLat?: number;
+  originLng?: number;
+}): { lat: number; lng: number } {
+  const DEFAULT_LAT = -23.5505;
+  const DEFAULT_LNG = -46.6333;
+  return {
+    lat:
+      params.deliveryLocation?.lat ||
+      params.destinationLat ||
+      params.originLat ||
+      DEFAULT_LAT,
+    lng:
+      params.deliveryLocation?.lng ||
+      params.destinationLng ||
+      params.originLng ||
+      DEFAULT_LNG,
+  };
+}
+
 export default function LiveTrackingReadonly({
   orderId,
   originLat,
@@ -79,13 +129,9 @@ export default function LiveTrackingReadonly({
         };
 
         ws.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            if (data.type === "location" && data.payload) {
-              setDeliveryLocation(data.payload);
-            }
-          } catch (e) {
-            // Payload não-JSON (keepalive etc.) — ignora.
+          const location = parseLocationMessage(event.data);
+          if (location) {
+            setDeliveryLocation(location);
           }
         };
 
@@ -99,7 +145,7 @@ export default function LiveTrackingReadonly({
           if (disposed) return;
           // Reconexão limitada: loop infinito a cada 5s drenava bateria
           // quando o servidor ficava fora por muito tempo (free tier).
-          if (attempts < MAX_ATTEMPTS) {
+          if (shouldReconnect(attempts, MAX_ATTEMPTS)) {
             attempts += 1;
             reconnectTimer = setTimeout(() => connectWebSocket(), 5000);
           } else {
@@ -134,16 +180,13 @@ export default function LiveTrackingReadonly({
     }
   }, [deliveryLocation]);
 
-  const centerLat =
-    deliveryLocation?.lat ||
-    destinationLat ||
-    originLat ||
-    -23.5505;
-  const centerLng =
-    deliveryLocation?.lng ||
-    destinationLng ||
-    originLng ||
-    -46.6333;
+  const { lat: centerLat, lng: centerLng } = resolveMapCenter({
+    deliveryLocation,
+    destinationLat,
+    destinationLng,
+    originLat,
+    originLng,
+  });
 
   return (
     <View style={styles.container}>

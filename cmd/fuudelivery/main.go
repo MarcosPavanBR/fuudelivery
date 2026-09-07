@@ -1207,6 +1207,9 @@ func setupDeliveryRoutes(app *fiber.App) {
 }
 
 func setupZoneRoutes(app *fiber.App) {
+	// Sem :id no path de propósito — resolve sempre pelo establishment_id
+	// do próprio token, nunca por um ID que o cliente possa manipular.
+	app.Get("/establishments/me/zone", protectedRoute, authHandlers.GetMyZoneFee)
 	app.Get("/zones", adminRequired, authHandlers.ListZones)
 	app.Get("/zones/all", adminRequired, authHandlers.ListAllZones)
 	app.Get("/zones/:id", adminRequired, authHandlers.GetZone)

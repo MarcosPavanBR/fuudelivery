@@ -19,11 +19,19 @@ const ESTABLISHMENT = {
   max_distance_delivery: 15,
 };
 
+// Cartão de crédito/débito desativado temporariamente (2026-09-07): nenhum
+// gateway que suporta cartão (Pagar.me, Asaas, Mercado Pago — ver
+// pkg/gateway/router.go) tem credencial configurada em produção. O
+// AbacatePay tem credencial mas só suporta PIX, então toda cobrança de
+// cartão hoje esgota a fila de fallback e falha. PIX vira o default (era
+// credit) por ser o único canal digital realmente funcionando agora.
+// Reative assim que PAGARME_API_KEY, ASAAS_API_KEY ou
+// MERCADOPAGO_ACCESS_TOKEN existir de verdade no Render.
 const PAYMENT_TYPE = [
-  { type: "credit", icon: "credit-score", label: "Cartão de Crédito" },
-  { type: "debit", icon: "credit-card", label: "Cartão de Débito" },
-  { type: "money", icon: "money", label: "Dinheiro" },
   { type: "pix", icon: "pix", label: "PIX" },
+  { type: "money", icon: "money", label: "Dinheiro" },
+  // { type: "credit", icon: "credit-score", label: "Cartão de Crédito" },
+  // { type: "debit", icon: "credit-card", label: "Cartão de Débito" },
 ];
 
 export {

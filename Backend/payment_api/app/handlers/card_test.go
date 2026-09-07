@@ -170,6 +170,40 @@ func TestPaymentRequest_PIXFields(t *testing.T) {
 	}
 }
 
+// === Testes de disponibilidade de gateway de cartão ===
+// Regressão real: nenhum dos três gateways com suporte a cartão tinha
+// credencial configurada em produção (AbacatePay tem credencial, mas só
+// suporta PIX) — ChargeCard/ProcessPayment esgotavam a fila de fallback e
+// falhavam com erro genérico em vez de recusar cedo com mensagem clara.
+
+func TestCardGatewayConfigured(t *testing.T) {
+	tests := []struct {
+		name        string
+		pagarme     string
+		asaas       string
+		mercadopago string
+		want        bool
+	}{
+		{"nenhuma credencial configurada (bug real que já aconteceu)", "", "", "", false},
+		{"só Pagar.me configurado", "sk_live_x", "", "", true},
+		{"só Asaas configurado", "", "asaas_key", "", true},
+		{"só Mercado Pago configurado", "", "", "mp_token", true},
+		{"todas configuradas", "sk_live_x", "asaas_key", "mp_token", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("PAGARME_API_KEY", tt.pagarme)
+			t.Setenv("ASAAS_API_KEY", tt.asaas)
+			t.Setenv("MERCADOPAGO_ACCESS_TOKEN", tt.mercadopago)
+
+			if got := cardGatewayConfigured(); got != tt.want {
+				t.Errorf("cardGatewayConfigured() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 // === Testes de status mapping ===
 
 func TestCardStatusMapping(t *testing.T) {

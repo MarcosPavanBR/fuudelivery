@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/carloshomar/fuudelivery/payment_api/app/dto"
@@ -11,6 +12,19 @@ import (
 	"github.com/carloshomar/fuudelivery/pkg/gateway"
 	"github.com/gofiber/fiber/v2"
 )
+
+// cardGatewayConfigured reporta se algum gateway com suporte a cartão
+// (Pagar.me, Asaas, Mercado Pago) tem credencial real no ambiente. O
+// AbacatePay também está no router mas só suporta PIX — sem nenhuma das
+// três, toda cobrança de cartão esgota a fila de fallback e falha em
+// produção (já aconteceu: nenhuma tinha credencial configurada no Render).
+// Falhar cedo aqui, com mensagem clara, é melhor que deixar o cliente
+// esperar o router tentar e descartar os quatro gateways.
+func cardGatewayConfigured() bool {
+	return os.Getenv("PAGARME_API_KEY") != "" ||
+		os.Getenv("ASAAS_API_KEY") != "" ||
+		os.Getenv("MERCADOPAGO_ACCESS_TOKEN") != ""
+}
 
 // getPaymentRouter extrai o router de pagamento do contexto Fiber.
 func getPaymentRouter(c *fiber.Ctx) (*gateway.Router, error) {
@@ -44,6 +58,10 @@ func ChargeCard(c *fiber.Ctx) error {
 
 	if req.OrderID == "" {
 		return c.Status(400).JSON(fiber.Map{"error": "order_id is required"})
+	}
+
+	if !cardGatewayConfigured() {
+		return c.Status(503).JSON(fiber.Map{"error": "Pagamento por cartão temporariamente indisponível. Use PIX."})
 	}
 
 	serverTotal, ok := validateChargeAmount(req.OrderID, req.Amount)
@@ -133,6 +151,9 @@ func ProcessPayment(c *fiber.Ctx) error {
 	}
 
 	if req.Method == "credit" || req.Method == "debit" {
+		if !cardGatewayConfigured() {
+			return c.Status(503).JSON(fiber.Map{"error": "Pagamento por cartão temporariamente indisponível. Use PIX."})
+		}
 		installments := req.Installments
 		if installments <= 0 {
 			installments = 1

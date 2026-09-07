@@ -47,6 +47,73 @@ interface ApiContextProps {
   establishment: any;
 }
 
+// ─── Lógica pura do checkout (extraída para ser testável sem renderizar
+// o provider inteiro — ver contexts/__tests__/ApiCartContext.test.ts) ───
+
+// Sem distância calculada, ou distância acima do raio do estabelecimento,
+// o pedido não pode ser entregue.
+export function isDeliveryValid(
+  distance: number | null,
+  establishment: { max_distance_delivery: number }
+): boolean {
+  if (!distance || distance > establishment.max_distance_delivery) {
+    return false;
+  }
+  return true;
+}
+
+export interface OrderPayload {
+  cart: object[];
+  distance: number | null;
+  location: Record<string, unknown>;
+  paymentMethod: unknown;
+  deliveryValue: number | null;
+  user: unknown;
+  establishmentId: number;
+  establishment: Record<string, unknown>;
+}
+
+// Monta o corpo de POST /orders. Isolado do submitCart para poder checar,
+// sem chamar a API de verdade, que o pedido leva o estabelecimento e a
+// taxa de entrega corretos — já houve caso aqui de enviar o delivery_value
+// do estabelecimento anterior ao trocar de restaurante no carrinho.
+export function buildOrderPayload(params: {
+  cart: object[];
+  distance: number | null;
+  location: Record<string, unknown>;
+  coordsLocation: unknown;
+  paymentMethod: unknown;
+  deliveryValue: number | null;
+  user: unknown;
+  establishment: { id: number };
+}): OrderPayload {
+  return {
+    cart: params.cart,
+    distance: params.distance,
+    location: {
+      ...params.location,
+      coords: params.coordsLocation,
+    },
+    paymentMethod: params.paymentMethod,
+    deliveryValue: params.deliveryValue,
+    user: params.user,
+    establishmentId: params.establishment.id,
+    establishment: {
+      ...params.establishment,
+    },
+  };
+}
+
+// Interpreta a resposta de POST /orders. A API responde { message, orderId }
+// — orderId precisa virar string pois é usado depois para gerar a cobrança
+// PIX (POST /payments/pix/generate), que espera o id como string.
+export function parseOrderResponse(data: any): { ok: true; orderId?: string } {
+  return {
+    ok: true,
+    orderId: data?.orderId ? String(data.orderId) : undefined,
+  };
+}
+
 const ApiContext = createContext<ApiContextProps | undefined>(undefined);
 
 interface ApiCartProviderProps {
@@ -98,12 +165,7 @@ export const ApiCartProvider: React.FC<ApiCartProviderProps> = ({
     setCart((prev) => prev.map((e: any) => (e.id === item.id ? item : e)));
   };
 
-  const validDelivery = () => {
-    if (!distance || distance > establishment.max_distance_delivery) {
-      return false;
-    }
-    return true;
-  };
+  const validDelivery = () => isDeliveryValid(distance, establishment);
 
   const getValueDelivery = async (ns: number, id: string | number) => {
     try {
@@ -163,28 +225,21 @@ export const ApiCartProvider: React.FC<ApiCartProviderProps> = ({
       return { ok: false };
     }
     const coords_location = await helpers.getLocationDistance();
-    const body = {
+    const body = buildOrderPayload({
       cart,
       distance,
-      location: {
-        ...location,
-        coords: coords_location,
-      },
+      location,
+      coordsLocation: coords_location,
       paymentMethod,
       deliveryValue,
       user,
-      establishmentId: establishment.id,
-      establishment: {
-        ...establishment,
-      },
-    };
+      establishment,
+    });
 
     try {
       const { data } = await api.post(`/orders`, body);
       setCart([]);
-      // A API responde { message, orderId } — o orderId é necessário para
-      // gerar a cobrança PIX (POST /payments/pix/generate) no carrinho.
-      return { ok: true, orderId: data?.orderId ? String(data.orderId) : undefined };
+      return parseOrderResponse(data);
     } catch (e) {
       Alert.alert("", Texts.erroPedido);
       return { ok: false };

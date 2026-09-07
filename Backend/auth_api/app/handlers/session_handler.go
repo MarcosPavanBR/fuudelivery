@@ -14,6 +14,16 @@ import (
 
 // setAuthCookies define cookies HttpOnly para access e refresh tokens.
 // Usado por Login, RefreshToken e LoginDeliveryMan.
+//
+// SameSite=None (não Strict/Lax): o frontend (fuudelivery-web.onrender.com,
+// fuudelivery-admin-*.onrender.com) e esta API (fuudelivery-api-*.onrender.com)
+// vivem em subdomínios .onrender.com diferentes — cross-site pro navegador,
+// mesmo sendo o mesmo produto. Com Strict/Lax o cookie nunca é enviado em
+// requisições XHR/fetch cross-site: login parecia funcionar (o estado local
+// vinha direto da resposta do POST), mas a primeira checagem de sessão
+// (GET /auth/session) ou qualquer outra chamada autenticada subsequente
+// não enviava o cookie de volta — daí o "loga, mas some e volta pro login".
+// None exige Secure=true, que já estava setado.
 func setAuthCookies(c *fiber.Ctx, accessToken, refreshToken string) {
 	accessMaxAge := int(15 * time.Minute.Seconds())
 	refreshMaxAge := int(30 * 24 * time.Hour.Seconds())
@@ -23,7 +33,7 @@ func setAuthCookies(c *fiber.Ctx, accessToken, refreshToken string) {
 		Value:    accessToken,
 		HTTPOnly: true,
 		Secure:   true,
-		SameSite: "strict",
+		SameSite: "none",
 		MaxAge:   accessMaxAge,
 		Path:     "/",
 	})
@@ -33,7 +43,7 @@ func setAuthCookies(c *fiber.Ctx, accessToken, refreshToken string) {
 		Value:    refreshToken,
 		HTTPOnly: true,
 		Secure:   true,
-		SameSite: "strict",
+		SameSite: "none",
 		MaxAge:   refreshMaxAge,
 		Path:     "/",
 	})
@@ -47,7 +57,7 @@ func clearAuthCookies(c *fiber.Ctx) {
 		Value:    "",
 		HTTPOnly: true,
 		Secure:   true,
-		SameSite: "strict",
+		SameSite: "none",
 		MaxAge:   -1,
 		Path:     "/",
 	})
@@ -57,7 +67,7 @@ func clearAuthCookies(c *fiber.Ctx) {
 		Value:    "",
 		HTTPOnly: true,
 		Secure:   true,
-		SameSite: "strict",
+		SameSite: "none",
 		MaxAge:   -1,
 		Path:     "/",
 	})

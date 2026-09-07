@@ -8,6 +8,31 @@
 
 ---
 
+> ## ⏸️ Status atual (2026-09-07) — plano pausado, não abandonado
+>
+> Decisão do dono do projeto: sem credencial de Pagar.me/Asaas/Mercado Pago
+> hoje, e sem previsão de obter — o objetivo original (split automático pra
+> fugir de taxa alta) fica **opcional/futuro**, não bloqueador.
+>
+> **Produção agora**: só PIX via AbacatePay. Cartão de crédito/débito foi
+> **desativado** no app e no backend (`cardGatewayConfigured()` em
+> `Backend/payment_api/app/handlers/card.go` recusa cedo com 503 em vez de
+> deixar o router estourar os 4 gateways sem credencial — ver commit
+> `fix(payment): desativa cartão até haver credencial de gateway real`).
+> `PAYMENT_GATEWAY_PRIMARY`/`FALLBACK`/`PAYMENT_SPLIT_ENABLED`/
+> `PAYMENT_PIN_REQUIRED` no `render.yaml` **não são lidas por nenhum código**
+> hoje (`NewRouterFromRegistry`, o único lugar que as leria, nunca é
+> chamado — `cmd/fuudelivery/main.go` monta o router com ordem fixa no
+> código). Tudo abaixo neste documento continua válido como plano — só não
+> é o estado atual do sistema.
+>
+> Se um dia aparecer credencial de Pagar.me, Asaas ou Mercado Pago: colocar
+> a env var já basta pro cartão voltar a funcionar (o guard reativa
+> sozinho); o split de verdade (tabelas `recipients`/`payment_split_rules`,
+> etc.) ainda precisa ser implementado — nada disso existe no banco hoje.
+
+---
+
 ## Sumário Executivo
 
 O FuuDelivery precisa de uma arquitetura de pagamentos que suporte **split automático** entre plataforma, restaurantes e entregadores, **pré-autorização** para cartão, **escrow** (custódia) com repasse D+X, e **múltiplos gateways** para resiliência. Este documento define a camada de abstração unificada que permite trocar gateways sem alterar o código de negócio, com foco em segurança, idempotência, observabilidade e recuperação de falhas.

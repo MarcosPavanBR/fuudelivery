@@ -60,20 +60,29 @@ services:
         sync: false
 
       # ── Gateways de pagamento ─────────────────────────────
-      # Gateway primário: pagarme | asaas | abacatepay | mercadopago
+      # ⚠️ Estas 4 variáveis NÃO são lidas por nenhum código hoje (2026-09-07)
+      # — cmd/fuudelivery/main.go monta o router com ordem fixa
+      # (pagarme, asaas, abacatepay, mercadopago), sem checar nenhuma delas.
+      # Mudar o valor aqui não muda o comportamento em produção. Deixadas só
+      # como intenção documentada pra quando o split real for implementado
+      # (ver references/arquitetura-split-pagamentos.md — plano pausado,
+      # sem credencial de Pagar.me/Asaas/Mercado Pago hoje).
       - key: PAYMENT_GATEWAY_PRIMARY
         value: "pagarme"
-      # Gateway fallback (se primary falhar)
       - key: PAYMENT_GATEWAY_FALLBACK
         value: "asaas"
-      # Split automático habilitado
       - key: PAYMENT_SPLIT_ENABLED
         value: "true"
-      # PIN de verificação obrigatório
       - key: PAYMENT_PIN_REQUIRED
         value: "true"
 
-      # ── Pagar.me (gateway principal) ──────────────────────
+      # ── Pagar.me/Asaas/Mercado Pago — OPCIONAL, deixadas em branco ──
+      # Sem conta/credencial nesses três hoje, de propósito (2026-09-07).
+      # Cartão de crédito/débito fica desativado (ver
+      # Backend/payment_api/app/handlers/card.go, cardGatewayConfigured())
+      # até uma das três existir de verdade. Produção roda só PIX via
+      # AbacatePay. Preencher qualquer uma reativa cartão automaticamente,
+      # sem precisar de outro deploy de código.
       - key: PAGARME_API_KEY
         sync: false
       - key: PAGARME_ENCRYPTION_KEY
@@ -81,13 +90,11 @@ services:
       - key: PAGARME_WEBHOOK_SECRET
         sync: false
 
-      # ── Asaas (gateway alternativo) ───────────────────────
       - key: ASAAS_API_KEY
         sync: false
       - key: ASAAS_WEBHOOK_TOKEN
         sync: false
 
-      # ── Mercado Pago (reserva) ────────────────────────────
       - key: MERCADOPAGO_ACCESS_TOKEN
         sync: false
       - key: MERCADOPAGO_WEBHOOK_SECRET

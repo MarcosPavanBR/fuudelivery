@@ -13,7 +13,7 @@
   --color-fuu-red: #DC2626;
   --color-fuu-red-dark: #B91C1C;
   --color-fuu-red-light: #FEF2F2;
-  --color-fuu-yellow: #F59E0B;
+  --color-fuu-yellow: #FBBF24;
   --color-fuu-yellow-light: #FFFBEB;
 
   /* ===== Tokens semânticos (Design System) =====
@@ -189,7 +189,7 @@
   }
 
   .btn-danger:hover:not(:disabled) {
-    background: #B91C1C;
+    background: var(--color-fuu-red-dark);
   }
 
   /* Skeleton loader (estados de carregamento) */
@@ -214,7 +214,7 @@
 
   input:focus, textarea:focus, select:focus {
     outline: none;
-    border-color: #DC2626 !important;
+    border-color: var(--color-fuu-red) !important;
     box-shadow: 0 0 0 3px rgba(234, 29, 44, 0.1) !important;
   }
 

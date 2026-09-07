@@ -54,7 +54,7 @@ export default function Login() {
             <h2 className="text-3xl font-bold mb-4" style={{ lineHeight: 1.2 }}>
               Gerencie seu restaurante
               <br />
-              <span style={{ color: "#F59E0B" }}>com inteligência</span>
+              <span className="text-fuu-yellow">com inteligência</span>
             </h2>
             <p className="text-white/70 text-lg max-w-md mx-auto">
               Acesse pedidos em tempo real, gerencie seu cardápio e acompanhe suas vendas
@@ -67,7 +67,7 @@ export default function Login() {
               { num: "4.9", label: "Avaliação" },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
-                <div className="text-2xl font-bold" style={{ color: "#F59E0B" }}>{stat.num}</div>
+                <div className="text-2xl font-bold text-fuu-yellow">{stat.num}</div>
                 <div className="text-white/60 text-sm mt-1">{stat.label}</div>
               </div>
             ))}

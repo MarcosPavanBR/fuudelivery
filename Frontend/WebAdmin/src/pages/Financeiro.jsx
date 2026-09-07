@@ -1,7 +1,23 @@
 import React, { useState, useEffect } from "react";
-import { FiCreditCard, FiDollarSign, FiClock, FiCheck, FiAlertTriangle } from "react-icons/fi";
+import { FiCreditCard, FiDollarSign, FiClock, FiCheck, FiAlertTriangle, FiSearch, FiFilter, FiRefreshCw } from "react-icons/fi";
 import { toast } from "react-toastify";
 import paymentApi from "../services/paymentApi";
+
+const statusOptions = [
+  { value: "", label: "Todos status" },
+  { value: "CONFIRMED", label: "Confirmado" },
+  { value: "PENDING", label: "Pendente" },
+  { value: "REFUNDED", label: "Estornado" },
+  { value: "REJECTED", label: "Rejeitado" },
+  { value: "EXPIRED", label: "Expirado" },
+  { value: "CANCELLED", label: "Cancelado" },
+];
+
+// Identificador do cliente: o backend enriquece o payload com user.nome
+// (buscado no Postgres por customer_id). Fallbacks: customer_phone e #id.
+function customerLabel(p) {
+  return p.user?.nome || p.customer_phone || (p.customer_id != null ? `#${p.customer_id}` : "Cliente");
+}
 
 function StatCard({ icon: Icon, label, value, color, bg }) {
   return (
@@ -40,6 +56,8 @@ export default function Financeiro() {
   const [tab, setTab] = useState("stats");
   const [isProcessing, setIsProcessing] = useState(false);
   const [rejectModal, setRejectModal] = useState({ open: false, id: null, motivo: "" });
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
 
   useEffect(() => { loadData(); }, []);
 
@@ -140,6 +158,19 @@ export default function Financeiro() {
   const approved = payments.filter(p => p.status === "CONFIRMED");
   const rejected = payments.filter(p => p.status === "REJECTED");
 
+  const filteredPayments = payments.filter(p => {
+    const idStr = (p.id || p._id || "").toString();
+    const q = search.toLowerCase();
+    const matchesSearch =
+      !search ||
+      idStr.toLowerCase().includes(q) ||
+      (p.user?.nome || "").toLowerCase().includes(q) ||
+      (p.user?.phone || p.customer_phone || "").toLowerCase().includes(q) ||
+      (p.orderId || p.order_id || "").toString().toLowerCase().includes(q);
+    const matchesStatus = !statusFilter || p.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
   return (
     <div className="animate-fade-in space-y-6 min-w-0">
       <h1 className="text-2xl font-bold text-gray-900">Financeiro</h1>
@@ -167,51 +198,85 @@ export default function Financeiro() {
       )}
 
       {tab === "payments" && (
-        <div className="card overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                {["ID", "Pedido", "Valor", "Status", "Ações"].map(h => (
-                  <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {payments.slice(0, 50).map(p => (
-                <tr key={p.id || p._id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-2 text-sm font-mono">{(p.id || p._id || "").slice(0, 8)}</td>
-                  <td className="px-4 py-2 text-sm">{p.orderId || p.order_id || "-"}</td>
-                  <td className="px-4 py-2 text-sm font-semibold">R$ {((p.amount || 0) / 100).toFixed(2)}</td>
-                  <td className="px-4 py-2">
-                    <span
-                      className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold"
-                      style={{
-                        background: p.status === "CONFIRMED" ? "#D1FAE5" : p.status === "PENDING" ? "#FEF3C7" : "#FEE2E2",
-                        color: p.status === "CONFIRMED" ? "#065F46" : p.status === "PENDING" ? "#92400E" : "#991B1B",
-                      }}
-                    >
-                      {p.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2">
-                    {p.status === "PENDING" && (
-                      <div className="flex gap-2">
-                        <button disabled={isProcessing} onClick={() => approvePayment(p.id || p._id)} className="btn btn-primary text-xs">
-                          {isProcessing ? "..." : "Aprovar"}
-                        </button>
-                        <button disabled={isProcessing} onClick={() => rejectPayment(p.id || p._id)} className="btn btn-danger text-xs">
-                          {isProcessing ? "..." : "Rejeitar"}
-                        </button>
-                      </div>
-                    )}
-                  </td>
+        <div className="space-y-4">
+          <div className="card p-4">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex-1 relative">
+                <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar por ID, cliente, pedido..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="input pl-10"
+                />
+              </div>
+              <div className="relative">
+                <FiFilter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <select
+                  value={statusFilter}
+                  onChange={e => setStatusFilter(e.target.value)}
+                  className="input w-44 pl-10"
+                >
+                  {statusOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+              <button onClick={loadData} className="btn btn-ghost" title="Atualizar">
+                <FiRefreshCw className="h-4 w-4" /> Atualizar
+              </button>
+            </div>
+          </div>
+
+          <div className="card overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  {["ID", "Cliente", "Pedido", "Valor", "Status", "Data", "Ações"].map(h => (
+                    <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
+                  ))}
                 </tr>
-              ))}
-              {payments.length === 0 && (
-                <tr><td colSpan={5} className="px-4 py-16 text-center text-gray-400">Nenhum pagamento encontrado</td></tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filteredPayments.slice(0, 50).map(p => (
+                  <tr key={p.id || p._id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-2 text-sm font-mono">{(p.id || p._id || "").slice(0, 8)}</td>
+                    <td className="px-4 py-2 text-sm">{customerLabel(p)}</td>
+                    <td className="px-4 py-2 text-sm">{p.orderId || p.order_id || "-"}</td>
+                    <td className="px-4 py-2 text-sm font-semibold">R$ {((p.amount || 0) / 100).toFixed(2)}</td>
+                    <td className="px-4 py-2">
+                      <span
+                        className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold"
+                        style={{
+                          background: p.status === "CONFIRMED" ? "#D1FAE5" : p.status === "PENDING" ? "#FEF3C7" : "#FEE2E2",
+                          color: p.status === "CONFIRMED" ? "#065F46" : p.status === "PENDING" ? "#92400E" : "#991B1B",
+                        }}
+                      >
+                        {p.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 text-sm text-gray-500">
+                      {p.created_at ? new Date(p.created_at).toLocaleString("pt-BR") : "-"}
+                    </td>
+                    <td className="px-4 py-2">
+                      {p.status === "PENDING" && (
+                        <div className="flex gap-2">
+                          <button disabled={isProcessing} onClick={() => approvePayment(p.id || p._id)} className="btn btn-primary text-xs">
+                            {isProcessing ? "..." : "Aprovar"}
+                          </button>
+                          <button disabled={isProcessing} onClick={() => rejectPayment(p.id || p._id)} className="btn btn-danger text-xs">
+                            {isProcessing ? "..." : "Rejeitar"}
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {filteredPayments.length === 0 && (
+                  <tr><td colSpan={7} className="px-4 py-16 text-center text-gray-400">Nenhum pagamento encontrado</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

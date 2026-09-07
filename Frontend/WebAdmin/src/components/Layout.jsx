@@ -20,7 +20,6 @@ const menuItems = [
   { path: "/users", label: "Usuários", iconKey: "users" },
   { path: "/orders", label: "Pedidos", iconKey: "orders" },
   { path: "/delivery-men", label: "Entregadores", iconKey: "delivery-men" },
-  { path: "/payments", label: "Pagamentos", iconKey: "payments" },
   { path: "/financeiro", label: "Financeiro", iconKey: "payments" },
   { path: "/password-resets", label: "Reset de Senha", iconKey: "password-resets" },
   { path: "/settings", label: "Configurações", iconKey: "settings" },
@@ -78,11 +77,11 @@ export default function Layout() {
             </defs>
             <rect width="48" height="48" rx="14" fill="url(#fuuGrad)" />
             <path d="M14 14h12c4.4 0 8 3.6 8 8s-3.6 8-8 8h-4v8h-8V14zm8 12h4c2.2 0 4-1.8 4-4s-1.8-4-4-4h-4v8z" fill="white" />
-            <circle cx="38" cy="12" r="4" fill="#F59E0B" />
+            <circle cx="38" cy="12" r="4" className="fill-fuu-yellow" />
           </svg>
           {sidebarOpen && (
             <div className="ml-3 flex flex-col leading-none">
-              <span style={{ fontSize: "18px", fontWeight: 900, color: "#DC2626", letterSpacing: "-0.5px", lineHeight: 1 }}>Fuu</span>
+              <span className="text-fuu-red" style={{ fontSize: "18px", fontWeight: 900, letterSpacing: "-0.5px", lineHeight: 1 }}>Fuu</span>
               <span style={{ fontSize: "10px", fontWeight: 700, color: "#9CA3AF", letterSpacing: "2px", textTransform: "uppercase", lineHeight: 1, marginTop: 2 }}>Delivery</span>
             </div>
           )}
@@ -98,7 +97,7 @@ export default function Layout() {
                   className={({ isActive }) =>
                     "relative flex items-center gap-2 px-4 py-2 rounded-r-xl transition-all duration-200 group " +
                     (isActive
-                      ? "text-[#DC2626] font-semibold bg-[rgba(220,38,38,0.10)]"
+                      ? "text-fuu-red font-semibold bg-fuu-red/10"
                       : "text-[#9CA3AF] hover:text-white hover:bg-[rgba(255,255,255,0.03)]") +
                     (!sidebarOpen ? " justify-center px-0" : "")
                   }
@@ -107,7 +106,7 @@ export default function Layout() {
                   {({ isActive }) => (
                     <>
                       {isActive && (
-                        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full" style={{ background: "#DC2626" }} />
+                        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full bg-fuu-red" />
                       )}
                       <span className="flex-shrink-0">
                         <SidebarIcon iconKey={item.iconKey} className="h-5 w-5" />
@@ -123,7 +122,7 @@ export default function Layout() {
 
         <div className={`border-t border-white/10 p-4 transition-all duration-300 ${!sidebarOpen ? "px-2" : ""}`}>
           <div className={`flex items-center gap-3 rounded-xl p-2 ${sidebarOpen ? "hover:bg-white/10" : "justify-center"}`}>
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}>
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-fuu-red to-fuu-red-dark">
               <FiLogOut className="h-4 w-4 text-white" />
             </div>
             {sidebarOpen && (

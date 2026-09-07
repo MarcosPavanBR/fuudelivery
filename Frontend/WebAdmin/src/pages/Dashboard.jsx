@@ -199,7 +199,7 @@ export default function Dashboard() {
           </table>
         </div>
         <div className="px-6 py-4 border-t border-gray-100">
-          <Link to="/orders" className="text-sm font-medium" style={{ color: "#DC2626" }}>
+          <Link to="/orders" className="text-sm font-medium text-fuu-red">
             Ver todos os pedidos →
           </Link>
         </div>

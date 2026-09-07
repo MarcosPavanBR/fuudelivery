@@ -10,6 +10,11 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Sem isso o GitHub usa o default de 6h: em 07/09/2026 três runs
+    # ficaram penduradas 60+ min no step do Gradle sem nunca falhar,
+    # queimando minutos de Actions. Referência de tempo real: o step
+    # inteiro do Gradle até o bundling leva ~9m40s.
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: Frontend/AppComida

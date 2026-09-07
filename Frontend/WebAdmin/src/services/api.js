@@ -22,15 +22,31 @@ function getCookie(name) {
   return null
 }
 
+// Garante que o cookie csrf_token existe antes de mutações — sem isso o
+// double-submit do backend não tem nada pra comparar com o header e a
+// proteção contra CSRF fica inerte (ver cmd/fuudelivery/csrf.go: sem
+// cookie, a checagem deixa passar por assumir que não é sessão de browser).
+async function ensureCsrfToken() {
+  let token = getCookie("csrf_token")
+  if (!token) {
+    const res = await api.get("/csrf-token", { withCredentials: true })
+    token = res.data?.csrf_token
+  }
+  return token
+}
+
 api.interceptors.request.use(
-  (config) => {
+  async (config) => {
     const withCredentials = config.withCredentials !== false
     if (withCredentials) {
       config.withCredentials = true
     }
-    const csrfToken = getCookie("csrf_token")
-    if (csrfToken && ["post", "put", "delete", "patch"].includes((config.method || "get").toLowerCase())) {
-      config.headers["X-CSRF-Token"] = csrfToken
+    const method = (config.method || "get").toLowerCase()
+    if (["post", "put", "delete", "patch"].includes(method)) {
+      const csrfToken = await ensureCsrfToken()
+      if (csrfToken) {
+        config.headers["X-CSRF-Token"] = csrfToken
+      }
     }
     return config
   },
@@ -69,26 +85,12 @@ api.interceptors.response.use(
       isRefreshing = true
 
       try {
-        const refreshToken = localStorage.getItem("fuu_admin_refresh_token")
-        if (!refreshToken) {
-          throw new Error("no refresh token")
-        }
-
-        const refreshResponse = await api.post("/auth/refresh", {
-          refresh_token: refreshToken,
-        })
-        const { token, refresh_token } = refreshResponse.data
-
-        if (token) {
-          localStorage.setItem("fuu_admin_token", token)
-        }
-        if (refresh_token) {
-          localStorage.setItem("fuu_admin_refresh_token", refresh_token)
-        }
-
-        processQueue(null, token)
-
-        originalRequest.headers.Authorization = `Bearer ${token}`
+        // Refresh token vive só no cookie HttpOnly — o backend lê e devolve
+        // um access_token novo, também via cookie. Não há nada pra guardar
+        // aqui nem Authorization pra setar: a próxima chamada já sai com o
+        // cookie atualizado.
+        await api.post("/auth/session/refresh", {}, { withCredentials: true })
+        processQueue(null, null)
         return api(originalRequest)
       } catch (refreshError) {
         processQueue(refreshError, null)

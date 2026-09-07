@@ -91,12 +91,11 @@ api.interceptors.response.use(
       isRefreshing = true
 
       try {
-        const refreshResponse = await api.post("/auth/session/refresh", {}, { withCredentials: true })
-        const { token } = refreshResponse.data
-
-        processQueue(null, token)
-
-        originalRequest.headers.Authorization = `Bearer ${token}`
+        // Access token novo vem só via cookie HttpOnly — nada pra colocar
+        // num header Authorization, a próxima chamada já sai com o cookie
+        // atualizado.
+        await api.post("/auth/session/refresh", {}, { withCredentials: true })
+        processQueue(null, null)
         return api(originalRequest)
       } catch (refreshError) {
         processQueue(refreshError, null)

@@ -20,18 +20,22 @@ vi.mock("./services/api", () => ({
   },
 }));
 
-// Token JWT fake válido (payload = { sub: 1, role: "admin", name: "Test Admin" })
-const FAKE_TOKEN =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9." +
-  btoa(JSON.stringify({ sub: 1, role: "admin", name: "Test Admin" })) +
-  ".fake-signature";
-
-const FAKE_REFRESH = "fake-refresh-token-abc123";
+// Sessão agora vive num cookie HttpOnly — o "usuário logado" é sempre o
+// que o backend devolve em /auth/session (GET pra restaurar, POST no
+// login), nunca um token decodificado no cliente.
+const FAKE_USER = { id: 1, role: "admin", name: "Test Admin", establishment_name: "Restaurante Teste" };
 
 // ── Setup / Teardown ───────────────────────────────────────────
 beforeEach(() => {
-  localStorage.clear();
   vi.clearAllMocks();
+  // Por padrão, ninguém está logado: GET /auth/session (checagem de sessão
+  // no mount) responde 401. Testes que precisam de sessão ativa sobrescrevem.
+  mockGet.mockImplementation((url) => {
+    if (url === "/auth/session") {
+      return Promise.reject({ response: { status: 401 } });
+    }
+    return Promise.resolve({ data: [] });
+  });
 });
 
 // ── 1. Smoke: App monta sem crashar ────────────────────────────
@@ -48,40 +52,48 @@ describe("WebAdmin Smoke Tests", () => {
 
 // ── 2. Login Page renderiza corretamente ───────────────────────
 describe("Login Page", () => {
-  it("renderiza formulário de login quando não autenticado", () => {
-    localStorage.removeItem("fuu_admin_token");
+  it("renderiza formulário de login quando não autenticado", async () => {
     render(<App />);
 
-    expect(screen.getByLabelText(/e-mail/i)).toBeDefined();
+    await waitFor(() => {
+      expect(screen.getByLabelText(/e-mail/i)).toBeDefined();
+    });
     expect(screen.getByLabelText(/senha/i)).toBeDefined();
     expect(screen.getByRole("button", { name: /entrar/i })).toBeDefined();
   });
 
-  it("renderiza campos de entrada com placeholders corretos", () => {
+  it("renderiza campos de entrada com placeholders corretos", async () => {
     render(<App />);
 
-    expect(screen.getByPlaceholderText("seu@email.com")).toBeDefined();
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("seu@email.com")).toBeDefined();
+    });
     expect(screen.getByPlaceholderText("Sua senha")).toBeDefined();
   });
 
-  it("renderiza branding do FuuDelivery na página de login", () => {
+  it("renderiza branding do FuuDelivery na página de login", async () => {
     render(<App />);
 
-    expect(screen.getByText("Entrar na conta")).toBeDefined();
+    await waitFor(() => {
+      expect(screen.getByText("Entrar na conta")).toBeDefined();
+    });
     expect(screen.getByText(/painel administrativo do FuuDelivery/i)).toBeDefined();
   });
 
-  it("possui link 'Esqueceu a senha?'", () => {
+  it("possui link 'Esqueceu a senha?'", async () => {
     render(<App />);
 
-    expect(screen.getByText("Esqueceu a senha?")).toBeDefined();
+    await waitFor(() => {
+      expect(screen.getByText("Esqueceu a senha?")).toBeDefined();
+    });
   });
 });
 
 // ── 3. Login interação: preencher e submeter ──────────────────
 describe("Login Interaction", () => {
-  it("permite digitar email e senha", () => {
+  it("permite digitar email e senha", async () => {
     render(<App />);
+    await waitFor(() => screen.getByLabelText(/e-mail/i));
 
     const emailInput = screen.getByLabelText(/e-mail/i);
     const passwordInput = screen.getByLabelText(/senha/i);
@@ -93,12 +105,11 @@ describe("Login Interaction", () => {
     expect(passwordInput.value).toBe("secret123");
   });
 
-  it("chama API POST /users/login ao submeter", async () => {
-    mockPost.mockResolvedValueOnce({
-      data: { token: FAKE_TOKEN, refresh_token: FAKE_REFRESH },
-    });
+  it("chama API POST /auth/session ao submeter", async () => {
+    mockPost.mockResolvedValueOnce({ data: { user: FAKE_USER } });
 
     render(<App />);
+    await waitFor(() => screen.getByLabelText(/e-mail/i));
 
     fireEvent.change(screen.getByLabelText(/e-mail/i), {
       target: { value: "admin@test.com" },
@@ -110,19 +121,18 @@ describe("Login Interaction", () => {
     fireEvent.click(screen.getByRole("button", { name: /entrar/i }));
 
     await waitFor(() => {
-      expect(mockPost).toHaveBeenCalledWith("/users/login", {
+      expect(mockPost).toHaveBeenCalledWith("/auth/session", {
         email: "admin@test.com",
         password: "secret123",
       });
     });
   });
 
-  it("armazena token e refresh token no localStorage após login", async () => {
-    mockPost.mockResolvedValueOnce({
-      data: { token: FAKE_TOKEN, refresh_token: FAKE_REFRESH },
-    });
+  it("mantém o usuário autenticado (sessão via cookie) após login", async () => {
+    mockPost.mockResolvedValueOnce({ data: { user: FAKE_USER } });
 
     render(<App />);
+    await waitFor(() => screen.getByLabelText(/e-mail/i));
 
     fireEvent.change(screen.getByLabelText(/e-mail/i), {
       target: { value: "admin@test.com" },
@@ -132,11 +142,11 @@ describe("Login Interaction", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /entrar/i }));
 
+    // Não há mais token pra guardar — a prova de que o login funcionou é
+    // a UI sair do formulário de login (ver "Login Redirect" abaixo) e o
+    // nome do usuário aparecer, vindo direto da resposta do POST.
     await waitFor(() => {
-      expect(localStorage.getItem("fuu_admin_token")).toBe(FAKE_TOKEN);
-      expect(localStorage.getItem("fuu_admin_refresh_token")).toBe(
-        FAKE_REFRESH
-      );
+      expect(screen.getByText("Test Admin")).toBeDefined();
     });
   });
 });
@@ -149,6 +159,7 @@ describe("Login Error Handling", () => {
     });
 
     render(<App />);
+    await waitFor(() => screen.getByLabelText(/e-mail/i));
 
     fireEvent.change(screen.getByLabelText(/e-mail/i), {
       target: { value: "wrong@test.com" },
@@ -170,11 +181,10 @@ describe("Login Error Handling", () => {
       .mockRejectedValueOnce({
         response: { status: 401, data: { error: "Unauthorized" } },
       })
-      .mockResolvedValueOnce({
-        data: { token: FAKE_TOKEN, refresh_token: FAKE_REFRESH },
-      });
+      .mockResolvedValueOnce({ data: { user: FAKE_USER } });
 
     render(<App />);
+    await waitFor(() => screen.getByLabelText(/e-mail/i));
 
     // Primeira tentativa — falha
     fireEvent.change(screen.getByLabelText(/e-mail/i), {
@@ -207,11 +217,10 @@ describe("Login Error Handling", () => {
 // ── 5. Login redireciona para Dashboard ────────────────────────
 describe("Login Redirect", () => {
   it("redireciona para / após login bem-sucedido", async () => {
-    mockPost.mockResolvedValueOnce({
-      data: { token: FAKE_TOKEN, refresh_token: FAKE_REFRESH },
-    });
+    mockPost.mockResolvedValueOnce({ data: { user: FAKE_USER } });
 
     render(<App />);
+    await waitFor(() => screen.getByLabelText(/e-mail/i));
 
     fireEvent.change(screen.getByLabelText(/e-mail/i), {
       target: { value: "admin@test.com" },
@@ -231,20 +240,29 @@ describe("Login Redirect", () => {
 
 // ── 6. Usuário autenticado vê Dashboard ───────────────────────
 describe("Authenticated State", () => {
-  it("redireciona para login quando token é inválido/expirado", () => {
-    // Token inválido (não é base64 JWT válido)
-    localStorage.setItem("fuu_admin_token", "invalid-token");
+  it("redireciona para login quando a sessão é inválida/expirada", async () => {
+    // GET /auth/session rejeitando (cookie ausente ou expirado) — é o
+    // mock padrão do beforeEach, mantido explícito aqui pela clareza.
+    mockGet.mockImplementation((url) => {
+      if (url === "/auth/session") {
+        return Promise.reject({ response: { status: 401 } });
+      }
+      return Promise.resolve({ data: [] });
+    });
+
     render(<App />);
 
-    // Deve voltar para login porque decodePayload lança erro
-    expect(screen.getByLabelText(/e-mail/i)).toBeDefined();
+    await waitFor(() => {
+      expect(screen.getByLabelText(/e-mail/i)).toBeDefined();
+    });
   });
 });
 
 // ── 7. Toggle mostrar/esconder senha ──────────────────────────
 describe("Password Visibility Toggle", () => {
-  it("alterna entre mostrar e esconder senha", () => {
+  it("alterna entre mostrar e esconder senha", async () => {
     render(<App />);
+    await waitFor(() => screen.getByLabelText(/senha/i));
 
     const passwordInput = screen.getByLabelText(/senha/i);
     expect(passwordInput.type).toBe("password");
@@ -259,23 +277,30 @@ describe("Password Visibility Toggle", () => {
 
 // ── 8. Layout autenticado ─────────────────────────────────────
 describe("Authenticated Layout", () => {
-  it("mostra sidebar com menu quando autenticado", () => {
-    localStorage.setItem("fuu_admin_token", FAKE_TOKEN);
-    mockGet.mockResolvedValue({ data: [] });
-
-    render(<App />);
-
-    // Verificar que o layout do admin aparece
-    // O Layout contém o nome "Fuu" no sidebar
-    expect(screen.getByText("Fuu")).toBeDefined();
+  beforeEach(() => {
+    // Sessão já ativa (cookie válido): GET /auth/session devolve o usuário;
+    // qualquer outra chamada GET do Dashboard/Layout cai no fallback [].
+    mockGet.mockImplementation((url) => {
+      if (url === "/auth/session") {
+        return Promise.resolve({ data: { user: FAKE_USER } });
+      }
+      return Promise.resolve({ data: [] });
+    });
   });
 
-  it("mostra nome do usuário no header", () => {
-    localStorage.setItem("fuu_admin_token", FAKE_TOKEN);
-    mockGet.mockResolvedValue({ data: [] });
-
+  it("mostra sidebar com menu quando autenticado", async () => {
     render(<App />);
 
-    expect(screen.getByText("Test Admin")).toBeDefined();
+    await waitFor(() => {
+      expect(screen.getByText("Fuu")).toBeDefined();
+    });
+  });
+
+  it("mostra nome do usuário no header", async () => {
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Test Admin")).toBeDefined();
+    });
   });
 });

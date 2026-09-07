@@ -22,7 +22,9 @@ func GetCSRFToken(c *fiber.Ctx) error {
 		Value:    csrfToken,
 		HTTPOnly: false, // frontend precisa ler via JS
 		Secure:   true,  // HTTPS only em produção
-		SameSite: "strict",
+		// None: frontend e API vivem em subdomínios .onrender.com diferentes
+		// (cross-site) — mesmo motivo do fix em session_handler.go.
+		SameSite: "none",
 		Path:     "/",
 		MaxAge:   86400, // 24h
 	})

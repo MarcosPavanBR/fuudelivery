@@ -106,3 +106,36 @@ func TestCalculateSplitRules_TotalSum(t *testing.T) {
 	totalDistributed := result.PlatformFee + result.EstablishmentAmt + result.DeliveryAmt + result.CustomerCredit
 	assert.InDelta(t, payment.Amount, totalDistributed, 0.001)
 }
+
+// TestCalculateSplitRules_ArredondaCentavos cobre o caso que os testes acima
+// não pegavam: todos usam valores redondos (100.0 / 10% / 80%), que nunca
+// produzem dízima. Com valores reais de pedido, `total * (pct/100)` gera
+// coisas como 2.9997 ou 0.30000000000000004 — fração de centavo indo parar no
+// ledger e no gateway, fazendo a conciliação não fechar.
+func TestCalculateSplitRules_ArredondaCentavos(t *testing.T) {
+	payment := &models.Payment{
+		Amount:         99.99, // valor típico de pedido, não redondo
+		DeliveryAmount: 7.77,
+		CustomerID:     42,
+	}
+
+	result, err := CalculateSplitRules(payment, 3, 87)
+	assert.NoError(t, err)
+
+	// 99.99 * 0.03 = 2.9997  -> 3.00
+	assert.Equal(t, 3.00, result.PlatformFee, "taxa da plataforma deve ficar em centavos exatos")
+	// 99.99 * 0.87 = 86.9913 -> 86.99
+	assert.Equal(t, 86.99, result.EstablishmentAmt, "parte do estabelecimento deve ficar em centavos exatos")
+
+	// Nenhuma parcela pode ter mais de 2 casas decimais.
+	for _, r := range result.Rules {
+		cents := r.Amount * 100
+		assert.InDelta(t, cents, float64(int64(cents+0.5)), 0.001,
+			"regra %s tem fração de centavo: %v", r.ReceiverType, r.Amount)
+	}
+
+	// O invariante documentado continua valendo: as quatro partes somam o total.
+	totalDistribuido := result.PlatformFee + result.EstablishmentAmt + result.DeliveryAmt + result.CustomerCredit
+	assert.InDelta(t, payment.Amount, totalDistribuido, 0.001,
+		"arredondar não pode quebrar a soma — o customerCredit absorve o resto")
+}

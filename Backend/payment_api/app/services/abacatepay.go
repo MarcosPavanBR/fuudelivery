@@ -225,7 +225,22 @@ func (c *AbacatePayClient) CreatePIXCharge(req PIXChargeRequest) (*PIXChargeResp
 		CopyPaste:    raw.BRCode, // código copia-e-cola
 		QRCodeBase64: base64Pure, // base64 puro da imagem
 		ExpiresAt:    raw.ExpiresAt,
-		Amount:       float64(raw.Amount),
+		// ATENÇÃO — unidade ambígua, NÃO use este campo sem resolver antes.
+		//
+		// Aqui é repasse direto de raw.Amount, que a API devolve em CENTAVOS
+		// (int64), para um campo float64. O PIXChargeRequest.Data.Amount que
+		// vai NA IDA também é centavos (pix.go faz toCents antes de enviar),
+		// então o repasse é consistente com a requisição.
+		//
+		// O que torna isso arriscado: o tipo float64 sugere reais, e nenhum
+		// consumidor lê este campo hoje (pix.go persiste req.Amount, não a
+		// resposta). Ou seja, não existe uso que prove a intenção — o primeiro
+		// consumidor que assumir "reais" vai errar por 100x.
+		//
+		// Antes de ler este campo: confirme a unidade e ou converta aqui
+		// (dividindo por 100 e ajustando abacatepay_test.go) ou troque o tipo
+		// para int64, deixando explícito que é centavos.
+		Amount: float64(raw.Amount),
 	}
 
 	if raw.ExpiresAt != "" {

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -112,6 +113,14 @@ func ChargeCard(c *fiber.Ctx) error {
 	resp, err := router.CreateTransactionWithFallback(c.Context(), gatewayReq)
 	if err != nil {
 		log.Printf("[CARD] Error creating card payment via router: amount=%.2f err=%v", req.Amount, err)
+		// Nenhum gateway elegível é indisponibilidade, não erro do servidor —
+		// mesma semântica do guard cardGatewayConfigured() acima. 500 fazia o
+		// cliente achar que a cobrança pode ter passado.
+		if errors.Is(err, gateway.ErrNoGatewayAvailable) {
+			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+				"error": "Pagamento por cartão temporariamente indisponível. Use PIX.",
+			})
+		}
 		return c.Status(500).JSON(fiber.Map{"error": "Card payment failed"})
 	}
 

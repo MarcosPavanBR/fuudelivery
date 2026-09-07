@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"log"
+	"math"
 	"strconv"
 
 	"github.com/carloshomar/fuudelivery/payment_api/app/dto"
@@ -43,7 +44,10 @@ func ProcessSplit(c *fiber.Ctx) error {
 	var totalSplit float64
 	for i, rule := range rules {
 		if rule.Amount == 0 && rule.Percentage > 0 {
-			rules[i].Amount = (rule.Percentage / 100.0) * payment.Amount
+			// Arredonda para centavos: sem isso o percentual gera dízima de
+			// float (ex.: 2.9997) e o lançamento vai pro ledger com fração
+			// de centavo, quebrando a conciliação.
+			rules[i].Amount = math.Round((rule.Percentage/100.0)*payment.Amount*100) / 100
 		}
 		totalSplit += rules[i].Amount
 	}

@@ -75,7 +75,7 @@ func ChargeCard(c *fiber.Ctx) error {
 
 	gatewayReq := &gateway.TransactionRequest{
 		OrderID:       0, // ChargeCard é avulsa, sem pedido interno
-		Amount:        int64(req.Amount * 100),
+		Amount:        toCents(req.Amount),
 		Currency:      "BRL",
 		PaymentMethod: gateway.MethodCreditCard,
 		CustomerEmail: email,
@@ -140,7 +140,7 @@ func ProcessPayment(c *fiber.Ctx) error {
 
 		gatewayReq := &gateway.TransactionRequest{
 			OrderID:       0,
-			Amount:        int64(req.Amount * 100),
+			Amount:        toCents(req.Amount),
 			Currency:      "BRL",
 			PaymentMethod: gateway.MethodCreditCard,
 			CustomerEmail: email,
@@ -204,7 +204,7 @@ func ProcessPayment(c *fiber.Ctx) error {
 	if req.Method == "pix" {
 		gatewayReq := &gateway.TransactionRequest{
 			OrderID:       parseOrderID(req.OrderID),
-			Amount:        int64(req.Amount * 100),
+			Amount:        toCents(req.Amount),
 			Currency:      "BRL",
 			PaymentMethod: gateway.MethodPIX,
 			CustomerEmail: email,

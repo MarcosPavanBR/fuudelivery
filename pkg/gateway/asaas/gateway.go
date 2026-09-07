@@ -334,8 +334,8 @@ func (g *AsaasGateway) GetRecipientBalance(
 		return 0, 0, fmt.Errorf("get balance: failed to parse response: %w", err)
 	}
 
-	available = int64(balance.Available * 100) // Reais → centavos
-	pending = int64(balance.WaitingFunds * 100)
+	available = gateway.ToCents(balance.Available) // Reais → centavos
+	pending = gateway.ToCents(balance.WaitingFunds)
 	return available, pending, nil
 }
 
@@ -370,7 +370,7 @@ func (g *AsaasGateway) ParseWebhook(body []byte) (*gateway.WebhookEvent, error) 
 	}
 
 	// Converter valor de reais para centavos
-	amount := int64(payload.Payment.Value * 100)
+	amount := gateway.ToCents(payload.Payment.Value)
 
 	// Mapear status
 	status := mapAsaasStatus(payload.Payment.Status)
@@ -402,7 +402,7 @@ func (g *AsaasGateway) ParseWebhook(body []byte) (*gateway.WebhookEvent, error) 
 	// Detalhes do split
 	var splitDetails []gateway.SplitDetail
 	if payload.SplitRule != nil {
-		splitAmount := int64(payload.SplitRule.Amount * 100)
+		splitAmount := gateway.ToCents(payload.SplitRule.Amount)
 		splitDetails = append(splitDetails, gateway.SplitDetail{
 			RecipientID: payload.SplitRule.WalletId,
 			Amount:      splitAmount,
@@ -411,7 +411,7 @@ func (g *AsaasGateway) ParseWebhook(body []byte) (*gateway.WebhookEvent, error) 
 	} else if len(payload.Payment.Split) > 0 {
 		splitDetails = make([]gateway.SplitDetail, len(payload.Payment.Split))
 		for i, split := range payload.Payment.Split {
-			splitAmount := int64(split.Amount * 100)
+			splitAmount := gateway.ToCents(split.Amount)
 			splitDetails[i] = gateway.SplitDetail{
 				RecipientID: split.WalletId,
 				Amount:      splitAmount,

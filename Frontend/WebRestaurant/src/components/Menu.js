@@ -103,7 +103,7 @@ const SideMenu = ({ isOpen, isMobile, onClose }) => {
       icon: <FiBox className="h-5 w-5" />,
     },
     {
-      title: "Delivery",
+      title: "Taxas",
       href: "/taxas",
       icon: (
         <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

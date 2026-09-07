@@ -1,8 +1,9 @@
-import { FiSave, FiTruck } from "react-icons/fi";
+import { FiSave, FiTruck, FiPercent } from "react-icons/fi";
 import MenuLayout from "../../components/Menu";
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import deliveryModel from "../../services/delivery.model";
+import zoneModel from "../../services/zone.model";
 import { toast } from "react-toastify";
 import Texts from "../../constants/Texts";
 
@@ -15,14 +16,19 @@ function Taxes() {
     fixedTaxa: 0,
     perKm: 0,
   });
+  const [zoneFee, setZoneFee] = useState(null);
 
   const start = async () => {
-    const resp = await deliveryModel.getDelivery(estId);
+    const [resp, fee] = await Promise.all([
+      deliveryModel.getDelivery(estId),
+      zoneModel.getMyZoneFee(),
+    ]);
     setBody({
       establishmentId: estId,
       fixedTaxa: resp?.FixedTaxa ?? 0,
       perKm: resp?.PerKm ?? 0,
     });
+    setZoneFee(fee);
   };
 
   useEffect(() => {
@@ -91,6 +97,67 @@ function Taxes() {
             </div>
           </form>
         </div>
+
+        {zoneFee && (
+          <div className="bg-white rounded-xl border border-gray-100 shadow-card p-6 mt-6">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="p-2 rounded-lg bg-red-50">
+                <FiPercent className="h-5 w-5" style={{ color: "#DC2626" }} />
+              </div>
+              <div>
+                <h4 className="font-bold text-gray-900">{Texts.comissao_plataforma}</h4>
+                <p className="text-xs text-gray-500 mt-0.5">{Texts.comissao_desc}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
+                  {Texts.taxa_atual_plataforma}
+                </label>
+                <p className="text-2xl font-bold text-gray-900">{zoneFee.current_platform_pct}%</p>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
+                  {Texts.sua_parte_pedido}
+                </label>
+                <p className="text-2xl font-bold text-gray-900">{zoneFee.current_establishment_pct}%</p>
+              </div>
+            </div>
+
+            {!zoneFee.has_zone && (
+              <p className="text-sm text-gray-500">{Texts.comissao_sem_zona}</p>
+            )}
+
+            {zoneFee.has_zone && (
+              <>
+                <p className="text-sm text-gray-500 mb-2">
+                  Região: {zoneFee.zone_name} — {zoneFee.city}
+                </p>
+                {zoneFee.at_target ? (
+                  <p className="text-sm text-gray-500">{Texts.comissao_no_target}</p>
+                ) : (
+                  <div className="text-sm text-gray-500 space-y-1">
+                    <p>
+                      {Texts.comissao_meta_final}: {zoneFee.target_platform_pct}% para a plataforma,{" "}
+                      {zoneFee.target_establishment_pct}% para você.
+                    </p>
+                    <p>
+                      Como a taxa evolui: a cada {zoneFee.step_months} meses, se a região mantiver pelo
+                      menos {zoneFee.min_monthly_orders} pedidos por mês, a taxa da plataforma sobe{" "}
+                      {zoneFee.step_platform_pct} ponto(s) percentual(is), até chegar à meta.
+                    </p>
+                    {zoneFee.last_adjusted_at && (
+                      <p>
+                        {Texts.ultimo_ajuste}: {new Date(zoneFee.last_adjusted_at).toLocaleDateString("pt-BR")}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
     </MenuLayout>
   );

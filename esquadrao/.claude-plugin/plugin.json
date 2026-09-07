@@ -1,0 +1,14 @@
+{
+  "name": "esquadrao",
+  "version": "1.0.0",
+  "description": "Equipa de engenharia para o Claude Code: agentes especializados, skills de domínio e comandos para planear, construir, revisar e proteger projetos Go/Node/React Native/Next.js do zero até produção.",
+  "author": {
+    "name": "Marcos Pavan"
+  },
+  "license": "MIT",
+  "keywords": ["subagents", "skills", "commands", "engineering-team", "tdd", "security-review", "go", "react-native", "nextjs"],
+  "agents": "./agents",
+  "commands": "./commands",
+  "skills": "./skills",
+  "hooks": "./hooks/hooks.json"
+}

@@ -45,7 +45,6 @@ func csrfReq(t *testing.T, app *fiber.App, method, path string, headers map[stri
 	return resp
 }
 
-
 // ── Atacante cross-site: cookie enviado sozinho, sem header ──
 
 func TestCSRF_CookieWithoutHeaderIsRejected(t *testing.T) {

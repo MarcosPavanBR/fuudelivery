@@ -22,6 +22,47 @@ import SwipeButtonDelivery from "@/componentes/SwipButton";
 import helper from "@/helpers/helper";
 import { MAP_STYLE_URL } from "@/constants/Config";
 
+// ─── Máquina de estado da entrega (extraída pra ser testável sem
+// renderizar a tela — ver __tests__/delivery_mode.test.ts) ───
+
+// Progressão da entrega: coleta -> aguardando no estabelecimento -> a
+// caminho do cliente -> finalizada. Status desconhecido reinicia no
+// primeiro passo (mesmo comportamento do switch original: sem match, o
+// valor default "IN_ROUTE_COLECT" é usado).
+export function nextDeliveryStatus(currentStatus: string): string {
+  switch (currentStatus) {
+    case "IN_ROUTE_COLECT":
+      return "AWAIT_COLECT";
+    case "AWAIT_COLECT":
+      return "IN_ROUTE_DELIVERY";
+    case "IN_ROUTE_DELIVERY":
+      return "FINISHED";
+    default:
+      return "IN_ROUTE_COLECT";
+  }
+}
+
+// Código de retirada só é exigido nas duas etapas em que o entregador
+// precisa confirmar posse do pedido com alguém (estabelecimento ou
+// cliente) — nas outras, o avanço de status não depende de código.
+export function needsPickupCode(status: string): boolean {
+  return status === "AWAIT_COLECT" || status === "IN_ROUTE_DELIVERY";
+}
+
+// O botão de confirmar fica travado enquanto o pedido não está pronto
+// (AWAIT_COLECT sem status DONE) ou ainda esperando aprovação — evita o
+// entregador confirmar retirada de um pedido que o restaurante nem
+// terminou de preparar.
+export function isSwipeDisabled(
+  deliveryman: { status: string },
+  order: { status: string }
+): boolean {
+  return (
+    (deliveryman.status === "AWAIT_COLECT" && order.status !== "DONE") ||
+    order.status === "AWAIT_APPROVE"
+  );
+}
+
 export default function DeliveryMode({ showIcon }: any) {
   const insets = useSafeAreaInsets();
   const nav = useNavigation();
@@ -45,19 +86,7 @@ export default function DeliveryMode({ showIcon }: any) {
   const deliveryman = order.deliveryman;
 
   const awaitCollect = async () => {
-    let status = "IN_ROUTE_COLECT";
-
-    switch (deliveryman.status) {
-      case "IN_ROUTE_COLECT":
-        status = "AWAIT_COLECT";
-        break;
-      case "AWAIT_COLECT":
-        status = "IN_ROUTE_DELIVERY";
-        break;
-      case "IN_ROUTE_DELIVERY":
-        status = "FINISHED";
-        break;
-    }
+    const status = nextDeliveryStatus(deliveryman.status);
 
     setLoading(true);
 
@@ -88,9 +117,7 @@ export default function DeliveryMode({ showIcon }: any) {
     // validate) — o entregador não consegue mais calculá-lo sozinho.
     // legacyCode mantém compatibilidade com pedidos antigos sem código
     // server-side gerado.
-    const needsCode =
-      deliveryman.status === "AWAIT_COLECT" ||
-      deliveryman.status === "IN_ROUTE_DELIVERY";
+    const needsCode = needsPickupCode(deliveryman.status);
 
     nav.navigate("confirm_generical", {
       onConfirm: awaitCollect,
@@ -205,10 +232,7 @@ export default function DeliveryMode({ showIcon }: any) {
       </View>
 
       <SwipeButtonDelivery
-        disabled={
-          (deliveryman.status == "AWAIT_COLECT" && order.status !== "DONE") ||
-          order.status == "AWAIT_APPROVE"
-        }
+        disabled={isSwipeDisabled(deliveryman, order)}
         loading={loading}
         title={(Texts as Record<string, string>)[deliveryman.status] ?? deliveryman.status}
         onComplete={() => {

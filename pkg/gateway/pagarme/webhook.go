@@ -37,10 +37,23 @@ func ValidateHMAC(body []byte, signature, secret string) bool {
 	isValid := hmac.Equal([]byte(signature), []byte(expectedMAC))
 
 	if !isValid {
-		log.Printf("[PAGARME] Webhook HMAC mismatch: expected=%s got=%s", expectedMAC[:8]+"...", signature[:8]+"...")
+		// signature vem de quem chamou o webhook: fatiar direto (signature[:8])
+		// dava panic com assinatura de menos de 8 caracteres.
+		log.Printf("[PAGARME] Webhook HMAC mismatch: expected=%s got=%s",
+			prefixForLog(expectedMAC), prefixForLog(signature))
 	}
 
 	return isValid
+}
+
+// prefixForLog devolve os primeiros 8 caracteres seguidos de "..." para log,
+// sem estourar quando a string é menor que isso.
+func prefixForLog(s string) string {
+	const n = 8
+	if len(s) <= n {
+		return s + "..."
+	}
+	return s[:n] + "..."
 }
 
 // ComputeHMAC calcula o HMAC-SHA256 de um body (para testes e debug).

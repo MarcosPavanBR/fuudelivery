@@ -300,8 +300,7 @@ func (g *PagarMeGateway) ValidateWebhook(body []byte, headers map[string]string)
 	}
 
 	if g.webhookSecret == "" {
-		log.Println("[PAGARME] WARNING: Webhook secret not configured. Skipping validation.")
-		return true // Fallback: aceitar se secret não configurado
+		return gateway.AllowUnsignedWebhook("PAGARME", "PAGARME_WEBHOOK_SECRET")
 	}
 
 	return ValidateHMAC(body, signature, g.webhookSecret)

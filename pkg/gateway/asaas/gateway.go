@@ -351,8 +351,7 @@ func (g *AsaasGateway) ValidateWebhook(body []byte, headers map[string]string) b
 	}
 
 	if g.webhookToken == "" {
-		log.Println("[ASAAS] WARNING: Webhook token not configured. Skipping validation.")
-		return true
+		return gateway.AllowUnsignedWebhook("ASAAS", "ASAAS_WEBHOOK_TOKEN")
 	}
 
 	return token == g.webhookToken

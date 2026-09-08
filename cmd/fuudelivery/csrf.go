@@ -22,26 +22,33 @@ import (
 //      cross-site é rejeitada.
 //
 // Escopo da proteção:
-//   - Aplica-se apenas a mutações com credenciais de browser
-//     (cookie access_token/refresh_token/csrf_token presentes) —
-//     o alvo real de CSRF.
+//   - Aplica-se a toda mutação que chega com COOKIE DE SESSÃO
+//     (access_token/refresh_token) — o alvo real de CSRF.
 //   - Requisições autenticadas só por `Authorization: Bearer`
 //     (apps mobile via SecureStore) não têm cookie para forjar:
 //     um atacante cross-site não consegue definir headers em
 //     requisições cross-origin, então não há CSRF a proteger.
 //     Elas continuam exigindo o Bearer e passam direto.
 //
-// O header tem prioridade sobre o cookie. Fallback legado: se não
-// houver header, mas o cliente enviar o token por query (?_csrf=),
-// também aceitamos — mantém compatibilidade com clientes antigos
-// que usavam apenas o cookie, sem enfraquecer o double-submit
-// (attacker cross-site não controla query strings de requisições
-// que ele não monta via JS).
+// O gatilho é o cookie de SESSÃO, não o cookie de CSRF. Isso é
+// deliberado e corrige um furo real: quando o teste era
+// `if csrf_token == "" { libera }`, uma sessão de browser sem o cookie
+// de CSRF passava direto. E isso acontecia sozinho — o csrf_token
+// expirava antes da sessão, então a proteção se desligava com o tempo.
+// Enquanto os cookies eram SameSite=Strict o navegador nem os mandava
+// cross-site e o furo era teórico; com SameSite=None (necessário porque
+// frontend e API vivem em subdomínios .onrender.com distintos) este
+// passou a ser o gate lógico principal, e precisa fechar.
+//
+// Não há fallback por query string (?_csrf=): token em URL vaza para
+// log de acesso, Referer e histórico — quem lê o log ganha um token
+// válido, que é justamente o que o double-submit tenta impedir.
 
 const (
-	csrfCookieName = "csrf_token"
-	csrfHeaderName = "X-CSRF-Token"
-	csrfQueryName  = "_csrf"
+	csrfCookieName    = "csrf_token"
+	csrfHeaderName    = "X-CSRF-Token"
+	accessCookieName  = "access_token"
+	refreshCookieName = "refresh_token"
 )
 
 // constantTimeEquals compara duas strings em tempo constante,
@@ -58,29 +65,44 @@ func csrfCheck(c *fiber.Ctx) *fiber.Error {
 		return nil // mutações não-afetantes não precisam de CSRF
 	}
 
+	// Webhooks de gateway autenticam por assinatura própria e não têm
+	// cookies do nosso domínio — isentos explicitamente.
+	if IsCSRFExemptPath(c.Path()) {
+		return nil
+	}
+
 	cookieToken := c.Cookies(csrfCookieName)
 	headerToken := c.Get(csrfHeaderName)
-	queryToken := c.Query(csrfQueryName)
 
-	// Sem cookie de CSRF → não é uma sessão de browser; nada a proteger.
+	hasSession := c.Cookies(accessCookieName) != "" || c.Cookies(refreshCookieName) != ""
+
+	// Sem NENHUM cookie nosso → não é requisição de browser com credencial
+	// ambiente; não há o que um site terceiro possa forjar.
 	// (Bearer-only: mobile/S2S.)
-	if cookieToken == "" {
+	if !hasSession && cookieToken == "" {
 		return nil
 	}
 
-	// Double-submit: header (ou query legada) precisa igualar o cookie.
+	// A partir daqui exige-se o double-submit. Note que basta haver sessão:
+	// cookie de CSRF ausente agora REJEITA em vez de liberar — era esse o
+	// furo, porque o csrf_token expirava antes da sessão e a proteção se
+	// desligava sozinha com o tempo.
+	if cookieToken == "" || headerToken == "" {
+		return &fiber.Error{
+			Code:    fiber.StatusForbidden,
+			Message: "CSRF token missing or invalid",
+		}
+	}
+
 	// constant-time para não vazar prefixo por timing.
-	if headerToken != "" && constantTimeEquals(headerToken, cookieToken) {
-		return nil
-	}
-	if queryToken != "" && constantTimeEquals(queryToken, cookieToken) {
-		return nil
+	if !constantTimeEquals(headerToken, cookieToken) {
+		return &fiber.Error{
+			Code:    fiber.StatusForbidden,
+			Message: "CSRF token missing or invalid",
+		}
 	}
 
-	return &fiber.Error{
-		Code:    fiber.StatusForbidden,
-		Message: "CSRF token missing or invalid",
-	}
+	return nil
 }
 
 // csrfMiddleware é o wrapper Fiber que converte o resultado de

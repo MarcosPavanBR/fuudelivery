@@ -190,7 +190,7 @@ export default function Financeiro() {
 
       {tab === "stats" && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard icon={FiDollarSign} label="Total" value={"R$ " + (totalAmount / 100).toFixed(2)} color="#6366f1" bg="#EEF2FF" />
+          <StatCard icon={FiDollarSign} label="Total" value={"R$ " + totalAmount.toFixed(2)} color="#6366f1" bg="#EEF2FF" />
           <StatCard icon={FiClock} label="Pendentes" value={pending.length} color="#D97706" bg="#FFFBEB" />
           <StatCard icon={FiCheck} label="Aprovados" value={approved.length} color="#16A34A" bg="#F0FDF4" />
           <StatCard icon={FiAlertTriangle} label="Rejeitados" value={rejected.length} color="#DC2626" bg="#FEF2F2" />
@@ -239,10 +239,13 @@ export default function Financeiro() {
               <tbody className="divide-y divide-gray-100">
                 {filteredPayments.slice(0, 50).map(p => (
                   <tr key={p.id || p._id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-2 text-sm font-mono">{(p.id || p._id || "").slice(0, 8)}</td>
+                    {/* String(): o id vem do Postgres como int64 e chega no
+                        JSON como NÚMERO. Chamar .slice direto nele lança
+                        TypeError e derruba a aba inteira no ErrorBoundary. */}
+                    <td className="px-4 py-2 text-sm font-mono">{String(p.id ?? p._id ?? "").slice(0, 8)}</td>
                     <td className="px-4 py-2 text-sm">{customerLabel(p)}</td>
                     <td className="px-4 py-2 text-sm">{p.orderId || p.order_id || "-"}</td>
-                    <td className="px-4 py-2 text-sm font-semibold">R$ {((p.amount || 0) / 100).toFixed(2)}</td>
+                    <td className="px-4 py-2 text-sm font-semibold">R$ {(p.amount || 0).toFixed(2)}</td>
                     <td className="px-4 py-2">
                       <span
                         className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold"
@@ -287,8 +290,8 @@ export default function Financeiro() {
                 <FiCreditCard className="h-5 w-5 text-fuu-red" />
                 <span className="font-semibold text-gray-900">{w.ownerName || w.owner_type || "Carteira"}</span>
               </div>
-              <div className="text-3xl font-bold text-green-600">R$ {((w.balance || 0) / 100).toFixed(2)}</div>
-              <div className="text-xs text-gray-500 mt-1">ID: {(w.id || w._id || "").slice(0, 8)}</div>
+              <div className="text-3xl font-bold text-green-600">R$ {(w.balance || 0).toFixed(2)}</div>
+              <div className="text-xs text-gray-500 mt-1">ID: {String(w.id ?? w._id ?? "").slice(0, 8)}</div>
             </div>
           ))}
           {wallets.length === 0 && (

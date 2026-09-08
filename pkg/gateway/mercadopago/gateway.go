@@ -237,9 +237,8 @@ func (g *MercadoPagoGateway) GetRecipientBalance(
 
 // ValidateWebhook valida a assinatura do webhook Mercado Pago.
 func (g *MercadoPagoGateway) ValidateWebhook(body []byte, headers map[string]string) bool {
-	// Em modo dev (sem secret configurado), aceitar sempre
 	if g.webhookSecret == "" {
-		return true
+		return gateway.AllowUnsignedWebhook("MERCADOPAGO", "MERCADOPAGO_WEBHOOK_SECRET")
 	}
 
 	// Mercado Pago usa HMAC-SHA256 com x-signature header

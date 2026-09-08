@@ -228,7 +228,10 @@ func TestCheckoutE2E_PaymentWebhookToSplit(t *testing.T) {
 	require.InDelta(t, 7.00, splitRules[2].Amount, 0.01)
 
 	require.Equal(t, "customer", splitRules[3].ReceiverType)
-	require.InDelta(t, 89.90-89.90*0.05-89.90*0.85-7.00, splitRules[3].Amount, 0.01)
+	// Valores arredondados a centavo: 4.495 -> 4.50 e 76.415 -> 76.42
+	// (nao existe meio centavo pagavel), entao o resto do cashback e 1.98,
+	// nao 1.99. A soma continua exata: 4.50+76.42+7.00+1.98 = 89.90.
+	require.InDelta(t, 1.98, splitRules[3].Amount, 0.001)
 
 	totalSplit := 0.0
 	for _, r := range splitRules {
@@ -711,7 +714,8 @@ func TestCheckoutE2E_WebhookRealFlow_Cashback(t *testing.T) {
 
 	require.Equal(t, "customer", stored.SplitRules[3].ReceiverType)
 	require.Equal(t, int64(777), stored.SplitRules[3].ReceiverID, "cashback vai para o customer_id do pagamento")
-	require.InDelta(t, 89.90-89.90*0.05-89.90*0.85-7.00, stored.SplitRules[3].Amount, 0.01)
+	// Mesmo arredondamento a centavo do teste acima: resto = 1.98.
+	require.InDelta(t, 1.98, stored.SplitRules[3].Amount, 0.001)
 
 	// O total dividido nunca excede o valor pago (nenhum centavo inventado).
 	totalSplit := 0.0

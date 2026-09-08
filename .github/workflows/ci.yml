@@ -169,7 +169,14 @@ jobs:
           echo "=== END DEBUG ==="
           echo ""
           echo "=== Running integration tests ==="
-          go test -tags=integration -v -count=1 -timeout 20m -run 'TestCheckoutE2E' ./app/handlers/ 2>&1 | tee /tmp/test-output.txt
+          # Sem -run: roda TODOS os testes com a tag `integration`.
+          #
+          # Antes era -run 'TestCheckoutE2E', o que fazia qualquer teste de
+          # integração com outro nome ser compilado e NUNCA executado — foi o
+          # caso dos TestWalletIdempotency_*, que cobrem a regra de
+          # idempotência financeira do projeto e passavam despercebidos.
+          # Sem filtro, teste de integração novo entra no gate sozinho.
+          go test -tags=integration -v -count=1 -timeout 20m ./app/handlers/ 2>&1 | tee /tmp/test-output.txt
           TEST_EXIT=${PIPESTATUS[0]}
           echo ""
           echo "=== Test exit code: $TEST_EXIT ==="

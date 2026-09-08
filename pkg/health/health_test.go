@@ -165,3 +165,40 @@ func TestOverallStatus_Lifecycle(t *testing.T) {
 		t.Fatalf("step 4: expected 'up', got '%s'", s4)
 	}
 }
+
+// ── GatewayCheck: reflete a cadeia REAL do router ──
+//
+// Antes, esta função lia ABACATE_PAY_API_KEY, PAGARME_API_KEY etc. por conta
+// própria e adivinhava a disponibilidade. Quem monta a cadeia de verdade é
+// buildPaymentGateways(), que também descarta gateway cujo construtor falhou:
+// credencial presente porém inválida deixava a cadeia VAZIA com o /health
+// dizendo 200 "up", toda cobrança falhando e o load balancer achando o
+// serviço saudável. Agora a lista vem de Router.Gateways().
+
+func TestGatewayCheck_CadeiaVaziaFicaDown(t *testing.T) {
+	for _, registered := range [][]string{nil, {}} {
+		check := GatewayCheck(registered)
+		if check.Status != "down" {
+			t.Fatalf("cadeia sem gateway deve ficar down, veio %q", check.Status)
+		}
+	}
+}
+
+func TestGatewayCheck_CadeiaComGatewayFicaUp(t *testing.T) {
+	check := GatewayCheck([]string{"pagarme", "asaas"})
+	if check.Status != "up" {
+		t.Fatalf("cadeia com gateway deve ficar up, veio %q", check.Status)
+	}
+}
+
+// A consequência que interessa: cadeia vazia derruba o status geral, e é isso
+// que faz o /health devolver 503 em vez de 200.
+func TestGatewayCheck_VaziaDerrubaOStatusGeral(t *testing.T) {
+	status := OverallStatus(
+		Check{Name: "postgres", Status: "up"},
+		GatewayCheck(nil),
+	)
+	if status != "down" {
+		t.Fatalf("Postgres up mas sem gateway deve dar down (503), veio %q", status)
+	}
+}

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -112,6 +113,14 @@ func ChargeCard(c *fiber.Ctx) error {
 	resp, err := router.CreateTransactionWithFallback(c.Context(), gatewayReq)
 	if err != nil {
 		log.Printf("[CARD] Error creating card payment via router: amount=%.2f err=%v", req.Amount, err)
+		// Nenhum gateway elegível é indisponibilidade, não erro do servidor —
+		// mesma semântica do guard cardGatewayConfigured() acima. 500 fazia o
+		// cliente achar que a cobrança pode ter passado.
+		if errors.Is(err, gateway.ErrNoGatewayAvailable) {
+			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+				"error": "Pagamento por cartão temporariamente indisponível. Use PIX.",
+			})
+		}
 		return c.Status(500).JSON(fiber.Map{"error": "Card payment failed"})
 	}
 
@@ -144,6 +153,22 @@ func ProcessPayment(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Valor da cobrança não corresponde ao pedido"})
 	}
 	req.Amount = serverTotal
+
+	// Idem ao PIX: o frete alimenta o split e, se vier >= total, zera
+	// plataforma e estabelecimento. Validado antes dos dois ramos abaixo
+	// (cartão e pix), que gravam req.DeliveryAmount no pagamento.
+	serverDelivery, deliveryOK := resolveDeliveryAmount(req.OrderID, req.DeliveryAmount, serverTotal)
+	if !deliveryOK {
+		log.Printf("[CARD] Cobrança rejeitada: frete diverge do pedido %s (client=%.2f total=%.2f)",
+			req.OrderID, req.DeliveryAmount, serverTotal)
+		return c.Status(400).JSON(fiber.Map{"error": "Valor da entrega não corresponde ao pedido"})
+	}
+	req.DeliveryAmount = serverDelivery
+
+	if !bindRecipientToOrder(c, &req) {
+		log.Printf("[CARD] Cobrança rejeitada: pedido %s sem estabelecimento conhecido", req.OrderID)
+		return c.Status(400).JSON(fiber.Map{"error": "Pedido inválido para cobrança"})
+	}
 
 	router, err := getPaymentRouter(c)
 	if err != nil {
@@ -180,6 +205,14 @@ func ProcessPayment(c *fiber.Ctx) error {
 		resp, err := router.CreateTransactionWithFallback(c.Context(), gatewayReq)
 		if err != nil {
 			log.Printf("Error processing card payment via router: %v", err)
+			// Mesma semântica do ChargeCard: cadeia sem gateway elegível é
+			// indisponibilidade (503), não erro do servidor. 500 aqui fazia o
+			// cliente suspeitar que a cobrança tivesse passado.
+			if errors.Is(err, gateway.ErrNoGatewayAvailable) {
+				return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+					"error": "Pagamento por cartão temporariamente indisponível. Use PIX.",
+				})
+			}
 			return c.Status(500).JSON(fiber.Map{"error": "Payment processing failed"})
 		}
 
@@ -238,6 +271,11 @@ func ProcessPayment(c *fiber.Ctx) error {
 		resp, err := router.CreateTransactionWithFallback(c.Context(), gatewayReq)
 		if err != nil {
 			log.Printf("Error processing PIX payment via router: %v", err)
+			if errors.Is(err, gateway.ErrNoGatewayAvailable) {
+				return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+					"error": "Pagamento por PIX temporariamente indisponível. Tente novamente em instantes.",
+				})
+			}
 			return c.Status(500).JSON(fiber.Map{"error": "PIX payment failed"})
 		}
 

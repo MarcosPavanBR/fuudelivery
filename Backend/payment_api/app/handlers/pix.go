@@ -39,6 +39,23 @@ func GeneratePIX(c *fiber.Ctx) error {
 	}
 	req.Amount = serverTotal
 
+	// O frete também não pode vir do cliente: ele entra no split e, se for
+	// >= total, zera plataforma e estabelecimento (ver resolveDeliveryAmount).
+	serverDelivery, deliveryOK := resolveDeliveryAmount(req.OrderID, req.DeliveryAmount, serverTotal)
+	if !deliveryOK {
+		log.Printf("[PIX] Cobrança rejeitada: frete diverge do pedido %s (client=%.2f total=%.2f)",
+			req.OrderID, req.DeliveryAmount, serverTotal)
+		return c.Status(400).JSON(fiber.Map{"error": "Valor da entrega não corresponde ao pedido"})
+	}
+	req.DeliveryAmount = serverDelivery
+
+	// Destinatário do dinheiro também não pode vir do corpo — era por aí que
+	// dava para redirecionar o split do estabelecimento.
+	if !bindRecipientToOrder(c, &req) {
+		log.Printf("[PIX] Cobrança rejeitada: pedido %s sem estabelecimento conhecido", req.OrderID)
+		return c.Status(400).JSON(fiber.Map{"error": "Pedido inválido para cobrança"})
+	}
+
 	client := services.NewAbacatePayClient()
 	chargeReq := services.PIXChargeRequest{}
 	// req.Amount está em REAIS (unidade persistida no Postgres); o gateway

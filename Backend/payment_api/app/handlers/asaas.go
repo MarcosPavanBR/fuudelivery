@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"log"
+	"math"
 	"time"
 
 	"github.com/carloshomar/fuudelivery/payment_api/app/services"
@@ -121,8 +122,10 @@ func CreateAsaasSplitPayment(c *fiber.Ctx) error {
 		Percentual:          req.EstablishmentSplitPct,
 	})
 
-	if req.DeliveryManWalletID != "" && req.DeliveryAmount > 0 {
-		deliveryPct := (req.DeliveryAmount / req.Amount) * 100
+	// req.Amount > 0 é obrigatório: sem essa guarda, Amount zerado produz
+	// +Inf no percentual e manda lixo pro Asaas.
+	if req.DeliveryManWalletID != "" && req.DeliveryAmount > 0 && req.Amount > 0 {
+		deliveryPct := math.Round((req.DeliveryAmount/req.Amount)*100*100) / 100
 		splits = append(splits, services.AsaasSplitRequest{
 			SubMerchantWalletId: req.DeliveryManWalletID,
 			Percentual:          deliveryPct,

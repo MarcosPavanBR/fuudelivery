@@ -1,0 +1,16 @@
+{
+  "_comment": "Exemplo de configuração de MCP servers para este plugin. Preencha com os servidores reais do seu ambiente (GitHub, banco de dados, etc). Nunca coloque tokens/segredos reais aqui — use variáveis de ambiente referenciadas por nome.",
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+      }
+    },
+    "postgres": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres", "${DATABASE_URL}"]
+    }
+  }
+}

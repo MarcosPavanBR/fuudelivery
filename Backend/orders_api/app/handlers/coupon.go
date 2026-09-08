@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"math"
 	"strings"
 	"time"
 
@@ -150,7 +151,7 @@ func ValidateCoupon(c *fiber.Ctx) error {
 	var discountAmount float64
 	switch coupon.DiscountType {
 	case "PERCENTAGE":
-		discountAmount = request.OrderValue * (coupon.DiscountValue / 100)
+		discountAmount = math.Round(request.OrderValue*(coupon.DiscountValue/100)*100) / 100
 	case "FIXED":
 		discountAmount = coupon.DiscountValue
 	case "FREE_DELIVERY":
@@ -229,7 +230,7 @@ func ApplyCoupon(c *fiber.Ctx) error {
 	var discountAmount float64
 	switch coupon.DiscountType {
 	case "PERCENTAGE":
-		discountAmount = request.OrderValue * (coupon.DiscountValue / 100)
+		discountAmount = math.Round(request.OrderValue*(coupon.DiscountValue/100)*100) / 100
 	case "FIXED":
 		discountAmount = coupon.DiscountValue
 	case "FREE_DELIVERY":
@@ -311,7 +312,7 @@ func ValidateCouponInternal(req dto.ValidateCouponRequest) dto.ValidateCouponRes
 	var discountAmount float64
 	switch coupon.DiscountType {
 	case "PERCENTAGE":
-		discountAmount = req.OrderValue * (coupon.DiscountValue / 100)
+		discountAmount = math.Round(req.OrderValue*(coupon.DiscountValue/100)*100) / 100
 	case "FIXED":
 		discountAmount = coupon.DiscountValue
 	case "FREE_DELIVERY":
@@ -461,7 +462,7 @@ func CalculateDiscount(c *fiber.Ctx) error {
 	var discountAmount float64
 	switch coupon.DiscountType {
 	case "PERCENTAGE":
-		discountAmount = request.OrderValue * (coupon.DiscountValue / 100)
+		discountAmount = math.Round(request.OrderValue*(coupon.DiscountValue/100)*100) / 100
 	case "FIXED":
 		discountAmount = coupon.DiscountValue
 	case "FREE_DELIVERY":

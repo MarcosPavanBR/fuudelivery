@@ -204,9 +204,8 @@ func (g *AbacatePayGateway) GetRecipientBalance(
 
 // ValidateWebhook valida a assinatura do webhook AbacatePay.
 func (g *AbacatePayGateway) ValidateWebhook(body []byte, headers map[string]string) bool {
-	// Em modo dev (sem secret configurado), aceitar sempre
 	if g.webhookSecret == "" {
-		return true
+		return gateway.AllowUnsignedWebhook("ABACATEPAY", "ABACATE_PAY_WEBHOOK_SECRET")
 	}
 
 	signature := headers["x-abacatepay-signature"]

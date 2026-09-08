@@ -2,6 +2,7 @@ package asaas
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -351,11 +352,16 @@ func (g *AsaasGateway) ValidateWebhook(body []byte, headers map[string]string) b
 	}
 
 	if g.webhookToken == "" {
-		log.Println("[ASAAS] WARNING: Webhook token not configured. Skipping validation.")
-		return true
+		return gateway.AllowUnsignedWebhook("ASAAS", "ASAAS_WEBHOOK_TOKEN")
 	}
 
-	return token == g.webhookToken
+	// Comparação em tempo constante. O `==` de string do Go faz curto-circuito
+	// no primeiro byte diferente: quem controla o header mede a diferença de
+	// tempo e descobre o token byte a byte. Os outros três adapters já usam
+	// hmac.Equal (pagarme/webhook.go, abacatepay/webhook.go,
+	// mercadopago/gateway.go); aqui o segredo é um token fixo, não um HMAC
+	// derivado, então o vazamento seria do segredo em si.
+	return subtle.ConstantTimeCompare([]byte(token), []byte(g.webhookToken)) == 1
 }
 
 // ParseWebhook converte o payload do webhook em um WebhookEvent normalizado.

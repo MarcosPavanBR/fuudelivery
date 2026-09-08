@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -79,14 +80,33 @@ func GetOrCreateWallet(db *gorm.DB, userID int64, userType string) (*Wallet, err
 	return wallet, nil
 }
 
-// AdjustWalletBalance aplica um crédito ou débito ATOMICAMENTE:
-// abre transação, trava a linha da carteira (SELECT ... FOR UPDATE),
-// valida saldo no débito, atualiza e insere o lançamento no ledger.
-// Toda movimentação de dinheiro DEVE passar por aqui — nunca atualize
+// GetWallet lê a carteira SEM criar. Use nos caminhos de leitura (ex.: replay
+// idempotente), onde criar uma carteira zerada mascararia o problema:
+// responder "saldo 0" como se a operação tivesse acontecido, para um usuário
+// que sequer tinha carteira.
+func GetWallet(db *gorm.DB, userID int64, userType string) (*Wallet, error) {
+	var wallet Wallet
+	if err := db.Where("user_id = ? AND user_type = ?", userID, userType).First(&wallet).Error; err != nil {
+		return nil, fmt.Errorf("carregar carteira %d/%s: %w", userID, userType, err)
+	}
+	return &wallet, nil
+}
+
 // ErrDuplicateCredit indica que já existe lançamento de crédito para a
 // referência (violacao de uq_wallet_txns_credit_ref) — o crédito já foi
 // aplicado antes e a operação atual é um replay idempotente.
 var ErrDuplicateCredit = errors.New("lançamento de crédito duplicado para a referência")
+
+// ErrDuplicateDebit é o equivalente para débitos (violacao de
+// uq_wallet_txns_debit_ref_wallet, criado em sql/18_debit_idempotency.sql e
+// reescopado por carteira em sql/20_debit_idempotency_por_wallet.sql). O
+// débito já foi aplicado antes; quem chamou deve responder de forma
+// idempotente em vez de tratar como erro de servidor.
+//
+// Atenção: aquele índice é parcial e exclui referência vazia (string de
+// comprimento zero), então um débito sem referência NÃO é protegido —
+// passar referenceID vazio desliga a idempotência silenciosamente.
+var ErrDuplicateDebit = errors.New("lançamento de débito duplicado para a referência")
 
 // isUniqueViolation detecta erro 23505 do Postgres, opcionalmente filtrando
 // pelo nome da constraint.
@@ -98,6 +118,10 @@ func isUniqueViolation(err error, constraint string) bool {
 	return false
 }
 
+// AdjustWalletBalance aplica um crédito ou débito ATOMICAMENTE:
+// abre transação, trava a linha da carteira (SELECT ... FOR UPDATE),
+// valida saldo no débito, atualiza e insere o lançamento no ledger.
+// Toda movimentação de dinheiro DEVE passar por aqui — nunca atualize
 // balance direto com UPDATE solto.
 //
 // referenceID identifica a origem (payment_id ou order_id) e é usado como
@@ -159,6 +183,14 @@ func AdjustWalletBalance(db *gorm.DB, userID int64, userType, txnType, kind stri
 			if txnType == "credit" && isUniqueViolation(err, "uq_wallet_txns_credit_ref") {
 				return ErrDuplicateCredit
 			}
+			// Mesmo caso para débito (saque/dedução reenviados): o índice
+			// uq_wallet_txns_debit_ref_wallet barra o segundo lançamento e o
+			// rollback desfaz o UPDATE do saldo, então o dinheiro não sai
+			// duas vezes. Sem este mapeamento o erro subia cru e virava 500,
+			// fazendo um retry legítimo parecer falha de servidor.
+			if txnType == "debit" && isUniqueViolation(err, "uq_wallet_txns_debit_ref_wallet") {
+				return ErrDuplicateDebit
+			}
 			return err
 		}
 
@@ -169,6 +201,39 @@ func AdjustWalletBalance(db *gorm.DB, userID int64, userType, txnType, kind stri
 		return nil, err
 	}
 	return updated, nil
+}
+
+// FindLedgerEntry devolve o lançamento já existente para a referência, do dono
+// informado. Use no caminho de replay, onde só saber que "existe alguma coisa"
+// não basta.
+//
+// Motivo: responder 200 apenas porque a referência já foi usada permite um
+// falso sucesso caro. A chave de idempotência (order_id, Idempotency-Key) NÃO
+// inclui o valor, então uma segunda chamada com a MESMA referência e um valor
+// MAIOR batia no índice único, virava "replay" e recebia
+// 200 "debitado com sucesso" com o valor novo no corpo — enquanto o que saiu
+// da carteira foi só o primeiro valor, possivelmente de um centavo. Quem
+// consome a resposta dá o pedido por pago.
+//
+// Com o lançamento em mãos, o chamador compara o valor e recusa a divergência
+// em vez de confirmá-la.
+func FindLedgerEntry(db *gorm.DB, referenceID, txnType string, userID int64) (*WalletTxn, error) {
+	var entry WalletTxn
+	err := db.Model(&WalletTxn{}).
+		Joins("JOIN wallets ON wallets.id = wallet_transactions.wallet_id").
+		Where("wallet_transactions.reference_id = ? AND wallet_transactions.type = ? AND wallets.user_id = ?", referenceID, txnType, userID).
+		First(&entry).Error
+	if err != nil {
+		return nil, err
+	}
+	return &entry, nil
+}
+
+// SameAmount compara dois valores em reais na granularidade de centavo, que é
+// a menor unidade pagável. Evita que ruído de float (0.1+0.2) faça um replay
+// legítimo parecer divergente.
+func SameAmount(a, b float64) bool {
+	return int64(math.Round(a*100)) == int64(math.Round(b*100))
 }
 
 // HasLedgerEntry checa idempotência: já existe lançamento deste tipo para a

@@ -1,0 +1,14 @@
+{
+  "name": "esquadrao-marketplace",
+  "owner": {
+    "name": "Marcos Pavan"
+  },
+  "plugins": [
+    {
+      "name": "esquadrao",
+      "source": "./",
+      "description": "Equipa de engenharia completa para o Claude Code — planeamento, revisão por linguagem, segurança, TDD e deploy.",
+      "version": "1.0.0"
+    }
+  ]
+}

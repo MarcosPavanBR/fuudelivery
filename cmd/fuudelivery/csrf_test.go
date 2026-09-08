@@ -19,8 +19,12 @@ const testCSRFToken = "0123456789abcdef0123456789abcdef" // 32 hex chars
 
 func newCSRFTestApp() *fiber.App {
 	app := fiber.New()
-	app.Post("/payments/webhook", func(c *fiber.Ctx) error { return c.SendString("wh-ok") })
+	// O middleware vem ANTES de toda rota, inclusive a do webhook. Se o
+	// webhook fosse registrado primeiro, o Fiber o atenderia sem passar pelo
+	// middleware e o teste de isenção passaria sem exercitar
+	// IsCSRFExemptPath — verde por acidente, não por proteção.
 	app.Use(csrfMiddleware)
+	app.Post("/payments/webhook", func(c *fiber.Ctx) error { return c.SendString("wh-ok") })
 	app.Post("/mutate", func(c *fiber.Ctx) error { return c.SendString("ok") })
 	app.Put("/mutate", func(c *fiber.Ctx) error { return c.SendString("ok") })
 	app.Delete("/mutate", func(c *fiber.Ctx) error { return c.SendString("ok") })
@@ -44,7 +48,6 @@ func csrfReq(t *testing.T, app *fiber.App, method, path string, headers map[stri
 	}
 	return resp
 }
-
 
 // ── Atacante cross-site: cookie enviado sozinho, sem header ──
 
@@ -79,6 +82,64 @@ func TestCSRF_MatchingHeaderCookieAccepted(t *testing.T) {
 		if resp.StatusCode != fiber.StatusOK {
 			t.Fatalf("expected 200 for %s with matching header×cookie, got %d", method, resp.StatusCode)
 		}
+	}
+}
+
+// ── O furo real: sessão de browser SEM cookie de CSRF ──
+//
+// Era este o caso que a versão anterior liberava. O gate era
+// `if csrf_token == "" { passa }`, então bastava a requisição chegar sem o
+// cookie de CSRF para a proteção se desligar — e isso acontecia sozinho,
+// porque o csrf_token expirava antes da sessão. Com SameSite=Strict o
+// navegador nem mandava os cookies cross-site e o furo era teórico; com
+// SameSite=None (necessário porque frontend e API vivem em subdomínios
+// .onrender.com distintos) ele virou alcançável de verdade.
+//
+// O gatilho correto é o cookie de SESSÃO: se ele veio, o browser está
+// mandando credencial ambiente e o double-submit é obrigatório.
+
+func TestCSRF_SessionWithoutCsrfCookieIsRejected(t *testing.T) {
+	for _, sessionCookie := range []string{accessCookieName, refreshCookieName} {
+		t.Run(sessionCookie, func(t *testing.T) {
+			app := newCSRFTestApp()
+			resp := csrfReq(t, app, "POST", "/mutate", nil,
+				map[string]string{sessionCookie: "jwt-de-sessao-valido"},
+			)
+			if resp.StatusCode != fiber.StatusForbidden {
+				t.Fatalf("esperava 403 para mutação com cookie de sessão %s e sem cookie de CSRF, veio %d",
+					sessionCookie, resp.StatusCode)
+			}
+		})
+	}
+}
+
+// Mesmo com sessão, um header sozinho (sem o cookie de CSRF para comparar)
+// não vale: o double-submit exige os dois lados.
+func TestCSRF_SessionWithHeaderButNoCsrfCookieIsRejected(t *testing.T) {
+	app := newCSRFTestApp()
+	resp := csrfReq(t, app, "POST", "/mutate",
+		map[string]string{"X-CSRF-Token": testCSRFToken},
+		map[string]string{accessCookieName: "jwt-de-sessao-valido"},
+	)
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Fatalf("esperava 403 para header de CSRF sem o cookie correspondente, veio %d", resp.StatusCode)
+	}
+}
+
+// Contraprova: a sessão legítima do painel web, que carrega os dois cookies
+// e reenvia o token no header, continua passando. Sem este teste o aperto
+// acima poderia estar simplesmente rejeitando tudo.
+func TestCSRF_SessionWithMatchingDoubleSubmitAccepted(t *testing.T) {
+	app := newCSRFTestApp()
+	resp := csrfReq(t, app, "POST", "/mutate",
+		map[string]string{"X-CSRF-Token": testCSRFToken},
+		map[string]string{
+			accessCookieName: "jwt-de-sessao-valido",
+			csrfCookieName:   testCSRFToken,
+		},
+	)
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("esperava 200 para sessão web com double-submit correto, veio %d", resp.StatusCode)
 	}
 }
 

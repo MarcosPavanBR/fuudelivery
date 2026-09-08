@@ -3,9 +3,15 @@
 package handlers
 
 import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"github.com/carloshomar/fuudelivery/payment_api/app/dto"
 	"github.com/carloshomar/fuudelivery/payment_api/app/models"
+	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/require"
 )
 
@@ -32,9 +38,11 @@ func createOrderDocumentsTable(t *testing.T) {
 	require.NoError(t, models.DB.Exec(`DROP TABLE IF EXISTS order_documents CASCADE`).Error)
 	require.NoError(t, models.DB.Exec(`
 		CREATE TABLE order_documents (
-			id        BIGSERIAL PRIMARY KEY,
-			legacy_id VARCHAR(32) UNIQUE,
-			payload   JSONB
+			id               BIGSERIAL PRIMARY KEY,
+			legacy_id        VARCHAR(32) UNIQUE,
+			establishment_id BIGINT,
+			user_phone       VARCHAR(32),
+			payload          JSONB
 		)`).Error)
 }
 
@@ -90,5 +98,90 @@ func TestResolveDeliveryAmount_ComPedidoGravado(t *testing.T) {
 		if _, ok := resolveDeliveryAmount(legacyOrder, 100.00, 100.00); ok {
 			t.Fatal("mesmo em pedido legado, frete que engole o total deve ser recusado")
 		}
+	})
+}
+
+// ============================================================================
+// Destinatário da cobrança vem do PEDIDO, não do corpo da requisição.
+//
+// Achado do security-reviewer, severidade alta: `amount` e `delivery_amount`
+// já eram reconferidos contra o pedido, mas `establishment_id` não — e era
+// exatamente ele que decidia qual carteira o webhook creditava
+// (adjustEstablishmentWallet). Como POST /establishments/register é aberto,
+// dava para registrar um estabelecimento próprio, fazer um pedido de verdade
+// num restaurante alheio e mandar `establishment_id` apontando para si: o
+// restaurante entregava a comida e o split caía na carteira do atacante,
+// sacável por EstablishmentWithdraw.
+// ============================================================================
+
+func TestBindRecipientToOrder_IgnoraEstabelecimentoDoCorpo(t *testing.T) {
+	teardown := setupCheckoutE2EEnv(t)
+	defer teardown()
+	createOrderDocumentsTable(t)
+
+	const (
+		orderID          = "ord-destinatario"
+		vitimaEstID      = int64(4001) // restaurante que realmente vendeu
+		atacanteEstID    = int64(9999) // estabelecimento registrado pelo atacante
+		telefoneDoPedido = "+5511999900001"
+	)
+	require.NoError(t, models.DB.Exec(
+		`INSERT INTO order_documents (legacy_id, establishment_id, user_phone, payload)
+		 VALUES (?, ?, ?, jsonb_build_object('order_total', 100.00::float8, 'deliveryValue', 7.00::float8))`,
+		orderID, vitimaEstID, telefoneDoPedido).Error)
+
+	app := fiber.New()
+	app.Post("/bind", func(c *fiber.Ctx) error {
+		var req dto.PaymentRequest
+		if err := c.BodyParser(&req); err != nil {
+			return c.Status(400).JSON(fiber.Map{"error": "corpo inválido"})
+		}
+		if !bindRecipientToOrder(c, &req) {
+			return c.Status(400).JSON(fiber.Map{"error": "pedido inválido"})
+		}
+		return c.JSON(fiber.Map{
+			"establishment_id": req.EstablishmentID,
+			"customer_phone":   req.CustomerPhone,
+		})
+	})
+
+	call := func(body string) map[string]interface{} {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/bind", bytesReader([]byte(body)))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := app.Test(req, -1)
+		require.NoError(t, err)
+		require.Equal(t, 200, resp.StatusCode)
+		var out map[string]interface{}
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&out))
+		return out
+	}
+
+	t.Run("establishment_id do atacante é descartado", func(t *testing.T) {
+		out := call(fmt.Sprintf(
+			`{"order_id":"%s","amount":100.00,"delivery_amount":7.00,"establishment_id":%d}`,
+			orderID, atacanteEstID))
+		require.EqualValues(t, vitimaEstID, out["establishment_id"],
+			"o split tem que ir para o estabelecimento do pedido, nunca para o do corpo")
+	})
+
+	t.Run("customer_phone também vem do pedido", func(t *testing.T) {
+		out := call(fmt.Sprintf(
+			`{"order_id":"%s","amount":100.00,"customer_phone":"+5511000000000"}`, orderID))
+		require.Equal(t, telefoneDoPedido, out["customer_phone"],
+			"o ACL de leitura (canViewOrderPayment) não pode ser escolhido pelo chamador")
+	})
+
+	t.Run("pedido sem estabelecimento não vira cobrança", func(t *testing.T) {
+		require.NoError(t, models.DB.Exec(
+			`INSERT INTO order_documents (legacy_id, payload)
+			 VALUES ('ord-sem-est', jsonb_build_object('order_total', 50.00::float8))`).Error)
+
+		req := httptest.NewRequest(http.MethodPost, "/bind",
+			bytesReader([]byte(`{"order_id":"ord-sem-est","amount":50.00,"establishment_id":9999}`)))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := app.Test(req, -1)
+		require.NoError(t, err)
+		require.Equal(t, 400, resp.StatusCode)
 	})
 }

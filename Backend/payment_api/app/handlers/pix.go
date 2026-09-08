@@ -49,6 +49,13 @@ func GeneratePIX(c *fiber.Ctx) error {
 	}
 	req.DeliveryAmount = serverDelivery
 
+	// Destinatário do dinheiro também não pode vir do corpo — era por aí que
+	// dava para redirecionar o split do estabelecimento.
+	if !bindRecipientToOrder(c, &req) {
+		log.Printf("[PIX] Cobrança rejeitada: pedido %s sem estabelecimento conhecido", req.OrderID)
+		return c.Status(400).JSON(fiber.Map{"error": "Pedido inválido para cobrança"})
+	}
+
 	client := services.NewAbacatePayClient()
 	chargeReq := services.PIXChargeRequest{}
 	// req.Amount está em REAIS (unidade persistida no Postgres); o gateway

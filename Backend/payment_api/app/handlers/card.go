@@ -165,6 +165,11 @@ func ProcessPayment(c *fiber.Ctx) error {
 	}
 	req.DeliveryAmount = serverDelivery
 
+	if !bindRecipientToOrder(c, &req) {
+		log.Printf("[CARD] Cobrança rejeitada: pedido %s sem estabelecimento conhecido", req.OrderID)
+		return c.Status(400).JSON(fiber.Map{"error": "Pedido inválido para cobrança"})
+	}
+
 	router, err := getPaymentRouter(c)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Payment router unavailable"})

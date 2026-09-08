@@ -154,6 +154,17 @@ func ProcessPayment(c *fiber.Ctx) error {
 	}
 	req.Amount = serverTotal
 
+	// Idem ao PIX: o frete alimenta o split e, se vier >= total, zera
+	// plataforma e estabelecimento. Validado antes dos dois ramos abaixo
+	// (cartão e pix), que gravam req.DeliveryAmount no pagamento.
+	serverDelivery, deliveryOK := resolveDeliveryAmount(req.OrderID, req.DeliveryAmount, serverTotal)
+	if !deliveryOK {
+		log.Printf("[CARD] Cobrança rejeitada: frete diverge do pedido %s (client=%.2f total=%.2f)",
+			req.OrderID, req.DeliveryAmount, serverTotal)
+		return c.Status(400).JSON(fiber.Map{"error": "Valor da entrega não corresponde ao pedido"})
+	}
+	req.DeliveryAmount = serverDelivery
+
 	router, err := getPaymentRouter(c)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Payment router unavailable"})
@@ -189,6 +200,14 @@ func ProcessPayment(c *fiber.Ctx) error {
 		resp, err := router.CreateTransactionWithFallback(c.Context(), gatewayReq)
 		if err != nil {
 			log.Printf("Error processing card payment via router: %v", err)
+			// Mesma semântica do ChargeCard: cadeia sem gateway elegível é
+			// indisponibilidade (503), não erro do servidor. 500 aqui fazia o
+			// cliente suspeitar que a cobrança tivesse passado.
+			if errors.Is(err, gateway.ErrNoGatewayAvailable) {
+				return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+					"error": "Pagamento por cartão temporariamente indisponível. Use PIX.",
+				})
+			}
 			return c.Status(500).JSON(fiber.Map{"error": "Payment processing failed"})
 		}
 
@@ -247,6 +266,11 @@ func ProcessPayment(c *fiber.Ctx) error {
 		resp, err := router.CreateTransactionWithFallback(c.Context(), gatewayReq)
 		if err != nil {
 			log.Printf("Error processing PIX payment via router: %v", err)
+			if errors.Is(err, gateway.ErrNoGatewayAvailable) {
+				return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+					"error": "Pagamento por PIX temporariamente indisponível. Tente novamente em instantes.",
+				})
+			}
 			return c.Status(500).JSON(fiber.Map{"error": "PIX payment failed"})
 		}
 

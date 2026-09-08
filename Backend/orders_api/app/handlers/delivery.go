@@ -8,6 +8,105 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// deliveryFee é o resultado do cálculo do frete.
+type deliveryFee struct {
+	Value                float64 // o que o cliente paga (0 se a assinatura zerar)
+	BaseValue            float64 // antes do desconto de assinatura
+	SubscriptionDiscount bool
+}
+
+// computeDeliveryFee calcula o frete a partir da distância e das configurações
+// do estabelecimento, aplicando o frete grátis da assinatura quando houver.
+//
+// Existe como função (e não só dentro do handler) porque DOIS caminhos
+// precisam do mesmo número: a cotação (POST /delivery/calculate-delivery-value,
+// que o app chama antes de fechar o pedido) e a CRIAÇÃO DO PEDIDO
+// (computeOrderTotal). Antes, só a cotação calculava — a criação do pedido
+// aceitava o `deliveryValue` que o cliente mandava no corpo e o somava ao
+// total. Ou seja, quem controlava o pedido definia o próprio frete.
+//
+// Isso importa porque o frete alimenta o split do pagamento: a cobrança passou
+// a conferir o frete contra o pedido, mas se o valor gravado NO pedido já veio
+// do cliente, a conferência só empurra o problema um passo para trás.
+//
+// orderSubtotal é o valor dos itens (sem frete) e serve ao plano basic, cujo
+// frete grátis depende de um mínimo de compra.
+func computeDeliveryFee(distance float32, establishmentID int64, userID *uint, orderSubtotal float64) (deliveryFee, error) {
+	if establishmentID == 0 {
+		establishmentID = 1 // matriz
+	}
+
+	var delivery models.Delivery
+	if err := models.DB.Where("establishment_id = ?", establishmentID).First(&delivery).Error; err != nil {
+		return deliveryFee{}, fmt.Errorf("configuração de entrega do estabelecimento %d: %w", establishmentID, err)
+	}
+
+	baseDeliveryValue := (distance * delivery.PerKm) + delivery.FixedTaxa
+	result := deliveryFee{
+		Value:     float64(baseDeliveryValue),
+		BaseValue: float64(baseDeliveryValue),
+	}
+
+	if userID == nil || *userID == 0 {
+		return result, nil
+	}
+
+	// Assinatura ativa que concede frete grátis. subscriptions vive no mesmo
+	// Postgres (banco único), então dá para consultar daqui.
+	//
+	// As datas são lidas como time.Time, NÃO como texto. A versão anterior
+	// fazia `current_period_start::text` e tentava dar parse com dois layouts
+	// ("2006-01-02T15:04:05Z" e "2006-01-02 15:04:05"). A coluna é time.Time
+	// no modelo, ou seja timestamptz no banco, e o ::text produz
+	// "2026-09-08 13:41:07.123456+00" — que não casa com nenhum dos dois. O
+	// parse falhava SEMPRE, e o fallback era `assume vigente`: na prática
+	// qualquer assinatura com status 'active' dava frete grátis eternamente,
+	// mesmo com o período vencido há meses. Sem string no meio, o problema
+	// deixa de existir.
+	type SubscriptionCheck struct {
+		Plan               string
+		Status             string
+		FreeDeliveryAbove  float64
+		CurrentPeriodStart time.Time
+		CurrentPeriodEnd   time.Time
+	}
+	var sub SubscriptionCheck
+	if err := models.DB.Table("subscriptions").
+		Where("user_id = ? AND status = 'active'", *userID).
+		Select("plan, status, free_delivery_above, current_period_start, current_period_end").
+		Scan(&sub).Error; err != nil || sub.Status != "active" {
+		return result, nil
+	}
+
+	// Período zerado = assinatura sem ciclo definido; tratada como vigente,
+	// que era a intenção do fallback original.
+	now := time.Now()
+	if !sub.CurrentPeriodEnd.IsZero() && now.After(sub.CurrentPeriodEnd) {
+		return result, nil
+	}
+	if !sub.CurrentPeriodStart.IsZero() && now.Before(sub.CurrentPeriodStart) {
+		return result, nil
+	}
+
+	switch sub.Plan {
+	case "premium":
+		// Premium: frete grátis sempre.
+		result.Value = 0
+		result.SubscriptionDiscount = true
+	case "basic":
+		// Basic: frete grátis acima do valor mínimo.
+		if sub.FreeDeliveryAbove > 0 && orderSubtotal >= sub.FreeDeliveryAbove {
+			result.Value = 0
+			result.SubscriptionDiscount = true
+		}
+	}
+
+	return result, nil
+}
+
+// CalculateDeliveryValue é a cotação do frete usada pelo app antes de fechar o
+// pedido. Wrapper HTTP sobre computeDeliveryFee — a regra mora lá, para não
+// divergir do que a criação do pedido calcula.
 func CalculateDeliveryValue(c *fiber.Ctx) error {
 	var request struct {
 		Distance        float32 `json:"distance"`
@@ -22,77 +121,17 @@ func CalculateDeliveryValue(c *fiber.Ctx) error {
 		})
 	}
 
-	// Se establishmentId não estiver presente na solicitação, definimos o valor padrão como 1 (matriz)
-	if request.EstablishmentID == 0 {
-		request.EstablishmentID = 1
-	}
-
-	var delivery models.Delivery
-	if err := models.DB.Where("establishment_id = ?", request.EstablishmentID).First(&delivery).Error; err != nil {
+	fee, err := computeDeliveryFee(request.Distance, request.EstablishmentID, request.UserID, request.OrderTotal)
+	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to fetch delivery settings",
 		})
 	}
 
-	// Calcular o valor base da entrega
-	baseDeliveryValue := (request.Distance * delivery.PerKm) + delivery.FixedTaxa
-	deliveryValue := float64(baseDeliveryValue)
-	subscriptionDiscount := false
-
-	// Verifica se o usuario tem assinatura ativa que concede frete gratis
-	if request.UserID != nil && *request.UserID > 0 {
-		// Busca assinatura ativa do usuario na tabela subscriptions (auth_api)
-		// Usamos o mesmo DB (compartilhado via GORM) porque subscriptions
-		// esta no mesmo banco PostgreSQL que orders_api
-		type SubscriptionCheck struct {
-			Plan               string
-			Status             string
-			FreeDeliveryAbove  float64
-			CurrentPeriodStart string
-			CurrentPeriodEnd   string
-		}
-		var sub SubscriptionCheck
-		// Tenta buscar a subscription no banco compartilhado
-		if err := models.DB.Table("subscriptions").
-			Where("user_id = ? AND status = 'active'", *request.UserID).
-			Select("plan, status, free_delivery_above, current_period_start::text as current_period_start, current_period_end::text as current_period_end").
-			Scan(&sub).Error; err == nil && sub.Status == "active" {
-
-			now := time.Now()
-			// Verifica periodo vigente
-			startTime, _ := time.Parse("2006-01-02T15:04:05Z", sub.CurrentPeriodStart)
-			endTime, _ := time.Parse("2006-01-02T15:04:05Z", sub.CurrentPeriodEnd)
-			// Tenta parse sem timezone
-			if startTime.IsZero() {
-				startTime, _ = time.Parse("2006-01-02 15:04:05", sub.CurrentPeriodStart)
-			}
-			if endTime.IsZero() {
-				endTime, _ = time.Parse("2006-01-02 15:04:05", sub.CurrentPeriodEnd)
-			}
-			// Se falhou parse, assume que esta valido
-			periodValid := startTime.IsZero() || (now.After(startTime) && now.Before(endTime))
-
-			if periodValid {
-				switch sub.Plan {
-				case "premium":
-					// Premium: frete gratis sempre
-					deliveryValue = 0
-					subscriptionDiscount = true
-				case "basic":
-					// Basic: frete gratis acima do valor minimo
-					if sub.FreeDeliveryAbove > 0 && request.OrderTotal >= sub.FreeDeliveryAbove {
-						deliveryValue = 0
-						subscriptionDiscount = true
-					}
-				}
-			}
-		}
-	}
-
 	return c.JSON(fiber.Map{
-		"deliveryValue":        deliveryValue,
-		"baseDeliveryValue":    float64(baseDeliveryValue),
-		"subscriptionDiscount": subscriptionDiscount,
+		"deliveryValue":        fee.Value,
+		"baseDeliveryValue":    fee.BaseValue,
+		"subscriptionDiscount": fee.SubscriptionDiscount,
 	})
 }
 

@@ -162,12 +162,13 @@ func resolveDeliveryAmount(orderID string, clientDelivery, serverTotal float64) 
 			return serverDelivery, false
 		}
 		// A guarda de sanidade vale AQUI TAMBÉM, e não só no ramo legado.
-		// O valor gravado no pedido não é um valor de servidor de verdade:
-		// orders_api/computeOrderTotal aceita o deliveryValue que o cliente
-		// mandou na criação do pedido, sem recalcular por zona. Então quem
-		// controla o pedido controla este "servidor" — tratar o campo como
-		// autoritativo sem teto só mudaria o momento do desvio, da cobrança
-		// para a criação do pedido.
+		//
+		// Hoje o valor gravado no pedido É calculado pelo servidor
+		// (orders_api/computeDeliveryFee: distância × perKm + taxa fixa), mas
+		// pedidos criados ANTES dessa mudança guardaram o deliveryValue que o
+		// cliente mandou — e esses pedidos continuam no banco, cobráveis. O
+		// teto protege esses, e protege de graça o dia em que alguém abrir
+		// outro caminho de escrita no pedido.
 		if toCents(serverDelivery) >= toCents(serverTotal) {
 			return serverDelivery, false
 		}

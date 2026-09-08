@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"net/http"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -26,7 +27,12 @@ func GetCSRFToken(c *fiber.Ctx) error {
 		// (cross-site) — mesmo motivo do fix em session_handler.go.
 		SameSite: "none",
 		Path:     "/",
-		MaxAge:   86400, // 24h
+		// Igual ao refresh_token (30 dias). Antes eram 24h: o cookie de CSRF
+		// morria muito antes da sessão e, como o middleware liberava quando
+		// ele faltava, a proteção se desligava sozinha um dia após o login.
+		// O middleware agora rejeita nesse caso, então uma validade menor que
+		// a da sessão só geraria 403 espúrio.
+		MaxAge: int(30 * 24 * time.Hour.Seconds()),
 	})
 
 	return c.JSON(fiber.Map{

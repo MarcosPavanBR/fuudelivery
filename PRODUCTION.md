@@ -50,7 +50,7 @@ O deploy e automatizado via GitHub Actions. Push para master dispara:
 | PORT | 3000 |
 | GO_ENV | production |
 | JWT_SECRET | Chave JWT (secret) |
-| ADMIN_BOOTSTRAP_SECRET | Bootstrap único do primeiro admin via `POST /admin/bootstrap` (secret). Remover após uso |
+| ADMIN_BOOTSTRAP_SECRET | **Não deixe configurada.** Só para criar o primeiro admin numa instalação nova: adicione, chame `POST /admin/bootstrap` uma vez, apague. O endpoint recusa quando já existe admin |
 | ABACATE_PAY_WEBHOOK_SECRET | Webhook secret (secret) |
 | REDIS_URL | Redis EXTERNO gerenciado (Redis Cloud — valor real no dashboard, NÃO é auto-linked) |
 | DB_CONNECTION_STRING | PostgreSQL Supabase via pooler :6543 (secret) |

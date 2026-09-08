@@ -19,8 +19,12 @@ REDIS_URL=redis://...
 
 # Autenticação
 JWT_SECRET=<gerar com: openssl rand -hex 32>
-# Bootstrap único do primeiro admin (POST /admin/bootstrap). Remover após uso.
-ADMIN_BOOTSTRAP_SECRET=<senha forte>
+# Bootstrap do primeiro admin (POST /admin/bootstrap).
+# NAO deixe esta variavel configurada de forma permanente: enquanto ela
+# existe, quem tiver o valor promove qualquer conta a admin. Adicione,
+# chame o endpoint uma vez, e apague. Numa instalacao que ja tem admin o
+# endpoint recusa, entao ela so agrega risco.
+# ADMIN_BOOTSTRAP_SECRET=<senha forte>   # descomente so no setup inicial
 
 # Pagamentos
 ABACATE_PAY_API_KEY=abc_prod_...

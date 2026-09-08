@@ -101,10 +101,17 @@ services:
         sync: false
 
       # ── Bootstrap do primeiro admin ───────────────────────
-      # POST /admin/bootstrap exige este secret. Uso único: criar o admin,
-      # confirmar, e remover a variável do dashboard depois.
-      - key: ADMIN_BOOTSTRAP_SECRET
-        sync: false
+      # ADMIN_BOOTSTRAP_SECRET foi REMOVIDA daqui de propósito.
+      #
+      # Enquanto estava declarada, ela reaparecia no dashboard a cada sync do
+      # blueprint, e o "remover após o uso" que ficava escrito neste comentário
+      # nunca foi cumprido — a variável seguiu ativa em produção. Enquanto ela
+      # existe, quem tiver o valor promove qualquer conta a admin.
+      #
+      # Instalação NOVA que precisa criar o primeiro admin: adicione a variável
+      # à mão no dashboard, chame POST /admin/bootstrap uma vez, e apague. O
+      # endpoint hoje se recusa a rodar quando já existe admin, então numa
+      # instalação em uso ela não serve para nada além de risco.
 
       # ── Observabilidade / rotas ───────────────────────────
       # Protege GET /metrics (Bearer ou ?token=). Vazio = público.

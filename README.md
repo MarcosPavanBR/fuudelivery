@@ -301,7 +301,7 @@ Referência completa: [`.env.example`](.env.example). Principais:
 | `JWT_SECRET` | Secret dos tokens JWT (64 chars aleatórios recomendado) | **Sim** |
 | `DB_CONNECTION_STRING` | PostgreSQL Supabase — pooler `:6543` (PgBouncer transaction mode) | **Sim** |
 | `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | Upload de imagens (sem isso o endpoint responde 503) | Sim (upload) |
-| `ADMIN_BOOTSTRAP_SECRET` | Bootstrap único do primeiro admin via `POST /admin/bootstrap`. Remover após uso | Recomendado |
+| `ADMIN_BOOTSTRAP_SECRET` | Só para criar o primeiro admin numa instalação nova (`POST /admin/bootstrap`): adicione, use uma vez, apague. O endpoint recusa quando já existe admin | **Não deixar ativa** |
 | `REDIS_URL` | Redis gerenciado (fila financeira + cache + rate limit; prefira política `noeviction`) | Não (fallback Go channels) |
 | `MONGO_URI` + `MONGO_DATABASE` | MongoDB Atlas — dual-write legado. Omitir = desligado | Não |
 | `ABACATE_PAY_API_KEY` + `ABACATE_PAY_WEBHOOK_SECRET` | Gateway PIX/Cartão | Sim (pagamentos) |

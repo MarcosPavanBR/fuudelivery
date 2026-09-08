@@ -3,7 +3,6 @@ package health
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -100,33 +99,31 @@ func BatchCheck(db *gorm.DB) Check {
 	return Check{Name: "batches", Status: "up", Latency: time.Since(start).String()}
 }
 
-// GatewayCheck verifica se pelo menos um gateway de pagamento esta configurado.
-// Retorna "up" se pelo menos uma API key estiver presente, "down" caso contrario.
-func GatewayCheck() Check {
+// GatewayCheck reporta se existe gateway de pagamento utilizável.
+//
+// `registered` deve ser a cadeia REAL do router (Router.Gateways()), não uma
+// leitura de variáveis de ambiente.
+//
+// Por que a assinatura mudou: antes esta função re-derivava a lista lendo
+// ABACATE_PAY_API_KEY, PAGARME_API_KEY etc. por conta própria, enquanto quem
+// monta a cadeia de verdade é buildPaymentGateways() — que também descarta
+// gateway cujo construtor falhou. As duas visões divergiam no pior momento:
+// credencial presente porém inválida na inicialização deixava a cadeia VAZIA
+// e o /health respondendo 200 "up", com toda cobrança falhando e o load
+// balancer convencido de que o serviço estava saudável. Health check que
+// adivinha o estado em vez de perguntar à fonte não é health check.
+func GatewayCheck(registered []string) Check {
 	start := time.Now()
-	gateways := map[string]string{
-		"abacatepay":  os.Getenv("ABACATE_PAY_API_KEY"),
-		"pagarme":     os.Getenv("PAGARME_API_KEY"),
-		"asaas":       os.Getenv("ASAAS_API_KEY"),
-		"mercadopago": os.Getenv("MERCADOPAGO_ACCESS_TOKEN"),
-	}
 
-	available := make([]string, 0)
-	for name, key := range gateways {
-		if key != "" {
-			available = append(available, name)
-		}
-	}
-
-	if len(available) == 0 {
-		return Check{Name: "payment_gateways", Status: "down", Error: "no payment gateway configured"}
+	if len(registered) == 0 {
+		return Check{Name: "payment_gateways", Status: "down", Error: "no payment gateway registered in router"}
 	}
 
 	return Check{
 		Name:    "payment_gateways",
 		Status:  "up",
 		Latency: time.Since(start).String(),
-		Error:   fmt.Sprintf("available: %v", available),
+		Error:   fmt.Sprintf("available: %v", registered),
 	}
 }
 

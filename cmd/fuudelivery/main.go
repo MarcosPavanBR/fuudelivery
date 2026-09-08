@@ -1629,7 +1629,20 @@ func main() {
 		redisCheck := health.RedisCheck(redisClient)
 		redisGeoCheck := health.RedisGeoCheck(redisClient)
 		batchesCheck := health.BatchCheck(ordersModels.DB)
-		gatewaysCheck := health.GatewayCheck()
+		// Fonte da verdade é a cadeia montada no router, não as env vars:
+		// credencial presente com construtor falhando deixa a cadeia vazia,
+		// e o /health precisa dizer "down" nesse caso (503), não "up".
+		//
+		// O nil check não é decorativo: este handler é registrado de
+		// propósito ANTES do resto da inicialização (para o Render conseguir
+		// bater no /health durante os até 125s de conexão com os bancos), e
+		// paymentRouter só é atribuído lá embaixo. Chamar Gateways() num
+		// *Router nil daria panic dentro do próprio health check.
+		var registeredGateways []string
+		if paymentRouter != nil {
+			registeredGateways = paymentRouter.Gateways()
+		}
+		gatewaysCheck := health.GatewayCheck(registeredGateways)
 
 		// On cold start (DB not yet initialized), return 200 so Render health
 		// checks pass during the DB initialization window (up to 125s).

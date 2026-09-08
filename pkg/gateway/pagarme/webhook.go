@@ -37,10 +37,15 @@ func ValidateHMAC(body []byte, signature, secret string) bool {
 	isValid := hmac.Equal([]byte(signature), []byte(expectedMAC))
 
 	if !isValid {
+		// Só a assinatura RECEBIDA vai pro log. O prefixo do HMAC esperado
+		// estava sendo logado junto, e ele é material derivado do secret:
+		// quem lê o log (agregador, bucket, suporte) ganha bytes verificados
+		// da assinatura correta para forjar a próxima chamada — e o log de
+		// erro é justamente o que um atacante consegue provocar à vontade.
+		//
 		// signature vem de quem chamou o webhook: fatiar direto (signature[:8])
 		// dava panic com assinatura de menos de 8 caracteres.
-		log.Printf("[PAGARME] Webhook HMAC mismatch: expected=%s got=%s",
-			prefixForLog(expectedMAC), prefixForLog(signature))
+		log.Printf("[PAGARME] Webhook HMAC mismatch: got=%s", prefixForLog(signature))
 	}
 
 	return isValid

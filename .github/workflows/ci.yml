@@ -214,6 +214,50 @@ jobs:
         if: always()
         run: docker rm -f pg-pay 2>/dev/null || true
 
+  integration-orders-api:
+    name: Integration — orders_api (frete e assinatura)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Backend/orders_api
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+          cache-dependency-path: Backend/orders_api/go.sum
+
+      - name: Start Docker service (Postgres)
+        run: |
+          docker run -d --name pg-orders -p 5433:5432 -e POSTGRES_USER=test -e POSTGRES_PASSWORD=test -e POSTGRES_DB=orders_test postgres:16-alpine
+          for i in $(seq 1 30); do
+            docker exec pg-orders pg_isready -U test 2>/dev/null && break
+            sleep 1
+          done
+          echo "Service ready."
+
+      - name: Wait for Postgres to settle
+        run: |
+          sleep 5
+          docker exec pg-orders pg_isready -U test
+
+      - name: Run orders_api integration tests
+        env:
+          POSTGRES_TEST_URI: postgres://test:test@localhost:5433/orders_test?sslmode=disable
+        # Sem -run: o filtro e que faz teste novo compilar e nunca executar.
+        #
+        # Este job existe porque os testes de frete por assinatura NAO podiam
+        # ficar no harness sqlite dos unitarios: a query usa cast ::text, que e
+        # sintaxe Postgres e o sqlite rejeita. Sem um job de integracao para
+        # orders_api eles compilariam e nunca rodariam — exatamente o buraco
+        # que o -run 'TestCheckoutE2E' criava no job do payment_api.
+        run: go test -tags=integration -v -count=1 -timeout 10m ./app/handlers/
+
+      - name: Cleanup Docker services
+        if: always()
+        run: docker rm -f pg-orders 2>/dev/null || true
+
   # ──────────────────────────────────────────────
   # Formatting — all Go modules
   # ──────────────────────────────────────────────

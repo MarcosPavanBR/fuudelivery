@@ -10,8 +10,10 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"math"
 	"net/url"
 	"strconv"
 	"time"
@@ -44,13 +46,39 @@ func CreateOrder(c *fiber.Ctx, sendMessageToClient func(clientID int64, message 
 	// O total é SEMPRE recalculado no servidor a partir dos preços do banco.
 	// O valor enviado pelo cliente (itens do carrinho) nunca é usado — evita
 	// pedido de R$100,00 criado com payload de R$0,01.
-	serverTotal, totalErr := computeOrderTotal(request.Cart, request.DeliveryValue, request.EstablishmentId)
+	//
+	// O FRETE entra na mesma regra: era o último valor do corpo que ainda
+	// entrava no total sem conferência. Agora sai de computeDeliveryFee
+	// (distância × perKm + taxa fixa, com o frete grátis da assinatura),
+	// a mesma função que a cotação usa.
+	//
+	// O user_id vem do token, não do corpo: é ele que decide se a assinatura
+	// zera o frete, então deixar o cliente escolher seria dar frete grátis a
+	// quem pedisse.
+	var subscriptionUserID *uint
+	if tokenUserID, tErr := middlewares.GetUserIDFromToken(c); tErr == nil && tokenUserID > 0 {
+		u := uint(tokenUserID)
+		subscriptionUserID = &u
+	}
+
+	clientDeliveryValue := request.DeliveryValue
+	serverTotal, serverDelivery, totalErr := computeOrderTotal(
+		request.Cart, float32(request.Distance), request.EstablishmentId, subscriptionUserID)
 	if totalErr != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": totalErr.Error(),
 		})
 	}
 	request.OrderTotal = serverTotal
+	request.DeliveryValue = serverDelivery
+
+	// Servidor vence em silêncio, como já acontece com o OrderTotal. Rejeitar
+	// quebraria pedido legítimo sempre que a cotação do app estivesse um pouco
+	// velha; o log é o que mostra se o app saiu de sincronia.
+	if math.Abs(clientDeliveryValue-serverDelivery) > 0.01 {
+		log.Printf("[ORDER] Frete do cliente (%.2f) diverge do calculado (%.2f) — usando o do servidor (est=%d dist=%.2f)",
+			clientDeliveryValue, serverDelivery, request.EstablishmentId, request.Distance)
+	}
 
 	if !request.IsScheduled {
 		isOpen, err := checkEstablishmentOpen(request.EstablishmentId)
@@ -107,46 +135,64 @@ func CreateOrder(c *fiber.Ctx, sendMessageToClient func(clientID int64, message 
 // computeOrderTotal recalcula o total do pedido no servidor: preço de cada
 // produto e adicional vem da tabela do banco (não do payload do cliente),
 // multiplicado pela quantidade, somado ao valor de entrega informado.
-func computeOrderTotal(cart []dto.CartItem, deliveryValue float64, establishmentID int64) (float64, error) {
-	if deliveryValue < 0 {
-		return 0, fmt.Errorf("valor de entrega inválido")
-	}
+func computeOrderTotal(cart []dto.CartItem, distance float32, establishmentID int64, userID *uint) (float64, float64, error) {
 	if len(cart) == 0 {
-		return 0, fmt.Errorf("carrinho vazio")
+		return 0, 0, fmt.Errorf("carrinho vazio")
+	}
+	if distance < 0 {
+		return 0, 0, fmt.Errorf("distância inválida")
 	}
 	if authModels.DB == nil {
-		return 0, fmt.Errorf("postgres indisponível")
+		return 0, 0, fmt.Errorf("postgres indisponível")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	total := deliveryValue
+	subtotal := 0.0
 	for _, ci := range cart {
 		if ci.Quantity <= 0 {
-			return 0, fmt.Errorf("quantidade inválida para o produto %s", ci.Item.Name)
+			return 0, 0, fmt.Errorf("quantidade inválida para o produto %s", ci.Item.Name)
 		}
 		var p models.Product
 		if err := authModels.DB.WithContext(ctx).First(&p, ci.Item.ID).Error; err != nil {
-			return 0, fmt.Errorf("produto %d não encontrado", ci.Item.ID)
+			return 0, 0, fmt.Errorf("produto %d não encontrado", ci.Item.ID)
 		}
 		if p.EstablishmentID != uint(establishmentID) {
-			return 0, fmt.Errorf("produto %d não pertence a este estabelecimento", p.ID)
+			return 0, 0, fmt.Errorf("produto %d não pertence a este estabelecimento", p.ID)
 		}
-		total += p.Price * float64(ci.Quantity)
+		subtotal += p.Price * float64(ci.Quantity)
 
 		for _, addID := range ci.Additionals {
 			var a models.Additional
 			if err := authModels.DB.WithContext(ctx).First(&a, addID).Error; err != nil {
-				return 0, fmt.Errorf("adicional %d não encontrado", addID)
+				return 0, 0, fmt.Errorf("adicional %d não encontrado", addID)
 			}
 			if a.EstablishmentID != uint(establishmentID) {
-				return 0, fmt.Errorf("adicional %d não pertence a este estabelecimento", a.ID)
+				return 0, 0, fmt.Errorf("adicional %d não pertence a este estabelecimento", a.ID)
 			}
-			total += a.Price
+			subtotal += a.Price
 		}
 	}
-	return total, nil
+
+	// O frete é calculado AQUI, com a distância e as configurações do
+	// estabelecimento — não aceito do corpo da requisição. O subtotal entra
+	// porque o frete grátis do plano basic depende de um mínimo de compra.
+	fee, feeErr := computeDeliveryFee(distance, establishmentID, userID, subtotal)
+	if errors.Is(feeErr, errNoDeliveryConfig) {
+		// Estabelecimento sem POST /delivery: cobra frete zero em vez de
+		// recusar o pedido. Antes desta mudança computeOrderTotal nem
+		// consultava `deliveries`, então esses estabelecimentos vendiam
+		// normalmente; falhar aqui trocaria um problema de dinheiro por uma
+		// interrupção de venda. O log é o que faz alguém configurar a taxa.
+		log.Printf("[ORDER] AVISO: estabelecimento %d sem configuração de entrega — frete cobrado como 0", establishmentID)
+		return subtotal, 0, nil
+	}
+	if feeErr != nil {
+		return 0, 0, feeErr
+	}
+
+	return subtotal + fee.Value, fee.Value, nil
 }
 
 // canActOnEstablishment verifica se o chamador pode agir sobre recursos do

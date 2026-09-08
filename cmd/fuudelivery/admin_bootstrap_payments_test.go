@@ -127,6 +127,11 @@ func TestAdminBootstrapPaymentsAll(t *testing.T) {
 		require.NotZero(t, userID)
 	})
 
+	// Limpeza defensiva: o bootstrap agora exige que NAO exista admin. Se uma
+	// execucao anterior morreu antes do t.Cleanup, sobraria um admin no banco
+	// e este teste falharia por lixo, nao por regressao.
+	authModels.DB.Unscoped().Where("role = ?", "admin").Delete(&authModels.User{})
+
 	// ---- 2. Bootstrap admin ----
 	var adminToken string
 	t.Run("BootstrapAdmin", func(t *testing.T) {
@@ -220,6 +225,42 @@ func TestAdminBootstrapPaymentsAll(t *testing.T) {
 		resp, err := app.Test(req)
 		require.NoError(t, err)
 		require.Equal(t, 403, resp.StatusCode)
+	})
+
+	// O bootstrap so vale enquanto NAO existe admin.
+	//
+	// Antes desta checagem o endpoint nao era de uso unico: com o secret
+	// certo dava para promover QUALQUER conta existente a admin
+	// (Update("role","admin")), quantas vezes quisesse, sem autenticacao — a
+	// rota tem so rate limit. O "remover a env apos o uso" existia como frase
+	// no README e no render.yaml, nao como codigo, e a variavel segue setada
+	// em producao. role=admin libera /payments/all, /orders/all e
+	// aprovar/rejeitar pagamento.
+	t.Run("BootstrapRecusadoComAdminExistente", func(t *testing.T) {
+		// Zera o token bucket em memoria: /admin/bootstrap tem rate limit de
+		// 3/min por IP e este seria o 4o POST do teste, entao viria 429 e nao
+		// provaria nada sobre o guard de admin existente.
+		ipLimitersMu.Lock()
+		ipLimiters = make(map[string]*ipLimiter)
+		ipLimitersMu.Unlock()
+
+		// Neste ponto o admin do passo 2 ja existe.
+		body, _ := json.Marshal(map[string]string{
+			"secret": "local-dev-bootstrap-secret", // secret CORRETO
+			"email":  customerEmail,                // promover o cliente comum
+		})
+		req := httptest.NewRequest(http.MethodPost, "/admin/bootstrap", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := app.Test(req)
+		require.NoError(t, err)
+		require.Equal(t, 403, resp.StatusCode,
+			"com admin ja existente, o bootstrap tem que recusar mesmo com o secret certo")
+
+		// E o que importa de verdade: a role nao mudou.
+		var vitima authModels.User
+		require.NoError(t, authModels.DB.Where("email = ?", customerEmail).First(&vitima).Error)
+		require.NotEqual(t, "admin", vitima.Role,
+			"a conta nao pode ter sido promovida")
 	})
 
 	// ---- Cleanup: remover dados de teste ----

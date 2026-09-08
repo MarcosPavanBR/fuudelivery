@@ -10,6 +10,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -178,6 +179,15 @@ func computeOrderTotal(cart []dto.CartItem, distance float32, establishmentID in
 	// estabelecimento — não aceito do corpo da requisição. O subtotal entra
 	// porque o frete grátis do plano basic depende de um mínimo de compra.
 	fee, feeErr := computeDeliveryFee(distance, establishmentID, userID, subtotal)
+	if errors.Is(feeErr, errNoDeliveryConfig) {
+		// Estabelecimento sem POST /delivery: cobra frete zero em vez de
+		// recusar o pedido. Antes desta mudança computeOrderTotal nem
+		// consultava `deliveries`, então esses estabelecimentos vendiam
+		// normalmente; falhar aqui trocaria um problema de dinheiro por uma
+		// interrupção de venda. O log é o que faz alguém configurar a taxa.
+		log.Printf("[ORDER] AVISO: estabelecimento %d sem configuração de entrega — frete cobrado como 0", establishmentID)
+		return subtotal, 0, nil
+	}
 	if feeErr != nil {
 		return 0, 0, feeErr
 	}

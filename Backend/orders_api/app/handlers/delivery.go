@@ -1,12 +1,26 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
+	"gorm.io/gorm"
 )
+
+// errNoDeliveryConfig sinaliza que o estabelecimento não tem linha em
+// `deliveries` — ninguém chamou POST /delivery para ele.
+//
+// Precisa ser distinguível de um erro de banco porque os dois chamadores
+// reagem de forma oposta, e por um motivo concreto: antes desta mudança
+// computeOrderTotal NÃO consultava `deliveries` (só somava o frete que o
+// cliente mandava), então um estabelecimento sem configuração conseguia
+// receber pedido normalmente. Tratar a ausência como erro faria TODO pedido
+// desse estabelecimento passar a falhar — troca de um problema de dinheiro
+// por uma interrupção de venda.
+var errNoDeliveryConfig = errors.New("estabelecimento sem configuração de entrega")
 
 // deliveryFee é o resultado do cálculo do frete.
 type deliveryFee struct {
@@ -38,6 +52,9 @@ func computeDeliveryFee(distance float32, establishmentID int64, userID *uint, o
 
 	var delivery models.Delivery
 	if err := models.DB.Where("establishment_id = ?", establishmentID).First(&delivery).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return deliveryFee{}, errNoDeliveryConfig
+		}
 		return deliveryFee{}, fmt.Errorf("configuração de entrega do estabelecimento %d: %w", establishmentID, err)
 	}
 
@@ -70,10 +87,17 @@ func computeDeliveryFee(distance float32, establishmentID int64, userID *uint, o
 		CurrentPeriodStart time.Time
 		CurrentPeriodEnd   time.Time
 	}
+	// ORDER BY + LIMIT 1: o Scan numa struct única pega a PRIMEIRA linha, e sem
+	// ordenação "primeira" é o que o Postgres devolver. Um usuário com mais de
+	// uma assinatura ativa (upgrade que não encerrou a anterior, linha
+	// duplicada por retry de webhook) tinha o benefício decidido por acaso —
+	// podendo perder o frete grátis que pagou. A mais recente é a que vale.
 	var sub SubscriptionCheck
 	if err := models.DB.Table("subscriptions").
 		Where("user_id = ? AND status = 'active'", *userID).
 		Select("plan, status, free_delivery_above, current_period_start, current_period_end").
+		Order("current_period_end DESC NULLS LAST").
+		Limit(1).
 		Scan(&sub).Error; err != nil || sub.Status != "active" {
 		return result, nil
 	}

@@ -11,6 +11,7 @@
 package handlers
 
 import (
+	"errors"
 	"testing"
 
 	authModels "github.com/carloshomar/fuudelivery/auth_api/app/models"
@@ -154,5 +155,40 @@ func TestComputeOrderTotal_RejeitaDistanciaNegativa(t *testing.T) {
 	cart := []dto.CartItem{{Item: dto.Item{ID: 102}, Quantity: 1}}
 	if _, _, err := computeOrderTotal(cart, -1, 1, nil); err == nil {
 		t.Fatal("distância negativa deveria ser recusada")
+	}
+}
+
+// ── Estabelecimento sem configuração de entrega ──
+//
+// Antes desta série, computeOrderTotal nem consultava `deliveries` — só somava
+// o frete do corpo. Um estabelecimento que nunca chamou POST /delivery vendia
+// normalmente. Se a ausência virasse erro, TODO pedido dele passaria a falhar:
+// trocaria um problema de dinheiro por uma interrupção de venda.
+
+func TestComputeDeliveryFee_SemConfigSinalizaErroProprio(t *testing.T) {
+	setupDeliveryFeeTestDB(t)
+	// De propósito: nenhuma linha em deliveries.
+
+	_, err := computeDeliveryFee(3, 42, nil, 0)
+	if !errors.Is(err, errNoDeliveryConfig) {
+		t.Fatalf("esperava errNoDeliveryConfig para poder distinguir de erro de banco, veio %v", err)
+	}
+}
+
+func TestComputeOrderTotal_SemConfigNaoDerrubaOPedido(t *testing.T) {
+	setupDeliveryFeeTestDB(t)
+	seedProduct(t, 200, 42, 25.00)
+	// Sem seedDelivery para o estabelecimento 42.
+
+	cart := []dto.CartItem{{Item: dto.Item{ID: 200}, Quantity: 2}}
+	total, frete, err := computeOrderTotal(cart, 3, 42, nil)
+	if err != nil {
+		t.Fatalf("pedido não pode falhar por falta de configuração de entrega: %v", err)
+	}
+	if frete != 0 {
+		t.Fatalf("sem configuração o frete é 0, veio %.2f", frete)
+	}
+	if total != 50.00 {
+		t.Fatalf("esperava total 50.00 (2 × 25, sem frete), veio %.2f", total)
 	}
 }

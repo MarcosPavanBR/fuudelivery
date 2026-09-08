@@ -119,11 +119,15 @@ func GatewayCheck(registered []string) Check {
 		return Check{Name: "payment_gateways", Status: "down", Error: "no payment gateway registered in router"}
 	}
 
+	// Só a contagem, não os nomes: /health é público e a lista entregava a
+	// topologia de pagamento (quais provedores estão ativos) a qualquer um.
+	// Não é credencial, mas é reconhecimento de graça — e quem opera lê o
+	// nome no log de inicialização, que já registra cada gateway da cadeia.
 	return Check{
 		Name:    "payment_gateways",
 		Status:  "up",
 		Latency: time.Since(start).String(),
-		Error:   fmt.Sprintf("available: %v", registered),
+		Error:   fmt.Sprintf("%d gateway(s) registrado(s)", len(registered)),
 	}
 }
 

@@ -26,7 +26,15 @@ func setupDeliveryFeePostgres(t *testing.T) {
 	t.Helper()
 	dsn := os.Getenv("POSTGRES_TEST_URI")
 	if dsn == "" {
-		t.Skip("POSTGRES_TEST_URI não definida")
+		// Skip serve para rodar `go test -tags=integration` na máquina de quem
+		// não subiu Postgres. Em CI ele seria um falso verde: o job passaria
+		// sem ter executado nada, que é justamente o buraco que este job veio
+		// fechar. Lá, a ausência da variável é erro de configuração do
+		// workflow e tem que falhar alto.
+		if os.Getenv("CI") != "" {
+			t.Fatal("POSTGRES_TEST_URI ausente em CI — o job precisa provê-la, senão este teste não roda")
+		}
+		t.Skip("POSTGRES_TEST_URI não definida (rode com um Postgres local)")
 	}
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {

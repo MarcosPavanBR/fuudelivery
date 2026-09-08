@@ -23,3 +23,8 @@ description: Idiomas e padrões de Go para o backend — tratamento de erro, con
 
 ## Idempotência
 - Toda operação financeira aceita uma chave de idempotência explícita (não derivada de timestamp) e a suíte de testes inclui o caso de chamada duplicada.
+
+## Ponteiro nil virando interface (typed nil)
+- Nunca descarte o erro de um construtor cujo resultado vira interface: `gw, _ := pagarme.NewGateway()` seguido de `NewRouter(gw)` registra um ponteiro nil que a interface passa a considerar **não-nil** (ela guarda tipo + valor, e só é nil quando os dois são). O método com receiver nil até funciona; o primeiro que desreferencia um campo dá panic — e, dentro de uma cadeia de fallback, derruba a cadeia inteira.
+- A checagem tem que ser no **erro ou no ponteiro concreto, antes da conversão**. Um `if x != nil` depois que o valor virou interface não pega nada.
+- Caso real (FuuDelivery, 2026-09): quatro gateways de pagamento registrados com o erro descartado; dois retornam `nil, err` sem credencial. Corrigido montando o slice condicionalmente, com teste que falha se alguém reintroduzir o padrão.

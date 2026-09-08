@@ -34,6 +34,11 @@ func TestZoneFeeDecay(t *testing.T) {
 ## Race detector
 - Rode `go test -race ./...` no CI, não só localmente — corrida de dados em jobs de background costuma só aparecer sob carga real.
 
+## Teste tem que ser falsificável
+- Depois de escrever o teste da correção, **reverta a correção e confirme que ele falha**. Teste que passa dos dois jeitos não testa nada, e o custo de descobrir isso depois é alto: havia aqui um `TestWalletAntiReplay` que validava um `map` local e nunca chamava handler nenhum — cobertura falsa, com nome tranquilizador.
+- Cuidado com o teste que passa pelo motivo errado: se a idempotência é garantida por índice parcial do Postgres e o schema de teste vem de `AutoMigrate` (que não cria índice de SQL cru), o teste roda contra um banco **sem** a constraint que existe em produção. Crie os índices explicitamente no setup.
+- Verifique também que os testes que você escreveu realmente **executam** no CI: um filtro `-run` no workflow deixava toda uma suíte de idempotência compilando e nunca rodando.
+
 ## Testes de idempotência (financeiro)
 ```go
 func TestWalletCredit_Idempotent(t *testing.T) {

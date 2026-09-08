@@ -19,6 +19,20 @@ func CreateCoupon(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Erro ao fazer parsing do corpo da requisição"})
 	}
 
+	// Cupom é dinheiro: quem cria decide quanto desconto sai do bolso de
+	// alguém. A rota é `protectedRoute`, que só valida o JWT — QUALQUER
+	// usuário logado passava por ela. Sem esta checagem, um cliente comum
+	// criava um PERCENTAGE de 100 (a validação abaixo só recusa acima de 100)
+	// para o establishment_id que quisesse e usava no próprio pedido.
+	//
+	// canActOnEstablishment: admin passa sempre; estabelecimento só no
+	// próprio. É o mesmo helper que os handlers de pedido já usam.
+	if !canActOnEstablishment(c, int64(request.EstablishmentID)) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "Apenas o administrador ou o próprio estabelecimento pode criar cupom",
+		})
+	}
+
 	request.Code = strings.ToUpper(strings.TrimSpace(request.Code))
 	if request.Code == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Código do cupom é obrigatório"})
@@ -370,6 +384,16 @@ func DeleteCoupon(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Cupom não encontrado"})
 	}
 
+	// Sem esta checagem, qualquer usuário logado desativava QUALQUER cupom
+	// só sabendo o id — inclusive a promoção de um restaurante concorrente.
+	// A autorização é sobre o cupom carregado, não sobre o id da URL: é o
+	// dono do cupom que importa.
+	if !canActOnEstablishment(c, int64(coupon.EstablishmentID)) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "Apenas o administrador ou o próprio estabelecimento pode desativar este cupom",
+		})
+	}
+
 	coupon.IsActive = false
 	if err := models.DB.Save(&coupon).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Erro ao desativar cupom"})
@@ -382,6 +406,22 @@ func GenerateReferralCoupon(c *fiber.Ctx) error {
 	var request dto.ReferralCouponRequest
 	if err := c.BodyParser(&request); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Erro ao fazer parsing do corpo da requisição"})
+	}
+
+	// Você só indica por si mesmo. O telefone do indicador vinha do CORPO da
+	// requisição, sem nenhuma checagem: dava para chamar em loop com números
+	// arbitrários e cunhar cupons de R$10 à vontade (os códigos são
+	// determinísticos — "GANHOU-<telefone>" — então também dava para gerar e
+	// usar o cupom de boas-vindas de outra pessoa).
+	//
+	// Admin segue podendo gerar para qualquer um (campanha manual).
+	if role, rErr := middlewares.GetUserRoleFromToken(c); rErr != nil || role != "admin" {
+		tokenPhone, pErr := middlewares.GetUserPhoneFromToken(c)
+		if pErr != nil || tokenPhone == "" || tokenPhone != request.ReferrerPhone {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "Você só pode gerar cupom de indicação para o seu próprio telefone",
+			})
+		}
 	}
 
 	now := time.Now()

@@ -459,6 +459,31 @@ func BootstrapAdmin(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Invalid secret"})
 	}
 
+	// Bootstrap é bootstrap: só vale enquanto NÃO existe admin.
+	//
+	// Sem esta checagem o endpoint não era de uso único — dava para promover
+	// qualquer conta existente a admin (o Update("role","admin") abaixo),
+	// quantas vezes quisesse, a qualquer momento, sem autenticação nenhuma
+	// (a rota tem só rate limit). O "remover a env após o uso" existia como
+	// frase no README e no render.yaml, não como código: bastava a variável
+	// continuar setada em produção — que é o estado real hoje — para a porta
+	// seguir aberta a quem tivesse o secret. E role=admin libera /payments/all,
+	// /orders/all, aprovar e rejeitar pagamento.
+	//
+	// Contar admins fecha isso sozinho: em produção já existe admin, então o
+	// endpoint se desliga sem depender de ninguém lembrar de apagar a env
+	// (o que continua sendo boa higiene, só deixa de ser o que segura a porta).
+	var adminCount int64
+	if cErr := models.DB.Model(&models.User{}).Where("role = ?", "admin").Count(&adminCount).Error; cErr != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to check existing admins"})
+	}
+	if adminCount > 0 {
+		log.Printf("[BOOTSTRAP] Tentativa recusada: ja existem %d admin(s) (email solicitado=%s)", adminCount, req.Email)
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "Bootstrap indisponível: já existe administrador neste sistema",
+		})
+	}
+
 	var user models.User
 	err := models.DB.Where("email = ?", req.Email).First(&user).Error
 	switch {

@@ -130,6 +130,22 @@ func TestWalletIdempotency_Withdraw(t *testing.T) {
 			"saldo debitado uma única vez (500 - 50)")
 	})
 
+	// A Idempotency-Key é escolhida pelo cliente e não carrega valor nem
+	// destino: reusá-la com outro valor recebia "Saque solicitado com
+	// sucesso" sem saque nenhum acontecer.
+	t.Run("mesma chave com valor diferente é recusada", func(t *testing.T) {
+		saldoAntes := currentBalance(t, estID, "establishment")
+		debitosAntes := countDebits(t, estID)
+
+		outro := `{"amount":90.0,"destination":"pix@example.com","method":"PIX"}`
+		resp := post(outro, "key-aaa")
+		require.Equal(t, 409, resp.StatusCode,
+			"chave reusada com outro valor não pode responder sucesso")
+
+		require.Equal(t, debitosAntes, countDebits(t, estID))
+		require.InDelta(t, saldoAntes, currentBalance(t, estID, "establishment"), 0.001)
+	})
+
 	t.Run("chaves diferentes sacam duas vezes", func(t *testing.T) {
 		// Saque legítimo do mesmo valor não pode ser bloqueado.
 		resp := post(body, "key-bbb")
@@ -234,6 +250,25 @@ func TestWalletIdempotency_Deduct(t *testing.T) {
 
 		require.Equal(t, int64(1), countDebits(t, userID))
 		require.InDelta(t, 75.0, currentBalance(t, userID, walletType), 0.001)
+	})
+
+	// O achado que mais dói: a chave de idempotência é o pedido e NÃO carrega
+	// o valor. Sem comparar o valor registrado, debitar 0,01 e depois 100,00
+	// no mesmo order_id devolvia 200 "debitado com sucesso" com
+	// amount_deducted=100,00 — e nada saía da carteira. Quem consome a
+	// resposta dá o pedido por pago.
+	t.Run("mesmo order_id com valor diferente é recusado", func(t *testing.T) {
+		saldoAntes := currentBalance(t, userID, walletType)
+		debitosAntes := countDebits(t, userID)
+
+		body := fmt.Sprintf(`{"user_id":%d,"amount":50.0,"order_id":"order-idem-1"}`, userID)
+		resp := post(body)
+		require.Equal(t, 409, resp.StatusCode,
+			"replay com valor diferente não pode ser confirmado como sucesso")
+
+		require.Equal(t, debitosAntes, countDebits(t, userID), "nada novo no ledger")
+		require.InDelta(t, saldoAntes, currentBalance(t, userID, walletType), 0.001,
+			"saldo intacto")
 	})
 
 	t.Run("order_id vazio é recusado", func(t *testing.T) {

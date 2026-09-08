@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -200,6 +201,39 @@ func AdjustWalletBalance(db *gorm.DB, userID int64, userType, txnType, kind stri
 		return nil, err
 	}
 	return updated, nil
+}
+
+// FindLedgerEntry devolve o lançamento já existente para a referência, do dono
+// informado. Use no caminho de replay, onde só saber que "existe alguma coisa"
+// não basta.
+//
+// Motivo: responder 200 apenas porque a referência já foi usada permite um
+// falso sucesso caro. A chave de idempotência (order_id, Idempotency-Key) NÃO
+// inclui o valor, então uma segunda chamada com a MESMA referência e um valor
+// MAIOR batia no índice único, virava "replay" e recebia
+// 200 "debitado com sucesso" com o valor novo no corpo — enquanto o que saiu
+// da carteira foi só o primeiro valor, possivelmente de um centavo. Quem
+// consome a resposta dá o pedido por pago.
+//
+// Com o lançamento em mãos, o chamador compara o valor e recusa a divergência
+// em vez de confirmá-la.
+func FindLedgerEntry(db *gorm.DB, referenceID, txnType string, userID int64) (*WalletTxn, error) {
+	var entry WalletTxn
+	err := db.Model(&WalletTxn{}).
+		Joins("JOIN wallets ON wallets.id = wallet_transactions.wallet_id").
+		Where("wallet_transactions.reference_id = ? AND wallet_transactions.type = ? AND wallets.user_id = ?", referenceID, txnType, userID).
+		First(&entry).Error
+	if err != nil {
+		return nil, err
+	}
+	return &entry, nil
+}
+
+// SameAmount compara dois valores em reais na granularidade de centavo, que é
+// a menor unidade pagável. Evita que ruído de float (0.1+0.2) faça um replay
+// legítimo parecer divergente.
+func SameAmount(a, b float64) bool {
+	return int64(math.Round(a*100)) == int64(math.Round(b*100))
 }
 
 // HasLedgerEntry checa idempotência: já existe lançamento deste tipo para a

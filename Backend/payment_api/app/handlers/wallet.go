@@ -236,6 +236,39 @@ func DeductFromWallet(c *fiber.Ctx) error {
 
 	walletType := walletTypeForUser(req.UserID)
 	ref := deductRef(req.UserID, req.OrderID)
+
+	// Compatibilidade com lançamentos anteriores ao namespacing.
+	//
+	// Antes desta mudança a referência gravada era o order_id puro. Um débito
+	// feito ANTES do deploy e reenviado DEPOIS geraria `ord:<uid>:<pedido>`,
+	// que não colide com a linha antiga — e o mesmo pedido seria debitado duas
+	// vezes, exatamente o que a idempotência existe para impedir. A janela é
+	// estreita (um retry atravessando o deploy), mas é dinheiro.
+	//
+	// Some sozinho quando não houver mais lançamento em formato antigo.
+	if legacy, lErr := models.FindLedgerEntry(models.DB, req.OrderID, "debit", req.UserID); lErr == nil {
+		if !models.SameAmount(legacy.Amount, req.Amount) {
+			log.Printf("[WALLET] Deduct: pedido %s já debitado (formato legado) com valor diferente: registrado=%.2f pedido=%.2f",
+				req.OrderID, legacy.Amount, req.Amount)
+			return c.Status(409).JSON(fiber.Map{
+				"error":           "Pedido já debitado com valor diferente",
+				"amount_recorded": legacy.Amount,
+			})
+		}
+		log.Printf("[WALLET] Deduct idempotente (lançamento legado): user=%d order=%s", req.UserID, req.OrderID)
+		wallet, wErr := models.GetWallet(models.DB, req.UserID, walletType)
+		if wErr != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "Failed to deduct from wallet"})
+		}
+		return c.Status(200).JSON(fiber.Map{
+			"user_id":         req.UserID,
+			"balance":         wallet.Balance,
+			"amount_deducted": req.Amount,
+			"message":         "Amount deducted successfully",
+			"idempotent":      true,
+		})
+	}
+
 	newWallet, dErr := models.AdjustWalletBalance(
 		models.DB, req.UserID, walletType,
 		"debit", "", req.Amount,
@@ -254,9 +287,22 @@ func DeductFromWallet(c *fiber.Ctx) error {
 		// isso deveria ser sempre verdade — mas "deveria ser verdade por
 		// construção" é exatamente o tipo de suposição que transforma colisão
 		// de índice em falso sucesso. Se não bater, é erro, não replay.
-		if !models.HasLedgerEntry(models.DB, ref, "debit", req.UserID) {
-			log.Printf("[WALLET] Deduct: violação de idempotência sem lançamento próprio: user=%d ref=%s", req.UserID, ref)
+		entry, eErr := models.FindLedgerEntry(models.DB, ref, "debit", req.UserID)
+		if eErr != nil {
+			log.Printf("[WALLET] Deduct: violação de idempotência sem lançamento próprio: user=%d ref=%s: %v", req.UserID, ref, eErr)
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to deduct from wallet"})
+		}
+		// A chave de idempotência é o pedido, e ela NÃO carrega o valor. Sem
+		// esta comparação, debitar 0,01 e depois 100,00 no mesmo order_id
+		// devolvia 200 "debitado com sucesso" com amount_deducted=100,00 e
+		// nada saía da carteira — o consumidor daria o pedido por pago.
+		if !models.SameAmount(entry.Amount, req.Amount) {
+			log.Printf("[WALLET] Deduct: mesmo order_id com valor diferente: user=%d order=%s registrado=%.2f pedido=%.2f",
+				req.UserID, req.OrderID, entry.Amount, req.Amount)
+			return c.Status(409).JSON(fiber.Map{
+				"error":           "Pedido já debitado com valor diferente",
+				"amount_recorded": entry.Amount,
+			})
 		}
 		log.Printf("[WALLET] Deduct idempotente (replay): user=%d order=%s", req.UserID, req.OrderID)
 		// Leitura pura: o replay não pode criar carteira que não existia.
@@ -497,9 +543,23 @@ func EstablishmentWithdraw(c *fiber.Ctx) error {
 		// referência já inclui o estID, mas se por algum motivo a colisão vier
 		// de outro dono, responder "saque efetuado" seria mentira — e o saque
 		// real teria sido silenciosamente descartado.
-		if !models.HasLedgerEntry(models.DB, ref, "debit", estID) {
-			log.Printf("[WALLET] Saque: violação de idempotência sem lançamento próprio: establishment=%d", estID)
+		entry, eErr := models.FindLedgerEntry(models.DB, ref, "debit", estID)
+		if eErr != nil {
+			log.Printf("[WALLET] Saque: violação de idempotência sem lançamento próprio: establishment=%d: %v", estID, eErr)
 			return c.Status(500).JSON(fiber.Map{"error": "Falha ao processar saque"})
+		}
+		// A Idempotency-Key é escolhida pelo cliente e não carrega valor nem
+		// destino. Reusá-la com outro valor (ou outra chave PIX) recebia
+		// "Saque solicitado com sucesso" sem que saque nenhum acontecesse.
+		// O fallback derivado não tem esse furo porque já hasheia os dois.
+		sameDestination := strings.EqualFold(strings.TrimSpace(entry.Destination), strings.TrimSpace(req.Destination))
+		if !models.SameAmount(entry.Amount, req.Amount) || !sameDestination {
+			log.Printf("[WALLET] Saque: Idempotency-Key reusada com dados diferentes: establishment=%d registrado=%.2f pedido=%.2f",
+				estID, entry.Amount, req.Amount)
+			return c.Status(409).JSON(fiber.Map{
+				"error":           "Idempotency-Key já usada para um saque diferente",
+				"amount_recorded": entry.Amount,
+			})
 		}
 		log.Printf("[WALLET] Saque idempotente (replay): establishment=%d", estID)
 		// Leitura pura: o replay não pode criar carteira que não existia.

@@ -16,11 +16,27 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// withdrawRefPrefix isola as referências de saque no ledger. Sem prefixo, uma
-// chave de idempotência de saque poderia colidir com um order_id usado como
-// referência por DeductFromWallet — o índice uq_wallet_txns_debit_ref é
-// global por reference_id, não por tipo de operação.
-const withdrawRefPrefix = "wd:"
+// Referências de débito no ledger são namespaceadas por operação E POR DONO.
+//
+// Motivo original: o índice de sql/18 era UNIQUE só em reference_id, sem
+// wallet_id, o que fazia do reference_id um espaço GLOBAL. Uma referência não
+// escopada ficava atacável — mandar um order_id/chave que outra pessoa já
+// usou provocava violação do índice e, com o handler tratando isso como
+// "replay", ele respondia sucesso sem mover dinheiro nenhum: falso sucesso
+// para o chamador e bloqueio da operação alheia.
+//
+// sql/20 reescopou o índice para (wallet_id, reference_id), então hoje o
+// banco já isola por carteira. O namespacing continua porque as duas camadas
+// protegem coisas diferentes: o índice garante unicidade DENTRO da carteira,
+// e o prefixo garante que um saque (`wd:`) nunca colida com uma dedução de
+// pedido (`ord:`) da MESMA carteira por reusar o mesmo identificador.
+func withdrawRef(estID int64, idemKey string) string {
+	return fmt.Sprintf("wd:%d:%s", estID, idemKey)
+}
+
+func deductRef(userID int64, orderID string) string {
+	return fmt.Sprintf("ord:%d:%s", userID, orderID)
+}
 
 // withdrawDedupWindow é a janela do fallback de idempotência para clientes
 // que não mandam Idempotency-Key. Curta de propósito: pega duplo clique e
@@ -31,11 +47,34 @@ const withdrawDedupWindow = 60 * time.Second
 // derivedWithdrawKey monta uma chave determinística por janela de tempo.
 // Duas requisições idênticas dentro da mesma janela produzem a mesma chave e
 // a segunda esbarra no índice de idempotência.
+//
+// destination é normalizado (trim + minúsculas) porque um espaço a mais na
+// chave PIX geraria uma chave diferente e deixaria o duplo clique passar.
 func derivedWithdrawKey(estID int64, amount float64, destination string, now time.Time) string {
-	bucket := now.Unix() / int64(withdrawDedupWindow.Seconds())
-	raw := fmt.Sprintf("%d|%.2f|%s|%d", estID, amount, destination, bucket)
+	return derivedWithdrawKeyForBucket(estID, amount, destination,
+		now.Unix()/int64(withdrawDedupWindow.Seconds()))
+}
+
+func derivedWithdrawKeyForBucket(estID int64, amount float64, destination string, bucket int64) string {
+	dest := strings.ToLower(strings.TrimSpace(destination))
+	raw := fmt.Sprintf("%d|%.2f|%s|%d", estID, amount, dest, bucket)
 	sum := sha256.Sum256([]byte(raw))
 	return hex.EncodeToString(sum[:16])
+}
+
+// derivedWithdrawKeyCandidates devolve a chave da janela atual e a da janela
+// anterior.
+//
+// Motivo: o bucket é fixo (unix/60), não deslizante. Duas requisições
+// separadas por 1 segundo podem cair em buckets diferentes (ex.: 59.9s e
+// 60.1s) e as duas passariam. Testando também o bucket anterior, o duplo
+// clique é barrado mesmo em cima da virada.
+func derivedWithdrawKeyCandidates(estID int64, amount float64, destination string, now time.Time) []string {
+	bucket := now.Unix() / int64(withdrawDedupWindow.Seconds())
+	return []string{
+		derivedWithdrawKeyForBucket(estID, amount, destination, bucket),
+		derivedWithdrawKeyForBucket(estID, amount, destination, bucket-1),
+	}
 }
 
 // ============================================================================
@@ -188,7 +227,7 @@ func DeductFromWallet(c *fiber.Ctx) error {
 	}
 
 	// order_id é a chave de idempotência do débito. Vazio significa cair fora
-	// do índice parcial uq_wallet_txns_debit_ref e permitir débito duplicado
+	// do índice parcial uq_wallet_txns_debit_ref_wallet e permitir débito duplicado
 	// no mesmo pedido — além de gerar lançamento sem origem rastreável no
 	// ledger. Melhor recusar do que debitar sem proteção.
 	if strings.TrimSpace(req.OrderID) == "" {
@@ -196,10 +235,11 @@ func DeductFromWallet(c *fiber.Ctx) error {
 	}
 
 	walletType := walletTypeForUser(req.UserID)
+	ref := deductRef(req.UserID, req.OrderID)
 	newWallet, dErr := models.AdjustWalletBalance(
 		models.DB, req.UserID, walletType,
 		"debit", "", req.Amount,
-		req.OrderID,
+		ref,
 		"Wallet deduction",
 		"",
 	)
@@ -208,9 +248,19 @@ func DeductFromWallet(c *fiber.Ctx) error {
 	}
 	if errors.Is(dErr, models.ErrDuplicateDebit) {
 		// Replay do mesmo pedido: o saldo não foi debitado de novo (rollback).
-		// Responde sucesso com o saldo atual em vez de 500.
+		//
+		// Antes de responder sucesso, confirma que o lançamento existente é
+		// DESTA carteira. A referência já é namespaceada por usuário, então
+		// isso deveria ser sempre verdade — mas "deveria ser verdade por
+		// construção" é exatamente o tipo de suposição que transforma colisão
+		// de índice em falso sucesso. Se não bater, é erro, não replay.
+		if !models.HasLedgerEntry(models.DB, ref, "debit", req.UserID) {
+			log.Printf("[WALLET] Deduct: violação de idempotência sem lançamento próprio: user=%d ref=%s", req.UserID, ref)
+			return c.Status(500).JSON(fiber.Map{"error": "Failed to deduct from wallet"})
+		}
 		log.Printf("[WALLET] Deduct idempotente (replay): user=%d order=%s", req.UserID, req.OrderID)
-		wallet, wErr := models.GetOrCreateWallet(models.DB, req.UserID, walletType)
+		// Leitura pura: o replay não pode criar carteira que não existia.
+		wallet, wErr := models.GetWallet(models.DB, req.UserID, walletType)
 		if wErr != nil {
 			log.Printf("[WALLET] Replay de deduct: falha ao ler saldo: user=%d: %v", req.UserID, wErr)
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to deduct from wallet"})
@@ -395,7 +445,7 @@ func EstablishmentWithdraw(c *fiber.Ctx) error {
 	}
 
 	// Chave de idempotência: sem ela o saque passava "" como reference_id e
-	// ficava FORA do índice parcial uq_wallet_txns_debit_ref (que exclui
+	// ficava FORA do índice parcial uq_wallet_txns_debit_ref_wallet (que exclui
 	// referência vazia) — duplo submit sacava duas vezes, limitado só pelo
 	// saldo. Cliente novo manda Idempotency-Key; cliente antigo cai no
 	// fallback derivado, que barra o duplo clique acidental sem impedir um
@@ -405,14 +455,33 @@ func EstablishmentWithdraw(c *fiber.Ctx) error {
 		idemKey = strings.TrimSpace(req.IdempotencyKey)
 	}
 	if idemKey == "" {
+		// Fallback derivado: checa a janela atual e a anterior antes de
+		// debitar. Só o índice do banco não basta aqui porque a chave da
+		// janela seguinte é diferente — sem esta checagem, um duplo clique em
+		// cima da virada do bucket passaria com duas chaves distintas.
+		for _, candidate := range derivedWithdrawKeyCandidates(estID, req.Amount, req.Destination, time.Now()) {
+			if models.HasLedgerEntry(models.DB, withdrawRef(estID, candidate), "debit", estID) {
+				log.Printf("[WALLET] Saque idempotente (janela derivada): establishment=%d", estID)
+				wallet, wErr := models.GetWallet(models.DB, estID, "establishment")
+				if wErr != nil {
+					return c.Status(500).JSON(fiber.Map{"error": "Falha ao processar saque"})
+				}
+				return c.JSON(fiber.Map{
+					"message":    "Saque solicitado com sucesso",
+					"balance":    wallet.Balance,
+					"idempotent": true,
+				})
+			}
+		}
 		idemKey = derivedWithdrawKey(estID, req.Amount, req.Destination, time.Now())
 	}
 
 	description := fmt.Sprintf("Saque via %s para %s", req.Method, req.Destination)
+	ref := withdrawRef(estID, idemKey)
 	newWallet, dErr := models.AdjustWalletBalance(
 		models.DB, estID, "establishment",
 		"debit", "withdrawal", req.Amount,
-		withdrawRefPrefix+idemKey,
+		ref,
 		description,
 		req.Destination,
 	)
@@ -422,10 +491,19 @@ func EstablishmentWithdraw(c *fiber.Ctx) error {
 	if errors.Is(dErr, models.ErrDuplicateDebit) {
 		// Replay: este saque já foi registrado antes. O rollback da transação
 		// garantiu que o saldo não foi debitado de novo, então a resposta
-		// correta é sucesso com o saldo atual — não 500. Mesmo formato do
-		// caminho feliz, mais um marcador pra facilitar depuração.
-		log.Printf("[WALLET] Saque idempotente (replay): establishment=%d key=%s", estID, idemKey)
-		wallet, wErr := models.GetOrCreateWallet(models.DB, estID, "establishment")
+		// correta é sucesso com o saldo atual — não 500.
+		//
+		// Confirma antes que o lançamento é DESTE estabelecimento: a
+		// referência já inclui o estID, mas se por algum motivo a colisão vier
+		// de outro dono, responder "saque efetuado" seria mentira — e o saque
+		// real teria sido silenciosamente descartado.
+		if !models.HasLedgerEntry(models.DB, ref, "debit", estID) {
+			log.Printf("[WALLET] Saque: violação de idempotência sem lançamento próprio: establishment=%d", estID)
+			return c.Status(500).JSON(fiber.Map{"error": "Falha ao processar saque"})
+		}
+		log.Printf("[WALLET] Saque idempotente (replay): establishment=%d", estID)
+		// Leitura pura: o replay não pode criar carteira que não existia.
+		wallet, wErr := models.GetWallet(models.DB, estID, "establishment")
 		if wErr != nil {
 			log.Printf("[WALLET] Replay de saque: falha ao ler saldo: establishment=%d: %v", estID, wErr)
 			return c.Status(500).JSON(fiber.Map{"error": "Falha ao processar saque"})

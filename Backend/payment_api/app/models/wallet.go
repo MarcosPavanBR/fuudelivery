@@ -79,13 +79,26 @@ func GetOrCreateWallet(db *gorm.DB, userID int64, userType string) (*Wallet, err
 	return wallet, nil
 }
 
+// GetWallet lê a carteira SEM criar. Use nos caminhos de leitura (ex.: replay
+// idempotente), onde criar uma carteira zerada mascararia o problema:
+// responder "saldo 0" como se a operação tivesse acontecido, para um usuário
+// que sequer tinha carteira.
+func GetWallet(db *gorm.DB, userID int64, userType string) (*Wallet, error) {
+	var wallet Wallet
+	if err := db.Where("user_id = ? AND user_type = ?", userID, userType).First(&wallet).Error; err != nil {
+		return nil, fmt.Errorf("carregar carteira %d/%s: %w", userID, userType, err)
+	}
+	return &wallet, nil
+}
+
 // ErrDuplicateCredit indica que já existe lançamento de crédito para a
 // referência (violacao de uq_wallet_txns_credit_ref) — o crédito já foi
 // aplicado antes e a operação atual é um replay idempotente.
 var ErrDuplicateCredit = errors.New("lançamento de crédito duplicado para a referência")
 
 // ErrDuplicateDebit é o equivalente para débitos (violacao de
-// uq_wallet_txns_debit_ref, criado em sql/18_debit_idempotency.sql). O
+// uq_wallet_txns_debit_ref_wallet, criado em sql/18_debit_idempotency.sql e
+// reescopado por carteira em sql/20_debit_idempotency_por_wallet.sql). O
 // débito já foi aplicado antes; quem chamou deve responder de forma
 // idempotente em vez de tratar como erro de servidor.
 //
@@ -170,11 +183,11 @@ func AdjustWalletBalance(db *gorm.DB, userID int64, userType, txnType, kind stri
 				return ErrDuplicateCredit
 			}
 			// Mesmo caso para débito (saque/dedução reenviados): o índice
-			// uq_wallet_txns_debit_ref barra o segundo lançamento e o
+			// uq_wallet_txns_debit_ref_wallet barra o segundo lançamento e o
 			// rollback desfaz o UPDATE do saldo, então o dinheiro não sai
 			// duas vezes. Sem este mapeamento o erro subia cru e virava 500,
 			// fazendo um retry legítimo parecer falha de servidor.
-			if txnType == "debit" && isUniqueViolation(err, "uq_wallet_txns_debit_ref") {
+			if txnType == "debit" && isUniqueViolation(err, "uq_wallet_txns_debit_ref_wallet") {
 				return ErrDuplicateDebit
 			}
 			return err

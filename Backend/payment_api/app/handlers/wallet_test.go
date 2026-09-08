@@ -15,7 +15,7 @@ import (
 // mesmo se os handlers fossem apagados.
 //
 // A idempotência de saque/débito é imposta por índice PARCIAL do Postgres
-// (uq_wallet_txns_debit_ref, sql/18) e por isso só pode ser testada de
+// (uq_wallet_txns_debit_ref_wallet, sql/18) e por isso só pode ser testada de
 // verdade contra um banco real — está em wallet_idempotency_test.go, sob a
 // tag de build `integration`.
 // ============================================================================

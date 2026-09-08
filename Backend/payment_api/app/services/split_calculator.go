@@ -56,9 +56,25 @@ func CalculateSplitRules(payment *models.Payment, platformPct, establishmentPct 
 		deliveryAmount = total
 	}
 
+	// Teto da plataforma: o que sobra depois da entrega.
+	//
+	// Sem isto o invariante quebrava de verdade. Exemplo real (total=20,
+	// entrega=19, 10%/85%): o establishment absorvia o excesso e clampava em
+	// 0, mas platformFee (2,00) + delivery (19,00) já somavam 21,00 sozinhos —
+	// ninguém reduzia a taxa da plataforma, e o split alocava mais do que o
+	// pagamento tinha. A entrega tem prioridade porque é custo real do
+	// entregador; a taxa da plataforma cede o que faltar.
+	maxPlatform := roundCents(total - deliveryAmount)
+	if maxPlatform < 0 {
+		maxPlatform = 0
+	}
+	if platformFee > maxPlatform {
+		platformFee = maxPlatform
+	}
+
 	// Garante que platformFee + establishment + delivery nunca exceda o total.
 	// Se o delivery consome parte do bolo, o establishment absorve a diferença
-	// (nunca o platform, que é taxa fixa).
+	// (o platform já foi limitado acima).
 	allocated := platformFee + establishmentAmount + deliveryAmount
 	if allocated > total {
 		overage := allocated - total

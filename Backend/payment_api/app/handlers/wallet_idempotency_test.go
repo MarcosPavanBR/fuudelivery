@@ -24,8 +24,8 @@ import (
 //
 // Por que integração e não unitário: a idempotência NÃO é implementada em Go,
 // e sim por índices PARCIAIS do Postgres (uq_wallet_txns_credit_ref em
-// sql/11, uq_wallet_txns_debit_ref em sql/18). Um teste com mock passaria
-// sem provar nada — o que segura o dinheiro é o banco.
+// sql/11, uq_wallet_txns_debit_ref_wallet em sql/18 + sql/20). Um teste com
+// mock passaria sem provar nada — o que segura o dinheiro é o banco.
 //
 // Como rodar:
 //
@@ -37,7 +37,7 @@ import (
 //
 // IMPORTANTE: setupCheckoutE2EEnv monta o schema com gormDB.AutoMigrate, que
 // cria as tabelas a partir das structs Go. Os índices parciais vêm de SQL cru
-// (sql/11 e sql/18) e NÃO têm tag de índice no struct WalletTxn — logo o
+// (sql/11 e sql/18+20) e NÃO têm tag de índice no struct WalletTxn — logo o
 // AutoMigrate não os cria. Sem esta função, um teste de idempotência rodaria
 // contra um schema SEM a constraint que garante idempotência em produção:
 // o INSERT duplicado passaria e o teste daria falsa sensação de segurança.
@@ -50,8 +50,8 @@ func applyLedgerIdempotencyIndexes(t *testing.T) {
 		    ON wallet_transactions (reference_id)
 		    WHERE type = 'credit' AND reference_id <> ''`).Error)
 	require.NoError(t, models.DB.Exec(`
-		CREATE UNIQUE INDEX IF NOT EXISTS uq_wallet_txns_debit_ref
-		    ON wallet_transactions (reference_id)
+		CREATE UNIQUE INDEX IF NOT EXISTS uq_wallet_txns_debit_ref_wallet
+		    ON wallet_transactions (wallet_id, reference_id)
 		    WHERE type = 'debit' AND reference_id <> ''`).Error)
 }
 

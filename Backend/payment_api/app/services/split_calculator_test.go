@@ -139,3 +139,53 @@ func TestCalculateSplitRules_ArredondaCentavos(t *testing.T) {
 	assert.InDelta(t, payment.Amount, totalDistribuido, 0.001,
 		"arredondar não pode quebrar a soma — o customerCredit absorve o resto")
 }
+
+// TestCalculateSplitRules_NaoSuperAloca cobre o ramo que os outros testes não
+// tocavam e onde o invariante ESTAVA QUEBRADO: quando a entrega consome quase
+// todo o pagamento, o establishment zerava mas a taxa da plataforma continuava
+// inteira, e platform + delivery sozinhos passavam do total.
+//
+// Caso real encontrado na revisão: total=20, entrega=19, 10%/85% produzia
+// plat=2.00 + del=19.00 = 21.00 para um pagamento de 20.00.
+func TestCalculateSplitRules_NaoSuperAloca(t *testing.T) {
+	casos := []struct {
+		nome    string
+		total   float64
+		entrega float64
+		platPct float64
+		estPct  float64
+	}{
+		{"entrega consome quase tudo", 20.0, 19.0, 10, 85},
+		{"entrega igual ao total", 20.0, 20.0, 10, 85},
+		{"entrega maior que o total", 20.0, 25.0, 10, 85},
+		{"entrega no limite da taxa", 100.0, 90.0, 10, 85},
+		{"valores nao redondos", 99.99, 95.55, 3, 87},
+	}
+
+	for _, c := range casos {
+		t.Run(c.nome, func(t *testing.T) {
+			p := &models.Payment{Amount: c.total, DeliveryAmount: c.entrega, CustomerID: 1}
+			r, err := CalculateSplitRules(p, c.platPct, c.estPct)
+			assert.NoError(t, err)
+
+			soma := r.PlatformFee + r.EstablishmentAmt + r.DeliveryAmt + r.CustomerCredit
+			assert.LessOrEqual(t, soma, c.total+0.001,
+				"split alocou %.2f para um pagamento de %.2f", soma, c.total)
+			assert.InDelta(t, c.total, soma, 0.011,
+				"as quatro partes devem somar o total")
+
+			// Nenhuma parcela negativa.
+			assert.GreaterOrEqual(t, r.PlatformFee, 0.0)
+			assert.GreaterOrEqual(t, r.EstablishmentAmt, 0.0)
+			assert.GreaterOrEqual(t, r.CustomerCredit, 0.0)
+
+			// A soma das regras emitidas também não pode passar do total.
+			somaRegras := 0.0
+			for _, rule := range r.Rules {
+				somaRegras += rule.Amount
+			}
+			assert.LessOrEqual(t, somaRegras, c.total+0.001,
+				"regras emitidas somam %.2f para um pagamento de %.2f", somaRegras, c.total)
+		})
+	}
+}

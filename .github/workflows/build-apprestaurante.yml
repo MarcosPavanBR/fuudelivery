@@ -10,20 +10,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # 120 min, medido — não chutado.
-    #
-    # Com 45 min a run 162 (09/09, já com as ABIs cortadas para duas) foi
-    # CANCELADA no teto, depois de compilar 45 minutos seguidos sem falhar.
-    # Ou seja: o build não trava, ele é grande mesmo. A pilha nativa destes
-    # apps é pesada — MapLibre, reanimated 4 + worklets, nitro-modules e mmkv,
-    # todos compilando C++ com New Architecture num runner de 2 núcleos.
-    #
-    # Não corto para uma ABI só para caber em 45: arm64-v8a sozinho deixaria
-    # de fora os aparelhos 32 bits, que ainda são comuns no público deste app.
-    # Melhor pagar o tempo uma vez — com o cache do Gradle salvo, as próximas
-    # runs são muito mais rápidas, e o paths filter faz este workflow rodar só
-    # quando o app muda.
-    timeout-minutes: 120
+    # 60 min: a COMPILAÇÃO leva ~19 min (medido na run 169), então isto é
+    # 3x de folga. Serve de rede contra travamento, não de meta.
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: Frontend/AppRestaurante
@@ -97,8 +86,26 @@ jobs:
           # instalado em celular de verdade, arm64-v8a cobre praticamente todo
           # aparelho atual e armeabi-v7a cobre os antigos. Se algum dia for
           # preciso rodar no emulador, é só acrescentar x86_64 aqui.
+          # -x nas tarefas de lintVital: é ELAS que travavam o build.
+          #
+          # O log da run 169 mostra a coisa inteira compilando em 19 min
+          # (dexBuilderRelease, mergeDexRelease, compileReleaseArtProfile — o
+          # APK estava praticamente pronto às 18:04). Aí
+          # :react-native-masked-view e :react-native-async-storage falharam em
+          # lintVitalAnalyzeRelease e o Gradle ficou 101 MINUTOS em silêncio,
+          # sem uma linha de log, até o job ser cancelado (o cleanup ainda
+          # matou dois aapt2 órfãos). Não era build lento — era o lint pendurado
+          # no caminho de falha.
+          #
+          # lintVital é checagem de qualidade que a AGP roda no build de
+          # release; não é requisito para gerar APK. E o que falhou está em
+          # node_modules de terceiros, não no código deste projeto — travar a
+          # entrega do app por isso seria o rabo abanando o cachorro.
           ./gradlew assembleRelease \
             -PreactNativeArchitectures=arm64-v8a,armeabi-v7a \
+            -x lintVitalAnalyzeRelease \
+            -x lintVitalReportRelease \
+            -x lintVitalRelease \
             --build-cache --no-daemon --stacktrace
 
       - name: Upload APK

@@ -3,6 +3,7 @@ import {
   getWallet,
   getExtract,
   requestWithdraw,
+  newIdempotencyKey,
   getPaymentHealth,
 } from "../../services/payment.model";
 import {
@@ -60,6 +61,16 @@ export default function MinhaCarteira() {
   const [withdrawMethod, setWithdrawMethod] = useState("PIX");
   const [withdrawDest, setWithdrawDest] = useState("");
   const [withdrawing, setWithdrawing] = useState(false);
+  // Chave de idempotência da TENTATIVA de saque em curso.
+  //
+  // Uma por intenção, não por requisição: se cada POST gerasse a sua, o duplo
+  // clique mandaria duas chaves diferentes, o backend as trataria como dois
+  // saques distintos e o dono sacaria duas vezes — pior do que o 409 que esta
+  // mudança veio corrigir. A chave nasce quando o modal abre e morre quando o
+  // saque conclui, então toda retentativa do MESMO saque reusa a mesma chave e
+  // volta 200 idempotente; um segundo saque deliberado abre o modal de novo e
+  // ganha chave nova.
+  const [withdrawKey, setWithdrawKey] = useState("");
   const [paymentOnline, setPaymentOnline] = useState(null);
   const [cursor, setCursor] = useState("");
   const [hasMore, setHasMore] = useState(false);
@@ -144,6 +155,7 @@ export default function MinhaCarteira() {
         amount,
         destination: withdrawDest,
         method: withdrawMethod,
+        idempotencyKey: withdrawKey,
       });
       toast.success(
         `Saque de R$ ${amount.toFixed(2)} solicitado com sucesso!`
@@ -151,6 +163,8 @@ export default function MinhaCarteira() {
       setShowWithdraw(false);
       setWithdrawAmount("");
       setWithdrawDest("");
+      // Saque concluído: a próxima abertura do modal é outra intenção.
+      setWithdrawKey("");
       await fetchWallet();
     } catch (err) {
       toast.error(
@@ -295,7 +309,10 @@ export default function MinhaCarteira() {
       {/* Botão de saque */}
       {wallet?.available > 0 && (
         <button
-          onClick={() => setShowWithdraw(true)}
+          onClick={() => {
+            setWithdrawKey(newIdempotencyKey());
+            setShowWithdraw(true);
+          }}
           className="btn btn-primary w-full justify-center py-3"
         >
           <FaMoneyBillWave /> Solicitar Saque

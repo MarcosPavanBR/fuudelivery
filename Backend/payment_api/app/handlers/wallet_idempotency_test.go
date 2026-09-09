@@ -196,7 +196,16 @@ func TestWalletIdempotency_WithdrawSemChaveUsaFallback(t *testing.T) {
 	seedWallet(t, estID, "establishment", 200.0)
 
 	require.Equal(t, 200, post().StatusCode)
-	require.Equal(t, 200, post().StatusCode, "replay sem chave também deve ser 200")
+
+	// O segundo saque idêntico na janela é RECUSADO com 409, não "200
+	// sucesso": sem Idempotency-Key não dá para provar que é a mesma
+	// requisição lógica (só hashia valor+destino+bucket), e responder
+	// sucesso sem mover dinheiro fazia o dono acreditar que sacou duas
+	// vezes. O dinheiro continua intocado e o cliente SABE que o segundo
+	// não aconteceu.
+	resp2 := post()
+	require.Equal(t, 409, resp2.StatusCode,
+		"segundo saque idêntico na janela derivada deve ser 409, não falso sucesso")
 
 	require.Equal(t, int64(1), countDebits(t, estID),
 		"fallback derivado deve barrar o segundo saque idêntico na mesma janela")

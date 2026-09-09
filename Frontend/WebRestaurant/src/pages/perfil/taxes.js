@@ -29,6 +29,11 @@ function Taxes() {
       perKm: resp?.PerKm ?? 0,
     });
     setZoneFee(fee);
+    // Erro real (403/500/network) não pode renderizar números como se
+    // fossem a comissão real — avisar é dever de casa, não opcional.
+    if (fee?.error) {
+      toast.error("Não foi possível carregar a taxa da sua região. Tente recarregar a página.");
+    }
   };
 
   useEffect(() => {
@@ -110,6 +115,15 @@ function Taxes() {
               </div>
             </div>
 
+            {zoneFee.error ? (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50">
+                <FiPercent className="h-5 w-5 shrink-0" style={{ color: "#DC2626" }} />
+                <p className="text-sm text-red-700">
+                  Não foi possível carregar a taxa da sua região agora. Os valores abaixo não estão disponíveis.
+                </p>
+              </div>
+            ) : (
+              <>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
@@ -154,6 +168,8 @@ function Taxes() {
                     )}
                   </div>
                 )}
+              </>
+            )}
               </>
             )}
           </div>

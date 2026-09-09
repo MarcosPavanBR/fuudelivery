@@ -191,6 +191,34 @@ func resolveWSTicket(queryToken, queryTicket string) (jwt.MapClaims, error) {
 	return nil, fmt.Errorf("authentication required: use POST /auth/ws-ticket first")
 }
 
+// wsUserIDMatches decide se o claim "id" do token autoriza a URL cujo id
+// é urlID. A regra existe porque o cliente WebSocket passou de user.sub
+// (string) para user.id (numérico) quando a sessão migrou para
+// GET /auth/session: tokens de sessão antigas ainda circulam com id em
+// STRING, e o dono legítimo não pode tomar "User ID mismatch" por causa do
+// tipo. Um id desalinhado com a URL, porém, é IDOR e é barrado em qualquer
+// formato.
+func wsUserIDMatches(claims jwt.MapClaims, urlID string) bool {
+	urlNum, err := strconv.ParseInt(urlID, 10, 64)
+	if err != nil {
+		return false
+	}
+	var claimID int64
+	switch v := claims["id"].(type) {
+	case float64:
+		claimID = int64(v)
+	case string:
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return false
+		}
+		claimID = n
+	default:
+		return false
+	}
+	return claimID == urlNum
+}
+
 // cleanupWSTickets remove tickets expirados periodicamente (1/min).
 func cleanupWSTickets() {
 	go func() {
@@ -814,7 +842,8 @@ func setupWebSocketRoutes(app *fiber.App) {
 			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Invalid client ID"}}`))
 			return
 		}
-		if int64(tokenUserID) != clientID {
+		_ = tokenUserID // regra de comparação extraída em wsUserIDMatches (testável)
+		if !wsUserIDMatches(claims, clientIDStr) {
 			role, _ := claims["role"].(string)
 			if role != "admin" {
 				c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"User ID mismatch"}}`))
@@ -869,8 +898,8 @@ func setupWebSocketRoutes(app *fiber.App) {
 			return
 		}
 		tokenUserID, _ := claims["id"].(float64)
-		urlUserID, _ := strconv.ParseInt(c.Params("userId"), 10, 64)
-		if int64(tokenUserID) != urlUserID {
+		_ = tokenUserID // regra de comparação extraída em wsUserIDMatches (testável)
+		if !wsUserIDMatches(claims, c.Params("userId")) {
 			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"User ID mismatch"}}`))
 			return
 		}

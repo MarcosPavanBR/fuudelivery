@@ -505,17 +505,21 @@ func EstablishmentWithdraw(c *fiber.Ctx) error {
 		// debitar. Só o índice do banco não basta aqui porque a chave da
 		// janela seguinte é diferente — sem esta checagem, um duplo clique em
 		// cima da virada do bucket passaria com duas chaves distintas.
+		//
+		// Colisão aqui NÃO é replay idempotente — ao contrário da colisão de
+		// Idempotency-Key (validada abaixo contra valor E destino, que prova
+		// ser a MESMA requisição lógica), o fallback derivado só hashia
+		// (estabelecimento, valor, destino, bucket). Responder "Saque
+		// solicitado com sucesso" sem mover dinheiro fazia o dono acreditar
+		// que sacou duas vezes: falso sucesso é o pior resultado possível em
+		// operação financeira. A resposta honesta é 409 — o cliente sabe que
+		// o segundo saque NÃO aconteceu e que o primeiro está em andamento.
 		for _, candidate := range derivedWithdrawKeyCandidates(estID, req.Amount, req.Destination, time.Now()) {
 			if models.HasLedgerEntry(models.DB, withdrawRef(estID, candidate), "debit", estID) {
-				log.Printf("[WALLET] Saque idempotente (janela derivada): establishment=%d", estID)
-				wallet, wErr := models.GetWallet(models.DB, estID, "establishment")
-				if wErr != nil {
-					return c.Status(500).JSON(fiber.Map{"error": "Falha ao processar saque"})
-				}
-				return c.JSON(fiber.Map{
-					"message":    "Saque solicitado com sucesso",
-					"balance":    wallet.Balance,
-					"idempotent": true,
+				log.Printf("[WALLET] Saque duplicado na janela derivada (sem Idempotency-Key): establishment=%d", estID)
+				return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+					"error":               "Saque idêntico já solicitado há menos de 1 minuto. Aguarde a confirmação ou envie uma Idempotency-Key para repetir de forma segura.",
+					"retry_after_seconds": 60,
 				})
 			}
 		}

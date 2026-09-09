@@ -10,11 +10,20 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Sem isso o GitHub usa o default de 6h: em 07/09/2026 três runs
-    # ficaram penduradas 60+ min no step do Gradle sem nunca falhar,
-    # queimando minutos de Actions. Referência de tempo real: o step
-    # inteiro do Gradle até o bundling leva ~9m40s.
-    timeout-minutes: 45
+    # 120 min, medido — não chutado.
+    #
+    # Com 45 min a run 162 (09/09, já com as ABIs cortadas para duas) foi
+    # CANCELADA no teto, depois de compilar 45 minutos seguidos sem falhar.
+    # Ou seja: o build não trava, ele é grande mesmo. A pilha nativa destes
+    # apps é pesada — MapLibre, reanimated 4 + worklets, nitro-modules e mmkv,
+    # todos compilando C++ com New Architecture num runner de 2 núcleos.
+    #
+    # Não corto para uma ABI só para caber em 45: arm64-v8a sozinho deixaria
+    # de fora os aparelhos 32 bits, que ainda são comuns no público deste app.
+    # Melhor pagar o tempo uma vez — com o cache do Gradle salvo, as próximas
+    # runs são muito mais rápidas, e o paths filter faz este workflow rodar só
+    # quando o app muda.
+    timeout-minutes: 120
     defaults:
       run:
         working-directory: Frontend/AppRestaurante
@@ -90,7 +99,7 @@ jobs:
           # preciso rodar no emulador, é só acrescentar x86_64 aqui.
           ./gradlew assembleRelease \
             -PreactNativeArchitectures=arm64-v8a,armeabi-v7a \
-            --no-daemon --stacktrace
+            --build-cache --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

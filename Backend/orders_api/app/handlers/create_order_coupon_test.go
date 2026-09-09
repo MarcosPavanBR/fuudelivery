@@ -298,3 +298,57 @@ func TestCreateOrder_CupomDeUsoUnicoNaoDescontaEmDoisPedidos(t *testing.T) {
 			out1["orderId"], uso.OrderID)
 	}
 }
+
+// ── O uso do cupom sobrevive quando o pedido não nasce ──
+
+// Falha no caminho DEPOIS do consumo não pode queimar o uso: o cupom é
+// consumido antes da checagem de horário, e um restaurante fechado é evento
+// comum — o cliente tenta de novo quando abrir. Sem o release, um cupom de
+// uso único virava cinza na primeira tentativa fracassada.
+func TestCreateOrder_CupomNaoQueimaQuandoEstabelecimentoFechado(t *testing.T) {
+	app := setupCreateOrder(t)
+	seedCoupon(t, models.Coupon{
+		Code: "UNICO", DiscountType: "FIXED", DiscountValue: 10,
+		EstablishmentID: 1, MaxUses: 1, FundedBy: models.CouponFundedByPlatform,
+	})
+	token := tokenComTelefone(t, "+5511999900001")
+
+	// Fecha o estabelecimento DEPOIS do setup (que semeia aberto).
+	fechado := "não"
+	if err := authModels.DB.Model(&authModels.Establishment{ID: 1}).
+		Update("open_data", &fechado).Error; err != nil {
+		t.Fatalf("fechar estabelecimento: %v", err)
+	}
+
+	resp, out := postPedido(t, app, token, corpoDoPedido(`"coupon_code":"UNICO"`))
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("esperava 400 para estabelecimento fechado, veio %d (%v)", resp.StatusCode, out)
+	}
+
+	// O uso tem de estar intacto: nenhuma linha em coupon_usages, e o
+	// used_count do cupom de volta em zero.
+	var usages int64
+	models.DB.Model(&models.CouponUsage{}).Count(&usages)
+	if usages != 0 {
+		t.Fatalf("uso do cupom deveria ter sido devolvido, veio %d registro(s) em coupon_usages", usages)
+	}
+	var coupon models.Coupon
+	if err := models.DB.Where("code = ?", "UNICO").First(&coupon).Error; err != nil {
+		t.Fatalf("reler cupom: %v", err)
+	}
+	if coupon.UsedCount != 0 {
+		t.Fatalf("used_count deveria ser 0, veio %d", coupon.UsedCount)
+	}
+
+	// E o mesmo pedido com o mesmo cupom tem de funcionar quando o
+	// estabelecimento reabre — é exatamente o que o release preserva.
+	reaberto := time.Now().Format(time.RFC3339)
+	if err := authModels.DB.Model(&authModels.Establishment{ID: 1}).
+		Update("open_data", &reaberto).Error; err != nil {
+		t.Fatalf("reabrir estabelecimento: %v", err)
+	}
+	resp2, out2 := postPedido(t, app, token, corpoDoPedido(`"coupon_code":"UNICO"`))
+	if resp2.StatusCode != fiber.StatusOK {
+		t.Fatalf("esperava 200 com o estabelecimento aberto (o uso foi devolvido), veio %d (%v)", resp2.StatusCode, out2)
+	}
+}

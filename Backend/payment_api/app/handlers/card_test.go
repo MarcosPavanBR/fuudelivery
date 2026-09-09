@@ -7,6 +7,9 @@ import (
 	"testing"
 
 	"github.com/carloshomar/fuudelivery/payment_api/app/dto"
+	"github.com/carloshomar/fuudelivery/pkg/gateway"
+	abacatepay "github.com/carloshomar/fuudelivery/pkg/gateway/abacatepay"
+	"github.com/carloshomar/fuudelivery/pkg/gateway/pagarme"
 )
 
 // === Testes de validacao de cartao ===
@@ -175,33 +178,55 @@ func TestPaymentRequest_PIXFields(t *testing.T) {
 // credencial configurada em produção (AbacatePay tem credencial, mas só
 // suporta PIX) — ChargeCard/ProcessPayment esgotavam a fila de fallback e
 // falhavam com erro genérico em vez de recusar cedo com mensagem clara.
+//
+// A checagem agora lê a CADEIA DO ROUTER (fonte única de verdade), não env
+// vars espelhadas: credencial presente porém inválida entra na cadeia e
+// divergia do runtime (401 → 500 em vez de 503). O teste constrói routers
+// reais com adapters que não exigem credencial na construção (pagarme sobe
+// com chave vazia) e comprova que a resposta acompanha a cadeia, não a env.
 
-func TestCardGatewayConfigured(t *testing.T) {
-	tests := []struct {
-		name        string
-		pagarme     string
-		asaas       string
-		mercadopago string
-		want        bool
-	}{
-		{"nenhuma credencial configurada (bug real que já aconteceu)", "", "", "", false},
-		{"só Pagar.me configurado", "sk_live_x", "", "", true},
-		{"só Asaas configurado", "", "asaas_key", "", true},
-		{"só Mercado Pago configurado", "", "", "mp_token", true},
-		{"todas configuradas", "sk_live_x", "asaas_key", "mp_token", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv("PAGARME_API_KEY", tt.pagarme)
-			t.Setenv("ASAAS_API_KEY", tt.asaas)
-			t.Setenv("MERCADOPAGO_ACCESS_TOKEN", tt.mercadopago)
-
-			if got := cardGatewayConfigured(); got != tt.want {
-				t.Errorf("cardGatewayConfigured() = %v, want %v", got, tt.want)
+func TestCardAvailableViaRouter(t *testing.T) {
+	newRouterWith := func(withCard bool) *gateway.Router {
+		var gws []gateway.Gateway
+		// AbacatePay: só PIX, precisa de credencial para construir.
+		t.Setenv("ABACATE_PAY_API_KEY", "test-key")
+		if pix, err := abacatepay.NewGateway(); err == nil {
+			gws = append(gws, pix)
+		} else {
+			t.Fatalf("construir abacatepay: %v", err)
+		}
+		// Pagar.me constrói mesmo sem credencial (entra na cadeia; falha só
+		// no runtime com 401) — é exatamente o caso que a env-check antiga
+		// classificava errado.
+		if withCard {
+			if pg, err := pagarme.NewGateway(); err == nil {
+				gws = append(gws, pg)
+			} else {
+				t.Fatalf("construir pagarme: %v", err)
 			}
-		})
+		}
+		r := gateway.NewRouter(gws...)
+		r.SetStrategy(gateway.StrategyOrdered)
+		return r
 	}
+
+	t.Run("cadeia só com PIX -> cartão indisponível", func(t *testing.T) {
+		if cardAvailableViaRouter(newRouterWith(false)) {
+			t.Error("router sem gateway de cartão não pode reportar cartão disponível")
+		}
+	})
+
+	t.Run("cadeia com gateway de cartão -> disponível (mesmo com credencial a validar no runtime)", func(t *testing.T) {
+		if !cardAvailableViaRouter(newRouterWith(true)) {
+			t.Error("router com gateway de cartão deve reportar cartão disponível")
+		}
+	})
+
+	t.Run("PIX continua disponível na cadeia só-PIX", func(t *testing.T) {
+		if !newRouterWith(false).HasAvailableForMethod(gateway.MethodPIX) {
+			t.Error("cadeia só-PIX deve suportar PIX")
+		}
+	})
 }
 
 // === Testes de status mapping ===

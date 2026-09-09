@@ -268,6 +268,29 @@ func (r *Router) Gateways() []string {
 	return names
 }
 
+// HasAvailableForMethod reporta se a cadeia tem algum gateway capaz de
+// atender o método informado, independentemente do estado do circuit
+// breaker (que é efêmero — abrir e fechar é o trabalho dele).
+//
+// Por que existe: é a FONTE ÚNICA de "este método tem gateway?" — a mesma
+// pergunta que o buildPaymentGateways respondeu na inicialização. Handlers
+// que antes consultavam os.Getenv diretamente (cardGatewayConfigured)
+// divergiam da cadeia real: credencial presente porém INVÁLIDA entrava na
+// cadeia, o runtime falhava com 401 e a resposta virava 500 em vez do 503
+// de indisponibilidade. Consultar a cadeia elimina a segunda fonte de
+// verdade, do mesmo jeito que o /health deixou de listar gateways fixos.
+func (r *Router) HasAvailableForMethod(method PaymentMethod) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, entry := range r.gateways {
+		if entry.gateway.SupportsMethod(method) {
+			return true
+		}
+	}
+	return false
+}
+
 // CircuitBreakerState retorna o estado do circuit breaker de um gateway.
 func (r *Router) CircuitBreakerState(name string) (CircuitState, int) {
 	r.mu.RLock()

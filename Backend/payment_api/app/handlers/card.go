@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os"
 	"time"
 
 	"github.com/carloshomar/fuudelivery/payment_api/app/dto"
@@ -14,17 +13,27 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// cardGatewayConfigured reporta se algum gateway com suporte a cartão
-// (Pagar.me, Asaas, Mercado Pago) tem credencial real no ambiente. O
-// AbacatePay também está no router mas só suporta PIX — sem nenhuma das
-// três, toda cobrança de cartão esgota a fila de fallback e falha em
-// produção (já aconteceu: nenhuma tinha credencial configurada no Render).
-// Falhar cedo aqui, com mensagem clara, é melhor que deixar o cliente
-// esperar o router tentar e descartar os quatro gateways.
-func cardGatewayConfigured() bool {
-	return os.Getenv("PAGARME_API_KEY") != "" ||
-		os.Getenv("ASAAS_API_KEY") != "" ||
-		os.Getenv("MERCADOPAGO_ACCESS_TOKEN") != ""
+// cardUnavailable é a resposta única de indisponibilidade de cartão.
+// Mensagem e status ficam num só lugar para não divergirem entre os
+// handlers (ChargeCard e ProcessPayment).
+func cardUnavailable() (int, fiber.Map) {
+	return fiber.StatusServiceUnavailable, fiber.Map{
+		"error": "Pagamento por cartão temporariamente indisponível. Use PIX.",
+	}
+}
+
+// cardAvailableViaRouter reporta se a CADEIA REAL tem gateway com suporte a
+// cartão (Pagar.me, Asaas, Mercado Pago) — fonte única de verdade, do mesmo
+// jeito que o /health passou a ler o router e não mais uma lista fixa.
+//
+// A versão antiga consultava os.Getenv("PAGARME_API_KEY")/ASAAS/MP: era uma
+// segunda fonte que divergia da cadeia montada em buildPaymentGateways —
+// credencial presente porém INVÁLIDA entrava na cadeia, o runtime falhava
+// com 401 e a cobrança respondia 500 (erro do servidor) em vez de 503
+// (indisponibilidade). O AbacatePay está na cadeia mas só suporta PIX, e o
+// filtro é por método, então ele nunca satisfaz a pergunta de cartão.
+func cardAvailableViaRouter(router *gateway.Router) bool {
+	return router.HasAvailableForMethod(gateway.MethodCreditCard)
 }
 
 // getPaymentRouter extrai o router de pagamento do contexto Fiber.
@@ -61,8 +70,16 @@ func ChargeCard(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "order_id is required"})
 	}
 
-	if !cardGatewayConfigured() {
-		return c.Status(503).JSON(fiber.Map{"error": "Pagamento por cartão temporariamente indisponível. Use PIX."})
+	routerEarly, rErr := getPaymentRouter(c)
+	if rErr != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Payment router unavailable"})
+	}
+
+	// Fonte única: a cadeia do router decide se cartão está disponível —
+	// não mais env vars espelhadas.
+	if !cardAvailableViaRouter(routerEarly) {
+		status, body := cardUnavailable()
+		return c.Status(status).JSON(body)
 	}
 
 	serverTotal, ok := validateChargeAmount(req.OrderID, req.Amount)
@@ -113,13 +130,12 @@ func ChargeCard(c *fiber.Ctx) error {
 	resp, err := router.CreateTransactionWithFallback(c.Context(), gatewayReq)
 	if err != nil {
 		log.Printf("[CARD] Error creating card payment via router: amount=%.2f err=%v", req.Amount, err)
-		// Nenhum gateway elegível é indisponibilidade, não erro do servidor —
-		// mesma semântica do guard cardGatewayConfigured() acima. 500 fazia o
-		// cliente achar que a cobrança pode ter passado.
-		if errors.Is(err, gateway.ErrNoGatewayAvailable) {
-			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
-				"error": "Pagamento por cartão temporariamente indisponível. Use PIX.",
-			})
+		// Nenhum gateway elegível (na seleção ou depois de esgotar a cadeia) é
+		// indisponibilidade, não erro do servidor. 500 fazia o cliente achar
+		// que a cobrança pode ter passado.
+		if errors.Is(err, gateway.ErrNoGatewayAvailable) || errors.Is(err, gateway.ErrGatewayFailed) {
+			status, body := cardUnavailable()
+			return c.Status(status).JSON(body)
 		}
 		return c.Status(500).JSON(fiber.Map{"error": "Card payment failed"})
 	}
@@ -176,8 +192,9 @@ func ProcessPayment(c *fiber.Ctx) error {
 	}
 
 	if req.Method == "credit" || req.Method == "debit" {
-		if !cardGatewayConfigured() {
-			return c.Status(503).JSON(fiber.Map{"error": "Pagamento por cartão temporariamente indisponível. Use PIX."})
+		if !cardAvailableViaRouter(router) {
+			status, body := cardUnavailable()
+			return c.Status(status).JSON(body)
 		}
 		installments := req.Installments
 		if installments <= 0 {
@@ -208,10 +225,9 @@ func ProcessPayment(c *fiber.Ctx) error {
 			// Mesma semântica do ChargeCard: cadeia sem gateway elegível é
 			// indisponibilidade (503), não erro do servidor. 500 aqui fazia o
 			// cliente suspeitar que a cobrança tivesse passado.
-			if errors.Is(err, gateway.ErrNoGatewayAvailable) {
-				return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
-					"error": "Pagamento por cartão temporariamente indisponível. Use PIX.",
-				})
+			if errors.Is(err, gateway.ErrNoGatewayAvailable) || errors.Is(err, gateway.ErrGatewayFailed) {
+				status, body := cardUnavailable()
+				return c.Status(status).JSON(body)
 			}
 			return c.Status(500).JSON(fiber.Map{"error": "Payment processing failed"})
 		}

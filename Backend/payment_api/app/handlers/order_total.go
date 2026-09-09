@@ -39,9 +39,19 @@ func lookupOrderRecipient(orderID string) (orderFacts, bool) {
 	var row struct {
 		EstablishmentID *int64
 		UserPhone       *string
+		// Fallback para pedidos criados ANTES da extração das colunas tipadas
+		// (corte 5): o payload completo sempre tem o destinatário — ver
+		// dto.RequestPayload (establishmentId / user.phone). Sem este fallback,
+		// a ordem de deploy (código novo antes do backfill sql/21) faria
+		// pedidos legítimos e cobráveis responderem 400 "Pedido inválido".
+		PayloadEstablishmentID *int64
+		PayloadUserPhone       *string
 	}
 	err := models.DB.Raw(
-		`SELECT establishment_id, user_phone
+		`SELECT establishment_id,
+		        user_phone,
+		        NULLIF(payload->>'establishmentId', '')::bigint AS payload_establishment_id,
+		        payload->'user'->>'phone'                        AS payload_user_phone
 		 FROM order_documents
 		 WHERE legacy_id = ?
 		 LIMIT 1`, orderID).Scan(&row).Error
@@ -49,14 +59,32 @@ func lookupOrderRecipient(orderID string) (orderFacts, bool) {
 		log.Printf("[PAYMENT] lookupOrderRecipient(%s): %v", orderID, err)
 		return orderFacts{}, false
 	}
-	if row.EstablishmentID == nil || *row.EstablishmentID <= 0 {
+
+	// Fonte preferencial: a coluna tipada (índice, backfill sql/21).
+	estID := int64(0)
+	if row.EstablishmentID != nil {
+		estID = *row.EstablishmentID
+	}
+	phone := ""
+	if row.UserPhone != nil {
+		phone = *row.UserPhone
+	}
+
+	// Fallback: destinatário gravado no payload pelo servidor no CreateOrder.
+	// NÃO é entrada do cliente da cobrança — é o mesmo dado do pedido, só que
+	// no JSONB. Continua impossível redirecionar split pelo corpo da request.
+	if estID <= 0 && row.PayloadEstablishmentID != nil {
+		estID = *row.PayloadEstablishmentID
+		log.Printf("[PAYMENT] pedido %s sem coluna tipada — destinatário vindo do payload (rodar sql/21)", orderID)
+	}
+	if phone == "" && row.PayloadUserPhone != nil {
+		phone = *row.PayloadUserPhone
+	}
+
+	if estID <= 0 {
 		return orderFacts{}, false
 	}
-	facts := orderFacts{EstablishmentID: *row.EstablishmentID}
-	if row.UserPhone != nil {
-		facts.UserPhone = *row.UserPhone
-	}
-	return facts, true
+	return orderFacts{EstablishmentID: estID, UserPhone: phone}, true
 }
 
 // lookupOrderTotal devolve o total recalculado pelo servidor no momento da
@@ -181,6 +209,25 @@ func resolveDeliveryAmount(orderID string, clientDelivery, serverTotal float64) 
 	// sempre > 0 (lookupOrderTotal rejeita total <= 0), então isto não
 	// bloqueia pedido de valor zero — ele nem chega até aqui.
 	if toCents(clientDelivery) >= toCents(serverTotal) {
+		return 0, false
+	}
+
+	// Teto anti-desvio no ramo legado: o frete aceito do cliente fica
+	// limitado a 50% do total do pedido.
+	//
+	// Sem o teto, um cliente mandando delivery = total - R$0,01 passava pela
+	// guarda `>=` acima e o split mandava ~100% do dinheiro do pedido para a
+	// regra do entregador, deixando plataforma e estabelecimento com 1
+	// centavo. Frete real médio fica em 7–15% do pedido (taxa fixa por zona
+	// + distância × perKm), então 50% é folgado para qualquer entrega
+	// legítima — inclusive a mais cara do catálogo.
+	//
+	// Pedidos novos não passam por aqui (frete vem do servidor via
+	// lookupOrderDelivery), então o teto só fecha o resíduo dos pedidos
+	// antigos cobráveis que ainda têm o campo ausente no payload.
+	if toCents(clientDelivery) > toCents(serverTotal)/2 {
+		log.Printf("[PAYMENT] frete legado acima do teto: pedido %s client=%.2f total=%.2f (limite %.2f)",
+			orderID, clientDelivery, serverTotal, float64(toCents(serverTotal))/200.0)
 		return 0, false
 	}
 	return clientDelivery, true

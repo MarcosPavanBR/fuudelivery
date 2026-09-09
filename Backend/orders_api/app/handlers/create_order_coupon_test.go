@@ -24,6 +24,7 @@ import (
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
+	"gorm.io/gorm"
 )
 
 const createOrderSecret = "create-order-coupon-secret"
@@ -314,9 +315,10 @@ func TestCreateOrder_CupomNaoQueimaQuandoEstabelecimentoFechado(t *testing.T) {
 	token := tokenComTelefone(t, "+5511999900001")
 
 	// Fecha o estabelecimento DEPOIS do setup (que semeia aberto).
-	fechado := "não"
+	// checkEstablishmentOpen trata OpenData != NULL como "aberto": fechado
+	// é a coluna NULL, não um texto qualquer.
 	if err := authModels.DB.Model(&authModels.Establishment{ID: 1}).
-		Update("open_data", &fechado).Error; err != nil {
+		Update("open_data", gorm.Expr("NULL")).Error; err != nil {
 		t.Fatalf("fechar estabelecimento: %v", err)
 	}
 

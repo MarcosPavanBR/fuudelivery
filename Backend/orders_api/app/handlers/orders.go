@@ -140,7 +140,7 @@ func CreateOrder(c *fiber.Ctx, sendMessageToClient func(clientID int64, message 
 	establishment, err := GetEstablishment(request.EstablishmentId)
 	if err != nil {
 		// Uso consumido e pedido não vai existir — devolve, igual aos
-			// caminhos de persistência logo abaixo.
+		// caminhos de persistência logo abaixo.
 		releaseCoupon(request.CouponCode, orderID)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Erro ao obter detalhes do estabelecimento",

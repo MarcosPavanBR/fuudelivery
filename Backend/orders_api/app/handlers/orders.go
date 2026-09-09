@@ -120,11 +120,17 @@ func CreateOrder(c *fiber.Ctx, sendMessageToClient func(clientID int64, message 
 	if !request.IsScheduled {
 		isOpen, err := checkEstablishmentOpen(request.EstablishmentId)
 		if err != nil {
+			// O uso do cupom já foi consumido; sem o pedido, devolve.
+			releaseCoupon(request.CouponCode, orderID)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": "Erro ao verificar horário do estabelecimento",
 			})
 		}
 		if !isOpen {
+			// Mesmo caso: o cupom foi consumido ANTES desta checagem. Sem o
+			// release, um cliente com cupom de uso único queimava o uso
+			// tentando pedir num restaurante fechado.
+			releaseCoupon(request.CouponCode, orderID)
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "Estabelecimento fechado neste horário",
 			})
@@ -133,6 +139,9 @@ func CreateOrder(c *fiber.Ctx, sendMessageToClient func(clientID int64, message 
 
 	establishment, err := GetEstablishment(request.EstablishmentId)
 	if err != nil {
+		// Uso consumido e pedido não vai existir — devolve, igual aos
+		// caminhos de persistência logo abaixo.
+		releaseCoupon(request.CouponCode, orderID)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Erro ao obter detalhes do estabelecimento",
 		})

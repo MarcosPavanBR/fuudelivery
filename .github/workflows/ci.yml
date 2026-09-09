@@ -323,8 +323,17 @@ jobs:
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@latest
 
-      - name: Run govulncheck
-        run: govulncheck ./...
+      # govulncheck carrega o grafo de pacotes do proxy.golang.org; um stream
+      # error transitório do proxy falha o job inteiro com erros falsos de
+      # "could not import". 3 tentativas espaçadas contornam a oscilação.
+      - name: Run govulncheck (3 tentativas)
+        run: |
+          for i in 1 2 3; do
+            if govulncheck ./...; then exit 0; fi
+            echo "tentativa $i falhou, aguardando antes de repetir..."
+            sleep 15
+          done
+          exit 1
 
   # ──────────────────────────────────────────────
   # Mobile — API URL consistency (URLS.md vs config/api.ts)

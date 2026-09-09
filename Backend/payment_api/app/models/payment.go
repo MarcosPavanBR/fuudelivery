@@ -63,13 +63,20 @@ func (s *SplitRules) Scan(src interface{}) error {
 }
 
 type Payment struct {
-	ID                      int64      `gorm:"primaryKey;column:id" json:"id"`
-	OrderID                 string     `gorm:"column:order_id" json:"order_id"`
-	CustomerID              int64      `gorm:"column:customer_id" json:"customer_id"`
-	CustomerPhone           string     `gorm:"column:customer_phone" json:"customer_phone,omitempty"`
-	EstablishmentID         int64      `gorm:"column:establishment_id" json:"establishment_id"`
-	Amount                  float64    `gorm:"column:amount" json:"amount"`
-	DeliveryAmount          float64    `gorm:"column:delivery_amount" json:"delivery_amount,omitempty"`
+	ID              int64   `gorm:"primaryKey;column:id" json:"id"`
+	OrderID         string  `gorm:"column:order_id" json:"order_id"`
+	CustomerID      int64   `gorm:"column:customer_id" json:"customer_id"`
+	CustomerPhone   string  `gorm:"column:customer_phone" json:"customer_phone,omitempty"`
+	EstablishmentID int64   `gorm:"column:establishment_id" json:"establishment_id"`
+	Amount          float64 `gorm:"column:amount" json:"amount"`
+	DeliveryAmount  float64 `gorm:"column:delivery_amount" json:"delivery_amount,omitempty"`
+	// DiscountAmount é o desconto do cupom aplicado no pedido, e
+	// DiscountFundedBy diz de quem ele sai ("platform" ou "establishment").
+	// Os dois vêm do pedido (order_documents.payload), nunca do corpo da
+	// cobrança, e são o que faz CalculateSplitRules subtrair do lado certo em
+	// vez de diluir a promoção entre plataforma e restaurante.
+	DiscountAmount          float64    `gorm:"column:discount_amount" json:"discount_amount,omitempty"`
+	DiscountFundedBy        string     `gorm:"column:discount_funded_by;size:20" json:"discount_funded_by,omitempty"`
 	Method                  string     `gorm:"column:method" json:"method"`
 	Status                  string     `gorm:"column:status" json:"status"`
 	PixQRCode               string     `gorm:"column:pix_qr_code" json:"pix_qr_code,omitempty"`

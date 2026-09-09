@@ -243,18 +243,20 @@ func ProcessPayment(c *fiber.Ctx) error {
 		}
 
 		payment := models.Payment{
-			OrderID:         req.OrderID,
-			CustomerID:      req.CustomerID,
-			CustomerPhone:   req.CustomerPhone,
-			EstablishmentID: req.EstablishmentID,
-			Amount:          req.Amount,
-			DeliveryAmount:  req.DeliveryAmount,
-			Method:          req.Method,
-			Status:          paymentStatus,
-			Installments:    installments,
-			CardLastDigits:  resp.CardLast4,
-			CreatedAt:       time.Now(),
-			ConfirmedAt:     confirmedAt,
+			OrderID:          req.OrderID,
+			CustomerID:       req.CustomerID,
+			CustomerPhone:    req.CustomerPhone,
+			EstablishmentID:  req.EstablishmentID,
+			Amount:           req.Amount,
+			DeliveryAmount:   req.DeliveryAmount,
+			DiscountAmount:   req.DiscountAmount,
+			DiscountFundedBy: req.DiscountFundedBy,
+			Method:           req.Method,
+			Status:           paymentStatus,
+			Installments:     installments,
+			CardLastDigits:   resp.CardLast4,
+			CreatedAt:        time.Now(),
+			ConfirmedAt:      confirmedAt,
 		}
 
 		if err := models.DB.Create(&payment).Error; err != nil {
@@ -303,18 +305,20 @@ func ProcessPayment(c *fiber.Ctx) error {
 		}
 
 		payment := models.Payment{
-			OrderID:         req.OrderID,
-			CustomerID:      req.CustomerID,
-			CustomerPhone:   req.CustomerPhone,
-			EstablishmentID: req.EstablishmentID,
-			Amount:          req.Amount,
-			DeliveryAmount:  req.DeliveryAmount,
-			Method:          "pix",
-			Status:          "PENDING",
-			PixCopyPaste:    resp.PIXCopyPaste,
-			QRCodeBase64:    resp.PIXQRCodeBase64,
-			PixQRCode:       resp.PIXQRCode,
-			CreatedAt:       time.Now(),
+			OrderID:          req.OrderID,
+			CustomerID:       req.CustomerID,
+			CustomerPhone:    req.CustomerPhone,
+			EstablishmentID:  req.EstablishmentID,
+			Amount:           req.Amount,
+			DeliveryAmount:   req.DeliveryAmount,
+			DiscountAmount:   req.DiscountAmount,
+			DiscountFundedBy: req.DiscountFundedBy,
+			Method:           "pix",
+			Status:           "PENDING",
+			PixCopyPaste:     resp.PIXCopyPaste,
+			QRCodeBase64:     resp.PIXQRCodeBase64,
+			PixQRCode:        resp.PIXQRCode,
+			CreatedAt:        time.Now(),
 		}
 
 		if err := models.DB.Create(&payment).Error; err != nil {

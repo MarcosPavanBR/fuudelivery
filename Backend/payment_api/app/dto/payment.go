@@ -14,6 +14,16 @@ type PaymentRequest struct {
 	CustomerName    string  `json:"customer_name,omitempty"`
 	CustomerEmail   string  `json:"customer_email,omitempty"`
 	CustomerPhone   string  `json:"customer_phone,omitempty"`
+
+	// Desconto de cupom, lido do PEDIDO por bindRecipientToOrder.
+	//
+	// `json:"-"` de propósito: são campos de saída do servidor, não de
+	// entrada. Se o cliente pudesse mandar discount_funded_by, escolheria de
+	// quem sai o desconto do próprio pedido — e mandando discount_amount alto
+	// inflaria o "bruto" sobre o qual as porcentagens incidem, aumentando a
+	// fatia do estabelecimento acima do que o pedido pagou.
+	DiscountAmount   float64 `json:"-"`
+	DiscountFundedBy string  `json:"-"`
 }
 
 type PaymentResponse struct {

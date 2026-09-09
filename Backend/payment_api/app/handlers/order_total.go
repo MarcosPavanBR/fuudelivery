@@ -9,11 +9,26 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// Quem absorve o desconto do cupom. Espelha as constantes de
+// orders_api/models.Coupon — os dois módulos são separados no go.work e
+// payment_api não importa orders_api, então o valor viaja pelo payload do
+// pedido e é validado aqui na entrada.
+const (
+	couponFundedByPlatform      = "platform"
+	couponFundedByEstablishment = "establishment"
+)
+
 // orderFacts são os campos do pedido que o servidor considera autoritativos
 // numa cobrança. Nenhum deles pode vir do corpo da requisição.
 type orderFacts struct {
 	EstablishmentID int64
 	UserPhone       string
+	// DiscountAmount e DiscountFundedBy vêm do cupom aplicado pelo
+	// orders_api no CreateOrder. São o que permite ao split subtrair o
+	// desconto do lado que ofereceu a promoção em vez de diluí-lo entre
+	// plataforma e restaurante.
+	DiscountAmount   float64
+	DiscountFundedBy string
 }
 
 // lookupOrderRecipient devolve QUEM recebe o dinheiro do pedido, lido das
@@ -46,12 +61,18 @@ func lookupOrderRecipient(orderID string) (orderFacts, bool) {
 		// pedidos legítimos e cobráveis responderem 400 "Pedido inválido".
 		PayloadEstablishmentID *int64
 		PayloadUserPhone       *string
+		// Cupom aplicado pelo orders_api. Só existe no payload — não há
+		// coluna tipada, e não precisa: nada filtra ou indexa por desconto.
+		DiscountAmount   *float64
+		DiscountFundedBy *string
 	}
 	err := models.DB.Raw(
 		`SELECT establishment_id,
 		        user_phone,
 		        NULLIF(payload->>'establishmentId', '')::bigint AS payload_establishment_id,
-		        payload->'user'->>'phone'                        AS payload_user_phone
+		        payload->'user'->>'phone'                        AS payload_user_phone,
+		        NULLIF(payload->>'discount_amount', '')::float8  AS discount_amount,
+		        payload->>'discount_funded_by'                   AS discount_funded_by
 		 FROM order_documents
 		 WHERE legacy_id = ?
 		 LIMIT 1`, orderID).Scan(&row).Error
@@ -84,7 +105,34 @@ func lookupOrderRecipient(orderID string) (orderFacts, bool) {
 	if estID <= 0 {
 		return orderFacts{}, false
 	}
-	return orderFacts{EstablishmentID: estID, UserPhone: phone}, true
+
+	// Desconto do cupom. Valor negativo ou funded_by desconhecido é tratado
+	// como "sem cupom": o split então divide como sempre dividiu, em vez de
+	// subtrair de um lado que ninguém escolheu.
+	discount := 0.0
+	fundedBy := ""
+	if row.DiscountAmount != nil && *row.DiscountAmount > 0 {
+		discount = *row.DiscountAmount
+		if row.DiscountFundedBy != nil {
+			fundedBy = *row.DiscountFundedBy
+		}
+		if fundedBy != couponFundedByPlatform && fundedBy != couponFundedByEstablishment {
+			// Pedido com desconto e sem dono declarado (payload antigo, ou
+			// gravado antes da migração 22). A plataforma absorve: é o mesmo
+			// default do cupom, e cobrar do restaurante por omissão tiraria
+			// dinheiro de terceiro.
+			log.Printf("[PAYMENT] pedido %s com desconto %.2f sem funded_by válido (%q) — plataforma absorve",
+				orderID, discount, fundedBy)
+			fundedBy = couponFundedByPlatform
+		}
+	}
+
+	return orderFacts{
+		EstablishmentID:  estID,
+		UserPhone:        phone,
+		DiscountAmount:   discount,
+		DiscountFundedBy: fundedBy,
+	}, true
 }
 
 // lookupOrderTotal devolve o total recalculado pelo servidor no momento da
@@ -162,6 +210,20 @@ func lookupOrderDelivery(orderID string) (float64, bool) {
 	return *row.Delivery, true
 }
 
+// grossOrderTotal devolve o valor do pedido ANTES do desconto do cupom.
+//
+// É o número contra o qual as guardas de sanidade do frete fazem sentido: o
+// frete é um custo do pedido inteiro, não do que sobrou depois da promoção.
+// Sem cupom (ou sem pedido legível) é o próprio total, e as guardas se
+// comportam exatamente como antes.
+func grossOrderTotal(orderID string, netTotal float64) float64 {
+	facts, ok := lookupOrderRecipient(orderID)
+	if !ok || facts.DiscountAmount <= 0 {
+		return netTotal
+	}
+	return netTotal + facts.DiscountAmount
+}
+
 // resolveDeliveryAmount decide qual frete gravar na cobrança.
 //
 // Por que existe: o Amount já era conferido contra o servidor
@@ -197,7 +259,14 @@ func resolveDeliveryAmount(orderID string, clientDelivery, serverTotal float64) 
 		// cliente mandou — e esses pedidos continuam no banco, cobráveis. O
 		// teto protege esses, e protege de graça o dia em que alguém abrir
 		// outro caminho de escrita no pedido.
-		if toCents(serverDelivery) >= toCents(serverTotal) {
+		//
+		// A comparação é contra o BRUTO (total + desconto do cupom), não
+		// contra o que o cliente pagou. Um cupom que zera o valor dos
+		// produtos deixa total == frete legitimamente: o cliente paga só a
+		// entrega, o entregador recebe tudo, e quem bancou o cupom comeu a
+		// comida. Comparando contra o total descontado, essa venda — que é
+		// exatamente a promoção que alguém quis fazer — não seria cobrável.
+		if toCents(serverDelivery) >= toCents(grossOrderTotal(orderID, serverTotal)) {
 			return serverDelivery, false
 		}
 		return serverDelivery, true
@@ -262,6 +331,12 @@ func bindRecipientToOrder(c *fiber.Ctx, req *dto.PaymentRequest) bool {
 	if tokenUserID, err := middlewares.GetUserIDFromToken(c); err == nil && tokenUserID > 0 {
 		req.CustomerID = tokenUserID
 	}
+
+	// Desconto do cupom: vem do pedido, sempre. O cliente não manda (os
+	// campos são `json:"-"`), e aqui a atribuição é incondicional para que
+	// nada sobreviva de um corpo malformado.
+	req.DiscountAmount = facts.DiscountAmount
+	req.DiscountFundedBy = facts.DiscountFundedBy
 
 	return true
 }

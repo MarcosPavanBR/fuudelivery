@@ -210,3 +210,96 @@ func TestReferralCoupon_ProprioTelefoneFunciona(t *testing.T) {
 }
 
 func TestMain(m *testing.M) { os.Exit(m.Run()) }
+
+// ── Quem banca o desconto ──
+//
+// FundedBy decide de qual lado o split subtrai. Se o estabelecimento pudesse
+// escolher "platform", ele criaria a promoção dele e mandaria a conta para a
+// plataforma.
+
+func bodyComFunded(establishmentID int, fundedBy string) string {
+	inicio := time.Now().Format(time.RFC3339)
+	fim := time.Now().AddDate(0, 1, 0).Format(time.RFC3339)
+	return fmt.Sprintf(`{"code":"FUND%s%d","discount_type":"FIXED","discount_value":5,
+		"establishment_id":%d,"funded_by":%q,"start_date":%q,"expiry_date":%q}`,
+		fundedBy, establishmentID, establishmentID, fundedBy, inicio, fim)
+}
+
+func TestCreateCoupon_EstabelecimentoNaoEmpurraCustoParaPlataforma(t *testing.T) {
+	app := setupCouponAuthz(t)
+
+	resp := doCoupon(t, app, "POST", "/coupons",
+		tokenFor(t, "establishment", 7, ""), bodyComFunded(7, "platform"))
+
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Fatalf("estabelecimento não pode fazer a plataforma bancar, veio %d", resp.StatusCode)
+	}
+}
+
+func TestCreateCoupon_AdminEscolheQuemBanca(t *testing.T) {
+	app := setupCouponAuthz(t)
+
+	for _, quem := range []string{"platform", "establishment"} {
+		resp := doCoupon(t, app, "POST", "/coupons",
+			tokenFor(t, "admin", 0, ""), bodyComFunded(7, quem))
+		if resp.StatusCode != fiber.StatusCreated {
+			t.Fatalf("admin deveria poder criar cupom bancado por %s, veio %d", quem, resp.StatusCode)
+		}
+		var out models.Coupon
+		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+			t.Fatalf("decodificar resposta: %v", err)
+		}
+		if out.FundedBy != quem {
+			t.Fatalf("esperava funded_by=%q gravado, veio %q", quem, out.FundedBy)
+		}
+	}
+}
+
+// Omitir funded_by não pode virar "o restaurante paga" por acidente.
+func TestCreateCoupon_SemFundedByEhPlataforma(t *testing.T) {
+	app := setupCouponAuthz(t)
+
+	resp := doCoupon(t, app, "POST", "/coupons",
+		tokenFor(t, "admin", 0, ""), novoCupomBody(7, 15))
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("esperava 201, veio %d", resp.StatusCode)
+	}
+	var out models.Coupon
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("decodificar: %v", err)
+	}
+	if out.FundedBy != models.CouponFundedByPlatform {
+		t.Fatalf("sem escolha explícita quem banca é a plataforma, veio %q", out.FundedBy)
+	}
+}
+
+// O padrão do estabelecimento é ele mesmo — e omitir o campo não pode virar
+// erro. Uma primeira versão desta regra fixava o padrão em "platform" e depois
+// recusava não-admin que pedisse "platform": o dono que simplesmente não
+// mandava o campo tomava 403 criando o próprio cupom.
+func TestCreateCoupon_DonoSemFundedByBancaEleMesmo(t *testing.T) {
+	app := setupCouponAuthz(t)
+
+	resp := doCoupon(t, app, "POST", "/coupons",
+		tokenFor(t, "establishment", 7, ""), novoCupomBody(7, 15))
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("dono criando cupom sem funded_by deveria dar 201, veio %d", resp.StatusCode)
+	}
+	var out models.Coupon
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("decodificar: %v", err)
+	}
+	if out.FundedBy != models.CouponFundedByEstablishment {
+		t.Fatalf("cupom do dono é bancado por ele, veio %q", out.FundedBy)
+	}
+}
+
+func TestCreateCoupon_FundedByInvalido(t *testing.T) {
+	app := setupCouponAuthz(t)
+
+	resp := doCoupon(t, app, "POST", "/coupons",
+		tokenFor(t, "admin", 0, ""), bodyComFunded(7, "ninguem"))
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("funded_by inválido deveria dar 400, veio %d", resp.StatusCode)
+	}
+}

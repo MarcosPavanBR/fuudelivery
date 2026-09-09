@@ -2,6 +2,12 @@ package models
 
 import "time"
 
+// Quem absorve o desconto do cupom.
+const (
+	CouponFundedByPlatform      = "platform"
+	CouponFundedByEstablishment = "establishment"
+)
+
 type Coupon struct {
 	ID              uint   `gorm:"primaryKey"`
 	Code            string `gorm:"uniqueIndex;not null"`
@@ -16,10 +22,21 @@ type Coupon struct {
 	ExpiryDate      time.Time
 	IsActive        bool `gorm:"default:true"`
 	EstablishmentID uint
-	OwnerPhone      string `gorm:"index"`
-	CreatedBy       uint
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+
+	// FundedBy diz de QUEM sai o desconto: "platform" (a taxa da plataforma
+	// absorve) ou "establishment" (o restaurante absorve). Sem isto o split
+	// não teria como saber de qual lado subtrair — o desconto sairia de
+	// ninguém, e o pedido fecharia com a soma das partes maior que o pago.
+	//
+	// Default "platform": um cupom criado sem escolha explícita é promoção da
+	// plataforma. Errar para "o restaurante paga" seria tirar dinheiro de
+	// terceiro por omissão.
+	FundedBy string `gorm:"size:20;not null;default:platform" json:"funded_by"`
+
+	OwnerPhone string `gorm:"index"`
+	CreatedBy  uint
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
 type CouponUsage struct {

@@ -648,6 +648,10 @@ func TestCheckoutE2E_WebhookRealFlow_Cashback(t *testing.T) {
 
 	os.Setenv("ABACATE_PAY_BASE_URL", mock.URL)
 	defer os.Unsetenv("ABACATE_PAY_BASE_URL")
+	// O adapter (NewGateway) exige a API key — diferente do client legado,
+	// que enviava Bearer vazio sem falhar.
+	os.Setenv("ABACATE_PAY_API_KEY", "e2e-api-key")
+	defer os.Unsetenv("ABACATE_PAY_API_KEY")
 
 	os.Setenv("ABACATE_PAY_WEBHOOK_SECRET", "e2e-webhook-secret")
 	defer os.Unsetenv("ABACATE_PAY_WEBHOOK_SECRET")
@@ -822,6 +826,10 @@ func TestCheckoutE2E_WebhookRealFlow_Refund(t *testing.T) {
 
 	os.Setenv("ABACATE_PAY_BASE_URL", mock.URL)
 	defer os.Unsetenv("ABACATE_PAY_BASE_URL")
+	// O adapter (NewGateway) exige a API key — diferente do client legado,
+	// que enviava Bearer vazio sem falhar.
+	os.Setenv("ABACATE_PAY_API_KEY", "e2e-api-key")
+	defer os.Unsetenv("ABACATE_PAY_API_KEY")
 
 	os.Setenv("ABACATE_PAY_WEBHOOK_SECRET", "e2e-refund-secret")
 	defer os.Unsetenv("ABACATE_PAY_WEBHOOK_SECRET")
@@ -1042,6 +1050,10 @@ func TestCheckoutE2E_WebhookRealFlow_ZoneSplitConfig(t *testing.T) {
 
 	os.Setenv("ABACATE_PAY_BASE_URL", mock.URL)
 	defer os.Unsetenv("ABACATE_PAY_BASE_URL")
+	// O adapter (NewGateway) exige a API key — diferente do client legado,
+	// que enviava Bearer vazio sem falhar.
+	os.Setenv("ABACATE_PAY_API_KEY", "e2e-api-key")
+	defer os.Unsetenv("ABACATE_PAY_API_KEY")
 
 	os.Setenv("ABACATE_PAY_WEBHOOK_SECRET", "e2e-zone-secret")
 	defer os.Unsetenv("ABACATE_PAY_WEBHOOK_SECRET")

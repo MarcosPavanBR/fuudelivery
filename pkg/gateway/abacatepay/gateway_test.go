@@ -2,6 +2,8 @@ package abacatepay
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/carloshomar/fuudelivery/pkg/gateway"
@@ -138,5 +140,95 @@ func TestCreateTransactionNaoSuportado(t *testing.T) {
 	_, err := gw.CreateTransaction(nil, &gateway.TransactionRequest{})
 	if err == nil {
 		t.Error("esperado erro (PIX não suporta CreateTransaction)")
+	}
+}
+
+// ═══════════════════════════════════════════════════════════════
+// STATUS MAPPING E GETCHARGEDETAILS
+// ═══════════════════════════════════════════════════════════════
+
+// A v2 mistura caixas: /transparents/create devolve "waiting" (lowercase),
+// /transparents/check e webhooks devolvem "PAID" (uppercase). O webhook
+// confirma pagamento a partir do segundo — mapear só lowercase deixa o
+// PAID cair em StatusPending e o pagamento nunca é confirmado.
+func TestMapAbacateStatus_CaseInsensitive(t *testing.T) {
+	tests := []struct {
+		in   string
+		want gateway.TransactionStatus
+	}{
+		{"PAID", gateway.StatusPaid},
+		{"paid", gateway.StatusPaid},
+		{"Paid", gateway.StatusPaid},
+		{"EXPIRED", gateway.StatusExpired},
+		{"REFUNDED", gateway.StatusRefunded},
+		{"CANCELED", gateway.StatusFailed},
+		{"cancelled", gateway.StatusFailed},
+		{"refused", gateway.StatusFailed},
+		{"waiting", gateway.StatusWaiting},
+		{"WAITING", gateway.StatusWaiting},
+		{"pENDING", gateway.StatusPending},
+		{"desconhecido", gateway.StatusPending},
+		{"", gateway.StatusPending},
+	}
+	for _, tt := range tests {
+		if got := mapAbacateStatus(tt.in); got != tt.want {
+			t.Errorf("mapAbacateStatus(%q) = %q, esperado %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+// GetChargeDetails deve desembrulhar o envelope v2 e devolver o objeto de
+// dentro de data — paridade com GetCharge do client legado.
+func TestGetChargeDetails_V2Envelope(t *testing.T) {
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/transparents/check" {
+			t.Errorf("path inesperado: %s", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("id"); got != "pix_char_123" {
+			t.Errorf("query id = %q, esperado pix_char_123", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"success":true,"data":{"id":"pix_char_123","status":"PAID","amount":8990},"error":null}`))
+	}))
+	defer mock.Close()
+
+	t.Setenv("ABACATE_PAY_API_KEY", "test-key")
+	t.Setenv("ABACATE_PAY_BASE_URL", mock.URL)
+
+	gw, err := NewGateway()
+	if err != nil {
+		t.Fatalf("NewGateway: %v", err)
+	}
+
+	charge, err := gw.GetChargeDetails("pix_char_123")
+	if err != nil {
+		t.Fatalf("GetChargeDetails: %v", err)
+	}
+
+	if got := charge["status"]; got != "PAID" {
+		t.Errorf("status = %v, esperado PAID", got)
+	}
+	if got, ok := charge["amount"].(float64); !ok || got != 8990 {
+		t.Errorf("amount = %v, esperado 8990", charge["amount"])
+	}
+}
+
+// Envelope de erro v2 deve virar erro, não objeto com success=false dentro.
+func TestGetChargeDetails_EnvelopeErro(t *testing.T) {
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"success":false,"data":null,"error":"charge not found"}`))
+	}))
+	defer mock.Close()
+
+	t.Setenv("ABACATE_PAY_API_KEY", "test-key")
+	t.Setenv("ABACATE_PAY_BASE_URL", mock.URL)
+
+	gw, err := NewGateway()
+	if err != nil {
+		t.Fatalf("NewGateway: %v", err)
+	}
+
+	if _, err := gw.GetChargeDetails("pix_char_inexistente"); err == nil {
+		t.Fatal("esperava erro para envelope success=false, veio nil")
 	}
 }

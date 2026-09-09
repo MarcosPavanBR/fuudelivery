@@ -623,6 +623,12 @@ func TestCheckoutE2E_WebhookRealFlow_Cashback(t *testing.T) {
 	var mockCalls int32
 	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&mockCalls, 1)
+		// Trava de regressão: o webhook deve consultar a API via ADAPTER do
+		// pkg/gateway, não via client legado services/abacatepay.go — o
+		// legado sempre manda User-Agent "Fuudelivery/1.0"; o adapter não
+		// seta (o client Go preenche o default).
+		require.NotEqual(t, "Fuudelivery/1.0", r.Header.Get("User-Agent"),
+			"verificação da charge deve vir do adapter, não do client legado")
 		if r.URL.Path != "/transparents/check" {
 			t.Errorf("path inesperado: %s", r.URL.Path)
 		}
@@ -798,6 +804,12 @@ func TestCheckoutE2E_WebhookRealFlow_Refund(t *testing.T) {
 	var mockCalls int32
 	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&mockCalls, 1)
+		// Trava de regressão: o webhook deve consultar a API via ADAPTER do
+		// pkg/gateway, não via client legado services/abacatepay.go — o
+		// legado sempre manda User-Agent "Fuudelivery/1.0"; o adapter não
+		// seta (o client Go preenche o default).
+		require.NotEqual(t, "Fuudelivery/1.0", r.Header.Get("User-Agent"),
+			"verificação da charge deve vir do adapter, não do client legado")
 		chargeID := r.URL.Query().Get("id")
 		chargeStatus := "PAID"
 		if strings.Contains(chargeID, "refund") {
@@ -1016,6 +1028,12 @@ func TestCheckoutE2E_WebhookRealFlow_ZoneSplitConfig(t *testing.T) {
 	var mockCalls int32
 	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&mockCalls, 1)
+		// Trava de regressão: o webhook deve consultar a API via ADAPTER do
+		// pkg/gateway, não via client legado services/abacatepay.go — o
+		// legado sempre manda User-Agent "Fuudelivery/1.0"; o adapter não
+		// seta (o client Go preenche o default).
+		require.NotEqual(t, "Fuudelivery/1.0", r.Header.Get("User-Agent"),
+			"verificação da charge deve vir do adapter, não do client legado")
 		chargeID := r.URL.Query().Get("id")
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = fmt.Fprintf(w, `{"success":true,"data":{"id":%q,"status":"PAID","amount":10000,"expiresAt":"2026-08-13T12:00:00Z"},"error":null}`, chargeID)

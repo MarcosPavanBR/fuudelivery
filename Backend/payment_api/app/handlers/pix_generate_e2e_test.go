@@ -79,6 +79,20 @@ func mockAbacateV2(t *testing.T, createCalls, checkCalls *int32) *httptest.Serve
 	}))
 }
 
+// seedOrderDocumentWithRecipient grava o pedido com as COLUNAS TIPADAS de
+// destinatário preenchidas — diferente do seedOrderDocument (que só preenche
+// payload e serve aos testes de frete, que não consultam destinatário).
+//
+// lookupOrderRecipient lê establishment_id/user_phone das colunas, não do
+// payload; sem elas bindRecipientToOrder devolve false e a cobrança toma 400.
+func seedOrderDocumentWithRecipient(t *testing.T, legacyID string, orderTotal, deliveryValue float64, establishmentID int64, userPhone string) {
+	t.Helper()
+	require.NoError(t, models.DB.Exec(
+		`INSERT INTO order_documents (legacy_id, establishment_id, user_phone, payload)
+		 VALUES (?, ?, ?, jsonb_build_object('order_total', ?::float8, 'deliveryValue', ?::float8))`,
+		legacyID, establishmentID, userPhone, orderTotal, deliveryValue).Error)
+}
+
 // TestGeneratePIX_RouterE2E percorre o caminho completo do item 1.7:
 // handler -> router -> adapter -> API v2 (mock) -> persistência -> resposta.
 func TestGeneratePIX_RouterE2E(t *testing.T) {
@@ -95,9 +109,10 @@ func TestGeneratePIX_RouterE2E(t *testing.T) {
 
 	// Pedido real no Postgres: total 89.90, frete 7.00, establishment 42,
 	// cliente +5511988887777 — o que validateChargeAmount/
-	// resolveDeliveryAmount/bindRecipientToOrder consultam.
+	// resolveDeliveryAmount/bindRecipientToOrder consultam. O destinatário
+	// vai nas colunas tipadas (é delas que o bind lê).
 	createOrderDocumentsTable(t)
-	seedOrderDocument(t, "order-e2e-router-001", 89.90, 7.00)
+	seedOrderDocumentWithRecipient(t, "order-e2e-router-001", 89.90, 7.00, 42, "+5511988887777")
 
 	// Router real com o adapter real — é o fluxo de produção, só com a
 	// URL da API apontando para o mock.
@@ -176,7 +191,7 @@ func TestGeneratePIX_RouterE2E_AmountDivergente(t *testing.T) {
 	t.Setenv("ABACATE_PAY_BASE_URL", mock.URL)
 
 	createOrderDocumentsTable(t)
-	seedOrderDocument(t, "order-e2e-router-002", 89.90, 7.00)
+	seedOrderDocumentWithRecipient(t, "order-e2e-router-002", 89.90, 7.00, 42, "+5511988887777")
 
 	abacateGW, err := abacatepay.NewGateway()
 	require.NoError(t, err)

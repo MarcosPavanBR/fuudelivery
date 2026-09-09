@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/carloshomar/fuudelivery/pkg/gateway"
@@ -331,8 +332,12 @@ func (g *AbacatePayGateway) MaxSplitRecipients() int { return 0 }
 // ═══════════════════════════════════════════════════════════════
 
 // mapAbacateStatus converte status do AbacatePay para status normalizado.
+//
+// A API v2 mistura caixas: /transparents/create devolve "waiting" (lowercase)
+// enquanto /transparents/check e os webhooks devolvem "PAID", "EXPIRED"
+// (uppercase). Comparação é case-insensitive para cobrir os dois.
 func mapAbacateStatus(status string) gateway.TransactionStatus {
-	switch status {
+	switch strings.ToLower(strings.TrimSpace(status)) {
 	case "waiting":
 		return gateway.StatusWaiting
 	case "paid":
@@ -343,7 +348,32 @@ func mapAbacateStatus(status string) gateway.TransactionStatus {
 		return gateway.StatusRefunded
 	case "refused":
 		return gateway.StatusFailed
+	// "canceled" (1 L) é a grafia que a v2 usa para cobrança cancelada.
+	case "canceled", "cancelled":
+		return gateway.StatusFailed
 	default:
 		return gateway.StatusPending
 	}
+}
+
+// GetChargeDetails consulta a cobrança na API v2 (/transparents/check) e
+// devolve o objeto bruto do envelope {"success","data"} — paridade com o
+// GetCharge do client legado (services/abacatepay.go). O webhook usa isto
+// para re-verificar server-side o status sem confiar no corpo do POST.
+func (g *AbacatePayGateway) GetChargeDetails(chargeID string) (map[string]interface{}, error) {
+	respBody, err := g.client.get("/transparents/check?id=" + chargeID)
+	if err != nil {
+		return nil, fmt.Errorf("get charge %s: %w", chargeID, err)
+	}
+
+	data, err := unwrapEnvelope(respBody)
+	if err != nil {
+		return nil, fmt.Errorf("get charge: %w", err)
+	}
+
+	var out map[string]interface{}
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil, fmt.Errorf("get charge: failed to parse response: %w", err)
+	}
+	return out, nil
 }

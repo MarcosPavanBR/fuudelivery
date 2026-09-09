@@ -12,6 +12,7 @@ import (
 
 	"github.com/carloshomar/fuudelivery/payment_api/app/models"
 	"github.com/carloshomar/fuudelivery/payment_api/app/services"
+	"github.com/carloshomar/fuudelivery/pkg/gateway/abacatepay"
 	"github.com/carloshomar/fuudelivery/pkg/queue"
 	"github.com/gofiber/fiber/v2"
 )
@@ -463,9 +464,18 @@ func HandlePaymentWebhook(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "charge.id is required"})
 	}
 
-	// Verify charge status with AbacatePay API (don't trust webhook body)
-	client := services.NewAbacatePayClient()
-	apiCharge, err := client.GetCharge(chargeID)
+	// Verify charge status with AbacatePay API (don't trust webhook body).
+	// O handler é específico do AbacatePay — HMAC x-abacatepay-signature e
+	// verificação via /transparents/check — então fala direto com o adapter
+	// do pkg/gateway, não com o router (que em produção devolveria o pagarme
+	// primeiro e 502 em charge IDs do AbacatePay). O client legado
+	// (services/abacatepay.go) fica um passo mais perto da aposentadoria.
+	gw, gwErr := abacatepay.NewGateway()
+	if gwErr != nil {
+		log.Printf("[WEBHOOK] Gateway AbacatePay indisponível: %v", gwErr)
+		return c.Status(502).JSON(fiber.Map{"error": "Failed to verify charge"})
+	}
+	apiCharge, err := gw.GetChargeDetails(chargeID)
 	if err != nil {
 		log.Printf("Failed to verify charge %s with AbacatePay: %v", chargeID, err)
 		return c.Status(502).JSON(fiber.Map{"error": "Failed to verify charge"})

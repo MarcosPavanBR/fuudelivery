@@ -50,6 +50,41 @@ func CreateCoupon(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Valor de desconto deve ser maior que zero"})
 	}
 
+	// Quem banca o desconto — é o que diz ao split de qual lado subtrair.
+	//
+	// O PADRÃO depende de quem cria, e não é detalhe: quem oferece a promoção
+	// sem dizer nada é quem a está oferecendo. Admin cria promoção da
+	// plataforma; estabelecimento cria a dele. Um padrão fixo obrigaria o
+	// restaurante a preencher um campo só para não mandar a conta para outro.
+	//
+	// A REGRA é assimétrica de propósito: o admin escolhe os dois lados
+	// (ele pode negociar que a loja banque), mas o estabelecimento só banca a
+	// si mesmo — senão ele criaria a promoção dele marcada como "platform" e
+	// empurraria o custo para a plataforma.
+	isAdmin := false
+	if role, rErr := middlewares.GetUserRoleFromToken(c); rErr == nil && role == "admin" {
+		isAdmin = true
+	}
+
+	fundedBy := strings.ToLower(strings.TrimSpace(request.FundedBy))
+	if fundedBy == "" {
+		if isAdmin {
+			fundedBy = models.CouponFundedByPlatform
+		} else {
+			fundedBy = models.CouponFundedByEstablishment
+		}
+	}
+	if fundedBy != models.CouponFundedByPlatform && fundedBy != models.CouponFundedByEstablishment {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "funded_by inválido. Use platform ou establishment",
+		})
+	}
+	if !isAdmin && fundedBy != models.CouponFundedByEstablishment {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "Cupom criado pelo estabelecimento é bancado pelo próprio estabelecimento",
+		})
+	}
+
 	var existingCoupon models.Coupon
 	if err := models.DB.Where("code = ?", request.Code).First(&existingCoupon).Error; err == nil {
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Código de cupom já existe"})
@@ -76,6 +111,7 @@ func CreateCoupon(c *fiber.Ctx) error {
 		StartDate:       startDate,
 		ExpiryDate:      expiryDate,
 		EstablishmentID: request.EstablishmentID,
+		FundedBy:        fundedBy,
 	}
 
 	if err := models.DB.Create(&coupon).Error; err != nil {

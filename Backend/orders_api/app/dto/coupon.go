@@ -11,6 +11,8 @@ type CreateCouponRequest struct {
 	StartDate       string  `json:"start_date"`
 	ExpiryDate      string  `json:"expiry_date"`
 	EstablishmentID uint    `json:"establishment_id"`
+	// FundedBy: "platform" (padrão) ou "establishment". Ver models.Coupon.
+	FundedBy string `json:"funded_by"`
 }
 
 type ValidateCouponRequest struct {

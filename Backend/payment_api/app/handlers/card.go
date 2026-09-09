@@ -265,7 +265,14 @@ func ProcessPayment(c *fiber.Ctx) error {
 			CustomerName:  req.CustomerName,
 			CustomerDoc:   "",
 			CustomerPhone: req.CustomerPhone,
+			Description:   fmt.Sprintf("Pedido %s", req.OrderID),
 			Capture:       true,
+			// IDs de pedido legados são strings (hex ObjectID): vão no metadata
+			// para o adapter montar o externalId real do gateway.
+			Metadata: map[string]string{
+				"order_id":       req.OrderID,
+				"customer_phone": req.CustomerPhone,
+			},
 		}
 
 		resp, err := router.CreateTransactionWithFallback(c.Context(), gatewayReq)

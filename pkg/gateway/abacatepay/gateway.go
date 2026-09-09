@@ -58,9 +58,7 @@ func (g *AbacatePayGateway) CreateTransaction(
 
 	if req.PaymentMethod != gateway.MethodPIX {
 		return nil, fmt.Errorf("abacatepay: only PIX is supported, got %s", req.PaymentMethod)
-	}
-
-	// Construir payload — endpoint v2 /transparents/create, corpo aninhado
+	} // Construir payload — endpoint v2 /transparents/create, corpo aninhado
 	// em "data" com method=PIX (o antigo /v1/charge/pix responde "Not found").
 	var pixReq struct {
 		Method string               `json:"method"`
@@ -70,7 +68,7 @@ func (g *AbacatePayGateway) CreateTransaction(
 	pixReq.Data = CreateBillingRequest{
 		Amount:      req.Amount,
 		Description: req.Description,
-		ExternalID:  fmt.Sprintf("%d", req.OrderID),
+		ExternalID:  externalIDFromRequest(req),
 		Metadata:    req.Metadata,
 	}
 
@@ -131,6 +129,22 @@ func (g *AbacatePayGateway) CreateTransaction(
 		SplitApplied:    false, // AbacatePay não suporta split
 		SplitCount:      0,
 	}, nil
+}
+
+// externalIDFromRequest resolve o externalId enviado ao gateway: o ID do
+// pedido. IDs de pedido legados são STRINGS (hex ObjectID), mas
+// TransactionRequest.OrderID é int64 — um id string passa pelo Metadata
+// ["order_id"] e o campo numérico é só para pedidos internos numéricos.
+// Sem isto, toda cobrança de pedido legado chegava ao dashboard do gateway
+// como externalId "0", inútil para conciliação.
+func externalIDFromRequest(req *gateway.TransactionRequest) string {
+	if id := req.Metadata["order_id"]; id != "" {
+		return id
+	}
+	if req.OrderID > 0 {
+		return fmt.Sprintf("%d", req.OrderID)
+	}
+	return ""
 }
 
 // CaptureTransaction não é suportado no AbacatePay (PIX é instantâneo).

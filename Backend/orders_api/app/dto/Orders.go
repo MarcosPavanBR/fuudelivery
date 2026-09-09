@@ -89,7 +89,21 @@ type RequestPayload struct {
 	// OrderTotal é SEMPRE recalculado no servidor (computeOrderTotal) a partir
 	// dos preços do banco; o valor do carrinho enviado pelo cliente é ignorado.
 	// Gravado no payload JSONB e usado pela cobrança PIX/card como fonte única.
-	OrderTotal      float64       `json:"order_total"`
+	OrderTotal float64 `json:"order_total"`
+
+	// CouponCode é o ÚNICO campo de cupom que o cliente preenche. O servidor o
+	// reescreve com o código efetivamente consumido (ou com "" se o cupom não
+	// descontou nada), para que o payload nunca guarde um cupom que não foi
+	// aplicado.
+	CouponCode string `json:"coupon_code,omitempty"`
+	// DiscountAmount e DiscountFundedBy são escritos SÓ pelo servidor
+	// (CreateOrder -> applyCouponToOrder). Valor mandado pelo cliente é
+	// sobrescrito. É daqui que payment_api lê para subtrair o desconto do lado
+	// certo do split — sem FundedBy o desconto sairia diluído entre plataforma
+	// e restaurante, e não de quem ofereceu a promoção.
+	DiscountAmount   float64 `json:"discount_amount,omitempty"`
+	DiscountFundedBy string  `json:"discount_funded_by,omitempty"`
+
 	User            User          `json:"user"`
 	EstablishmentId int64         `json:"establishmentId"`
 	Establishment   Establishment `json:"establishment"`

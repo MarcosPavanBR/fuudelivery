@@ -105,19 +105,21 @@ func GeneratePIX(c *fiber.Ctx) error {
 
 	// ID é BIGSERIAL no Postgres — preenchido automaticamente pelo Create.
 	payment := models.Payment{
-		OrderID:         req.OrderID,
-		CustomerID:      req.CustomerID,
-		CustomerPhone:   req.CustomerPhone,
-		EstablishmentID: req.EstablishmentID,
-		Amount:          req.Amount,
-		DeliveryAmount:  req.DeliveryAmount,
-		Method:          "pix",
-		Status:          "PENDING",
-		PixQRCode:       resp.PIXQRCode,
-		PixCopyPaste:    resp.PIXCopyPaste,
-		QRCodeBase64:    resp.PIXQRCodeBase64,
-		AbacatePayID:    resp.GatewayID,
-		CreatedAt:       time.Now(),
+		OrderID:          req.OrderID,
+		CustomerID:       req.CustomerID,
+		CustomerPhone:    req.CustomerPhone,
+		EstablishmentID:  req.EstablishmentID,
+		Amount:           req.Amount,
+		DeliveryAmount:   req.DeliveryAmount,
+		DiscountAmount:   req.DiscountAmount,
+		DiscountFundedBy: req.DiscountFundedBy,
+		Method:           "pix",
+		Status:           "PENDING",
+		PixQRCode:        resp.PIXQRCode,
+		PixCopyPaste:     resp.PIXCopyPaste,
+		QRCodeBase64:     resp.PIXQRCodeBase64,
+		AbacatePayID:     resp.GatewayID,
+		CreatedAt:        time.Now(),
 	}
 
 	if err := models.DB.Create(&payment).Error; err != nil {

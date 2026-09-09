@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"log"
 	"math"
 
 	"github.com/carloshomar/fuudelivery/payment_api/app/models"
@@ -44,11 +45,65 @@ func CalculateSplitRules(payment *models.Payment, platformPct, establishmentPct 
 	total := payment.Amount
 	deliveryAmount := payment.DeliveryAmount
 
+	// O BRUTO é o pedido antes da promoção: o que o cliente pagou mais o
+	// desconto do cupom. É sobre ele que as porcentagens incidem.
+	//
+	// Aplicar as porcentagens sobre o valor já descontado seria o erro
+	// silencioso que este bloco existe para evitar: um cupom de R$10 num
+	// pedido de R$100 (5% plataforma, 85% loja) tiraria R$0,50 da plataforma
+	// e R$8,50 do restaurante — os dois pagando a promoção, em proporção,
+	// independentemente de quem a ofereceu. Quem escolhe "descontar de mim"
+	// na criação do cupom estaria escolhendo nada.
+	discount := payment.DiscountAmount
+	if discount < 0 {
+		discount = 0
+	}
+	gross := roundCents(total + discount)
+
 	// When delivery exceeds the payment total, zero out platform and
 	// establishment shares — the delivery fee consumes the entire amount.
 	// The caller (defaultSplitRules) expects a valid result, not an error.
-	platformFee := roundCents(total * (platformPct / 100.0))
-	establishmentAmount := roundCents(total * (establishmentPct / 100.0))
+	platformFee := roundCents(gross * (platformPct / 100.0))
+	establishmentAmount := roundCents(gross * (establishmentPct / 100.0))
+
+	// O desconto sai INTEIRO do lado que banca. As outras fatias ficam como
+	// ficariam sem cupom nenhum — inclusive o cashback do cliente, que é o
+	// resto e por isso não muda: a promoção não pode encolher o cashback de
+	// quem usou o cupom.
+	//
+	// Se a fatia de quem banca não cobre o desconto, ela ZERA — quem banca dá
+	// tudo o que tem antes de o outro lado perder um centavo. O que ainda
+	// faltar depois disso é absorvido pelo cashback (o resto) e, se nem ele
+	// bastar, pela cláusula `allocated > total` mais abaixo, que reduz o
+	// estabelecimento. Isso não é escolha: o split só distribui o que o
+	// cliente pagou, e um cupom acima da margem de quem o ofereceu não cria
+	// dinheiro. É por isso que o caso é logado — significa cupom criado além
+	// do que quem banca consegue bancar.
+	if discount > 0 {
+		switch payment.DiscountFundedBy {
+		case "establishment":
+			if discount > establishmentAmount {
+				log.Printf("[SPLIT] pedido %s: cupom de %.2f acima da fatia do estabelecimento (%.2f) — a diferença sai das outras partes",
+					payment.OrderID, discount, establishmentAmount)
+			}
+			establishmentAmount = roundCents(establishmentAmount - discount)
+			if establishmentAmount < 0 {
+				establishmentAmount = 0
+			}
+		default:
+			if discount > platformFee {
+				log.Printf("[SPLIT] pedido %s: cupom de %.2f acima da fatia da plataforma (%.2f) — a diferença sai das outras partes",
+					payment.OrderID, discount, platformFee)
+			}
+			// "platform" e qualquer valor não reconhecido: a plataforma
+			// absorve. É o mesmo default do cupom — quem oferece a promoção
+			// sem dizer nada é quem a está oferecendo.
+			platformFee = roundCents(platformFee - discount)
+			if platformFee < 0 {
+				platformFee = 0
+			}
+		}
+	}
 
 	if deliveryAmount >= total {
 		platformFee = 0

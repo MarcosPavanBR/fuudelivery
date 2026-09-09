@@ -86,22 +86,29 @@ jobs:
           until docker exec pg-it psql -U test -d postgres -c 'SELECT 1' >/dev/null 2>&1; do sleep 1; done
           for i in $(seq 1 30); do
             if docker exec pg-it psql -U test -d postgres \
-              -c "CREATE DATABASE it_fullflow" -c "CREATE DATABASE it_err_scenarios" -c "CREATE DATABASE it_admin_bootstrap"; then break; fi
+              -c "CREATE DATABASE it_password_reset" -c "CREATE DATABASE it_split_metrics" -c "CREATE DATABASE it_admin_bootstrap"; then break; fi
             sleep 2
           done
           echo "Services ready."
 
       # Cada suíte roda isolada (database própria), replicando o isolamento
       # que os containers individuais garantiam antes do escape hatch.
-      - name: Run TestFullFlow
+      # ATENÇÃO ao mexer nos -run daqui: um nome de teste que não existe faz
+      # `go test` responder "ok [no tests to run]" e o passo fica VERDE sem ter
+      # verificado nada. Foi o que aconteceu por muito tempo com dois passos
+      # chamados "Run TestFullFlow" e "Run TestErrorScenarios": nenhuma das
+      # duas funções existia no repositório, e o gate anunciava uma cobertura
+      # que não tinha. Antes de renomear, confirme com
+      # `grep -rn "func <Nome>" cmd/fuudelivery`.
+      - name: Run TestPasswordResetFlow
         env:
-          POSTGRES_TEST_URI: postgres://test:test@localhost:5432/it_fullflow?sslmode=disable
-        run: go test -tags=integration -v -count=1 -timeout 10m -run 'TestFullFlow' ./
+          POSTGRES_TEST_URI: postgres://test:test@localhost:5432/it_password_reset?sslmode=disable
+        run: go test -tags=integration -v -count=1 -timeout 10m -run 'TestPasswordResetFlow' ./
 
-      - name: Run TestErrorScenarios
+      - name: Run TestGetMonthlyOrders
         env:
-          POSTGRES_TEST_URI: postgres://test:test@localhost:5432/it_err_scenarios?sslmode=disable
-        run: go test -tags=integration -v -count=1 -timeout 10m -run 'TestErrorScenarios' ./
+          POSTGRES_TEST_URI: postgres://test:test@localhost:5432/it_split_metrics?sslmode=disable
+        run: go test -tags=integration -v -count=1 -timeout 10m -run 'TestGetMonthlyOrders' ./
 
       - name: Run TestAdminBootstrap
         env:

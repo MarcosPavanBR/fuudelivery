@@ -250,8 +250,14 @@ type TransactionResponse struct {
 
 	// ── PIX ────────────────────────────────────────────────────
 
-	// PIXQRCode é a imagem do QR Code em base64 (data:image/png;base64,...).
+	// PIXQRCode carrega o payload PIX (copia-e-cola/brCode) — nome histórico
+	// da struct, mantido para não quebrar consumidores. Em adapters novos
+	// prefira PIXCopyPaste para o payload e PIXQRCodeBase64 para a imagem.
 	PIXQRCode string
+
+	// PIXQRCodeBase64 é a imagem do QR Code em base64 PURO (sem o prefixo
+	// "data:image/png;base64,") — pronto para renderizar no app/painel.
+	PIXQRCodeBase64 string
 
 	// PIXCopyPaste é o código copia-e-cola (payload PIX).
 	PIXCopyPaste string

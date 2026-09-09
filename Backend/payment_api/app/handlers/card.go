@@ -289,7 +289,7 @@ func ProcessPayment(c *fiber.Ctx) error {
 			Method:          "pix",
 			Status:          "PENDING",
 			PixCopyPaste:    resp.PIXCopyPaste,
-			QRCodeBase64:    resp.PIXQRCode,
+			QRCodeBase64:    resp.PIXQRCodeBase64,
 			PixQRCode:       resp.PIXQRCode,
 			CreatedAt:       time.Now(),
 		}
@@ -303,7 +303,7 @@ func ProcessPayment(c *fiber.Ctx) error {
 			PaymentID:    payment.IDString(),
 			Status:       "PENDING",
 			PixCopyPaste: resp.PIXCopyPaste,
-			QRCodeBase64: resp.PIXQRCode,
+			QRCodeBase64: resp.PIXQRCodeBase64,
 			PixQRCode:    resp.PIXQRCode,
 			Message:      fmt.Sprintf("PIX payment created via %s", resp.Gateway),
 		}

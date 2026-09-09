@@ -27,9 +27,17 @@ func NewClient() (*Client, error) {
 		return nil, fmt.Errorf("abacatepay: ABACATE_PAY_API_KEY not configured")
 	}
 
+	// ABACATE_PAY_BASE_URL permite apontar para sandbox/mock — mesma env que
+	// o client legado (services/abacatepay.go) usa nos testes E2E. Sem
+	// override, usa a API de produção.
+	baseURL := os.Getenv("ABACATE_PAY_BASE_URL")
+	if baseURL == "" {
+		baseURL = "https://api.abacatepay.com/v2"
+	}
+
 	return &Client{
 		apiKey:  apiKey,
-		baseURL: "https://api.abacatepay.com/v1",
+		baseURL: baseURL,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},

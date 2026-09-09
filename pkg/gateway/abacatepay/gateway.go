@@ -60,8 +60,14 @@ func (g *AbacatePayGateway) CreateTransaction(
 		return nil, fmt.Errorf("abacatepay: only PIX is supported, got %s", req.PaymentMethod)
 	}
 
-	// Construir payload
-	billingReq := CreateBillingRequest{
+	// Construir payload — endpoint v2 /transparents/create, corpo aninhado
+	// em "data" com method=PIX (o antigo /v1/charge/pix responde "Not found").
+	var pixReq struct {
+		Method string               `json:"method"`
+		Data   CreateBillingRequest `json:"data"`
+	}
+	pixReq.Method = "PIX"
+	pixReq.Data = CreateBillingRequest{
 		Amount:      req.Amount,
 		Description: req.Description,
 		ExternalID:  fmt.Sprintf("%d", req.OrderID),
@@ -73,30 +79,57 @@ func (g *AbacatePayGateway) CreateTransaction(
 	if req.IdempotencyKey != "" {
 		headers["X-Idempotency-Key"] = req.IdempotencyKey
 	}
-	respBody, err := g.client.postWithHeaders("/billings", billingReq, headers)
+	respBody, err := g.client.postWithHeaders("/transparents/create", pixReq, headers)
+	if err != nil {
+		return nil, fmt.Errorf("create transaction: %w", err)
+	}
+
+	// Desembrulhar o envelope v2 {"success", "data", "error"} antes de parsear.
+	data, err := unwrapEnvelope(respBody)
 	if err != nil {
 		return nil, fmt.Errorf("create transaction: %w", err)
 	}
 
 	// Parsear resposta
-	var billingResp CreateBillingResponse
-	if err := json.Unmarshal(respBody, &billingResp); err != nil {
+	var raw struct {
+		ID           string `json:"id"`
+		Status       string `json:"status"`
+		Amount       int64  `json:"amount"`
+		BRCode       string `json:"brCode"`
+		BRCodeBase64 string `json:"brCodeBase64"`
+		ExpiresAt    string `json:"expiresAt"`
+		ExternalID   string `json:"externalId"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("create transaction: failed to parse response: %w", err)
 	}
 
-	// Mapear para resposta normalizada
-	expiresAt, _ := time.Parse(time.RFC3339, billingResp.ExpiresAt)
+	// Mapear para resposta normalizada.
+	//
+	// Campos PIX, em paridade com o client legado (services/abacatepay.go):
+	// brCode é o copia-e-cola; brCodeBase64 chega com o prefixo
+	// "data:image/png;base64," e vai para o frontend como base64 PURO.
+	// PIXQRCode e PIXCopyPaste carregam o MESMO brCode: o PixQRCode da tabela
+	// payments é lido como copia-e-cola pelo handler de polling e o WebAdmin,
+	// e o QRCodeBase64 alimenta o desenho do QR — os três campos existem para
+	// manter o contrato de API dos painéis/apps.
+	var expiresAt time.Time
+	if raw.ExpiresAt != "" {
+		expiresAt, _ = time.Parse(time.RFC3339, raw.ExpiresAt)
+	}
 
 	return &gateway.TransactionResponse{
-		GatewayID:    billingResp.ID,
+		GatewayID:    raw.ID,
 		Gateway:      "abacatepay",
-		Status:       mapAbacateStatus(billingResp.Status),
-		PIXQRCode:    billingResp.QRCode,
-		PIXCopyPaste: billingResp.CopyPaste,
-		PIXExpiresAt: &expiresAt,
-		SplitApplied: false, // AbacatePay não suporta split
-		SplitCount:   0,
+		Status:       mapAbacateStatus(raw.Status),
+		PIXQRCode:    raw.BRCode,
+		PIXCopyPaste: raw.BRCode,
 		Metadata:     req.Metadata,
+		// extras via metadata não; base64 vai num campo dedicado abaixo.
+		PIXQRCodeBase64: stripBase64Prefix(raw.BRCodeBase64),
+		PIXExpiresAt:    &expiresAt,
+		SplitApplied:    false, // AbacatePay não suporta split
+		SplitCount:      0,
 	}, nil
 }
 
@@ -150,19 +183,27 @@ func (g *AbacatePayGateway) VoidTransaction(
 }
 
 // GetTransactionStatus consulta o status de uma cobrança.
+// Usa o /transparents/check?id= da v2 (mesma consulta que o webhook faz
+// server-side) e desembrulha o envelope antes de mapear o status.
 func (g *AbacatePayGateway) GetTransactionStatus(
 	ctx context.Context,
 	gatewayID string,
 ) (gateway.TransactionStatus, error) {
 
-	path := fmt.Sprintf("/billings/%s", gatewayID)
-	respBody, err := g.client.get(path)
+	respBody, err := g.client.get("/transparents/check?id=" + gatewayID)
 	if err != nil {
 		return "", fmt.Errorf("get transaction status %s: %w", gatewayID, err)
 	}
 
-	var resp CreateBillingResponse
-	if err := json.Unmarshal(respBody, &resp); err != nil {
+	data, err := unwrapEnvelope(respBody)
+	if err != nil {
+		return "", fmt.Errorf("get status: %w", err)
+	}
+
+	var resp struct {
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(data, &resp); err != nil {
 		return "", fmt.Errorf("get status: failed to parse response: %w", err)
 	}
 

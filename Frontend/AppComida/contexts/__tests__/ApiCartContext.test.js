@@ -178,6 +178,20 @@ describe("parseOrderResponse — total do servidor", () => {
     expect(res.discount).toBeUndefined();
   });
 
+  // Frete ZERO é legítimo — retirada no balcão, frete grátis de assinatura.
+  // Tratar como ausente faria a cobrança declarar a cotação local em vez do
+  // zero que o servidor decidiu.
+  it("aceita frete zero, que é um valor válido", () => {
+    expect(parseOrderResponse({ delivery_value: 0 }).deliveryValue).toBe(0);
+    expect(parseOrderResponse({ delivery_value: 11 }).deliveryValue).toBe(11);
+  });
+
+  it("deixa o frete indefinido quando o servidor não manda", () => {
+    expect(parseOrderResponse({ orderId: "x" }).deliveryValue).toBeUndefined();
+    expect(parseOrderResponse({ delivery_value: -1 }).deliveryValue).toBeUndefined();
+    expect(parseOrderResponse({ delivery_value: "abc" }).deliveryValue).toBeUndefined();
+  });
+
   it("ignora total zero ou inválido em vez de cobrar zero", () => {
     expect(parseOrderResponse({ order_total: 0 }).orderTotal).toBeUndefined();
     expect(parseOrderResponse({ order_total: "abc" }).orderTotal).toBeUndefined();

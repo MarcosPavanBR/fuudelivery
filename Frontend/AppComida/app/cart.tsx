@@ -73,7 +73,8 @@ const cart = () => {
   async function generatePix(
     orderId: string,
     user: any,
-    serverTotal?: number
+    serverTotal?: number,
+    serverDelivery?: number
   ): Promise<boolean> {
     // O valor cobrado é o que o SERVIDOR calculou para o pedido, não uma
     // conta refeita aqui. Com cupom os dois divergem, e payment_api confere
@@ -91,7 +92,15 @@ const cart = () => {
         customer_id: Number(user?.id) || 0,
         establishment_id: Number(establishment?.id) || 0,
         amount,
-        delivery_amount: deliveryValue || 0,
+        // Mesmo princípio do amount: o frete que a cobrança declara é o que
+        // o SERVIDOR gravou no pedido, não a cotação que esta tela tinha em
+        // mãos. resolveDeliveryAmount confere os dois no payment_api, e uma
+        // cotação local defasada (assinatura, taxa da zona alterada entre a
+        // cotação e o pedido) faria a cobrança ser recusada.
+        delivery_amount:
+          typeof serverDelivery === "number" && serverDelivery >= 0
+            ? serverDelivery
+            : deliveryValue || 0,
         method: "pix",
       });
       if (data?.qr_code_base64 || data?.pix_copy_paste) {
@@ -114,7 +123,7 @@ const cart = () => {
         { text: "Continuar sem pagar", style: "cancel" },
         {
           text: "Tentar novamente",
-          onPress: () => generatePix(orderId, user, serverTotal),
+          onPress: () => generatePix(orderId, user, serverTotal, serverDelivery),
         },
       ]
     );
@@ -130,7 +139,7 @@ const cart = () => {
       if (res.ok) {
         if (paymentMethod.type === "pix" && res.orderId) {
           // Fluxo PIX: mostra o QR Code antes de sair da tela.
-          await generatePix(res.orderId, user, res.orderTotal);
+          await generatePix(res.orderId, user, res.orderTotal, res.deliveryValue);
           setLoad(false);
           return;
         }

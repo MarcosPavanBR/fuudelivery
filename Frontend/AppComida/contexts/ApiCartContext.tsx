@@ -36,6 +36,7 @@ interface ApiContextProps {
     ok: boolean;
     orderId?: string;
     orderTotal?: number;
+    deliveryValue?: number;
     discount?: number;
   }>;
   couponCode: string;
@@ -132,15 +133,21 @@ export function parseOrderResponse(data: any): {
   ok: true;
   orderId?: string;
   orderTotal?: number;
+  deliveryValue?: number;
   discount?: number;
   couponCode?: string;
 } {
   const total = Number(data?.order_total);
+  const frete = Number(data?.delivery_value);
   const desconto = Number(data?.discount_amount);
   return {
     ok: true,
     orderId: data?.orderId ? String(data.orderId) : undefined,
     orderTotal: Number.isFinite(total) && total > 0 ? total : undefined,
+    // Frete ZERO é legítimo (retirada no balcão, frete grátis de assinatura),
+    // então aqui o corte é `>= 0`, não `> 0` como no total: só a AUSÊNCIA do
+    // campo faz o chamador cair na conta local.
+    deliveryValue: Number.isFinite(frete) && frete >= 0 ? frete : undefined,
     discount: Number.isFinite(desconto) && desconto > 0 ? desconto : undefined,
     couponCode: data?.coupon_code || undefined,
   };
@@ -272,6 +279,7 @@ export const ApiCartProvider: React.FC<ApiCartProviderProps> = ({
     ok: boolean;
     orderId?: string;
     orderTotal?: number;
+    deliveryValue?: number;
     discount?: number;
   }> {
     if (!validDelivery()) {

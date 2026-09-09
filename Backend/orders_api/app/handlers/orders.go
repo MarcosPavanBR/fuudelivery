@@ -173,9 +173,23 @@ func CreateOrder(c *fiber.Ctx, sendMessageToClient func(clientID int64, message 
 		return err
 	}
 
+	// O total vai na resposta porque o app precisa COBRAR exatamente este
+	// valor.
+	//
+	// Antes o app recalculava o valor da cobrança por conta própria
+	// (subtotal do carrinho + frete). Com cupom isso passou a divergir: o
+	// pedido fecha descontado e payment_api confere o amount da cobrança
+	// contra o order_total gravado (validateChargeAmount, tolerância de 1
+	// centavo) — recalculando no cliente, TODA cobrança de pedido com cupom
+	// seria recusada. Devolvendo o número aqui, o app cobra o que o servidor
+	// decidiu, sem repetir a conta.
 	return c.JSON(fiber.Map{
-		"message": "Ordem criada com sucesso",
-		"orderId": orderID,
+		"message":         "Ordem criada com sucesso",
+		"orderId":         orderID,
+		"order_total":     request.OrderTotal,
+		"delivery_value":  request.DeliveryValue,
+		"discount_amount": request.DiscountAmount,
+		"coupon_code":     request.CouponCode,
 	})
 }
 

@@ -652,6 +652,15 @@ func TestCheckoutE2E_WebhookRealFlow_Cashback(t *testing.T) {
 	os.Setenv("ABACATE_PAY_WEBHOOK_SECRET", "e2e-webhook-secret")
 	defer os.Unsetenv("ABACATE_PAY_WEBHOOK_SECRET")
 
+	// A verificação da cobrança passou a usar o adapter do pkg/gateway
+	// (abacatepay.NewGateway), que EXIGE a chave — o client legado tolerava a
+	// ausência e chamava o mock com chave vazia. Sem isto o webhook responde
+	// 502 antes de qualquer HTTP, e o teste mediria a falta da env em vez do
+	// fluxo. Em produção a exigência está certa: sem chave não há como
+	// verificar a cobrança, e processar o webhook na palavra dele seria pior.
+	os.Setenv("ABACATE_PAY_API_KEY", "e2e-api-key")
+	defer os.Unsetenv("ABACATE_PAY_API_KEY")
+
 	// amount=89.90, delivery=7.00, 5%+85%: platform=4.495, est=76.415,
 	// delivery=7.00 -> sobra 1.99 de cashback (customer credit > 0) -> 4 receivers.
 	payment := models.Payment{
@@ -825,6 +834,15 @@ func TestCheckoutE2E_WebhookRealFlow_Refund(t *testing.T) {
 
 	os.Setenv("ABACATE_PAY_WEBHOOK_SECRET", "e2e-refund-secret")
 	defer os.Unsetenv("ABACATE_PAY_WEBHOOK_SECRET")
+
+	// A verificação da cobrança passou a usar o adapter do pkg/gateway
+	// (abacatepay.NewGateway), que EXIGE a chave — o client legado tolerava a
+	// ausência e chamava o mock com chave vazia. Sem isto o webhook responde
+	// 502 antes de qualquer HTTP, e o teste mediria a falta da env em vez do
+	// fluxo. Em produção a exigência está certa: sem chave não há como
+	// verificar a cobrança, e processar o webhook na palavra dele seria pior.
+	os.Setenv("ABACATE_PAY_API_KEY", "e2e-api-key")
+	defer os.Unsetenv("ABACATE_PAY_API_KEY")
 
 	app := fiber.New()
 	app.Post("/api/payment/webhook", HandlePaymentWebhook)
@@ -1045,6 +1063,15 @@ func TestCheckoutE2E_WebhookRealFlow_ZoneSplitConfig(t *testing.T) {
 
 	os.Setenv("ABACATE_PAY_WEBHOOK_SECRET", "e2e-zone-secret")
 	defer os.Unsetenv("ABACATE_PAY_WEBHOOK_SECRET")
+
+	// A verificação da cobrança passou a usar o adapter do pkg/gateway
+	// (abacatepay.NewGateway), que EXIGE a chave — o client legado tolerava a
+	// ausência e chamava o mock com chave vazia. Sem isto o webhook responde
+	// 502 antes de qualquer HTTP, e o teste mediria a falta da env em vez do
+	// fluxo. Em produção a exigência está certa: sem chave não há como
+	// verificar a cobrança, e processar o webhook na palavra dele seria pior.
+	os.Setenv("ABACATE_PAY_API_KEY", "e2e-api-key")
+	defer os.Unsetenv("ABACATE_PAY_API_KEY")
 
 	// Ligacao que o monolito faz em main(): resolver de split por zona.
 	// Zona com percentuais customizados 7%/80% para o estabelecimento 42.

@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"golang.org/x/time/rate"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -36,6 +37,29 @@ import (
 //   - Identificador inexistente â†’ 404 (admin) / 400 (pÃºblico)
 //   - user_type invÃ¡lido â†’ 400
 //   - Senha muito curta â†’ 400
+
+// zeraRateLimits limpa os dois token buckets em memoria que protegem as rotas
+// de reset de senha: rateLimitMiddleware (5/min por IP) e
+// rateLimitByIdentifierMiddleware (10/min por conta).
+//
+// Sem isto o teste mede o rate limit, nao o fluxo. Todos os subtestes batem no
+// MESMO IP (httptest) e no MESMO identificador (o cliente de teste), entao a
+// partir do 6o POST tudo vira 429 — e um 429 nao prova nada sobre reset de
+// senha. O suite inteiro estava vermelho por causa disso, sem ninguem ver,
+// porque o job de CI so rodava TestAdminBootstrap.
+//
+// Zerar em teste e legitimo: o limite existe contra forca bruta de um atacante
+// real, e continua coberto por TestRateLimit* em rate_limit_redis_test.go.
+func zeraRateLimits() {
+	ipLimitersMu.Lock()
+	ipLimiters = make(map[string]*ipLimiter)
+	ipLimitersMu.Unlock()
+
+	identifierLimitersMu.Lock()
+	identifierLimiters = make(map[string]*rate.Limiter)
+	identifierLimitersMu.Unlock()
+}
+
 func TestPasswordResetFlow(t *testing.T) {
 	ctx := context.Background()
 
@@ -173,6 +197,7 @@ func TestPasswordResetFlow(t *testing.T) {
 	// ---- 3. Gerar cÃ³digo de reset (admin) ----
 	var resetCode string
 	t.Run("GenerateResetCode", func(t *testing.T) {
+		zeraRateLimits()
 		resp := doJSON(http.MethodPost, "/admin/password-reset/code", map[string]string{
 			"user_type":  "client",
 			"identifier": clientPhone,
@@ -191,6 +216,7 @@ func TestPasswordResetFlow(t *testing.T) {
 	// ---- 4. Resetar senha com cÃ³digo vÃ¡lido ----
 	newPass := "NovaSenha456!"
 	t.Run("ResetPassword_Success", func(t *testing.T) {
+		zeraRateLimits()
 		resp := doJSON(http.MethodPost, "/auth/reset-password", map[string]string{
 			"user_type":    "client",
 			"identifier":   clientPhone,
@@ -203,8 +229,13 @@ func TestPasswordResetFlow(t *testing.T) {
 	})
 
 	// ---- 5. Verificar: senha antiga nÃ£o funciona mais ----
+	//
+	// A rota é /clients/login. Estava escrita como "/users/login/client", que
+	// não existe: o 404 satisfazia o NotEqual(200) e este subteste passava sem
+	// nunca ter tentado um login. O de baixo, que exige 200, é o que denunciou.
 	t.Run("LoginWithOldPassword_Fails", func(t *testing.T) {
-		resp := doJSON(http.MethodPost, "/users/login/client", map[string]string{
+		zeraRateLimits()
+		resp := doJSON(http.MethodPost, "/clients/login", map[string]string{
 			"phone":    clientPhone,
 			"password": clientOldPass,
 		})
@@ -213,7 +244,8 @@ func TestPasswordResetFlow(t *testing.T) {
 
 	// ---- 6. Verificar: nova senha funciona ----
 	t.Run("LoginWithNewPassword_Works", func(t *testing.T) {
-		resp := doJSON(http.MethodPost, "/users/login/client", map[string]string{
+		zeraRateLimits()
+		resp := doJSON(http.MethodPost, "/clients/login", map[string]string{
 			"phone":    clientPhone,
 			"password": newPass,
 		})
@@ -222,6 +254,7 @@ func TestPasswordResetFlow(t *testing.T) {
 
 	// ---- 7. CÃ³digo jÃ¡ usado nÃ£o pode ser reutilizado ----
 	t.Run("ReuseCode_Fails", func(t *testing.T) {
+		zeraRateLimits()
 		resp := doJSON(http.MethodPost, "/auth/reset-password", map[string]string{
 			"user_type":    "client",
 			"identifier":   clientPhone,
@@ -235,6 +268,7 @@ func TestPasswordResetFlow(t *testing.T) {
 
 	// ---- CenÃ¡rios negativos ----
 	t.Run("WrongCode_Fails", func(t *testing.T) {
+		zeraRateLimits()
 		// Gerar um novo cÃ³digo vÃ¡lido primeiro
 		resp := doJSON(http.MethodPost, "/admin/password-reset/code", map[string]string{
 			"user_type":  "client",
@@ -253,6 +287,7 @@ func TestPasswordResetFlow(t *testing.T) {
 	})
 
 	t.Run("ShortPassword_Fails", func(t *testing.T) {
+		zeraRateLimits()
 		resp := doJSON(http.MethodPost, "/admin/password-reset/code", map[string]string{
 			"user_type":  "client",
 			"identifier": clientPhone,
@@ -271,6 +306,7 @@ func TestPasswordResetFlow(t *testing.T) {
 	})
 
 	t.Run("InvalidUserType_Fails", func(t *testing.T) {
+		zeraRateLimits()
 		resp := doJSON(http.MethodPost, "/admin/password-reset/code", map[string]string{
 			"user_type":  "admin",
 			"identifier": clientPhone,
@@ -279,6 +315,7 @@ func TestPasswordResetFlow(t *testing.T) {
 	})
 
 	t.Run("UnknownIdentifier_Admin404", func(t *testing.T) {
+		zeraRateLimits()
 		resp := doJSON(http.MethodPost, "/admin/password-reset/code", map[string]string{
 			"user_type":  "client",
 			"identifier": "+5511000009999",
@@ -287,6 +324,7 @@ func TestPasswordResetFlow(t *testing.T) {
 	})
 
 	t.Run("UnknownIdentifier_Public400", func(t *testing.T) {
+		zeraRateLimits()
 		resp := doJSON(http.MethodPost, "/auth/reset-password", map[string]string{
 			"user_type":    "client",
 			"identifier":   "+5511000009999",
@@ -300,6 +338,7 @@ func TestPasswordResetFlow(t *testing.T) {
 	})
 
 	t.Run("MaxAttempts_LocksCode", func(t *testing.T) {
+		zeraRateLimits()
 		// Gerar cÃ³digo
 		resp := doJSON(http.MethodPost, "/admin/password-reset/code", map[string]string{
 			"user_type":  "client",
@@ -311,6 +350,12 @@ func TestPasswordResetFlow(t *testing.T) {
 
 		// Tentar errar 5 vezes (maxPasswordResetAttempts = 5)
 		for i := 0; i < 5; i++ {
+			// Zera a cada volta: o balde por IP é COMPARTILHADO entre rotas
+			// (getIPLimiter indexa só pelo IP), então o POST de geração de
+			// código acima já consumiu um token e o limite de 5/min estouraria
+			// no meio do laço. O que este subteste mede é o bloqueio do CÓDIGO
+			// depois de 5 tentativas erradas, não o rate limit.
+			zeraRateLimits()
 			resp = doJSON(http.MethodPost, "/auth/reset-password", map[string]string{
 				"user_type":    "client",
 				"identifier":   clientPhone,
@@ -320,16 +365,41 @@ func TestPasswordResetFlow(t *testing.T) {
 			require.Equal(t, 400, resp.StatusCode)
 		}
 
-		// 6a tentativa com o cÃ³digo CORRETO deve falhar (cÃ³digo bloqueado)
+		// A 6a tentativa ERRADA é a que mata o código.
+		//
+		// O teto é `attempts < maxPasswordResetAttempts` no WHERE do
+		// incremento: com attempts=5 o UPDATE não afeta linha, e é aí que o
+		// handler marca used_at e responde "bloqueado". O atacante ganha
+		// exatamente 5 palpites — que é o limite pretendido.
+		//
+		// Este subteste exigia que o código CORRETO já estivesse morto depois
+		// das 5 erradas, o que a implementação não faz (e não precisa fazer:
+		// não muda o número de palpites do atacante, só obrigaria quem errou 5
+		// vezes de digitação a pedir outro código). Como o job de CI nunca
+		// rodou este arquivo, a divergência ficou anos sem aparecer. A asserção
+		// agora fixa o contrato real.
+		zeraRateLimits()
+		resp = doJSON(http.MethodPost, "/auth/reset-password", map[string]string{
+			"user_type":    "client",
+			"identifier":   clientPhone,
+			"code":         "WRONGCODE9",
+			"new_password": "Teste123!",
+		})
+		require.Equal(t, 400, resp.StatusCode)
+		result = decodeJSON(resp)
+		require.Contains(t, result["error"], "bloqueado",
+			"a 6a tentativa errada tem de matar o código")
+
+		// E, morto o código, nem o correto passa mais.
+		zeraRateLimits()
 		resp = doJSON(http.MethodPost, "/auth/reset-password", map[string]string{
 			"user_type":    "client",
 			"identifier":   clientPhone,
 			"code":         code,
 			"new_password": "Teste123!",
 		})
-		require.Equal(t, 400, resp.StatusCode)
-		result = decodeJSON(resp)
-		require.Contains(t, result["error"], "bloqueado")
+		require.Equal(t, 400, resp.StatusCode,
+			"código bloqueado não volta a funcionar nem com o valor certo")
 	})
 
 	// ---- Cleanup ----

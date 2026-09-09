@@ -72,6 +72,43 @@ func CreateOrder(c *fiber.Ctx, sendMessageToClient func(clientID int64, message 
 	request.OrderTotal = serverTotal
 	request.DeliveryValue = serverDelivery
 
+	// ID gerado ANTES do cupom porque o consumo grava coupon_usages.order_id:
+	// o uso precisa apontar para um pedido, senão não dá para auditar (nem
+	// estornar) qual pedido gastou qual cupom.
+	orderID := newLegacyOrderID()
+	request.OrderId = orderID
+
+	// O cupom entra aqui, depois do frete e antes de gravar. O único dado do
+	// cliente é o CÓDIGO; valor, tipo, vigência e limites saem do banco, e o
+	// telefone sai do token — cupom de indicação é pessoal, e lendo o telefone
+	// do corpo qualquer um resgataria o de outra pessoa.
+	tokenPhone, _ := middlewares.GetUserPhoneFromToken(c)
+	subtotal := serverTotal - serverDelivery
+	coupon, couponErr := applyCouponToOrder(
+		request.CouponCode, orderID, tokenPhone, request.EstablishmentId, subtotal, serverDelivery)
+	if couponErr != nil {
+		// Recusar em vez de ignorar o cupom: seguir em frente cobraria o preço
+		// cheio de quem viu o desconto na tela.
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": fmt.Sprintf("cupom: %s", couponErr.Error()),
+		})
+	}
+	if coupon.Discount > 0 {
+		request.CouponCode = coupon.Code
+		request.DiscountAmount = coupon.Discount
+		request.DiscountFundedBy = coupon.FundedBy
+		request.OrderTotal = roundReais(serverTotal - coupon.Discount)
+		if request.OrderTotal < 0 {
+			request.OrderTotal = 0
+		}
+	} else {
+		// Cupom inexistente, ou válido mas sem efeito: o pedido não carrega
+		// resíduo de cupom para o split interpretar depois.
+		request.CouponCode = ""
+		request.DiscountAmount = 0
+		request.DiscountFundedBy = ""
+	}
+
 	// Servidor vence em silêncio, como já acontece com o OrderTotal. Rejeitar
 	// quebraria pedido legítimo sempre que a cotação do app estivesse um pouco
 	// velha; o log é o que mostra se o app saiu de sincronia.
@@ -103,18 +140,19 @@ func CreateOrder(c *fiber.Ctx, sendMessageToClient func(clientID int64, message 
 
 	request.Establishment = *establishment
 
-	// Corte 5: ID público gerado no formato legado (ObjectID hex) para não
-	// quebrar nenhum consumidor; Postgres é a fonte primária, Mongo espelhado.
-	orderID := newLegacyOrderID()
-	request.OrderId = orderID
-
+	// orderID (formato legado, ObjectID hex, para não quebrar consumidor
+	// nenhum) já foi gerado acima, antes do cupom.
 	doc, err := payloadToDoc(orderID, &request)
 	if err != nil {
+		releaseCoupon(request.CouponCode, orderID)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Erro ao serializar a ordem",
 		})
 	}
 	if err := saveOrderPrimary(doc); err != nil {
+		// O uso do cupom já foi gasto; sem o pedido ele ficaria queimado à
+		// toa. Devolve.
+		releaseCoupon(request.CouponCode, orderID)
 		log.Printf("[ORDER] Falha ao persistir pedido: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Erro ao inserir a ordem no banco de dados",

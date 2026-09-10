@@ -20,6 +20,10 @@ jobs:
   health:
     name: Health Check
     runs-on: ubuntu-latest
+    # O check da API agora espera até API_BUDGET (180s) pelo cold start, então
+    # o job pode levar alguns minutos. O teto existe pela lição do lintVital:
+    # job sem timeout que trava fica pendurado até o limite da conta.
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4

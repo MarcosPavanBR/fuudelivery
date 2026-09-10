@@ -289,6 +289,25 @@ jobs:
           fi
 
   # ──────────────────────────────────────────────
+  # Monitor de produção — leitura do /health
+  # ──────────────────────────────────────────────
+  # O verify-deploy.sh cravou "API is down" em 82 execuções seguidas do
+  # Monitor Production (runs 486→567) sem nenhuma queda real: ele lia o 200
+  # com {"status":"starting"} do cold start como queda. Parsing de monitor sem
+  # teste é alarme que mente em silêncio — estes testes rodam sem rede.
+  monitor-script:
+    name: Monitor — verify-deploy.sh
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Testes de leitura do /health (com jq e sem jq)
+        run: bash scripts/verify-deploy_test.sh
+
+      - name: Teste ponta a ponta contra servidor local
+        run: bash scripts/verify-deploy_e2e_test.sh
+
+  # ──────────────────────────────────────────────
   # Vulnerability scanning — all Go modules
   # ──────────────────────────────────────────────
   govulncheck:

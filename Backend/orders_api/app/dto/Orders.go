@@ -80,7 +80,16 @@ type DeliveryMan struct {
 }
 
 type RequestPayload struct {
-	Cart          []CartItem    `json:"cart"`
+	Cart []CartItem `json:"cart"`
+	// Distance é IGNORADO no cálculo do frete desde que o preço passou a sair
+	// da região do endereço (faixa de CEP). Continua no DTO só para app antigo
+	// não quebrar no parse.
+	//
+	// Era o furo: `(distance × perKm) + fixa` com a distância vindo daqui, ou
+	// seja, o cliente escolhia o próprio frete mandando "distance": 0. Quando
+	// o servidor precisa de distância (fallback por km, e o raio de entrega),
+	// ele a calcula com haversine a partir de Location.Coords e das
+	// coordenadas do estabelecimento no banco.
 	Distance      float64       `json:"distance"`
 	Location      Location      `json:"location"`
 	Status        string        `json:"status"`

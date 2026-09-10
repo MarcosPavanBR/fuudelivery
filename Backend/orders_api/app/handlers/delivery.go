@@ -3,8 +3,11 @@ package handlers
 import (
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
+	authModels "github.com/carloshomar/fuudelivery/auth_api/app/models"
+	"github.com/carloshomar/fuudelivery/orders_api/app/dto"
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
@@ -27,6 +30,11 @@ type deliveryFee struct {
 	Value                float64 // o que o cliente paga (0 se a assinatura zerar)
 	BaseValue            float64 // antes do desconto de assinatura
 	SubscriptionDiscount bool
+
+	// RegionName é a região que definiu o preço, vazia quando o preço veio do
+	// fallback por km. Aparece na cotação para o cliente saber por que está
+	// pagando aquilo, e no log para o Marcos ver CEP sem cobertura.
+	RegionName string
 }
 
 // computeDeliveryFee calcula o frete a partir da distância e das configurações
@@ -45,23 +53,104 @@ type deliveryFee struct {
 //
 // orderSubtotal é o valor dos itens (sem frete) e serve ao plano basic, cujo
 // frete grátis depende de um mínimo de compra.
-func computeDeliveryFee(distance float32, establishmentID int64, userID *uint, orderSubtotal float64) (deliveryFee, error) {
-	if establishmentID == 0 {
-		establishmentID = 1 // matriz
+
+// distanciaServidorKm mede do estabelecimento até as coordenadas do pedido.
+//
+// Reusa authModels.HaversineDistance (auth_api/app/models/zone.go), que já
+// existe e é a mesma conta usada pelo motor de despacho — não vale criar uma
+// terceira cópia da fórmula.
+//
+// O ponto importante: as coordenadas do ESTABELECIMENTO vêm do banco, não do
+// corpo. Então nem o cliente nem um app desatualizado conseguem encolher a
+// distância; o máximo que o corpo faz é dizer para onde entregar, e é para lá
+// que o entregador vai.
+//
+// Devolve 0 quando falta coordenada — nesse caso o preço por região continua
+// valendo (não depende de distância), e só o fallback por km fica sem base,
+// caindo na taxa fixa do estabelecimento.
+func distanciaServidorKm(loc dto.Location, establishmentID int64) float64 {
+	if authModels.DB == nil || establishmentID == 0 {
+		return 0
+	}
+	if loc.Coords.Latitude == 0 && loc.Coords.Longitude == 0 {
+		return 0
+	}
+
+	var est authModels.Establishment
+	if err := authModels.DB.Select("lat", "long").First(&est, establishmentID).Error; err != nil {
+		log.Printf("[FRETE] estabelecimento %d sem coordenadas para medir distância: %v", establishmentID, err)
+		return 0
+	}
+	if est.Lat == 0 && est.Long == 0 {
+		return 0
+	}
+
+	return authModels.HaversineDistance(est.Lat, est.Long, loc.Coords.Latitude, loc.Coords.Longitude)
+}
+
+// resolveBaseFee decide o preço BASE do frete (antes de assinatura) para um
+// endereço.
+//
+// Ordem, e o porquê de cada degrau:
+//
+//  1. Região que casa com o CEP. É o caminho normal e o único que não depende
+//     de nada que o cliente escolha além do endereço para onde a comida vai.
+//  2. Sem região, cai na configuração por km do estabelecimento
+//     (fixed_taxa + per_km × distância). Existe só para o período de
+//     transição: enquanto o Marcos não cadastrar as regiões da praça, o
+//     sistema continua vendendo em vez de parar. A distância aqui é a
+//     CALCULADA no servidor, nunca a do corpo.
+//
+// O que NUNCA acontece: frete zero por falta de configuração. Sem região e sem
+// configuração do estabelecimento, o erro sobe e o chamador decide — hoje,
+// cobrar zero com log de aviso, que é o comportamento que já existia e não
+// piora nada.
+func resolveBaseFee(loc dto.Location, establishmentID int64, distanciaKm float64) (float64, string, error) {
+	if regra, ok := models.ResolveRegionFee(loc.Cep, loc.Localidade, loc.UF); ok {
+		if regra.CepEnd-regra.CepStart > 9000000 {
+			// Regra que cobre o país inteiro é a "taxa padrão" que o admin
+			// cadastrou como rede de segurança. Funciona, mas significa que
+			// este CEP não tem região própria — logar é o que faz alguém
+			// cadastrar a faixa certa.
+			log.Printf("[FRETE] CEP %s (%s/%s) sem região específica — usando a faixa geral %q",
+				loc.Cep, loc.Localidade, loc.UF, regra.Name)
+		}
+		return regra.Fee, regra.Name, nil
 	}
 
 	var delivery models.Delivery
 	if err := models.DB.Where("establishment_id = ?", establishmentID).First(&delivery).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return deliveryFee{}, errNoDeliveryConfig
+			return 0, "", errNoDeliveryConfig
 		}
-		return deliveryFee{}, fmt.Errorf("configuração de entrega do estabelecimento %d: %w", establishmentID, err)
+		return 0, "", fmt.Errorf("configuração de entrega do estabelecimento %d: %w", establishmentID, err)
 	}
 
-	baseDeliveryValue := (distance * delivery.PerKm) + delivery.FixedTaxa
+	log.Printf("[FRETE] CEP %q sem região cadastrada — caindo na taxa por km do estabelecimento %d",
+		loc.Cep, establishmentID)
+	return (distanciaKm * float64(delivery.PerKm)) + float64(delivery.FixedTaxa), "", nil
+}
+
+// computeDeliveryFee calcula o frete do ENDEREÇO de entrega.
+//
+// distanciaKm é calculada no SERVIDOR (haversine entre o estabelecimento e as
+// coordenadas do pedido) e serve só ao fallback por km; o preço por região não
+// depende dela. O campo `distance` que o app manda no corpo é ignorado — era
+// ele que permitia pagar só a taxa fixa mandando zero.
+func computeDeliveryFee(loc dto.Location, distanciaKm float64, establishmentID int64, userID *uint, orderSubtotal float64) (deliveryFee, error) {
+	if establishmentID == 0 {
+		establishmentID = 1 // matriz
+	}
+
+	base, regiao, err := resolveBaseFee(loc, establishmentID, distanciaKm)
+	if err != nil {
+		return deliveryFee{}, err
+	}
+
 	result := deliveryFee{
-		Value:     float64(baseDeliveryValue),
-		BaseValue: float64(baseDeliveryValue),
+		Value:      base,
+		BaseValue:  base,
+		RegionName: regiao,
 	}
 
 	if userID == nil || *userID == 0 {
@@ -133,10 +222,14 @@ func computeDeliveryFee(distance float32, establishmentID int64, userID *uint, o
 // divergir do que a criação do pedido calcula.
 func CalculateDeliveryValue(c *fiber.Ctx) error {
 	var request struct {
-		Distance        float32 `json:"distance"`
-		EstablishmentID int64   `json:"establishmentId"`
-		UserID          *uint   `json:"user_id,omitempty"`     // opcional: para verificar frete gratis da assinatura
-		OrderTotal      float64 `json:"order_total,omitempty"` // valor total do pedido para frete gratis
+		// O ENDEREÇO é o que define o preço. `distance` continua sendo aceito
+		// para não quebrar app antigo, mas é ignorado — era ele que permitia
+		// cotar frete de R$0 mandando zero.
+		Location        dto.Location `json:"location"`
+		Distance        float32      `json:"distance"` // ignorado; ver acima
+		EstablishmentID int64        `json:"establishmentId"`
+		UserID          *uint        `json:"user_id,omitempty"`     // opcional: para verificar frete gratis da assinatura
+		OrderTotal      float64      `json:"order_total,omitempty"` // valor total do pedido para frete gratis
 	}
 
 	if err := c.BodyParser(&request); err != nil {
@@ -145,7 +238,10 @@ func CalculateDeliveryValue(c *fiber.Ctx) error {
 		})
 	}
 
-	fee, err := computeDeliveryFee(request.Distance, request.EstablishmentID, request.UserID, request.OrderTotal)
+	fee, err := computeDeliveryFee(
+		request.Location,
+		distanciaServidorKm(request.Location, request.EstablishmentID),
+		request.EstablishmentID, request.UserID, request.OrderTotal)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to fetch delivery settings",
@@ -156,6 +252,7 @@ func CalculateDeliveryValue(c *fiber.Ctx) error {
 		"deliveryValue":        fee.Value,
 		"baseDeliveryValue":    fee.BaseValue,
 		"subscriptionDiscount": fee.SubscriptionDiscount,
+		"region":               fee.RegionName,
 	})
 }
 

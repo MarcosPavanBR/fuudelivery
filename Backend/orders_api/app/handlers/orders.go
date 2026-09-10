@@ -47,10 +47,10 @@ func CreateOrder(c *fiber.Ctx, sendMessageToClient func(clientID int64, message 
 	// O valor enviado pelo cliente (itens do carrinho) nunca é usado — evita
 	// pedido de R$100,00 criado com payload de R$0,01.
 	//
-	// O FRETE entra na mesma regra: era o último valor do corpo que ainda
-	// entrava no total sem conferência. Agora sai de computeDeliveryFee
-	// (distância × perKm + taxa fixa, com o frete grátis da assinatura),
-	// a mesma função que a cotação usa.
+	// O FRETE entra na mesma regra, e agora vai além: o preço sai da REGIÃO
+	// do endereço de entrega (faixa de CEP), não de uma distância que o
+	// cliente mandava no corpo. `request.Distance` é ignorado — era ele que
+	// permitia pagar só a taxa fixa mandando zero.
 	//
 	// O user_id vem do token, não do corpo: é ele que decide se a assinatura
 	// zera o frete, então deixar o cliente escolher seria dar frete grátis a
@@ -63,7 +63,7 @@ func CreateOrder(c *fiber.Ctx, sendMessageToClient func(clientID int64, message 
 
 	clientDeliveryValue := request.DeliveryValue
 	serverTotal, serverDelivery, totalErr := computeOrderTotal(
-		request.Cart, float32(request.Distance), request.EstablishmentId, subscriptionUserID)
+		request.Cart, request.Location, request.EstablishmentId, subscriptionUserID)
 	if totalErr != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": totalErr.Error(),
@@ -113,8 +113,8 @@ func CreateOrder(c *fiber.Ctx, sendMessageToClient func(clientID int64, message 
 	// quebraria pedido legítimo sempre que a cotação do app estivesse um pouco
 	// velha; o log é o que mostra se o app saiu de sincronia.
 	if math.Abs(clientDeliveryValue-serverDelivery) > 0.01 {
-		log.Printf("[ORDER] Frete do cliente (%.2f) diverge do calculado (%.2f) — usando o do servidor (est=%d dist=%.2f)",
-			clientDeliveryValue, serverDelivery, request.EstablishmentId, request.Distance)
+		log.Printf("[ORDER] Frete do cliente (%.2f) diverge do calculado (%.2f) — usando o do servidor (est=%d cep=%q)",
+			clientDeliveryValue, serverDelivery, request.EstablishmentId, request.Location.Cep)
 	}
 
 	if !request.IsScheduled {
@@ -195,13 +195,10 @@ func CreateOrder(c *fiber.Ctx, sendMessageToClient func(clientID int64, message 
 
 // computeOrderTotal recalcula o total do pedido no servidor: preço de cada
 // produto e adicional vem da tabela do banco (não do payload do cliente),
-// multiplicado pela quantidade, somado ao valor de entrega informado.
-func computeOrderTotal(cart []dto.CartItem, distance float32, establishmentID int64, userID *uint) (float64, float64, error) {
+// multiplicado pela quantidade, somado ao frete da REGIÃO do endereço.
+func computeOrderTotal(cart []dto.CartItem, loc dto.Location, establishmentID int64, userID *uint) (float64, float64, error) {
 	if len(cart) == 0 {
 		return 0, 0, fmt.Errorf("carrinho vazio")
-	}
-	if distance < 0 {
-		return 0, 0, fmt.Errorf("distância inválida")
 	}
 	if authModels.DB == nil {
 		return 0, 0, fmt.Errorf("postgres indisponível")
@@ -239,7 +236,8 @@ func computeOrderTotal(cart []dto.CartItem, distance float32, establishmentID in
 	// O frete é calculado AQUI, com a distância e as configurações do
 	// estabelecimento — não aceito do corpo da requisição. O subtotal entra
 	// porque o frete grátis do plano basic depende de um mínimo de compra.
-	fee, feeErr := computeDeliveryFee(distance, establishmentID, userID, subtotal)
+	fee, feeErr := computeDeliveryFee(
+		loc, distanciaServidorKm(loc, establishmentID), establishmentID, userID, subtotal)
 	if errors.Is(feeErr, errNoDeliveryConfig) {
 		// Estabelecimento sem POST /delivery: cobra frete zero em vez de
 		// recusar o pedido. Antes desta mudança computeOrderTotal nem

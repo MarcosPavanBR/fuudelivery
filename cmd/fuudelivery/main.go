@@ -1174,6 +1174,14 @@ func setupOrdersRoutes(app *fiber.App) {
 	app.Post("/delivery", protectedRoute, ordersHandlers.InsertDelivery)
 	app.Post("/delivery/calculate-delivery-value", protectedRoute, ordersHandlers.CalculateDeliveryValue)
 	app.Post("/delivery/calculate-route", protectedRoute, ordersHandlers.CalculateRoute)
+
+	// Regiões de frete (faixa de CEP → preço). adminRequired em todas: quem
+	// define o preço do frete é o dono da plataforma. Uma região é dinheiro em
+	// todo pedido que casar com ela.
+	app.Get("/delivery/regions", adminRequired, ordersHandlers.ListDeliveryRegions)
+	app.Post("/delivery/regions", adminRequired, ordersHandlers.CreateDeliveryRegion)
+	app.Put("/delivery/regions/:id", adminRequired, ordersHandlers.UpdateDeliveryRegion)
+	app.Delete("/delivery/regions/:id", adminRequired, ordersHandlers.DeleteDeliveryRegion)
 	app.Get("/delivery/value/:establishmentId", ordersHandlers.GetDeliveryByEstablishmentID)
 	// Rate limit 30/min na criação de pedidos: é a rota que grava, notifica
 	// e dispara dispatch — abuso direto impacta o banco e a fila.

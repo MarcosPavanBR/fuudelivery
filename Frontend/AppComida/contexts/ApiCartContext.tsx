@@ -223,11 +223,20 @@ export const ApiCartProvider: React.FC<ApiCartProviderProps> = ({
 
   const validDelivery = () => isDeliveryValid(distance, establishment);
 
+  // Cotação do frete. O que decide o preço é o ENDEREÇO de entrega (o servidor
+  // casa o CEP com a região cadastrada), não a distância.
+  //
+  // `distance` continua indo no corpo porque o servidor ainda a aceita para
+  // não quebrar app antigo — mas é ignorada lá. Antes ela era o preço: o
+  // servidor fazia (distance × perKm) + fixa com o número que ESTA tela
+  // mandava, e a distância vinha do GPS do celular, não do endereço. Quem
+  // pedia do trabalho para casa era cobrado pela distância até o trabalho.
   const getValueDelivery = async (ns: number, id: string | number) => {
     try {
       const { data } = await api.post(
         "/delivery/calculate-delivery-value",
         {
+          location,
           distance: ns,
           establishmentId: id,
         }

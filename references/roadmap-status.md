@@ -31,7 +31,7 @@ que foi concluído em cada fase do roadmap de modernização (`fuudelivery-moder
 | Item | Status |
 |---|---|
 | Fila → Redis Streams + consumer groups + retry + DLQ + reclaim | ✅ `pkg/queue` (XAdd/XReadGroup/XAck/XClaim) |
-| `SubscribeFunc` com retry/DLQ no Payment Service | ✅ `Backend/payment_api (monolith)/queue/redis_queue.go` |
+| `SubscribeFunc` com retry/DLQ | ✅ `pkg/queue` (`SubscribeFunc` em `pkg/queue/queue.go`, consumido no monolito `cmd/fuudelivery/main.go`) |
 | Métricas em formato Prometheus (`GET /metrics`) | ✅ `cmd/fuudelivery/pkg/metrics` + contadores no `pkg/queue` |
 | OpenTelemetry (exportação OTLP) | ⏳ SDK não configurado — depende de collector/endpoint (ver nota) |
 

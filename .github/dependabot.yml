@@ -8,7 +8,7 @@
 version: 2
 
 updates:
-  # Módulos Go (monolito + APIs + ETLs + pacotes compartilhados)
+  # Módulos Go (monolito + APIs + pacotes compartilhados)
   - package-ecosystem: gomod
     directory: /cmd/fuudelivery
     schedule:
@@ -69,27 +69,6 @@ updates:
           - "minor"
           - "patch"
     open-pull-requests-limit: 5
-  - package-ecosystem: gomod
-    directory: /cmd/etl-payments
-    schedule:
-      interval: weekly
-    groups:
-      go-minor-patch:
-        update-types:
-          - "minor"
-          - "patch"
-    open-pull-requests-limit: 3
-  - package-ecosystem: gomod
-    directory: /cmd/etl-orders
-    schedule:
-      interval: weekly
-    groups:
-      go-minor-patch:
-        update-types:
-          - "minor"
-          - "patch"
-    open-pull-requests-limit: 3
-
   # Pacotes compartilhados (estavam fora — cegos para CVEs)
   - package-ecosystem: gomod
     directory: /pkg/health

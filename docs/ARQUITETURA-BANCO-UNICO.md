@@ -43,7 +43,7 @@ Não faça isso tudo de uma vez. Sugestão de ordem, do menos arriscado ao mais:
 1. ✅ **`push_tokens`** (script 01) — baixíssimo risco, não é dado financeiro nem afeta fluxo em tempo real. Bom para validar o processo de corte (trocar o código para escrever em Postgres, rodar os dois em paralelo por alguns dias, depois desligar o Mongo).
 2. ✅ **`chat_api`** (script 04) — sem dado financeiro, mas é tempo real (WebSocket). Testa o padrão de corte sob carga de leitura/escrita constante.
 3. ✅ **`delivery_api`** (script 02) — código já migrado: escrita/leitura primárias em Postgres, dual-write Mongo best-effort. Motor de despacho usa o read-model GORM.
-4. ✅ **Pagamentos** (script 03) — código migrado: todos os handlers (`payment_api`) usam GORM/Postgres como primário com dual-write best-effort no Mongo; ETL one-shot disponível em `cmd/etl-payments` (idempotente, não apaga nada). Teste E2E reescrito para Postgres via testcontainers.
+4. ✅ **Pagamentos** (script 03) — código migrado: todos os handlers (`payment_api`) usam GORM/Postgres como primário. Teste E2E reescrito para Postgres via testcontainers.
 
 5. ✅ **Recursos de pedidos** — código migrado: TODOS os handlers do `orders_api` usam Postgres primário com dual-write best-effort no Mongo. Detalhes no corte 5 da tabela abaixo.
 
@@ -54,49 +54,16 @@ Não faça isso tudo de uma vez. Sugestão de ordem, do menos arriscado ao mais:
 | 1. `push_tokens` | ✅ **Código migrado** — escrita primária em Postgres (`models.PushToken`, upsert por user_id+user_type), dual-write Mongo best-effort; leitura 100% Postgres. Bônus: corrigido caminho de envio de push que consultava Mongo por `user_phone` (campo nunca gravado pela escrita — provável caminho morto); agora resolve phone → client_id → tokens. | `orders_api/app/models/push_token.go`, `handlers/notifications.go`, `handlers/orders.go` |
 | 2. `chat_messages` | ✅ **Código migrado** — escrita primária em Postgres (GORM AutoMigrate + tabela sql/04), dual-write Mongo best-effort; leitura e MarkAsRead 100% Postgres. ID agora é BIGSERIAL (era ObjectID). | `chat_api/app/models/{message,database}.go`, `handlers/chat.go` |
 | 3. `delivery_solicitations` | ✅ **Código migrado** — Postgres primário, dual-write legado | `delivery_api/app/handlers/solicitations.go`, `dispatch_handler.go` |
-| 4. Pagamentos/carteiras | ✅ **Código migrado + ETL pronto** — handlers 100% GORM/Postgres com dual-write best-effort; lazy-ETL "on first touch" para carteiras + ferramenta `cmd/etl-payments` para importar histórico completo (payments, wallets, wallet_ledger → wallet_transactions) antes de desligar o Atlas. Suíte E2E reescrita para Postgres (testcontainers). | `payment_api/app/handlers/*`, `payment_api/app/models/{payment,wallet}.go`, `cmd/etl-payments/` |
-| 5. Recursos de pedidos | ✅ **Código migrado** — a tabela `order_documents` guarda o payload completo (JSONB) + colunas tipadas para filtros/índices (`establishment_id`, `user_phone`, `status`, `pickup_code`, agendamento). O ID público continua no formato legado (ObjectID hex) — nenhum cliente precisou mudar. Leitura Postgres-first com **lazy import** do Mongo (pedido antigo é importado no primeiro acesso) e fallback de listagem enquanto o ETL não roda. Teste de integração atualizado: valida persistência em Postgres, dual-write no Mongo e geração de pickup code. | `orders_api/app/models/order_document.go`, `handlers/orders_pg.go`, `handlers/{orders,pickup_code,review,scheduling,reorder}.go` |
+| 4. Pagamentos/carteiras | ✅ **Código migrado** — handlers 100% GORM/Postgres. Suíte E2E reescrita para Postgres (testcontainers). | `payment_api/app/handlers/*`, `payment_api/app/models/{payment,wallet}.go` |
+| 5. Recursos de pedidos | ✅ **Código migrado** — a tabela `order_documents` guarda o payload completo (JSONB) + colunas tipadas para filtros/índices (`establishment_id`, `user_phone`, `status`, `pickup_code`, agendamento). O ID público continua no formato legado (ObjectID hex) — nenhum cliente precisou mudar. Leitura Postgres-first com **lazy import** do Mongo (pedido antigo é importado no primeiro acesso) e fallback de listagem. Teste de integração atualizado: valida persistência em Postgres, dual-write no Mongo e geração de pickup code. | `orders_api/app/models/order_document.go`, `handlers/orders_pg.go`, `handlers/{orders,pickup_code,review,scheduling,reorder}.go` |
 
 **Como desligar o Mongo depois:** remova as chamadas `ConnectMongoDatabase()` e os blocos "dual-write" marcados nos handlers; então remova `MONGO_URI` do Render. Os blocos legados estão todos marcados com comentários "dual-write temporário" no código.
 
-### Runbook do ETL de pagamentos (`cmd/etl-payments`)
+### ✅ Migração histórica concluída (23/08/2026)
 
-Rode UMA vez (idempotente — pode repetir sem duplicar) antes de pausar o Atlas:
+A migração Mongo → Postgres foi executada em produção; o Atlas foi aposentado. Os ETLs one-shot que fizeram a importação foram removidos junto com o código de dual-write.
 
-```bash
-cd cmd/etl-payments && GOWORK=off go build -o etl-payments .
-DB_CONNECTION_STRING="postgres://..." \
-MONGO_URI="mongodb+srv://..." \
-PAYMENT_MONGO_DATABASE="fuudelivery_payments" \
-./etl-payments
-```
-
-O que faz: importa `payments` (dedup por abacatepay_id ou order_id+amount), cria carteiras que só existem no Mongo (**nunca sobrescreve saldo Postgres**) com lançamento de auditoria, e importa o `wallet_ledger` antigo para `wallet_transactions` (dedup por tupla característica). Não apaga nada em nenhum banco. Confira o resumo impresso ao final contra os totais do Atlas.
-
-Depois de 1 ciclo financeiro de dual-write observado + ETL validado: execute o ETL de pedidos (abaixo) e só então remova o Atlas.
-
-### Runbook do ETL de pedidos
-
-O corte 5 tem lazy import por pedido individual, mas para desligar o Atlas sem lacunas em LISTAGENS (pedidos antigos só aparecem nas listas depois do ETL), rode uma vez:
-
-```bash
-cd cmd/etl-orders && GOWORK=off go build -o etl-orders .
-DB_CONNECTION_STRING="postgres://..." \
-MONGO_URI="mongodb+srv://..." \
-MONGO_DATABASE="fuudelivery" \
-./etl-orders
-```
-
-Idempotente (dedup por `legacy_id`), não apaga nada nos dois lados. Confira os totais impressos contra o Atlas antes de pausá-lo.
-
-### ✅ ETLs executados em produção (23/08/2026)
-
-| Ferramenta | Resultado |
-|---|---|
-| `etl-payments` | 1 pagamento importado; 0 carteiras a criar (Atlas sem carteiras fora do Postgres); 0 ledger antigo |
-| `etl-orders` | 0 documentos na collection `orders` do Atlas (nenhum pedido pré-migração) — nada a importar |
-
-Durante o ETL foi descoberto e **corrigido em produção** um bug de schema: tabelas legadas vazias com `id TEXT` (era Mongo) bloqueavam o `CREATE TABLE IF NOT EXISTS` dos scripts 01–03, e o AutoMigrate do GORM não altera coluna existente — a tabela `payments` tinha `id TEXT`, quebrando TODO insert de pagamento. Reparo aplicado manualmente e registrado como script idempotente `sql/09_reparo_tabelas_legado_texto.sql` para ambientes futuros.
+Durante a migração foi descoberto e **corrigido em produção** um bug de schema: tabelas legadas vazias com `id TEXT` (era Mongo) bloqueavam o `CREATE TABLE IF NOT EXISTS` dos scripts 01–03, e o AutoMigrate do GORM não altera coluna existente — a tabela `payments` tinha `id TEXT`, quebrando TODO insert de pagamento. Reparo aplicado manualmente e registrado como script idempotente `sql/09_reparo_tabelas_legado_texto.sql` para ambientes futuros.
 
 Achados adicionais da auditoria de 23/08:
 
@@ -104,12 +71,9 @@ Achados adicionais da auditoria de 23/08:
 2. As colunas `kind`/`destination` do ledger só existiam via AutoMigrate; versionadas em `sql/10_wallet_ledger_kind.sql` (aplicado em produção).
 3. A tabela `schema_migrations` não existia no banco de produção (script 00 nunca rodou lá). Criada manualmente; o changelog de produção começa na versão 10. Recomendação: rodar `sql/run_all.sh --so-testes` e depois avaliar aplicar 00–08 completos em janela planejada (06/RLS merece revisão antes, pois muda privilégios).
 
-### ⏰ Critério com data para desligar o Atlas
+### ✅ Atlas desligado
 
-"Esperar 1 ciclo financeiro" sem data vira "esperar para sempre". Marcado:
-
-- **Data limite de revisão: 22/09/2026** (30 dias após o ETL de 23/08). Na revisão: re-rodar ambos os ETLs (agora seguros para re-execução — pulam linhas já existentes), comparar totais contra o Atlas e decidir a remoção do `MONGO_URI`.
-- Antes de pausar o Atlas, **confirmar que as collections do antigo `Backend/Payment`** (`chargebacks`, `chargeback_evidence`, `payout_requests`, `payment_approval_rules`, `payment_admin_users`) estão vazias — o `cmd/etl-payments` não as migra por não haver caminho primário nelas; se houver dado real, estender o ETL primeiro.
+A migração foi concluída e o `MONGO_URI` foi removido do Render — não há mais dependência de MongoDB em runtime, nem ETL a re-executar. O custo do Atlas está zerado e o `/health` não lista mais dependência Mongo.
 
 ## Por que RLS não pode copiar o padrão `auth.uid()`
 

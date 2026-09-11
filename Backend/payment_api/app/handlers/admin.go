@@ -16,7 +16,7 @@ import (
 
 // ============================================================================
 // Painel admin — corte 4: todas as consultas agora vêm do Postgres.
-// Histórico anterior ao corte só aparece depois de rodar cmd/etl-payments.
+// Histórico anterior ao corte já foi importado na migração banco-único.
 // ============================================================================
 
 // ListAllPayments lista os últimos 500 pagamentos (mais recentes primeiro),

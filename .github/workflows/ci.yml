@@ -25,8 +25,6 @@ jobs:
           - Backend/chat_api
           - pkg/health
           - pkg/queue
-          - cmd/etl-payments
-          - cmd/etl-orders
     defaults:
       run:
         working-directory: ${{ matrix.module }}
@@ -139,8 +137,8 @@ jobs:
           cache-dependency-path: Backend/payment_api/go.sum
 
       - name: Start Docker service (Postgres)
-        # Mesmo padrão comprovado do job e2e-delivery: "docker run" cru +
-        # pg_isready. O teste detecta POSTGRES_TEST_URI e conecta direto.
+        # Padrão comprovado: "docker run" cru + pg_isready. O teste detecta
+        # POSTGRES_TEST_URI e conecta direto.
         run: |
           docker run -d --name pg-pay -p 5432:5432 -e POSTGRES_USER=test -e POSTGRES_PASSWORD=test -e POSTGRES_DB=payment_e2e_test postgres:16-alpine
           for i in $(seq 1 30); do
@@ -307,8 +305,6 @@ jobs:
           - Backend/chat_api
           - pkg/health
           - pkg/queue
-          - cmd/etl-payments
-          - cmd/etl-orders
     defaults:
       run:
         working-directory: ${{ matrix.module }}
@@ -499,41 +495,6 @@ jobs:
           fi
           echo "Checking: $scripts"
           shellcheck -S warning --exclude=SC1091 $scripts
-
-  # ──────────────────────────────────────────────
-  # Delivery E2E — dual-write PG+Mongo via testcontainers
-  # ──────────────────────────────────────────────
-  e2e-delivery:
-    name: E2E — Delivery (dual-write)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      # FIXADO em 1.25.x, igual aos demais jobs (ver comentário na matriz go-modules).
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.25.x"
-          cache-dependency-path: cmd/fuudelivery/go.sum
-
-      - name: Start Docker services (Postgres)
-        run: |
-          docker run -d --name pg-e2e -p 5432:5432 -e POSTGRES_USER=test -e POSTGRES_PASSWORD=test -e POSTGRES_DB=fuudelivery_delivery postgres:16-alpine
-          for i in $(seq 1 30); do
-            docker exec pg-e2e pg_isready -U test 2>/dev/null && break
-            sleep 1
-          done
-          echo "Services ready."
-
-      - name: Run Delivery E2E tests
-        working-directory: cmd/fuudelivery
-        run: |
-          go test -tags=integration -v -count=1 -timeout=5m \
-            -run 'TestDeliveryLifecycle|TestDeliverySolicitationsDualWrite' \
-            .
-
-      - name: Cleanup Docker services
-        if: always()
-        run: docker rm -f pg-e2e 2>/dev/null || true
 
   # ──────────────────────────────────────────────
   # Mobile — TypeScript type-check + tests

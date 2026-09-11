@@ -153,11 +153,10 @@ em < 10 min, com rollback testado.
 ## Fase 4 — Backend: cortes restantes + robustez ✅ EXECUTADA (2026-08-23)
 
 > Cortes 3 e 4 concluídos no código: handlers de delivery e pagamentos usam
-> Postgres/GORM como primário com dual-write best-effort; ETL one-shot em
-> `cmd/etl-payments`; suíte E2E reescrita para testcontainers-postgres.
+> Postgres/GORM como primário; suíte E2E reescrita para testcontainers-postgres.
 > Restante: corte 5 (`pickup_code`/`review`/`scheduling`/`reorder` ainda no
 > Mongo) + desligar o Atlas após ciclo financeiro de observação. Ver
-> `docs/ARQUITETURA-BANCO-UNICO.md` para status detalhado e runbook do ETL.
+> `docs/ARQUITETURA-BANCO-UNICO.md` para status detalhado.
 
 Histórico original:
 

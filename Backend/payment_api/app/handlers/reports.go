@@ -18,7 +18,7 @@ import (
 // JWT — o dono só vê o relatório do próprio restaurante).
 //
 // Fonte: tabela payments no Postgres (corte 4). Histórico anterior ao corte
-// só aparece depois de rodar cmd/etl-payments.
+// já foi importado na migração banco-único.
 //
 // A resposta inclui os DOIS formatos (snake_case para o DashboardCharts e
 // camelCase para a página de Relatórios) para compatibilidade com o

@@ -98,7 +98,6 @@ Todas as portas ficam **presas a `127.0.0.1`** — o **nginx instalado no host**
 | React | 19 | `Frontend/*/package.json` |
 | Expo SDK (apps mobile — fora do VPS) | 54 | `Frontend/AppComida`, `Frontend/AppEntrega` |
 | PostgreSQL | nuvem (Supabase) | `.env` → `DB_CONNECTION_STRING` |
-| MongoDB | nuvem (Atlas) | `.env` → `MONGO_URI` |
 
 ### Atualizar o PDF
 
@@ -189,9 +188,9 @@ nano .env   # preencha com seus valores reais
 | `APP_URL` | URL pública do painel do restaurante | `https://restaurante.suaempresa.com` |
 | `PAYMENT_API_BASE_URL` | URL pública do Payment Service (build do WebAdmin) | `https://payment.suaempresa.com` |
 | `DB_CONNECTION_STRING` | PostgreSQL Supabase (pooler) | `postgresql://postgres:...@aws-0-...pooler.supabase.com:6543/postgres?pgbouncer=true` |
-| `MONGO_URI` | MongoDB Atlas | `mongodb+srv://user:pass@cluster0.xxxxx.mongodb.net/fuudelivery` |
-| `MONGO_DATABASE` | Banco do monolito | `fuudelivery` |
-| `PAYMENT_MONGO_DATABASE` | Banco do Payment Service | `fuudelivery_payments` |
+
+> **Nota:** `MONGO_URI`/`MONGO_DATABASE`/`PAYMENT_MONGO_DATABASE` não são mais usados —
+> o MongoDB Atlas foi aposentado (banco único = Postgres). Não defina essas variáveis.
 | `REDIS_URL` | **Dentro do compose use `redis://redis:6379`** (nome do serviço). Se usar Redis gerenciado, aponte aqui e remova o serviço `redis` do compose | `redis://redis:6379` |
 | `ABACATE_PAY_API_KEY` | Chave da AbacatePay | `abc_...` |
 | `ABACATE_PAY_WEBHOOK_SECRET` | Secret do webhook (mesmo valor cadastrado na AbacatePay) | `whsec_...` |
@@ -487,7 +486,7 @@ docker stats                                         # CPU/RAM dos contêineres
 | Sintoma | Causa provável | Solução |
 |---|---|---|
 | `curl 127.0.0.1:3000/health` não responde | Build falhou / contêiner caiu | `docker compose logs fuudelivery-api`, `docker compose ps` |
-| `/health` mostra `mongodb: down` | `MONGO_URI` errado ou IP não autorizado no Atlas | Corrija o `.env`; no Atlas, libere o **IP do VPS** em Network Access |
+| `/health` mostra `mongodb: down` | Variável `MONGO_URI` definida à toa (Atlas aposentado) | Remova `MONGO_URI`/`MONGO_*` do `.env` — o banco único é Postgres e o `/health` só pinga Postgres/Redis |
 | `/health` mostra `postgres: down` | `DB_CONNECTION_STRING` errada | Confira pooler/usuário/senha no Supabase |
 | `/health` mostra `redis: down` | `REDIS_URL` errado (fora do compose) | Dentro do compose use `redis://redis:6379` |
 | 502 Bad Gateway no nginx | Contêiner ainda não subiu ou porta errada | `docker compose ps`; confira `proxy_pass` e a porta mapeada |

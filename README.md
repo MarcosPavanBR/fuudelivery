@@ -100,7 +100,7 @@ Fork do [vercardapio/appdelivery](https://github.com/carloshomar/appdelivery) es
 └───────────────────────────┘  └─────────────────────────────────────┘
 ```
 
-**Banco único:** o PostgreSQL (Supabase) é o banco primário de todos os domínios. O MongoDB Atlas sobrevive apenas como *dual-write* legado opcional — basta não definir `MONGO_URI` para desligá-lo. A migração é feita pelos ETLs idempotentes `cmd/etl-orders` e `cmd/etl-payments`. Detalhes em [`docs/ARQUITETURA-BANCO-UNICO.md`](docs/ARQUITETURA-BANCO-UNICO.md).
+**Banco único:** o PostgreSQL (Supabase) é o banco primário de todos os domínios. O MongoDB Atlas era usado apenas como *dual-write* legado e já foi aposentado — não defina `MONGO_URI`. Detalhes em [`docs/ARQUITETURA-BANCO-UNICO.md`](docs/ARQUITETURA-BANCO-UNICO.md).
 
 > Os serviços isolados `fuudelivery-payment` e `fuudelivery-payment-panel` foram **removidos do Render (2026-08)**: todas as rotas de pagamento vivem no monolito. O painel standalone foi arquivado em `legacy/PaymentPanel/` e substituído pela aba **Financeiro** do WebAdmin.
 
@@ -181,10 +181,8 @@ fuudelivery/
 │   ├── chat_api/             # Chat por pedido via WebSocket
 │   └── storage/supabase.go   # Upload de imagens (Supabase Storage)
 ├── cmd/
-│   ├── fuudelivery/          # Monolito principal (aglutina os 5 APIs) + pkg interno:
-│   │                         #   health/ · queue/ · storage/ · upload/ · metrics/ · search/
-│   ├── etl-orders/           # ETL one-shot Mongo → Postgres (orders → order_documents)
-│   └── etl-payments/         # ETL one-shot Mongo → Postgres (payments/wallets/ledger)
+│   └── fuudelivery/          # Monolito principal (aglutina os 5 APIs) + pkg interno:
+│                             #   health/ · queue/ · storage/ · upload/ · metrics/ · search/
 ├── pkg/
 │   ├── gateway/              # Camada de abstração multi-gateway (interface Gateway + Router + CircuitBreaker)
 │   │   ├── gateway.go        # Interface Gateway + tipos + enums (PaymentMethod, SplitRule, etc.)
@@ -233,7 +231,7 @@ Os módulos Go individuais seguem a convenção `app/{handlers,models,routes,dto
   - `14–16` — **multi-gateway**: recipients (sub-contas), split_rules (divisão de valores), colunas gateway na tabela payments
 - Dicionário completo de tabelas: [`docs/banco-de-dados.md`](docs/banco-de-dados.md)
 - Regras para alterar o schema (obrigatórias): [`skills/fuudelivery-banco-unico/SKILL.md`](skills/fuudelivery-banco-unico/SKILL.md)
-- Migração Mongo → Postgres: rode os binários `cmd/etl-orders` e `cmd/etl-payments` (idempotentes)
+- Migração Mongo → Postgres concluída — o Atlas foi aposentado; nada mais a migrar
 
 ## Como Rodar
 

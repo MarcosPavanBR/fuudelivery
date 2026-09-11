@@ -24,7 +24,7 @@
 
 ## 2. MongoDB Atlas (dual-write legado)
 
-1. Atlas → Database Access → user `pavanbrtl050_db_user` → **Edit Password** (gerar forte).
+1. Atlas → Database Access → user `<USUARIO>` → **Edit Password** (gerar forte).
 2. Render Environment → `MONGO_URI` com a nova senha.
 3. Observação: em ~22/09 o Atlas é aposentado (ver ARQUITETURA-BANCO-UNICO.md);
    mesmo assim rotacione agora — a senha está exposta.

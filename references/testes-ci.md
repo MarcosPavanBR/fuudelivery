@@ -1,5 +1,10 @@
 # Testes e CI — FuuDelivery
 
+> ⚠️ **Estado dos bancos nos testes (atualizado 2026-09-11):** a suíte de integração
+> usa **Postgres real** (testcontainers/`docker run`) — **nenhum teste sobe MongoDB**.
+> O Atlas foi aposentado (banco único = Postgres) e o `Payment` isolado foi removido;
+> seções abaixo que citam MongoDB referem-se ao código arquivado em `legacy/Payment`.
+
 ## Estado atual (2026-07-31)
 
 ### CI atual (`.github/workflows/ci.yml`)
@@ -83,22 +88,23 @@ steps:
 
 ### O que falta (backlog)
 
-#### 1. Testes de integração para chargeback com MongoDB
-- Hoje: só testes unitários do chargeback_service
-- Necessário: teste de integração que cria chargeback → debita carteira → verifica saldo
+#### 1. Testes de integração para chargeback com MongoDB — OBSOLETO
+> ✅ Obsoleta: o chargeback vivia no `Payment` arquivado; não há mais o que integrar
+> com MongoDB. Em `payment_api`, o equivalente (estorno/débito de carteira) já tem
+> cobertura de idempotência em `wallet_test.go`/`wallet_idempotency_test.go`.",
 
 #### 2. Testes E2E completos
 - Fluxo: pedido → pagamento → aprovação → split → carteira
-- Requer: mock do AbacatePay + MongoDB + Redis
+- Requer: mock do AbacatePay + Postgres + Redis (Mongo não é mais necessário)
+- Parcialmente atendido pelos E2E de checkout/webhook (`TestCheckoutE2E_*`, Postgres real)
 
 #### 3. Frontend CI mais completo
 - Hoje: só WebRestaurant tem test + build
 - Pendente: WebAdmin e PaymentPanel
 
-#### 4. Shared MongoDB container
-- Cada teste de integração sobe um container separado (~5-10s cada)
-- Ideal: TestMain ou Repository struct para compartilhar
-- Reduziria tempo de CI significativamente
+#### 4. Shared MongoDB container — OBSOLETO
+> ✅ Obsoleta junto com o Atlas: a suíte compartilha Postgres por job e o tempo de CI
+> já reflete isso. Encerrado sem ação.
 
 ---
 
@@ -138,4 +144,4 @@ govulncheck ./...
 
 ---
 
-*Última atualização: 2026-07-31*
+*Última atualização: 2026-09-11 (Mongo/Atlas aposentado nas seções de backlog)*

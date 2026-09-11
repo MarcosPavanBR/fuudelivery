@@ -31,14 +31,14 @@ O arquivo `.fuudelivery-config/CREDENTIALS.md` foi commitado no repositório pú
 
 ```bash
 # 1. Acesse https://cloud.mongodb.com
-# 2. Database Access → Usuário pavanbrtl050_db_user → Edit
+# 2. Database Access → Usuário <USUARIO> → Edit
 # 3. Regenerate Password → copie a nova senha
 # 4. Atualize MONGODB_URI no Render (Payment Service e API)
 ```
 
 Nova connection string:
 ```
-mongodb+srv://pavanbrtl050_db_user:NOVA_SENHA@fuudelivery.hj0pytw.mongodb.net/fuudelivery?retryWrites=true&w=majority&appName=fuudelivery
+mongodb+srv://<USUARIO>:<NOVA_SENHA>@<CLUSTER>.mongodb.net/fuudelivery?retryWrites=true&w=majority&appName=<APP>
 ```
 
 #### Passo 2 — Supabase (PostgreSQL)
@@ -52,7 +52,7 @@ mongodb+srv://pavanbrtl050_db_user:NOVA_SENHA@fuudelivery.hj0pytw.mongodb.net/fu
 
 Nova connection string:
 ```
-postgresql://postgres.prpfuoqhazfynpsfsrpb:NOVA_SENHA@aws-1-us-east-2.pooler.supabase.com:6543/postgres
+postgresql://<USUARIO>:<NOVA_SENHA>@<HOST>.pooler.supabase.com:6543/postgres
 ```
 
 #### Passo 3 — Redis (provedor EXTERNO, não é serviço Render)

@@ -6,6 +6,9 @@
 > não use este documento como retrato do estado atual — consulte o README e o CI.
 > As menções históricas a `Backend/payment_api (monolith)` referem-se a código que foi arquivado e
 > removido do repositório — todo o código de pagamento ativo vive em `payment_api`.
+> Idem para **MongoDB/Atlas**: hoje o banco é Postgres único (`/health` só pinga Postgres;
+> Redis degrada com 200) e o split vive em tabelas — qualquer menção a "verificar split no
+> Mongo", credenciais de Atlas ou ETLs `cmd/etl-*` é retrato de época; os ETLs foram removidos.
 
 > ⚠️ **`Backend/payment_api (monolith)` foi arquivado e removido do repositório.** Todo o código
 > de pagamento ativo vive em `payment_api` (embutido no monolito `cmd/fuudelivery`).

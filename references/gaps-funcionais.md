@@ -5,6 +5,11 @@
 > de pagamento ativo vive em `payment_api` (embutido no monolito `cmd/fuudelivery`).
 > As menções a `Backend/payment_api (monolith)` neste documento são **históricas** — não edite,
 > não busque e não rode comandos apontando para esse diretório.
+>
+> ⚠️ **MongoDB/Atlas já foi aposentado (banco único = Postgres, migracao concluída).** As
+> seções de tech-debt que mencionam containers MongoDB no teste, `repository/mongo.go` e
+> aggregation pipelines do Mongo referem-se ao código arquivado — nada disso roda mais.
+> Os ETLs `cmd/etl-orders`/`cmd/etl-payments` foram removidos por não restar nada a migrar.
 ## TODOs (resolvidos ✅)
 
 ### 1. Pagamento — Ponte entre monólito e Payment Service ✅
@@ -87,7 +92,12 @@
 
 ## Duplicação: payment_api vs Backend/payment_api (monolith)
 
-### O que existe
+> ✅ **RESOLVIDO (2026-08)**: a duplicação acabou — o `Payment` isolado foi removido do
+> Render e arquivado em `legacy/Payment`; todas as rotas de pagamento (carteiras,
+> relatórios, webhooks, split) vivem no `payment_api` embutido no monolito, 100% Postgres.
+> A tabela e o texto abaixo descrevem a arquitetura **antiga**, mantida como registro.
+
+### O que existia
 
 | Módulo | Localização | Banco | Escopo |
 |---|---|---|---|
@@ -176,18 +186,17 @@ O README.md foi atualizado em 2026-07-26 para refletir o FuuDelivery:
 - [ ] Publicar AppEntrega no Google Play / App Store
 - [ ] Configurar push notifications (Firebase)
 
-### Shared MongoDB container nos testes (tech-debt)
+### Shared MongoDB container nos testes (tech-debt) — OBSOLETO
 
-- [ ] Cada teste de integração sobe um container MongoDB separado
-- [ ] Ideal: usar TestMain ou Repository struct para compartilhar container
-- [ ] Reduziría tempo de CI de ~5min para ~1min
+> ✅ Obsoleta: não há mais teste nenhum subindo MongoDB — a suíte de integração usa
+> Postgres real (testcontainers/`docker run`). Item encerrado sem ação.
 
-### Repository struct/interface (tech-debt)
+### Repository struct/interface (tech-debt) — OBSOLETO
 
-- [ ] Introduzir `Repository` struct para desacoplar globals do `repository/mongo.go`
-- [ ] Permitir injeção de dependência nos service constructors
-- [ ] Melhorar testabilidade e reduzir acoplamento
+> ✅ Obsoleta: o `repository/mongo.go` citado pertence ao código arquivado em
+> `legacy/Payment`. O desacoplamento por injeção de dependência segue valendo como
+> princípio, mas o alvo concreto não existe mais.
 
 ---
 
-*Última atualização: 2026-07-31*
+*Última atualização: 2026-09-11 (aposentadoria do Atlas/ETLs marcada; duplicação Payment encerrada)*

@@ -1,9 +1,28 @@
 # monitor.yml — Scheduled production health checks
 #
-# Runs verify-deploy.sh against the live FuuDelivery services every 30 minutes.
-# The job FAILS whenever any service is unhealthy (script exit code = failure count),
-# which surfaces as a red run in GitHub Actions and can be wired to notifications.
-# A workflow_dispatch trigger allows on-demand checks from the Actions tab.
+# Roda o verify-deploy.sh contra a produção. O job FALHA quando algum serviço
+# está fora do ar (o exit code do script é a contagem de falhas), o que aparece
+# como run vermelha no Actions. workflow_dispatch permite checar sob demanda.
+#
+# ATENÇÃO — A CADÊNCIA REAL NÃO É A DECLARADA.
+#
+# O cron abaixo pede 30 minutos. Medindo os 99 intervalos entre as execuções
+# agendadas de 26/08 a 10/09:
+#
+#   mínimo    47 min
+#   mediana  212 min  (3h32)
+#   média    228 min
+#   máximo   776 min  (quase 13 horas)
+#
+# NENHUM dos 99 intervalos chegou perto de 30 minutos. O GitHub despriorizA
+# schedules de alta frequência em runners compartilhados e atrasa ou descarta
+# execuções sob carga — comportamento documentado, não bug deste repositório.
+#
+# Consequência prática: este workflow é uma REDE DE SEGURANÇA, não um alarme.
+# A produção pode ficar fora do ar por horas antes de ele rodar. Para
+# monitoramento de verdade (checagem a cada 1-5 min e notificação no celular),
+# use um serviço externo apontando para /health — o endpoint /metrics já existe
+# com METRICS_TOKEN justamente para UptimeRobot/BetterStack/Grafana.
 name: Monitor Production
 
 on:
@@ -20,6 +39,10 @@ jobs:
   health:
     name: Health Check
     runs-on: ubuntu-latest
+    # O check da API agora espera até API_BUDGET (180s) pelo cold start, então
+    # o job pode levar alguns minutos. O teto existe pela lição do lintVital:
+    # job sem timeout que trava fica pendurado até o limite da conta.
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4

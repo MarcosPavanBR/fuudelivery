@@ -23,6 +23,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	paymentHandlers "github.com/carloshomar/fuudelivery/payment_api/app/handlers"
 	"github.com/carloshomar/fuudelivery/pkg/queue"
 )
 
@@ -120,7 +121,61 @@ func PrometheusText() string {
 	// --- Metricas da fila (pkg/queue) ---
 	writeQueueMetrics(&b)
 
+	// --- Rede de seguranca do caminho do dinheiro ---
+	writeReconciliationMetrics(&b)
+
 	return b.String()
+}
+
+// DLQDepthFunc devolve quantos pedidos estao esperando entregador na DLQ do
+// dispatch. E um hook porque o motor de matching vive no pacote main, que este
+// pacote nao pode importar; o main atribui isto na inicializacao.
+var DLQDepthFunc func() int
+
+// writeReconciliationMetrics expoe a rede de seguranca do pagamento.
+//
+// Estas quatro linhas sao o que transforma o job de reconciliacao de "mais um
+// log" em algo acionavel:
+//
+//   - healed_total subindo com frequencia NAO e boa noticia. Significa que o
+//     caminho sincrono do webhook esta falhando e a rede esta segurando a
+//     queda. A causa e que precisa ser investigada.
+//   - pending que sobe e nao volta a zero significa que a propria reconciliacao
+//     esta falhando — dinheiro parado sem ninguem para buscar.
+//   - orders_stuck e pedido pago que nunca recebeu entregador.
+//   - dlq_depth e a fila de pedidos que nao acharam entregador.
+func writeReconciliationMetrics(b *strings.Builder) {
+	healed, failed, last, lastRun := paymentHandlers.ReconciliationSnapshot()
+
+	fmt.Fprintf(b, "# HELP fuudelivery_reconciliation_healed_total Pagamentos liquidados pela reconciliacao (o webhook sincrono falhou).\n")
+	fmt.Fprintf(b, "# TYPE fuudelivery_reconciliation_healed_total counter\n")
+	fmt.Fprintf(b, "fuudelivery_reconciliation_healed_total %d\n", healed)
+
+	fmt.Fprintf(b, "# HELP fuudelivery_reconciliation_failed_total Tentativas de liquidacao que continuaram falhando.\n")
+	fmt.Fprintf(b, "# TYPE fuudelivery_reconciliation_failed_total counter\n")
+	fmt.Fprintf(b, "fuudelivery_reconciliation_failed_total %d\n", failed)
+
+	fmt.Fprintf(b, "# HELP fuudelivery_reconciliation_pending Pagamentos CONFIRMED sem credito na carteira na ultima passada.\n")
+	fmt.Fprintf(b, "# TYPE fuudelivery_reconciliation_pending gauge\n")
+	fmt.Fprintf(b, "fuudelivery_reconciliation_pending %d\n", last.Pending)
+
+	fmt.Fprintf(b, "# HELP fuudelivery_orders_stuck Pedidos pagos que continuam sem entregador.\n")
+	fmt.Fprintf(b, "# TYPE fuudelivery_orders_stuck gauge\n")
+	fmt.Fprintf(b, "fuudelivery_orders_stuck %d\n", last.StuckOrders)
+
+	fmt.Fprintf(b, "# HELP fuudelivery_reconciliation_last_run_seconds Segundos desde a ultima passada (0 = nunca rodou).\n")
+	fmt.Fprintf(b, "# TYPE fuudelivery_reconciliation_last_run_seconds gauge\n")
+	var desde int64
+	if !lastRun.IsZero() {
+		desde = int64(time.Since(lastRun).Seconds())
+	}
+	fmt.Fprintf(b, "fuudelivery_reconciliation_last_run_seconds %d\n", desde)
+
+	if DLQDepthFunc != nil {
+		fmt.Fprintf(b, "# HELP fuudelivery_dispatch_dlq_depth Pedidos na dead-letter queue do dispatch (sem entregador).\n")
+		fmt.Fprintf(b, "# TYPE fuudelivery_dispatch_dlq_depth gauge\n")
+		fmt.Fprintf(b, "fuudelivery_dispatch_dlq_depth %d\n", DLQDepthFunc())
+	}
 }
 
 // writeQueueMetrics adiciona os contadores da fila (pkg/queue singleton).

@@ -50,7 +50,11 @@ func setupCreateOrder(t *testing.T) *fiber.App {
 		t.Fatalf("semear estabelecimento: %v", err)
 	}
 
-	seedDelivery(t, 1, 5.00, 2.00) // frete = 5 + 2/km
+	// Frete 11,00 vindo da REGIÃO do endereço. Estes testes são sobre cupom,
+	// não sobre frete: a região mantém o mesmo 11,00 que a antiga conta por km
+	// dava, para as contas de desconto continuarem as mesmas.
+	seedRegiao(t, "Centro", "01000000", "01999999", 11.00)
+	seedDelivery(t, 1, 5.00, 2.00) // fallback, não deve ser usado
 	seedProduct(t, 100, 1, 30.00)
 
 	t.Setenv("JWT_SECRET", createOrderSecret)
@@ -79,6 +83,7 @@ func tokenComTelefone(t *testing.T, phone string) string {
 // `extra` entra cru para poder mandar campo que o cliente não deveria mandar.
 func corpoDoPedido(extra string) string {
 	base := `"cart":[{"item":{"id":100},"quantity":2}],"distance":3,"establishmentId":1,
+		"location":{"cep":"01310100","localidade":"São Paulo","uf":"SP"},
 		"user":{"phone":"+5511999900001"},"deliveryValue":11`
 	if extra != "" {
 		base += "," + extra
@@ -236,6 +241,7 @@ func TestCreateOrder_TelefoneDoCorpoNaoResgataCupomPessoal(t *testing.T) {
 
 	// Token de OUTRA pessoa, corpo alegando ser o dono do cupom.
 	corpo := `{"cart":[{"item":{"id":100},"quantity":2}],"distance":3,"establishmentId":1,
+		"location":{"cep":"01310100","localidade":"São Paulo","uf":"SP"},
 		"user":{"phone":"+5511999900001"},"coupon_code":"INDICA"}`
 	resp, out := postPedido(t, app, tokenComTelefone(t, "+5511999900002"), corpo)
 

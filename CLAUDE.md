@@ -14,7 +14,7 @@ este projeto. Instale uma vez por ambiente:
 - **Backend**: Go (`go.work`), monorepo de módulos — `Backend/auth_api`,
   `Backend/chat_api`, `Backend/delivery_api`, `Backend/orders_api`,
   `Backend/payment_api`, monólito `cmd/fuudelivery` e pacotes partilhados
-  (`pkg/gateway`, `pkg/outbox`, `pkg/queue`, `pkg/featureflags`, `pkg/health`,
+  (`pkg/gateway`, `pkg/queue`, `pkg/featureflags`, `pkg/health`,
   `pkg/sanitizer`).
 - **Banco**: consolidação para **Postgres único (Supabase)** em andamento —
   ver `docs/ARQUITETURA-BANCO-UNICO.md` e `skills/fuudelivery-banco-unico/`

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { FiMenu, FiX, FiHome, FiUsers, FiShoppingBag, FiTruck, FiCreditCard, FiSettings, FiLogOut, FiBarChart2, FiChevronLeft, FiKey, FiTag } from "react-icons/fi";
+import { FiMenu, FiX, FiHome, FiUsers, FiShoppingBag, FiTruck, FiCreditCard, FiSettings, FiLogOut, FiBarChart2, FiChevronLeft, FiKey, FiTag, FiMapPin } from "react-icons/fi";
 
 const iconMap = {
   dashboard: FiBarChart2,
@@ -13,6 +13,7 @@ const iconMap = {
   settings: FiSettings,
   "password-resets": FiKey,
   cupons: FiTag,
+  regioes: FiMapPin,
 };
 
 const menuItems = [
@@ -23,6 +24,7 @@ const menuItems = [
   { path: "/delivery-men", label: "Entregadores", iconKey: "delivery-men" },
   { path: "/financeiro", label: "Financeiro", iconKey: "payments" },
   { path: "/cupons", label: "Cupons", iconKey: "cupons" },
+  { path: "/regioes", label: "Regiões", iconKey: "regioes" },
   { path: "/password-resets", label: "Reset de Senha", iconKey: "password-resets" },
   { path: "/settings", label: "Configurações", iconKey: "settings" },
 ];

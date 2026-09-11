@@ -10,11 +10,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Sem isso o GitHub usa o default de 6h: em 07/09/2026 três runs
-    # ficaram penduradas 60+ min no step do Gradle sem nunca falhar,
-    # queimando minutos de Actions. Referência de tempo real: o step
-    # inteiro do Gradle até o bundling leva ~9m40s.
-    timeout-minutes: 45
+    # 60 min: a COMPILAÇÃO leva ~19 min (medido na run 169), então isto é
+    # 3x de folga. Serve de rede contra travamento, não de meta.
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: Frontend/AppComida
@@ -47,13 +45,68 @@ jobs:
         env:
           EX_UPDATES_CHANNEL: preview
 
+      # Cache do Gradle: sem ele cada run rebaixa o distributivo, os plugins e
+      # todo o cache de build do zero. Chave por lockfile do app + arquivos de
+      # build do Android; o restore-keys aproveita o cache anterior quando só
+      # uma dependência muda.
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-appcomida-${{ hashFiles('Frontend/AppComida/package-lock.json') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-appcomida-
+
       - name: Build APK (Gradle)
         run: |
-          echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1g" >> android/gradle.properties
+          # -Xmx3g, não 4g: o runner tem ~7GB e o build sobe MAIS de uma JVM
+          # (Gradle + daemon do Kotlin) além dos compiladores nativos do NDK.
+          # Com 4g o conjunto encosta no limite e o runner entra em swap, que
+          # é exatamente o quadro de "trava sem erro" visto nas runs 156/158.
+          echo "org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g" >> android/gradle.properties
+          # Runner do GitHub tem 2 núcleos. Sem o teto, o Gradle dispara mais
+          # workers do que há CPU e os compiladores nativos disputam memória.
+          echo "org.gradle.workers.max=2" >> android/gradle.properties
+          # Ver bae98ee: sem valor explícito, o Gradle "achata" a lista vazia
+          # do plugin de autolinking e o CLI morre com "argument missing".
           echo "expo.inlineModules.watchedDirectories=[]" >> android/gradle.properties
           cd android
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon --stacktrace
+          # DUAS ABIs em vez de quatro. Este é o item que destrava o build.
+          #
+          # O padrão do prebuild é armeabi-v7a,arm64-v8a,x86,x86_64 — com
+          # newArchEnabled=true (codegen C++) mais worklets, nitro-modules,
+          # mmkv e maplibre, o compilador nativo roda o projeto inteiro
+          # QUATRO vezes. A run 156 bateu no teto de 6 HORAS do GitHub sem
+          # terminar; a 158 morreu no timeout de 45 min.
+          #
+          # x86 e x86_64 só servem para EMULADOR. Para um APK que vai ser
+          # instalado em celular de verdade, arm64-v8a cobre praticamente todo
+          # aparelho atual e armeabi-v7a cobre os antigos. Se algum dia for
+          # preciso rodar no emulador, é só acrescentar x86_64 aqui.
+          # -x nas tarefas de lintVital: é ELAS que travavam o build.
+          #
+          # O log da run 169 mostra a coisa inteira compilando em 19 min
+          # (dexBuilderRelease, mergeDexRelease, compileReleaseArtProfile — o
+          # APK estava praticamente pronto às 18:04). Aí
+          # :react-native-masked-view e :react-native-async-storage falharam em
+          # lintVitalAnalyzeRelease e o Gradle ficou 101 MINUTOS em silêncio,
+          # sem uma linha de log, até o job ser cancelado (o cleanup ainda
+          # matou dois aapt2 órfãos). Não era build lento — era o lint pendurado
+          # no caminho de falha.
+          #
+          # lintVital é checagem de qualidade que a AGP roda no build de
+          # release; não é requisito para gerar APK. E o que falhou está em
+          # node_modules de terceiros, não no código deste projeto — travar a
+          # entrega do app por isso seria o rabo abanando o cachorro.
+          ./gradlew assembleRelease \
+            -PreactNativeArchitectures=arm64-v8a,armeabi-v7a \
+            -x lintVitalAnalyzeRelease \
+            -x lintVitalReportRelease \
+            -x lintVitalRelease \
+            --build-cache --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

@@ -65,6 +65,8 @@ services:
       dockerfile: Dockerfile
       args:
         REACT_APP_API_URL: ${API_BASE_URL:-http://localhost:3000}
+        # Mesmo domínio da API: o payment_api roda dentro do monolito.
+        REACT_APP_PAYMENT_API_URL: ${PAYMENT_API_BASE_URL:-${API_BASE_URL:-http://localhost:3000}}
     image: fuudelivery-web-admin:latest
     container_name: fuudelivery-web-admin
     restart: unless-stopped

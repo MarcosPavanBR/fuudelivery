@@ -32,7 +32,15 @@ interface ApiContextProps {
   editCart(item: object): void;
   cleanCart(): void;
   setPaymentMethod(method: object): void;
-  submitCart(user: any): Promise<{ ok: boolean; orderId?: string }>;
+  submitCart(user: any): Promise<{
+    ok: boolean;
+    orderId?: string;
+    orderTotal?: number;
+    deliveryValue?: number;
+    discount?: number;
+  }>;
+  couponCode: string;
+  setCouponCode(code: string): void;
 
   validDelivery(): boolean;
   paymentMethod: any;
@@ -71,6 +79,11 @@ export interface OrderPayload {
   user: unknown;
   establishmentId: number;
   establishment: Record<string, unknown>;
+  // Só o CÓDIGO vai daqui. Valor do desconto, vigência, limites e de quem
+  // sai a promoção são decididos no servidor — o app não tem como (nem
+  // deve) opinar sobre isso. Omitido quando não há cupom, para o pedido
+  // sem cupom continuar exatamente igual ao que era antes.
+  coupon_code?: string;
 }
 
 // Monta o corpo de POST /orders. Isolado do submitCart para poder checar,
@@ -86,8 +99,11 @@ export function buildOrderPayload(params: {
   deliveryValue: number | null;
   user: unknown;
   establishment: { id: number };
+  couponCode?: string;
 }): OrderPayload {
+  const coupon = (params.couponCode || "").trim().toUpperCase();
   return {
+    ...(coupon ? { coupon_code: coupon } : {}),
     cart: params.cart,
     distance: params.distance,
     location: {
@@ -104,14 +120,50 @@ export function buildOrderPayload(params: {
   };
 }
 
-// Interpreta a resposta de POST /orders. A API responde { message, orderId }
-// — orderId precisa virar string pois é usado depois para gerar a cobrança
-// PIX (POST /payments/pix/generate), que espera o id como string.
-export function parseOrderResponse(data: any): { ok: true; orderId?: string } {
+// Interpreta a resposta de POST /orders. orderId precisa virar string pois é
+// usado depois para gerar a cobrança PIX (POST /payments/pix/generate), que
+// espera o id como string.
+//
+// orderTotal é o total que o SERVIDOR calculou, já com desconto de cupom. É
+// ele que a cobrança tem de usar: payment_api confere o amount contra o
+// order_total gravado no pedido, então recalcular no app faria toda cobrança
+// de pedido com cupom ser recusada. Vem opcional porque resposta de servidor
+// antigo não traz o campo — nesse caso o chamador cai no cálculo local.
+export function parseOrderResponse(data: any): {
+  ok: true;
+  orderId?: string;
+  orderTotal?: number;
+  deliveryValue?: number;
+  discount?: number;
+  couponCode?: string;
+} {
+  const total = Number(data?.order_total);
+  const frete = Number(data?.delivery_value);
+  const desconto = Number(data?.discount_amount);
   return {
     ok: true,
     orderId: data?.orderId ? String(data.orderId) : undefined,
+    orderTotal: Number.isFinite(total) && total > 0 ? total : undefined,
+    // Frete ZERO é legítimo (retirada no balcão, frete grátis de assinatura),
+    // então aqui o corte é `>= 0`, não `> 0` como no total: só a AUSÊNCIA do
+    // campo faz o chamador cair na conta local.
+    deliveryValue: Number.isFinite(frete) && frete >= 0 ? frete : undefined,
+    discount: Number.isFinite(desconto) && desconto > 0 ? desconto : undefined,
+    couponCode: data?.coupon_code || undefined,
   };
+}
+
+// Mensagem de erro de POST /orders para mostrar ao cliente.
+//
+// O servidor recusa o pedido inteiro quando o cupom não vale ("cupom: cupom
+// expirado", "cupom: valor mínimo do pedido não atingido"...). Engolir isso
+// num "erro ao fazer o pedido" genérico deixaria o cliente sem saber que o
+// problema é o código que ele digitou — e sem como corrigir.
+export function orderErrorMessage(err: any, fallback: string): string {
+  const doServidor = err?.response?.data?.error;
+  return typeof doServidor === "string" && doServidor.trim()
+    ? doServidor
+    : fallback;
 }
 
 const ApiContext = createContext<ApiContextProps | undefined>(undefined);
@@ -124,6 +176,10 @@ export const ApiCartProvider: React.FC<ApiCartProviderProps> = ({
   children,
 }) => {
   const [cart, setCart] = useState<object[]>([]);
+  // Código do cupom digitado no carrinho. Vive no contexto (e não na tela)
+  // porque submitCart é quem o envia, e porque ele precisa sobreviver ao
+  // cliente sair do carrinho para adicionar mais um item.
+  const [couponCode, setCouponCode] = useState("");
   const insets = useSafeAreaInsets();
   const nav = useNavigation();
   const [hiddenCart, setHiddenCart] = useState(false);
@@ -167,11 +223,20 @@ export const ApiCartProvider: React.FC<ApiCartProviderProps> = ({
 
   const validDelivery = () => isDeliveryValid(distance, establishment);
 
+  // Cotação do frete. O que decide o preço é o ENDEREÇO de entrega (o servidor
+  // casa o CEP com a região cadastrada), não a distância.
+  //
+  // `distance` continua indo no corpo porque o servidor ainda a aceita para
+  // não quebrar app antigo — mas é ignorada lá. Antes ela era o preço: o
+  // servidor fazia (distance × perKm) + fixa com o número que ESTA tela
+  // mandava, e a distância vinha do GPS do celular, não do endereço. Quem
+  // pedia do trabalho para casa era cobrado pela distância até o trabalho.
   const getValueDelivery = async (ns: number, id: string | number) => {
     try {
       const { data } = await api.post(
         "/delivery/calculate-delivery-value",
         {
+          location,
           distance: ns,
           establishmentId: id,
         }
@@ -219,7 +284,13 @@ export const ApiCartProvider: React.FC<ApiCartProviderProps> = ({
     }
   }
 
-  async function submitCart(user: any): Promise<{ ok: boolean; orderId?: string }> {
+  async function submitCart(user: any): Promise<{
+    ok: boolean;
+    orderId?: string;
+    orderTotal?: number;
+    deliveryValue?: number;
+    discount?: number;
+  }> {
     if (!validDelivery()) {
       Alert.alert("", Texts.erroPedido);
       return { ok: false };
@@ -234,14 +305,20 @@ export const ApiCartProvider: React.FC<ApiCartProviderProps> = ({
       deliveryValue,
       user,
       establishment,
+      couponCode,
     });
 
     try {
       const { data } = await api.post(`/orders`, body);
       setCart([]);
+      // Cupom consumido: o próximo pedido começa sem código preenchido.
+      setCouponCode("");
       return parseOrderResponse(data);
     } catch (e) {
-      Alert.alert("", Texts.erroPedido);
+      // A mensagem do servidor manda: é ela que diz que foi o cupom, e qual
+      // o problema. O carrinho NÃO é limpo — o cliente corrige o código e
+      // tenta de novo sem remontar o pedido.
+      Alert.alert("", orderErrorMessage(e, Texts.erroPedido));
       return { ok: false };
     }
   }
@@ -274,6 +351,8 @@ export const ApiCartProvider: React.FC<ApiCartProviderProps> = ({
           location,
           paymentMethod,
           deliveryValue,
+          couponCode,
+          setCouponCode,
         } as any
       }
     >

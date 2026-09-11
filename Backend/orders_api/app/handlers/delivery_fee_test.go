@@ -31,7 +31,7 @@ func setupDeliveryFeeTestDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("abrir sqlite em memória: %v", err)
 	}
-	if err := db.AutoMigrate(&models.Delivery{}, &models.Product{}, &models.Additional{}); err != nil {
+	if err := db.AutoMigrate(&models.Delivery{}, &models.DeliveryRegionFee{}, &models.Product{}, &models.Additional{}); err != nil {
 		t.Fatalf("migrar tabelas: %v", err)
 	}
 	// subscriptions vive no auth_api; aqui só precisa da forma que a query lê.
@@ -69,13 +69,40 @@ func seedProduct(t *testing.T, id, establishmentID uint, price float64) {
 	}
 }
 
+// endereco monta um destino com CEP. Sem coordenadas de propósito: os testes
+// que medem o fallback POR KM chamam computeDeliveryFee direto, passando a
+// distância; os que medem o preço por REGIÃO não dependem de distância nenhuma.
+func endereco(cep string) dto.Location {
+	return dto.Location{Cep: cep, Localidade: "São Paulo", UF: "SP"}
+}
+
+// seedRegiao cadastra uma faixa de CEP com preço fixo.
+func seedRegiao(t *testing.T, nome, inicio, fim string, valor float64) {
+	t.Helper()
+	if err := models.DB.Create(&models.DeliveryRegionFee{
+		Name:     nome,
+		CepStart: models.NormalizeCep(inicio),
+		CepEnd:   models.NormalizeCep(fim),
+		Fee:      valor,
+		Priority: 100,
+		Active:   true,
+	}).Error; err != nil {
+		t.Fatalf("semear região %s: %v", nome, err)
+	}
+}
+
+// cartDe monta um carrinho de um item só.
+func cartDe(produtoID int, qtd int) []dto.CartItem {
+	return []dto.CartItem{{Item: dto.Item{ID: produtoID}, Quantity: qtd}}
+}
+
 // ── O cálculo em si ──
 
 func TestComputeDeliveryFee_DistanciaVezesPerKmMaisFixa(t *testing.T) {
 	setupDeliveryFeeTestDB(t)
 	seedDelivery(t, 1, 5.00, 2.00) // taxa fixa 5, R$2/km
 
-	fee, err := computeDeliveryFee(3, 1, nil, 0)
+	fee, err := computeDeliveryFee(endereco("01310100"), 3, 1, nil, 0)
 	if err != nil {
 		t.Fatalf("erro inesperado: %v", err)
 	}
@@ -103,13 +130,15 @@ func TestComputeOrderTotal_IgnoraFreteDoCliente(t *testing.T) {
 
 	cart := []dto.CartItem{{Item: dto.Item{ID: 100}, Quantity: 2}}
 
-	total, frete, err := computeOrderTotal(cart, 3, 1, nil)
+	seedRegiao(t, "Centro", "01000000", "01999999", 11.00)
+
+	total, frete, err := computeOrderTotal(cart, endereco("01310100"), 1, nil)
 	if err != nil {
 		t.Fatalf("erro inesperado: %v", err)
 	}
-	// 2 × 30 = 60 de itens, frete 3×2+5 = 11 → 71.
+	// 2 × 30 = 60 de itens, frete 11.00 da região Centro → 71.
 	if frete != 11.00 {
-		t.Fatalf("esperava frete calculado 11.00, veio %.2f", frete)
+		t.Fatalf("esperava frete 11.00 da região, veio %.2f", frete)
 	}
 	if total != 71.00 {
 		t.Fatalf("esperava total 71.00 (60 + 11), veio %.2f", total)
@@ -125,36 +154,51 @@ func TestComputeOrderTotal_FreteNaoVemDoCorpo(t *testing.T) {
 
 	cart := []dto.CartItem{{Item: dto.Item{ID: 101}, Quantity: 1}}
 
-	// A assinatura de computeOrderTotal não aceita mais frete: qualquer valor
-	// que o cliente mandasse ficaria de fora por construção. O que este teste
-	// trava é que a distância é que decide.
-	_, fretePerto, err := computeOrderTotal(cart, 1, 1, nil)
+	// computeOrderTotal não aceita frete nem distância do cliente: o preço sai
+	// da REGIÃO do endereço. O que este teste trava é que endereços diferentes
+	// custam diferente, ou seja, que a região está mesmo sendo consultada.
+	seedRegiao(t, "Centro", "01000000", "01999999", 7.00)
+	seedRegiao(t, "Zona Leste", "08000000", "08999999", 25.00)
+
+	_, fretePerto, err := computeOrderTotal(cart, endereco("01310100"), 1, nil)
 	if err != nil {
 		t.Fatalf("erro inesperado: %v", err)
 	}
-	_, freteLonge, err := computeOrderTotal(cart, 10, 1, nil)
+	_, freteLonge, err := computeOrderTotal(cart, endereco("08500000"), 1, nil)
 	if err != nil {
 		t.Fatalf("erro inesperado: %v", err)
 	}
-	if fretePerto != 7.00 { // 1×2 + 5
-		t.Fatalf("1km deveria custar 7.00, veio %.2f", fretePerto)
+	if fretePerto != 7.00 {
+		t.Fatalf("Centro deveria custar 7.00, veio %.2f", fretePerto)
 	}
-	if freteLonge != 25.00 { // 10×2 + 5
-		t.Fatalf("10km deveria custar 25.00, veio %.2f", freteLonge)
-	}
-	if freteLonge <= fretePerto {
-		t.Fatal("o frete tem que crescer com a distância — sinal de que não está sendo calculado")
+	if freteLonge != 25.00 {
+		t.Fatalf("Zona Leste deveria custar 25.00, veio %.2f", freteLonge)
 	}
 }
 
-func TestComputeOrderTotal_RejeitaDistanciaNegativa(t *testing.T) {
+// A validação de "distância negativa" deixou de existir junto com o parâmetro:
+// a distância não vem mais do cliente, então não há valor inválido para
+// recusar. O teste equivalente hoje é o de baixo — o corpo não muda o preço.
+//
+// Este é O vetor que a mudança fecha: antes, `distance: 0` no corpo fazia
+// `(0 × perKm) + fixa` e o cliente pagava só a taxa fixa em qualquer pedido.
+func TestComputeOrderTotal_CorpoNaoMudaOFrete(t *testing.T) {
 	setupDeliveryFeeTestDB(t)
-	seedDelivery(t, 1, 5.00, 2.00)
+	seedDelivery(t, 1, 5.00, 2.00) // configuração por km, que NÃO deve ser usada
 	seedProduct(t, 102, 1, 10.00)
+	seedRegiao(t, "Centro", "01000000", "01999999", 9.00)
 
 	cart := []dto.CartItem{{Item: dto.Item{ID: 102}, Quantity: 1}}
-	if _, _, err := computeOrderTotal(cart, -1, 1, nil); err == nil {
-		t.Fatal("distância negativa deveria ser recusada")
+
+	// computeOrderTotal nem tem por onde receber distância — o parâmetro
+	// sumiu. Qualquer coisa que o cliente mande em `distance` fica de fora por
+	// construção, e o preço é o da região.
+	_, frete, err := computeOrderTotal(cart, endereco("01310100"), 1, nil)
+	if err != nil {
+		t.Fatalf("erro inesperado: %v", err)
+	}
+	if frete != 9.00 {
+		t.Fatalf("o frete é o da região (9.00), não a taxa por km, veio %.2f", frete)
 	}
 }
 
@@ -169,7 +213,7 @@ func TestComputeDeliveryFee_SemConfigSinalizaErroProprio(t *testing.T) {
 	setupDeliveryFeeTestDB(t)
 	// De propósito: nenhuma linha em deliveries.
 
-	_, err := computeDeliveryFee(3, 42, nil, 0)
+	_, err := computeDeliveryFee(endereco("01310100"), 3, 42, nil, 0)
 	if !errors.Is(err, errNoDeliveryConfig) {
 		t.Fatalf("esperava errNoDeliveryConfig para poder distinguir de erro de banco, veio %v", err)
 	}
@@ -181,7 +225,7 @@ func TestComputeOrderTotal_SemConfigNaoDerrubaOPedido(t *testing.T) {
 	// Sem seedDelivery para o estabelecimento 42.
 
 	cart := []dto.CartItem{{Item: dto.Item{ID: 200}, Quantity: 2}}
-	total, frete, err := computeOrderTotal(cart, 3, 42, nil)
+	total, frete, err := computeOrderTotal(cart, endereco("01310100"), 42, nil)
 	if err != nil {
 		t.Fatalf("pedido não pode falhar por falta de configuração de entrega: %v", err)
 	}

@@ -15,6 +15,36 @@ O FuuDelivery trata dados financeiros e pessoais de milhões de usuários. A seg
 | Upload sem ownership | ✅ Corrigido | `verificação de establishment_id` |
 | RBAC ausente em pagamentos | ✅ Corrigido | `AdminRequired() em 8 rotas` |
 | `.env` no repositório | ✅ Corrigido | `.gitignore` +`.env.example` |
+| Frete escolhido pelo cliente (`distance` no corpo) | ✅ Corrigido | `preço por região de CEP, decidido no servidor` |
+
+## Riscos aceitos (conhecidos, não corrigidos)
+
+Registrados aqui de propósito: risco conhecido e escrito é decisão; risco
+conhecido e não escrito vira surpresa na produção de outra pessoa.
+
+### CEP de entrega vem do corpo da requisição
+
+**Onde:** `orders_api/app/handlers/delivery.go` — `resolveBaseFee()` usa
+`Location.Cep` para achar a faixa de preço da região.
+
+**O que dá para fazer:** mandar o CEP de uma região barata junto com um
+logradouro de uma região cara. O entregador vai ao endereço real e a
+plataforma cobrou o frete errado.
+
+**Por que está aceito:**
+
+- É estritamente melhor que o estado anterior, em que bastava mandar
+  `"distance": 0` para pagar só a taxa fixa, sem deixar rastro nenhum.
+- A mentira fica registrada no pedido: CEP e logradouro/bairro incoerentes,
+  à vista do restaurante e do admin.
+- Não existe frete grátis por essa via — sem região que case, o cálculo cai
+  na taxa por km do estabelecimento, nunca em zero.
+
+**O que fecharia de vez:** validar o CEP contra o ViaCEP no próprio servidor,
+com cache e *fail-closed* na taxa mais cara. É uma chamada externa dentro do
+checkout — custo, latência e mais um ponto de falha no caminho do dinheiro.
+Decisão adiada de propósito até haver dado: quantos pedidos chegam com CEP
+incoerente com o logradouro.
 
 ## Controles de Segurança
 

@@ -7,6 +7,7 @@ import {
   isDeliveryValid,
   buildOrderPayload,
   parseOrderResponse,
+  orderErrorMessage,
 } from "../ApiCartContext";
 
 // Lógica pura extraída do checkout (submitCart/validDelivery) — cobre o
@@ -99,5 +100,125 @@ describe("parseOrderResponse", () => {
   it("não quebra com resposta vazia/undefined", () => {
     expect(parseOrderResponse(undefined)).toEqual({ ok: true, orderId: undefined });
     expect(parseOrderResponse(null)).toEqual({ ok: true, orderId: undefined });
+  });
+});
+
+// ── Cupom no checkout ──
+//
+// O sistema de cupom estava completo do servidor para dentro (admin cria,
+// pedido desconta, split cobra de quem banca) e não tinha porta de entrada
+// no app: buildOrderPayload não mandava o código, então o cliente não tinha
+// como usar cupom nenhum. Estes testes fixam essa porta.
+
+describe("buildOrderPayload — cupom", () => {
+  const base = {
+    cart: [{ item: { id: 1, Price: 10 }, quantity: 1, additionals: [] }],
+    distance: 3,
+    location: { rua: "X" },
+    coordsLocation: { lat: 1, lng: 2 },
+    paymentMethod: { type: "pix" },
+    deliveryValue: 11,
+    user: { phone: "+5511999900001" },
+    establishment: { id: 7 },
+  };
+
+  it("manda o código quando o cliente digita um", () => {
+    const body = buildOrderPayload({ ...base, couponCode: "PROMO10" });
+    expect(body.coupon_code).toBe("PROMO10");
+  });
+
+  // Normaliza para o cliente não perder desconto por ter digitado minúsculo
+  // ou com espaço sobrando.
+  it("normaliza o código (maiúsculo, sem espaços)", () => {
+    const body = buildOrderPayload({ ...base, couponCode: "  promo10 " });
+    expect(body.coupon_code).toBe("PROMO10");
+  });
+
+  // Pedido sem cupom tem de sair EXATAMENTE como saía antes: um campo vazio
+  // no corpo faria o servidor tratar como cupom inválido e recusar o pedido.
+  it("omite o campo quando não há cupom", () => {
+    expect(buildOrderPayload(base).coupon_code).toBeUndefined();
+    expect(buildOrderPayload({ ...base, couponCode: "" }).coupon_code).toBeUndefined();
+    expect(buildOrderPayload({ ...base, couponCode: "   " }).coupon_code).toBeUndefined();
+  });
+
+  // Só o código viaja: valor do desconto e quem banca são decididos no
+  // servidor a partir do cupom no banco.
+  it("não manda valor de desconto nenhum", () => {
+    const body = buildOrderPayload({ ...base, couponCode: "PROMO10" });
+    expect(body).not.toHaveProperty("discount_amount");
+    expect(body).not.toHaveProperty("discount_funded_by");
+  });
+});
+
+describe("parseOrderResponse — total do servidor", () => {
+  // É o número que a cobrança PIX tem de usar. payment_api confere o amount
+  // contra o order_total gravado no pedido: recalculando no app, toda
+  // cobrança de pedido com cupom seria recusada.
+  it("lê o total e o desconto que o servidor devolveu", () => {
+    const res = parseOrderResponse({
+      orderId: "abc123",
+      order_total: 65,
+      discount_amount: 6,
+      coupon_code: "DEZ",
+    });
+    expect(res.orderId).toBe("abc123");
+    expect(res.orderTotal).toBe(65);
+    expect(res.discount).toBe(6);
+    expect(res.couponCode).toBe("DEZ");
+  });
+
+  // Resposta de servidor antigo não traz os campos — o chamador precisa
+  // conseguir distinguir "não veio" de "veio zero" para cair no cálculo
+  // local em vez de cobrar R$ 0,00.
+  it("deixa o total indefinido quando o servidor não manda", () => {
+    const res = parseOrderResponse({ orderId: "abc123" });
+    expect(res.orderId).toBe("abc123");
+    expect(res.orderTotal).toBeUndefined();
+    expect(res.discount).toBeUndefined();
+  });
+
+  // Frete ZERO é legítimo — retirada no balcão, frete grátis de assinatura.
+  // Tratar como ausente faria a cobrança declarar a cotação local em vez do
+  // zero que o servidor decidiu.
+  it("aceita frete zero, que é um valor válido", () => {
+    expect(parseOrderResponse({ delivery_value: 0 }).deliveryValue).toBe(0);
+    expect(parseOrderResponse({ delivery_value: 11 }).deliveryValue).toBe(11);
+  });
+
+  it("deixa o frete indefinido quando o servidor não manda", () => {
+    expect(parseOrderResponse({ orderId: "x" }).deliveryValue).toBeUndefined();
+    expect(parseOrderResponse({ delivery_value: -1 }).deliveryValue).toBeUndefined();
+    expect(parseOrderResponse({ delivery_value: "abc" }).deliveryValue).toBeUndefined();
+  });
+
+  it("ignora total zero ou inválido em vez de cobrar zero", () => {
+    expect(parseOrderResponse({ order_total: 0 }).orderTotal).toBeUndefined();
+    expect(parseOrderResponse({ order_total: "abc" }).orderTotal).toBeUndefined();
+    expect(parseOrderResponse({ order_total: -5 }).orderTotal).toBeUndefined();
+  });
+});
+
+describe("orderErrorMessage", () => {
+  // O servidor recusa o pedido inteiro com "cupom: cupom expirado" e afins.
+  // Engolir isso num erro genérico deixaria o cliente sem saber que o
+  // problema é o código que ele digitou.
+  it("mostra a mensagem do servidor quando existe", () => {
+    const err = { response: { data: { error: "cupom: cupom expirado" } } };
+    expect(orderErrorMessage(err, "genérico")).toBe("cupom: cupom expirado");
+  });
+
+  it("cai no texto padrão quando não há mensagem do servidor", () => {
+    expect(orderErrorMessage({}, "genérico")).toBe("genérico");
+    expect(orderErrorMessage(null, "genérico")).toBe("genérico");
+    expect(orderErrorMessage({ response: { data: {} } }, "genérico")).toBe("genérico");
+    expect(
+      orderErrorMessage({ response: { data: { error: "   " } } }, "genérico")
+    ).toBe("genérico");
+  });
+
+  // Erro de rede (sem response) não pode virar "[object Object]" na tela.
+  it("cai no texto padrão em erro de rede", () => {
+    expect(orderErrorMessage(new Error("Network Error"), "genérico")).toBe("genérico");
   });
 });

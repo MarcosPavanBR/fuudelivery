@@ -15,7 +15,25 @@ Em sistemas distribuídos, é comum ocorrerem falhas entre salvar dados no banco
 - Split financeiro processado mas webhook não disparado
 
 ### Solução Implementada
-**Arquivos:** `pkg/outbox/outbox.go`, `pkg/outbox/processor.go`, `sql/19_outbox_pattern.sql`
+> **NÃO IMPLEMENTADO — seção histórica.** `pkg/outbox/` foi escrito mas nunca
+> teve um único chamador: nenhum `.go` fora do próprio pacote o importava, e o
+> `OutboxProcessor` nunca era instanciado, então nada drenaria a tabela mesmo
+> que alguém gravasse nela. Tinha ainda dois bugs latentes (um evento que
+> falhava ao publicar nunca era reprocessado, porque `processing_at` ficava
+> preenchido e a consulta filtra por `processing_at IS NULL`; e `MarkAsFailed`
+> dizia "move para DLQ" mas só marcava como processado, que é descarte
+> silencioso). O pacote foi **removido**: código morto que promete garantia
+> transacional é pior que a ausência dela, porque alguém assume que a garantia
+> existe.
+>
+> A consistência do caminho de pagamento é feita pela **reconciliação
+> periódica** (`Backend/payment_api/app/handlers/reconciliation.go`), que se
+> apoia na idempotência que já existe no banco (`UNIQUE
+> uq_wallet_txns_credit_ref`). A tabela `outbox_events` da migration 19
+> continua existindo, vazia e inofensiva — reverter migração já aplicada é pior
+> que uma tabela ociosa.
+
+**Arquivos (removidos):** ~~`pkg/outbox/outbox.go`, `pkg/outbox/processor.go`~~, `sql/19_outbox_pattern.sql`
 
 O padrão **Transactional Outbox** garante que entidade e evento sejam salvos na **mesma transação ACID**:
 

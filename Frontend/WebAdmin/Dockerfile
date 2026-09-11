@@ -12,7 +12,14 @@ WORKDIR /app
 # Ex.: --build-arg REACT_APP_API_URL=https://api.suaempresa.com
 ARG REACT_APP_API_URL=http://localhost:3000
 ENV REACT_APP_API_URL=$REACT_APP_API_URL
-ARG REACT_APP_PAYMENT_API_URL=http://localhost:8084
+# Rotas de pagamento vivem DENTRO do monolito desde que o serviço isolado
+# (Backend/Payment, porta 8084) foi arquivado. O default aqui é VAZIO de
+# propósito: paymentApi.js encadeia
+# REACT_APP_PAYMENT_API_URL || ... || REACT_APP_API_URL, e um default
+# não-vazio faz o encadeamento parar no primeiro valor — o painel era
+# compilado apontando para http://localhost:8084, que não existe em VPS
+# nenhum. Vazio, o fallback funciona e o painel usa a própria API.
+ARG REACT_APP_PAYMENT_API_URL=
 ENV REACT_APP_PAYMENT_API_URL=$REACT_APP_PAYMENT_API_URL
 
 # Instala dependências (usa o .npmrc com legacy-peer-deps)

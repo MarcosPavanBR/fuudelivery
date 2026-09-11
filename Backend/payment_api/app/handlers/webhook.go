@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"time"
@@ -294,6 +295,17 @@ func publishPaymentApproved(abacatepayID string) {
 		return
 	}
 
+	notifyPaymentApproved(payment)
+
+	if err := settlePaymentApproved(payment); err != nil {
+		log.Printf("[SETTLE] Falha ao liquidar %s: %v — o job de reconciliação vai reprocessar", abacatepayID, err)
+	}
+}
+
+// notifyPaymentApproved avisa os clientes conectados. Só WebSocket: os três
+// listeners da fila chamam processStatusUpdate, que faz log + envio ao socket
+// e nada mais. Nenhuma lógica de negócio depende destes eventos.
+func notifyPaymentApproved(payment *models.Payment) {
 	now := time.Now()
 	orderMsg := map[string]interface{}{
 		"order_id":     payment.OrderID,
@@ -309,8 +321,15 @@ func publishPaymentApproved(abacatepayID string) {
 		log.Printf("Failed to publish payment confirmation to order queue: %v", err)
 	}
 
-	// Publica na fila de pagamentos para que a carteira do restaurante
-	// seja creditada pelo fluxo de split abaixo.
+	// Aviso ao painel do restaurante. NÃO credita nada: o consumidor de
+	// payment_updates é processStatusUpdate, que faz log + WebSocket e mais
+	// nada. O crédito da carteira é síncrono, em settlePaymentApproved.
+	//
+	// O comentário anterior aqui dizia que a fila creditava a carteira "pelo
+	// fluxo de split abaixo". Descrevia uma arquitetura que nunca existiu, e
+	// induzia a acreditar que a fila era transacionalmente relevante — ou
+	// seja, que perder um evento custaria dinheiro. Não custa: perder um
+	// evento destes custa uma notificação.
 	paymentMsg := map[string]interface{}{
 		"order_id":         payment.OrderID,
 		"establishment_id": payment.EstablishmentID,
@@ -322,6 +341,26 @@ func publishPaymentApproved(abacatepayID string) {
 	if err := publishToPaymentQueue(paymentMsgBody); err != nil {
 		log.Printf("Failed to publish to payment queue: %v", err)
 	}
+}
+
+// settlePaymentApproved LIQUIDA o pagamento: calcula o split, credita a
+// carteira do estabelecimento, persiste e concede os pontos de fidelidade.
+//
+// Existe separada do webhook porque o job de reconciliação
+// (cmd/fuudelivery/reconciliation.go) precisa chamar EXATAMENTE este código.
+// Se o job reimplementasse o cálculo de split e o crédito por fora, passariam
+// a existir dois caminhos que movem dinheiro, e eles divergiriam na primeira
+// manutenção — o tipo de divergência que só aparece no extrato de alguém.
+//
+// É SEGURA para reprocessar, e cada efeito colateral tem a sua própria razão:
+//   - crédito na carteira: UNIQUE uq_wallet_txns_credit_ref (sql/11) devolve
+//     ErrDuplicateCredit no segundo crédito do mesmo pagamento;
+//   - pontos de fidelidade: EarnPointsForOrder conta LoyaltyTransaction por
+//     order_id+earn e sai sem fazer nada se já existe;
+//   - split_rules: recalcula os mesmos valores e sobrescreve.
+func settlePaymentApproved(payment *models.Payment) error {
+	now := time.Now()
+	abacatepayID := payment.AbacatePayID
 
 	// Determina os percentuais de split com base na zona do estabelecimento
 	platformPct, establishmentPct := 5.0, 85.0
@@ -331,16 +370,29 @@ func publishPaymentApproved(abacatepayID string) {
 
 	splitResult, err := services.CalculateSplitRules(payment, platformPct, establishmentPct)
 	if err != nil {
-		log.Printf("[SPLIT] Erro ao calcular split para %s: %v", abacatepayID, err)
-		log.Printf("[SPLIT] Erro ao calcular split: %v", err)
-		return
+		// Este era o pior `return` da cadeia: o pagamento fica CONFIRMED, sem
+		// crédito, sem split_rules e sem pontos — e os eventos já saíram, então
+		// o cliente JÁ VIU "pagamento confirmado" no app. Agora o erro sobe e a
+		// reconciliação volta aqui até liquidar.
+		return fmt.Errorf("calcular split de %s: %w", abacatepayID, err)
 	}
 	splitRules := splitResult.Rules
 
 	setFields := map[string]interface{}{
-		"status":       "CONFIRMED",
-		"split_rules":  models.SplitRules(splitRules),
-		"confirmed_at": now,
+		"status":      "CONFIRMED",
+		"split_rules": models.SplitRules(splitRules),
+	}
+
+	// confirmed_at só na PRIMEIRA vez. Esta função é reentrante (webhook
+	// reenviado pelo gateway, aprovação manual no admin, job de
+	// reconciliação), e gravar `now` a cada passagem reescreveria a hora real
+	// em que o cliente pagou: um pagamento confirmado às 10:00 e liquidado
+	// pela reconciliação às 10:30 passaria a constar como pago às 10:30.
+	// Isso é falsificar histórico financeiro — e ainda esconde do próprio job
+	// os pagamentos que ele acabou de tocar, porque a consulta filtra por
+	// confirmed_at.
+	if payment.ConfirmedAt == nil {
+		setFields["confirmed_at"] = now
 	}
 
 	// Credita a carteira do estabelecimento pelo share do split. A idempotência
@@ -360,7 +412,10 @@ func publishPaymentApproved(abacatepayID string) {
 				log.Printf("[WALLET] Crédito já aplicado para %s — replay idempotente ignorado", abacatepayID)
 				setFields["establishment_credited_at"] = now
 			case wErr != nil:
-				log.Printf("[WALLET] WARNING: falha ao creditar carteira do estabelecimento %d: %v", payment.EstablishmentID, wErr)
+				// Não engole: sem isto, o pagamento era persistido sem
+				// establishment_credited_at e nada nunca voltava para tentar.
+				return fmt.Errorf("creditar carteira do estabelecimento %d (payment=%s): %w",
+					payment.EstablishmentID, abacatepayID, wErr)
 			default:
 				setFields["establishment_credited_at"] = now
 				log.Printf("[WALLET] Carteira do estabelecimento %d creditada em %.2f (payment=%s)", payment.EstablishmentID, credit, abacatepayID)
@@ -369,14 +424,18 @@ func publishPaymentApproved(abacatepayID string) {
 	}
 
 	if err := models.DB.Model(payment).Updates(setFields).Error; err != nil {
-		log.Printf("Failed to save split rules for AbacatePay ID %s: %v", abacatepayID, err)
-		return
+		return fmt.Errorf("gravar split rules de %s: %w", abacatepayID, err)
 	}
 	if OnPaymentApproved != nil {
 		if err := OnPaymentApproved(payment.CustomerPhone, payment.OrderID, payment.Amount); err != nil {
+			// Pontos NÃO sobem como erro de propósito: o dinheiro já foi
+			// creditado e establishment_credited_at já está gravado, então a
+			// reconciliação não veria mais este pagamento. Devolver erro aqui
+			// só produziria ruído sobre uma liquidação que deu certo.
 			log.Printf("[LOYALTY] Failed to award points for order %s: %v", payment.OrderID, err)
 		}
 	}
+	return nil
 }
 
 // adjustEstablishmentWallet credita a carteira do estabelecimento de forma

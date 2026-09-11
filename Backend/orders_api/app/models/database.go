@@ -65,6 +65,7 @@ func ConnectPostgresDatabase() {
 		&OrderItem{},
 		&Order{},
 		&Delivery{},
+		&DeliveryRegionFee{},
 		&Coupon{},
 		&CouponUsage{},
 		&LoyaltyPoints{},

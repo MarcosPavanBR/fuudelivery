@@ -38,6 +38,12 @@ func setupTestDB(t *testing.T) *gorm.DB {
 			metadata JSONB,
 			created_tz TIMESTAMPTZ NOT NULL DEFAULT now()
 		)`)
+		// Isolamento entre testes. Sem isto, os testes só são corretos sob
+		// testcontainers (um container novo por teste); com POSTGRES_TEST_URI
+		// apontando para um banco compartilhado, cada teste herda as linhas do
+		// anterior e o PopNext (ORDER BY created_at ASC) devolve o pedido de
+		// OUTRO teste. Foi o que mascarou o bug do metadata jsonb.
+		db.Exec("TRUNCATE unmatched_orders")
 		return db
 	}
 
@@ -84,6 +90,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		metadata JSONB,
 		created_tz TIMESTAMPTZ NOT NULL DEFAULT now()
 	)`)
+	db.Exec("TRUNCATE unmatched_orders")
 
 	return db
 }
@@ -267,5 +274,56 @@ func TestPostgresDLQStore_RetryCountIncrement(t *testing.T) {
 	result2 := dlq.PopNext()
 	if result2 != nil {
 		t.Errorf("PopNext should skip exhausted order, got %v", result2)
+	}
+}
+
+// TestMatchingEngine_DLQSobreviveARestart cobre o que a troca em
+// cmd/fuudelivery/main.go garante: com a DLQ persistente, um pedido que não
+// achou entregador continua lá depois de o processo morrer e subir de novo.
+//
+// Este é o teste da LIGAÇÃO, não do componente. A PostgresDLQStore já tinha
+// testes; o que nunca teve teste foi o MatchingEngine de fato usá-la — e por
+// isso o main.go ficou apontando para a DLQ in-memory sem ninguém notar.
+//
+// Falsificação: trocar NewMatchingEngineWithDLQ por NewMatchingEngine faz o
+// segundo engine nascer com uma DLQ vazia e o teste quebra na hora.
+func TestMatchingEngine_DLQSobreviveARestart(t *testing.T) {
+	db := setupTestDB(t)
+
+	pedido := &UnmatchedOrder{
+		OrderID:          "pedido-que-nao-pode-sumir",
+		EstablishmentLat: -23.5505,
+		EstablishmentLng: -46.6333,
+		ZoneID:           1,
+		CreatedAt:        time.Now().UnixMilli(),
+		RetryCount:       0,
+		// Passado o suficiente para o PopNext (que exige 30s entre tentativas)
+		// considerar o pedido pronto para retry.
+		LastAttemptAt: time.Now().UnixMilli() - 60000,
+	}
+
+	// --- processo 1: o pedido não casa e vai para a DLQ ---
+	engine1 := NewMatchingEngineWithDLQ(NewCourierStore(), nil, NewPostgresDLQStore(db))
+	engine1.DLQ.Push(pedido)
+
+	if got := engine1.DLQ.Len(); got != 1 {
+		t.Fatalf("antes do restart: esperava 1 pedido na DLQ, obtive %d", got)
+	}
+
+	// --- o processo morre e sobe de novo (novo engine, nova store, mesmo banco) ---
+	engine2 := NewMatchingEngineWithDLQ(NewCourierStore(), nil, NewPostgresDLQStore(db))
+
+	if got := engine2.DLQ.Len(); got != 1 {
+		t.Fatalf("depois do restart: o pedido sumiu da DLQ (Len=%d). "+
+			"Com a DLQ in-memory é exatamente isto que acontece em produção "+
+			"toda vez que o Render derruba o processo por inatividade.", got)
+	}
+
+	recuperado := engine2.DLQ.PopNext()
+	if recuperado == nil {
+		t.Fatal("depois do restart: PopNext devolveu nil — o pedido não é recuperável")
+	}
+	if recuperado.OrderID != pedido.OrderID {
+		t.Fatalf("depois do restart: recuperei %q, esperava %q", recuperado.OrderID, pedido.OrderID)
 	}
 }

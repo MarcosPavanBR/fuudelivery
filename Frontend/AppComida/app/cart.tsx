@@ -18,6 +18,7 @@ import {
   ActivityIndicator,
   Modal,
   Alert,
+  TextInput,
 } from "react-native";
 import api from "@/services/api";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -44,8 +45,17 @@ export function calculateSubtotal(items: any[]): number {
 }
 
 const cart = () => {
-  const { setHiddenCart, cart, paymentMethod, submitCart, distance, deliveryValue, establishment } =
-    useCartApi();
+  const {
+    setHiddenCart,
+    cart,
+    paymentMethod,
+    submitCart,
+    distance,
+    deliveryValue,
+    establishment,
+    couponCode,
+    setCouponCode,
+  } = useCartApi();
 
   const [load, setLoad] = useState(false);
   const [pixData, setPixData] = useState<{
@@ -60,15 +70,37 @@ const cart = () => {
   const nav = useNavigation();
   const insets = useSafeAreaInsets();
 
-  async function generatePix(orderId: string, user: any): Promise<boolean> {
-    const amount = calculateSubtotal(cart) + (deliveryValue || 0);
+  async function generatePix(
+    orderId: string,
+    user: any,
+    serverTotal?: number,
+    serverDelivery?: number
+  ): Promise<boolean> {
+    // O valor cobrado é o que o SERVIDOR calculou para o pedido, não uma
+    // conta refeita aqui. Com cupom os dois divergem, e payment_api confere
+    // o amount contra o order_total gravado (tolerância de 1 centavo): a
+    // conta local faria toda cobrança de pedido com cupom ser recusada.
+    // O cálculo local fica só como fallback para resposta de servidor antigo,
+    // que não devolve order_total.
+    const amount =
+      typeof serverTotal === "number" && serverTotal > 0
+        ? serverTotal
+        : calculateSubtotal(cart) + (deliveryValue || 0);
     try {
       const { data } = await api.post("/payments/pix/generate", {
         order_id: orderId,
         customer_id: Number(user?.id) || 0,
         establishment_id: Number(establishment?.id) || 0,
         amount,
-        delivery_amount: deliveryValue || 0,
+        // Mesmo princípio do amount: o frete que a cobrança declara é o que
+        // o SERVIDOR gravou no pedido, não a cotação que esta tela tinha em
+        // mãos. resolveDeliveryAmount confere os dois no payment_api, e uma
+        // cotação local defasada (assinatura, taxa da zona alterada entre a
+        // cotação e o pedido) faria a cobrança ser recusada.
+        delivery_amount:
+          typeof serverDelivery === "number" && serverDelivery >= 0
+            ? serverDelivery
+            : deliveryValue || 0,
         method: "pix",
       });
       if (data?.qr_code_base64 || data?.pix_copy_paste) {
@@ -89,7 +121,10 @@ const cart = () => {
       "Seu pedido foi criado, mas não conseguimos gerar a cobrança. Tentar novamente?",
       [
         { text: "Continuar sem pagar", style: "cancel" },
-        { text: "Tentar novamente", onPress: () => generatePix(orderId, user) },
+        {
+          text: "Tentar novamente",
+          onPress: () => generatePix(orderId, user, serverTotal, serverDelivery),
+        },
       ]
     );
     return false;
@@ -104,7 +139,7 @@ const cart = () => {
       if (res.ok) {
         if (paymentMethod.type === "pix" && res.orderId) {
           // Fluxo PIX: mostra o QR Code antes de sair da tela.
-          await generatePix(res.orderId, user);
+          await generatePix(res.orderId, user, res.orderTotal, res.deliveryValue);
           setLoad(false);
           return;
         }
@@ -198,6 +233,46 @@ const cart = () => {
             <OrderSummary data={cart} />
 
             <OrderSummaryWithTotal data={cart} />
+
+            {/* Cupom.
+              *
+              * O cliente só digita o CÓDIGO. Quem decide se vale, quanto
+              * desconta e de quem sai a promoção é o servidor, no
+              * POST /orders — inclusive recusando o pedido inteiro se o
+              * cupom não valer, com uma mensagem que a tela mostra tal e
+              * qual. Não há validação de valor aqui de propósito: um
+              * desconto calculado no app seria um palpite que o servidor
+              * ignora, e mostrá-lo antes do pedido enganaria o cliente. */}
+            <View style={styles.cupomBox}>
+              <Text style={styles.cupomLabel}>Cupom de desconto</Text>
+              <View style={styles.cupomRow}>
+                <TextInput
+                  style={styles.cupomInput}
+                  placeholder="Tem um código? Digite aqui"
+                  placeholderTextColor="#9CA3AF"
+                  value={couponCode}
+                  onChangeText={(t: string) => setCouponCode(t.toUpperCase())}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  editable={!load}
+                  accessibilityLabel="Código do cupom"
+                />
+                {couponCode.length > 0 && (
+                  <TouchableOpacity
+                    style={styles.cupomLimpar}
+                    onPress={() => setCouponCode("")}
+                    disabled={load}
+                    accessibilityLabel="Limpar cupom"
+                  >
+                    <MaterialIcons name="close" size={18} color="#6B7280" />
+                  </TouchableOpacity>
+                )}
+              </View>
+              <Text style={styles.cupomHint}>
+                O desconto é aplicado ao finalizar o pedido.
+              </Text>
+            </View>
+
             <PaymentComponent
               title={(Texts as Record<string, string>)[paymentMethod.type]}
               icon={paymentMethod.icon}
@@ -250,6 +325,43 @@ const cart = () => {
 };
 
 const styles = StyleSheet.create({
+  cupomBox: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 14,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  cupomLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#111827",
+    marginBottom: 8,
+  },
+  cupomRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+  },
+  cupomInput: {
+    flex: 1,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: "#111827",
+  },
+  cupomLimpar: {
+    padding: 6,
+  },
+  cupomHint: {
+    marginTop: 6,
+    fontSize: 12,
+    color: "#6B7280",
+  },
   pixOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.6)",

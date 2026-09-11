@@ -10,16 +10,21 @@ import (
 
 // UnmatchedOrderRow representa uma linha na tabela unmatched_orders (Postgres).
 type UnmatchedOrderRow struct {
-	ID               int64     `gorm:"primaryKey;autoIncrement"`
-	OrderID          string    `gorm:"column:order_id;size:64;not null"`
-	EstablishmentLat float64   `gorm:"column:establishment_lat;not null"`
-	EstablishmentLng float64   `gorm:"column:establishment_lng;not null"`
-	ZoneID           int       `gorm:"column:zone_id;default:0"`
-	CreatedAt        int64     `gorm:"column:created_at;not null"`
-	RetryCount       int       `gorm:"column:retry_count;default:0"`
-	LastAttemptAt    int64     `gorm:"column:last_attempt_at;not null"`
-	Metadata         string    `gorm:"column:metadata;type:jsonb"`
-	CreatedTZ        time.Time `gorm:"column:created_tz;autoCreateTime"`
+	ID               int64   `gorm:"primaryKey;autoIncrement"`
+	OrderID          string  `gorm:"column:order_id;size:64;not null"`
+	EstablishmentLat float64 `gorm:"column:establishment_lat;not null"`
+	EstablishmentLng float64 `gorm:"column:establishment_lng;not null"`
+	ZoneID           int     `gorm:"column:zone_id;default:0"`
+	CreatedAt        int64   `gorm:"column:created_at;not null"`
+	RetryCount       int     `gorm:"column:retry_count;default:0"`
+	LastAttemptAt    int64   `gorm:"column:last_attempt_at;not null"`
+	// PONTEIRO, não string. Como string, o GORM mandava '' no INSERT e o
+	// Postgres rejeitava com "invalid input syntax for type json" — ou seja,
+	// TODO Push falhava. E como Push não devolve erro (a DLQInterface não
+	// prevê), a falha só virava log: a DLQ persistente aceitaria tudo e não
+	// guardaria nada. Nil vira NULL, que é o que a coluna (opcional) espera.
+	Metadata  *string   `gorm:"column:metadata;type:jsonb"`
+	CreatedTZ time.Time `gorm:"column:created_tz;autoCreateTime"`
 }
 
 // TableName retorna o nome da tabela.
@@ -154,8 +159,15 @@ func (d *PostgresDLQStore) Cleanup(maxAge time.Duration) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	cutoff := time.Now().Add(-maxAge)
-	result := d.db.Where("created_tz < ?", cutoff).Delete(&UnmatchedOrderRow{})
+	// Filtra por created_at (idade do PEDIDO, UnixMilli), não por created_tz
+	// (quando a LINHA foi inserida). A diferença não é cosmética: o motor de
+	// matching faz PopNext + Push de volta a cada nova tentativa, e Push cria
+	// uma linha nova — o que reseta created_tz. Com created_tz, um pedido que
+	// falha repetidamente renova o próprio prazo a cada retry e NUNCA é
+	// limpo. A tabela vaza, e é o pedido mais velho (o mais provável de estar
+	// morto) que fica para sempre.
+	cutoff := time.Now().Add(-maxAge).UnixMilli()
+	result := d.db.Where("created_at < ?", cutoff).Delete(&UnmatchedOrderRow{})
 	if result.Error != nil {
 		log.Printf("[DLQ-PG] ERRO ao limpar registros antigos: %v", result.Error)
 		return

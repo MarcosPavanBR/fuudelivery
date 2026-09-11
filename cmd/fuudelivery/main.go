@@ -319,7 +319,29 @@ func initDispatchEngine(db *gorm.DB) {
 	// Zone resolver: consulta PostgreSQL via GORM
 	zoneResolver := &zoneDBResolver{DB: db}
 
-	matchingEngine = dispatchServices.NewMatchingEngine(courierStore, zoneResolver)
+	// DLQ PERSISTENTE, não em memória. A NewDLQStore in-memory descarta o pedido
+	// mais antigo em SILÊNCIO quando enche (matching_engine.go:52,
+	// `d.orders = d.orders[1:]`) e perde tudo num restart — e restart aqui é
+	// rotina, não exceção: o free tier do Render derruba o processo por
+	// inatividade. Pedido não casado que some é pedido pago que nunca recebe
+	// entregador, sem nada no backend percebendo.
+	//
+	// A PostgresDLQStore e o construtor WithDLQ já existiam, testados, com a
+	// tabela criada em sql/17_unmatched_orders.sql — só nunca tinham sido
+	// ligados aqui.
+	matchingEngine = dispatchServices.NewMatchingEngineWithDLQ(
+		courierStore, zoneResolver, dispatchServices.NewPostgresDLQStore(db))
+
+	// Expõe a profundidade da DLQ no /metrics. É um hook porque o pacote de
+	// métricas não pode importar main; sem ele, a fila de pedidos sem
+	// entregador continuaria invisível — que é metade do problema que a DLQ
+	// persistente resolve (a outra metade é não perdê-los no restart).
+	metrics.DLQDepthFunc = func() int {
+		if matchingEngine == nil || matchingEngine.DLQ == nil {
+			return 0
+		}
+		return matchingEngine.DLQ.Len()
+	}
 
 	// Callback: quando um pedido e matchado, publica no canal de delivery_updates
 	matchingEngine.OnMatch = func(orderID string, courierID int64) {
@@ -1174,6 +1196,14 @@ func setupOrdersRoutes(app *fiber.App) {
 	app.Post("/delivery", protectedRoute, ordersHandlers.InsertDelivery)
 	app.Post("/delivery/calculate-delivery-value", protectedRoute, ordersHandlers.CalculateDeliveryValue)
 	app.Post("/delivery/calculate-route", protectedRoute, ordersHandlers.CalculateRoute)
+
+	// Regiões de frete (faixa de CEP → preço). adminRequired em todas: quem
+	// define o preço do frete é o dono da plataforma. Uma região é dinheiro em
+	// todo pedido que casar com ela.
+	app.Get("/delivery/regions", adminRequired, ordersHandlers.ListDeliveryRegions)
+	app.Post("/delivery/regions", adminRequired, ordersHandlers.CreateDeliveryRegion)
+	app.Put("/delivery/regions/:id", adminRequired, ordersHandlers.UpdateDeliveryRegion)
+	app.Delete("/delivery/regions/:id", adminRequired, ordersHandlers.DeleteDeliveryRegion)
 	app.Get("/delivery/value/:establishmentId", ordersHandlers.GetDeliveryByEstablishmentID)
 	// Rate limit 30/min na criação de pedidos: é a rota que grava, notifica
 	// e dispara dispatch — abuso direto impacta o banco e a fila.
@@ -1716,12 +1746,22 @@ func main() {
 
 	// Metricas em formato Prometheus text (para Prometheus/Grafana/BetterStack/UptimeRobot)
 	// GET /metrics — protegido por bearer token (env METRICS_TOKEN).
-	// Sem a env var configurada (ex.: dev local), o endpoint fica aberto.
+	//
+	// Em PRODUÇÃO, sem METRICS_TOKEN configurado o endpoint NÃO serve (403).
+	// A regra completa e o porquê estão em metrics_auth.go.
 	app.Get("/metrics", func(c *fiber.Ctx) error {
-		if want := os.Getenv("METRICS_TOKEN"); want != "" {
-			if c.Get("Authorization") != "Bearer "+want {
-				return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+		ok, motivo := metricsAuthorized(
+			os.Getenv("GO_ENV"),
+			os.Getenv("METRICS_TOKEN"),
+			c.Get("Authorization"),
+		)
+		if !ok {
+			if motivo == metricsDeniedNoToken {
+				// LOUD: quem subiu em produção precisa saber que as métricas
+				// estão inacessíveis por falta de configuração, e não por bug.
+				log.Printf("[METRICS] 403 — %s. Configure METRICS_TOKEN para habilitar o endpoint.", motivo)
 			}
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "forbidden"})
 		}
 		return metrics.Handler(c)
 	})
@@ -1785,6 +1825,13 @@ func main() {
 
 		// Initialize dispatch engine (courier store + matching engine + handler)
 		initDispatchEngine(models.DB)
+
+		// Reconciliação de pagamentos: a rede de segurança do caminho do
+		// dinheiro. Sobe AQUI, dentro da goroutine de inicialização, porque
+		// depende dos bancos conectados — e a primeira passada acontece logo
+		// na subida de propósito: o restart pode ter sido exatamente o que
+		// interrompeu uma liquidação no meio.
+		go paymentHandlers.StartPaymentReconciliation(5 * time.Minute)
 	}()
 
 	// Start background workers

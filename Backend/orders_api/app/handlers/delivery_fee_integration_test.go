@@ -82,7 +82,7 @@ func TestDeliveryFeeAssinatura(t *testing.T) {
 	t.Run("premium tem frete grátis sempre", func(t *testing.T) {
 		seedSub(701, "premium", 0)
 		uid := uint(701)
-		fee, err := computeDeliveryFee(3, 1, &uid, 0)
+		fee, err := computeDeliveryFee(endereco("01310100"), 3, 1, &uid, 0)
 		if err != nil {
 			t.Fatalf("erro inesperado: %v", err)
 		}
@@ -101,7 +101,7 @@ func TestDeliveryFeeAssinatura(t *testing.T) {
 		seedSub(702, "basic", 50.0)
 		uid := uint(702)
 
-		abaixo, err := computeDeliveryFee(3, 1, &uid, 49.99)
+		abaixo, err := computeDeliveryFee(endereco("01310100"), 3, 1, &uid, 49.99)
 		if err != nil {
 			t.Fatalf("erro inesperado: %v", err)
 		}
@@ -109,7 +109,7 @@ func TestDeliveryFeeAssinatura(t *testing.T) {
 			t.Fatalf("abaixo do mínimo o frete é cobrado, veio %.2f", abaixo.Value)
 		}
 
-		acima, err := computeDeliveryFee(3, 1, &uid, 50.00)
+		acima, err := computeDeliveryFee(endereco("01310100"), 3, 1, &uid, 50.00)
 		if err != nil {
 			t.Fatalf("erro inesperado: %v", err)
 		}
@@ -125,7 +125,7 @@ func TestDeliveryFeeAssinatura(t *testing.T) {
 			t.Fatalf("semear assinatura vencida: %v", err)
 		}
 		uid := uint(703)
-		fee, err := computeDeliveryFee(3, 1, &uid, 0)
+		fee, err := computeDeliveryFee(endereco("01310100"), 3, 1, &uid, 0)
 		if err != nil {
 			t.Fatalf("erro inesperado: %v", err)
 		}
@@ -136,7 +136,7 @@ func TestDeliveryFeeAssinatura(t *testing.T) {
 
 	t.Run("usuário sem assinatura paga o frete", func(t *testing.T) {
 		uid := uint(999)
-		fee, err := computeDeliveryFee(3, 1, &uid, 1000.00)
+		fee, err := computeDeliveryFee(endereco("01310100"), 3, 1, &uid, 1000.00)
 		if err != nil {
 			t.Fatalf("erro inesperado: %v", err)
 		}

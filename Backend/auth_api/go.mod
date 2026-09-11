@@ -1,10 +1,10 @@
 module github.com/carloshomar/fuudelivery/auth_api
 
-go 1.25.0
+go 1.26.0
 
 require (
-	github.com/gofiber/fiber/v2 v2.52.12
-	golang.org/x/crypto v0.55.0
+	github.com/gofiber/fiber/v2 v2.52.15
+	golang.org/x/crypto v0.56.0
 	gorm.io/driver/postgres v1.6.2
 	gorm.io/gorm v1.31.2
 )

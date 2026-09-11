@@ -500,10 +500,23 @@ docker stats                                         # CPU/RAM dos contêineres
 
 ---
 
-## 14. Checklist Final
+## 14. Monitoramento
+
+O passo a passo de monitoramento (monitor externo no `/health`, como ler cada
+`status`, `METRICS_TOKEN`, e quais métricas alertar) está em
+**`docs/guia-deploy.md`, seção "Monitoramento"** — vale igual para VPS e para
+Render, e mantê-lo num lugar só evita as duas cópias divergirem.
+
+Um ponto que não dá para pular: o `status: starting` do `/health` responde
+**HTTP 200**. Um monitor que olha só o código HTTP não distingue cold start de
+banco que nunca conectou.
+
+---
+
+## 15. Checklist Final
 
 - [ ] `docker compose ps` — 6 serviços `Up`
-- [ ] `curl http://127.0.0.1:3000/health` — `status: ok`, dependências `up`
+- [ ] `curl http://127.0.0.1:3000/health` — `status: up` (ou `degraded`), dependências `up`
 - [ ] `https://api.suaempresa.com/health` — 200 via nginx + HTTPS
 - [ ] `https://restaurante.suaempresa.com` e `https://admin.suaempresa.com` — 200
 - [ ] Webhook AbacatePay apontando para `https://api.suaempresa.com/payments/webhook`
@@ -513,6 +526,9 @@ docker stats                                         # CPU/RAM dos contêineres
 - [ ] UFW: apenas 22, 80, 443
 - [ ] Renovação do certificado automática (`sudo systemctl status certbot.timer`)
 - [ ] Backup do `.env` fora do VPS
+- [ ] `METRICS_TOKEN` configurado — sem ele o `/metrics` devolve 403 em produção
+- [ ] Monitor externo apontando para `/health` (1–5 min) com alerta no celular
+- [ ] `sql/24` aplicado e regiões de frete cadastradas no WebAdmin
 - [ ] Tabela de Versões atualizada + PDF regenerado
 
 ---

@@ -1746,12 +1746,22 @@ func main() {
 
 	// Metricas em formato Prometheus text (para Prometheus/Grafana/BetterStack/UptimeRobot)
 	// GET /metrics — protegido por bearer token (env METRICS_TOKEN).
-	// Sem a env var configurada (ex.: dev local), o endpoint fica aberto.
+	//
+	// Em PRODUÇÃO, sem METRICS_TOKEN configurado o endpoint NÃO serve (403).
+	// A regra completa e o porquê estão em metrics_auth.go.
 	app.Get("/metrics", func(c *fiber.Ctx) error {
-		if want := os.Getenv("METRICS_TOKEN"); want != "" {
-			if c.Get("Authorization") != "Bearer "+want {
-				return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+		ok, motivo := metricsAuthorized(
+			os.Getenv("GO_ENV"),
+			os.Getenv("METRICS_TOKEN"),
+			c.Get("Authorization"),
+		)
+		if !ok {
+			if motivo == metricsDeniedNoToken {
+				// LOUD: quem subiu em produção precisa saber que as métricas
+				// estão inacessíveis por falta de configuração, e não por bug.
+				log.Printf("[METRICS] 403 — %s. Configure METRICS_TOKEN para habilitar o endpoint.", motivo)
 			}
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "forbidden"})
 		}
 		return metrics.Handler(c)
 	})

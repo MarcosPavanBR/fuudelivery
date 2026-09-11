@@ -332,6 +332,17 @@ func initDispatchEngine(db *gorm.DB) {
 	matchingEngine = dispatchServices.NewMatchingEngineWithDLQ(
 		courierStore, zoneResolver, dispatchServices.NewPostgresDLQStore(db))
 
+	// Expõe a profundidade da DLQ no /metrics. É um hook porque o pacote de
+	// métricas não pode importar main; sem ele, a fila de pedidos sem
+	// entregador continuaria invisível — que é metade do problema que a DLQ
+	// persistente resolve (a outra metade é não perdê-los no restart).
+	metrics.DLQDepthFunc = func() int {
+		if matchingEngine == nil || matchingEngine.DLQ == nil {
+			return 0
+		}
+		return matchingEngine.DLQ.Len()
+	}
+
 	// Callback: quando um pedido e matchado, publica no canal de delivery_updates
 	matchingEngine.OnMatch = func(orderID string, courierID int64) {
 		data, _ := json.Marshal(map[string]interface{}{
@@ -1804,6 +1815,13 @@ func main() {
 
 		// Initialize dispatch engine (courier store + matching engine + handler)
 		initDispatchEngine(models.DB)
+
+		// Reconciliação de pagamentos: a rede de segurança do caminho do
+		// dinheiro. Sobe AQUI, dentro da goroutine de inicialização, porque
+		// depende dos bancos conectados — e a primeira passada acontece logo
+		// na subida de propósito: o restart pode ter sido exatamente o que
+		// interrompeu uma liquidação no meio.
+		go paymentHandlers.StartPaymentReconciliation(5 * time.Minute)
 	}()
 
 	// Start background workers

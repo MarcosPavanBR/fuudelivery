@@ -163,7 +163,6 @@ func retryHashKey(queueName string) string {
 // Se Redis estiver disponivel, usa XAdd (Stream). Caso contrario, usa Go channels.
 func (q *Queue) Publish(queueName string, data []byte) error {
 	if q.useRedis && q.client != nil {
-		atomic.AddInt64(&q.metrics.published, 1)
 		if err := q.client.XAdd(q.ctx, &redis.XAddArgs{
 			Stream: streamKey(queueName),
 			Values: map[string]interface{}{"payload": data},
@@ -171,6 +170,12 @@ func (q *Queue) Publish(queueName string, data []byte) error {
 			atomic.AddInt64(&q.metrics.publishErrors, 1)
 			return err
 		}
+		// Conta DEPOIS do XAdd. Contando antes, uma falha somava em published
+		// E em publishErrors ao mesmo tempo, e `published - delivered` — a
+		// única forma de estimar backlog a partir destes contadores — virava
+		// lixo. Métrica de fila que não permite calcular backlog não serve
+		// para alertar sobre nada, que é a única razão de ela existir.
+		atomic.AddInt64(&q.metrics.published, 1)
 		return nil
 	}
 

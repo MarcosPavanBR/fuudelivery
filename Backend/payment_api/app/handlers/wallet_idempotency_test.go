@@ -216,19 +216,26 @@ func TestWalletIdempotency_Deduct(t *testing.T) {
 	cleanup := setupCheckoutE2EEnv(t)
 	defer cleanup()
 	applyLedgerIdempotencyIndexes(t)
+	// Âncora server-side do débito: o valor pagável vem de order_documents
+	// (order_total) e o dono da coluna user_phone. Sem o pedido semeado, o
+	// débito legítimo é recusado com 400 — a âncora existe justamente para
+	// recusar pedido que o servidor não conhece.
+	createOrderDocumentsTable(t)
 
 	os.Setenv("JWT_SECRET", "idem-deduct-secret")
 	defer os.Unsetenv("JWT_SECRET")
 
 	const userID int64 = 7777
+	const userPhone = "+5511900007777"
 
 	app := fiber.New()
 	app.Post("/wallets/deduct", DeductFromWallet)
 
 	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"id":   float64(userID),
-		"role": "client",
-		"exp":  time.Now().Add(time.Hour).Unix(),
+		"id":    float64(userID),
+		"phone": userPhone,
+		"role":  "client",
+		"exp":   time.Now().Add(time.Hour).Unix(),
 	})
 	token, err := tok.SignedString([]byte("idem-deduct-secret"))
 	require.NoError(t, err)
@@ -245,6 +252,13 @@ func TestWalletIdempotency_Deduct(t *testing.T) {
 
 	walletType := walletTypeForUser(userID)
 	seedWallet(t, userID, walletType, 100.0)
+
+	// Pedido real com total 25.00 e dono = telefone do token. É daqui que a
+	// âncora lê o valor pagável e a posse.
+	require.NoError(t, models.DB.Exec(
+		`INSERT INTO order_documents (legacy_id, establishment_id, user_phone, payload)
+		 VALUES ('order-idem-1', 7, ?, jsonb_build_object('order_total', 25.0::float8))`,
+		userPhone).Error)
 
 	t.Run("mesmo order_id debita uma vez só", func(t *testing.T) {
 		body := fmt.Sprintf(`{"user_id":%d,"amount":25.0,"order_id":"order-idem-1"}`, userID)

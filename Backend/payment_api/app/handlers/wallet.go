@@ -234,6 +234,34 @@ func DeductFromWallet(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "order_id é obrigatório para debitar da carteira"})
 	}
 
+	// Âncora server-side do débito — mesma postura de validateChargeAmount
+	// no PIX/cartão. O amount do corpo já foi a maior fonte de desvio
+	// possível aqui: debitar 0,01 da carteira para liberar um pedido de
+	// R$ 100. O valor pagável é o order_total gravado pelo orders_api (JÁ
+	// líquido do cupom), e o dono do pedido vem das colunas/payload do
+	// pedido — nunca do chamador.
+	serverTotal, totalOK := lookupOrderTotal(req.OrderID)
+	if !totalOK {
+		log.Printf("[WALLET] Deduct rejected: pedido %s sem total server-side válido (user=%d)", req.OrderID, req.UserID)
+		return c.Status(400).JSON(fiber.Map{"error": "Pedido não encontrado ou sem total válido"})
+	}
+	if !models.SameAmount(serverTotal, req.Amount) {
+		log.Printf("[WALLET] Deduct rejected: valor diverge do pedido %s (client=%.2f server=%.2f user=%d)",
+			req.OrderID, req.Amount, serverTotal, req.UserID)
+		return c.Status(409).JSON(fiber.Map{
+			"error":           "Valor do débito não corresponde ao pedido",
+			"amount_recorded": serverTotal,
+		})
+	}
+	tokenPhone, pErr := middlewares.GetUserPhoneFromToken(c)
+	if pErr != nil {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Phone not found in token"})
+	}
+	if facts, ok := lookupOrderRecipient(req.OrderID); !ok || facts.UserPhone == "" || facts.UserPhone != tokenPhone {
+		log.Printf("[WALLET] Deduct rejected: pedido %s não pertence ao chamador (user=%d)", req.OrderID, req.UserID)
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Pedido não pertence a este usuário"})
+	}
+
 	walletType := walletTypeForUser(req.UserID)
 	ref := deductRef(req.UserID, req.OrderID)
 

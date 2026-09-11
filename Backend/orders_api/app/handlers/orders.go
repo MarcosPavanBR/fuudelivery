@@ -52,6 +52,19 @@ func CreateOrder(c *fiber.Ctx, sendMessageToClient func(clientID int64, message 
 	// cliente mandava no corpo. `request.Distance` é ignorado — era ele que
 	// permitia pagar só a taxa fixa mandando zero.
 	//
+	// O telefone do pedido vem do TOKEN, não do corpo: é ele que vira a
+	// coluna user_phone em order_documents e o destinatário usado pelo
+	// payment_api (cobrança, ACL de leitura, cashback do split, débito de
+	// carteira com âncora de dono). Aceitar o do corpo deixava o cliente
+	// escolher de quem é o pedido — mandando o phone de outro usuário, o
+	// pedido nascia com identidade alheia. O nome é cosmético e fica do
+	// corpo; o telefone é identidade e vem do token.
+	if tokenPhone, tErr := middlewares.GetUserPhoneFromToken(c); tErr == nil && tokenPhone != "" {
+		request.User.Phone = tokenPhone
+	} else {
+		log.Printf("[ORDER] Pedido sem telefone no token — user.phone do corpo segue (%q)", request.User.Phone)
+	}
+
 	// O user_id vem do token, não do corpo: é ele que decide se a assinatura
 	// zera o frete, então deixar o cliente escolher seria dar frete grátis a
 	// quem pedisse.

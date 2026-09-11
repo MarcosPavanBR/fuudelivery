@@ -22,12 +22,16 @@
    `https://fuudelivery-api-8y6l.onrender.com/payments/webhook`.
 6. Teste: gerar um PIX real de R$0,01 pelo app e conferir o webhook (logs do Render).
 
-## 2. MongoDB Atlas (dual-write legado)
+## 2. MongoDB Atlas (aposentado)
 
-1. Atlas → Database Access → user `<USUARIO>` → **Edit Password** (gerar forte).
-2. Render Environment → `MONGO_URI` com a nova senha.
-3. Observação: em ~22/09 o Atlas é aposentado (ver ARQUITETURA-BANCO-UNICO.md);
-   mesmo assim rotacione agora — a senha está exposta.
+> **Seção histórica.** O Atlas saiu do projeto (consolidação no Supabase
+> concluída — ver ARQUITETURA-BANCO-UNICO.md): não existe mais `MONGO_URI` em
+> nenhum serviço do Render, nenhum import de mongo-driver no código e os ETLs
+> foram apagados. Não há o que rotacionar em ambiente ativo.
+>
+> Única ação pendente, se o projeto ainda existir na conta do Atlas:
+> **apagar o projeto** (Settings → Delete Project). Enquanto existir, a senha
+> vazada deste runbook continua valendo para os dados que lá ficaram.
 
 ## 3. Redis Cloud (fila financeira)
 
@@ -40,9 +44,15 @@
 
 1. Dashboard → Settings → API → **Rotate** `service_role` key.
 2. Render Environment → `SUPABASE_SERVICE_ROLE_KEY`.
-3. A connection string do banco (`DB_CONNECTION_STRING`) usa a senha do role
+3. **Formato novo de chaves**: se o projeto já usa as chaves `sb_secret_…` /
+   `sb_publishable_…` (sucessoras das `service_role`/`anon` baseadas em JWT),
+   rotacione **as duas gerações** — ambas ignoram RLS e escrevem direto nas
+   tabelas. O dashboard lista cada uma com o próprio botão de rotate.
+4. A connection string do banco (`DB_CONNECTION_STRING`) usa a senha do role
    `postgres`/`app_backend` — se ela também esteve em algum arquivo local,
    troque em Database → Settings → Reset database password, e atualize o Render.
+5. Regerar também a `anon`/`sb_publishable_` usada por qualquer frontend que
+   fale direto com o Supabase (Storage, por exemplo).
 
 ## 5. Render API Key
 
@@ -59,12 +69,24 @@
    implantado nos clientes, os usuários são reautenticados transparentemente
    na maioria dos casos (login novo quando o refresh também for antigo).
 
+## 6b. METRICS_TOKEN (novo — não está vazado, precisa existir)
+
+1. `openssl rand -hex 32`.
+2. Render Environment → `METRICS_TOKEN`.
+3. Sem esta variável o `/metrics` responde **403** em produção (guarda
+   fail-closed em `cmd/fuudelivery/metrics_auth.go`): gere e cole **junto com**
+   o deploy, não depois.
+4. Consumidor externo (monitor de uptime, Grafana Agent) usa
+   `Authorization: Bearer <token>`.
+
 ## 7. Validação final
 
 - [ ] `monitor.yml` verde / `/health` 200
+- [ ] `/metrics` 200 com o bearer novo (e 403 sem ele)
 - [ ] Login no app + painel admin funcionando
 - [ ] PIX de teste confirmado via webhook
 - [ ] Upload de imagem funcionando (Supabase Storage)
+- [ ] Chave antiga do Supabace recusada (a rotacionada deixa de autenticar)
 
 ## 8. Purgar o histórico (APENAS depois de fechar todos os PRs abertos)
 

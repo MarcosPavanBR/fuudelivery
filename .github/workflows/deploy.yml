@@ -55,9 +55,10 @@ jobs:
             "https://api.render.com/v1/services/${SERVICE_ID}/routes"
 
       - name: Deploy ${{ matrix.service.name }} to Render
+        env:
+          COMMIT_ID: ${{ github.event.inputs.commit_id }}
         run: |
           DEPLOY_BODY="{}"
-          COMMIT_ID="${{ github.event.inputs.commit_id }}"
           if [ -n "$COMMIT_ID" ]; then
             DEPLOY_BODY="{\"commitId\":\"${COMMIT_ID}\"}"
             echo "Deployando commit especifico: $COMMIT_ID"

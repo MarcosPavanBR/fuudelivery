@@ -427,3 +427,76 @@ func TestApplyCoupon_FundedByVazioViraPlataforma(t *testing.T) {
 		t.Fatalf("cupom sem funded_by é da plataforma, veio %q", app.FundedBy)
 	}
 }
+
+// ── releaseCoupon é idempotente ──
+//
+// O decremento só pode acontecer quando o DELETE apagou um uso DE VERDADE.
+// Sem o gate no RowsAffected, chamar releaseCoupon duas vezes (ou para um
+// order_id que nunca consumiu) empurra o used_count para baixo — e uso
+// devolvido que não existia é cupom rendendo de graça.
+
+func TestReleaseCoupon_SegundaChamadaNaoDecrementa(t *testing.T) {
+	setupCouponOrderDB(t)
+	c := seedCoupon(t, models.Coupon{
+		Code: "DEZ", DiscountType: "FIXED", DiscountValue: 10,
+		EstablishmentID: 1, MaxUses: 1,
+	})
+
+	if _, err := applyCouponToOrder("DEZ", "ped-1", "+5511999900001", 1, 60, 11); err != nil {
+		t.Fatalf("erro inesperado: %v", err)
+	}
+
+	releaseCoupon("DEZ", "ped-1")
+	releaseCoupon("DEZ", "ped-1") // dupla chamada: a segunda não pode fazer nada
+
+	var depois models.Coupon
+	models.DB.First(&depois, c.ID)
+	if depois.UsedCount != 0 {
+		t.Fatalf("used_count deveria parar em 0, veio %d (o segundo release desceu abaixo de zero ou o primeiro não foi gateado)", depois.UsedCount)
+	}
+}
+
+func TestReleaseCoupon_SemUsoNaoDecrementa(t *testing.T) {
+	setupCouponOrderDB(t)
+	c := seedCoupon(t, models.Coupon{
+		Code: "DEZ", DiscountType: "FIXED", DiscountValue: 10,
+		EstablishmentID: 1, MaxUses: 5,
+	})
+
+	// Simula o consumo que DEU CERTO em outro pedido e um release para um
+	// pedido que nunca consumiu (caminho de falha antes do consumeCoupon).
+	other := c
+	if err := consumeCoupon(&other, "ped-outro", "+5511999900002", 10); err != nil {
+		t.Fatalf("consumo de controle falhou: %v", err)
+	}
+
+	releaseCoupon("DEZ", "ped-fantasma") // nunca consumiu — não pode devolver nada
+
+	var depois models.Coupon
+	models.DB.First(&depois, c.ID)
+	if depois.UsedCount != 1 {
+		t.Fatalf("used_count deveria continuar 1, veio %d — release fantasma devolveu uso que não existia", depois.UsedCount)
+	}
+}
+
+// ── O dono do cupom de indicação é o telefone, não quem sabe o código ──
+//
+// Os códigos são determinísticos ("GANHOU-<tel>"): sem OwnerPhone gravado,
+// qualquer um que chutasse o código de outra pessoa usava o boas-vindas alheio.
+
+func TestApplyCoupon_GanhouDeTerceiroNaoResgata(t *testing.T) {
+	setupCouponOrderDB(t)
+	// Cupom exatamente como o GenerateReferralCoupon cunha o boas-vindas.
+	seedCoupon(t, models.Coupon{
+		Code: "GANHOU-+5511977776666", DiscountType: "FIXED", DiscountValue: 10,
+		MaxUses: 1, MaxUsesPerUser: 1,
+		OwnerPhone: "+5511977776666",
+	})
+
+	if _, err := applyCouponToOrder("GANHOU-+5511977776666", "ped-1", "+5511888885555", 1, 60, 11); err == nil {
+		t.Fatal("terceiro não pode resgatar o boas-vindas que é pessoal de outro")
+	}
+	if _, err := applyCouponToOrder("GANHOU-+5511977776666", "ped-2", "+5511977776666", 1, 60, 11); err != nil {
+		t.Fatalf("o dono deveria resgatar: %v", err)
+	}
+}

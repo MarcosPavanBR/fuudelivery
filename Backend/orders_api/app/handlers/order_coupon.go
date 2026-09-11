@@ -189,9 +189,17 @@ func releaseCoupon(couponCode, orderID string) {
 		if err := tx.Where("code = ?", couponCode).First(&coupon).Error; err != nil {
 			return err
 		}
-		if err := tx.Where("coupon_id = ? AND order_id = ?", coupon.ID, orderID).
-			Delete(&models.CouponUsage{}).Error; err != nil {
-			return err
+		// O decremento é condicionado ao DELETE ter apagado ALGO: devolver uso
+		// que não existe infla o used_count para baixo e vira uso grátis — o
+		// espelho exato do bug do consumo duplo. Chamar releaseCoupon duas
+		// vezes (ou para um order_id que nunca consumiu) vira no-op.
+		del := tx.Where("coupon_id = ? AND order_id = ?", coupon.ID, orderID).
+			Delete(&models.CouponUsage{})
+		if del.Error != nil {
+			return del.Error
+		}
+		if del.RowsAffected == 0 {
+			return nil
 		}
 		return tx.Model(&models.Coupon{}).
 			Where("id = ? AND used_count > 0", coupon.ID).

@@ -303,3 +303,163 @@ func TestCreateCoupon_FundedByInvalido(t *testing.T) {
 		t.Fatalf("funded_by inválido deveria dar 400, veio %d", resp.StatusCode)
 	}
 }
+
+// ── Identidade: o ApplyCoupon lê o telefone do token, nunca do corpo ──
+
+func TestApplyCoupon_TelefoneVemDoTokenNaoDoCorpo(t *testing.T) {
+	app := setupCouponAuthz(t)
+	models.DB.Create(&models.Coupon{
+		Code: "CORPO", DiscountType: "FIXED", DiscountValue: 5,
+		StartDate: time.Now().Add(-time.Hour), ExpiryDate: time.Now().Add(time.Hour),
+		IsActive: true,
+	})
+
+	// O corpo diz "+5511111111111" (vítima), mas o token é de "+5511900000000".
+	resp := doCoupon(t, app, "POST", "/coupons/apply",
+		tokenFor(t, "client", 0, "+5511900000000"),
+		`{"code":"CORPO","user_phone":"+5511111111111","order_id":"ped-1","order_value":100}`)
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("apply deveria valer com telefone do token, veio %d", resp.StatusCode)
+	}
+
+	// O uso tem que ter sido registrado no nome do DONO DO TOKEN.
+	var uso models.CouponUsage
+	if err := models.DB.First(&uso).Error; err != nil {
+		t.Fatalf("uso não registrado: %v", err)
+	}
+	if uso.UserPhone != "+5511900000000" {
+		t.Fatalf("uso gravado no nome do corpo forjado: %q", uso.UserPhone)
+	}
+}
+
+func TestApplyCoupon_SemTelefoneNoTokenEh401(t *testing.T) {
+	app := setupCouponAuthz(t)
+
+	resp := doCoupon(t, app, "POST", "/coupons/apply",
+		tokenFor(t, "client", 0, ""), // token SEM claim de telefone
+		`{"code":"CORPO","user_phone":"+5511111111111","order_id":"ped-1","order_value":100}`)
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("token sem telefone deveria dar 401, veio %d", resp.StatusCode)
+	}
+}
+
+// ── Listagem: escopo pelo token, não pelo query ──
+
+func TestListCoupons_EstabelecimentoNaoListaDoOutro(t *testing.T) {
+	app := setupCouponAuthz(t)
+	app.Get("/coupons", ListCoupons)
+
+	models.DB.Create(&models.Coupon{
+		Code: "DOCONCORRENTE", DiscountType: "FIXED", DiscountValue: 5,
+		EstablishmentID: 9, IsActive: true,
+		StartDate: time.Now().Add(-time.Hour), ExpiryDate: time.Now().Add(time.Hour),
+	})
+
+	resp := doCoupon(t, app, "GET", "/coupons?establishment_id=9",
+		tokenFor(t, "establishment", 7, ""), "")
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("listagem deveria responder 200, veio %d", resp.StatusCode)
+	}
+	var out []models.Coupon
+	_ = json.NewDecoder(resp.Body).Decode(&out)
+	for _, c := range out {
+		if c.EstablishmentID == 9 {
+			t.Fatal("o query param mandou no escopo: estabelecimento 7 viu cupons do 9")
+		}
+	}
+}
+
+// Contraprova: o dono continua vendo o dele (e os globais).
+func TestListCoupons_DonoVeOProprioEGlobais(t *testing.T) {
+	app := setupCouponAuthz(t)
+	app.Get("/coupons", ListCoupons)
+
+	models.DB.Create(&models.Coupon{
+		Code: "MEU", DiscountType: "FIXED", DiscountValue: 5,
+		EstablishmentID: 7, IsActive: true,
+		StartDate: time.Now().Add(-time.Hour), ExpiryDate: time.Now().Add(time.Hour),
+	})
+	models.DB.Create(&models.Coupon{
+		Code: "GLOBAL", DiscountType: "FIXED", DiscountValue: 5,
+		EstablishmentID: 0, IsActive: true,
+		StartDate: time.Now().Add(-time.Hour), ExpiryDate: time.Now().Add(time.Hour),
+	})
+
+	resp := doCoupon(t, app, "GET", "/coupons", tokenFor(t, "establishment", 7, ""), "")
+	var out []models.Coupon
+	_ = json.NewDecoder(resp.Body).Decode(&out)
+	codigos := map[string]bool{}
+	for _, c := range out {
+		codigos[c.Code] = true
+	}
+	if !codigos["MEU"] || !codigos["GLOBAL"] {
+		t.Fatalf("dono deveria ver o próprio + globais, veio %v", codigos)
+	}
+}
+
+// ── Leitura por id: o id na URL não é autorização ──
+
+func TestGetCoupon_ClienteNaoLeCupomPorID(t *testing.T) {
+	app := setupCouponAuthz(t)
+	app.Get("/coupons/:id", GetCoupon)
+
+	c := models.Coupon{Code: "SECRETO", DiscountType: "FIXED", DiscountValue: 5, EstablishmentID: 7}
+	models.DB.Create(&c)
+
+	resp := doCoupon(t, app, "GET", fmt.Sprintf("/coupons/%d", c.ID),
+		tokenFor(t, "client", 0, "+5511999900001"), "")
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Fatalf("cliente não deveria ler cupom por id, veio %d", resp.StatusCode)
+	}
+}
+
+func TestGetCoupon_DonoLeOProprioMasNaoOAlheio(t *testing.T) {
+	app := setupCouponAuthz(t)
+	app.Get("/coupons/:id", GetCoupon)
+
+	me := models.Coupon{Code: "MEUID", DiscountType: "FIXED", DiscountValue: 5, EstablishmentID: 7}
+	alheio := models.Coupon{Code: "ALHEIO", DiscountType: "FIXED", DiscountValue: 5, EstablishmentID: 9}
+	models.DB.Create(&me)
+	models.DB.Create(&alheio)
+
+	if resp := doCoupon(t, app, "GET", fmt.Sprintf("/coupons/%d", me.ID),
+		tokenFor(t, "establishment", 7, ""), ""); resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("dono deveria ler o próprio, veio %d", resp.StatusCode)
+	}
+	if resp := doCoupon(t, app, "GET", fmt.Sprintf("/coupons/%d", alheio.ID),
+		tokenFor(t, "establishment", 7, ""), ""); resp.StatusCode != fiber.StatusForbidden {
+		t.Fatalf("dono não deveria ler cupom do 9, veio %d", resp.StatusCode)
+	}
+}
+
+// ── Criação: cupom global e limites negativos ──
+
+func TestCreateCoupon_EstabelecimentoNaoCriaGlobal(t *testing.T) {
+	app := setupCouponAuthz(t)
+
+	// establishment_id = 0 vale em TODOS os restaurantes — decisão da plataforma.
+	resp := doCoupon(t, app, "POST", "/coupons",
+		tokenFor(t, "establishment", 7, ""), novoCupomBody(0, 20))
+
+	if resp.StatusCode != fiber.StatusForbidden {
+		t.Fatalf("estabelecimento não pode criar cupom global, veio %d", resp.StatusCode)
+	}
+	var n int64
+	models.DB.Model(&models.Coupon{}).Count(&n)
+	if n != 0 {
+		t.Fatalf("nenhum cupom deveria ter sido criado, há %d", n)
+	}
+}
+
+func TestCreateCoupon_LimitesNegativosSaoRecusados(t *testing.T) {
+	app := setupCouponAuthz(t)
+
+	body := `{"code":"NEGATIVO","discount_type":"FIXED","discount_value":5,
+		"establishment_id":0,"max_uses":-5,"start_date":"` + time.Now().Format(time.RFC3339) +
+		`","expiry_date":"` + time.Now().AddDate(0, 1, 0).Format(time.RFC3339) + `"}`
+	resp := doCoupon(t, app, "POST", "/coupons", tokenFor(t, "admin", 0, ""), body)
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("max_uses negativo deveria dar 400, veio %d", resp.StatusCode)
+	}
+}

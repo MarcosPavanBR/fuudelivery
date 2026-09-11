@@ -16,14 +16,22 @@
 -- Idempotente: ADD COLUMN IF NOT EXISTS.
 -- ============================================================================
 
-ALTER TABLE coupons
-    ADD COLUMN IF NOT EXISTS funded_by VARCHAR(20) NOT NULL DEFAULT 'platform';
-
--- Trava os valores aceitos no banco, não só no Go: quem escrever direto no
--- Postgres (script, correção manual) não consegue inventar um terceiro valor
--- que o split não saiba tratar.
+-- coupons é criada pelo AutoMigrate do GORM, não por SQL. Num banco NOVO,
+-- antes do primeiro boot, ela não existe — e sem este guarda o script abortava
+-- a suíte, levando junto os scripts 23 e 24.
 DO $$
 BEGIN
+    IF to_regclass('public.coupons') IS NULL THEN
+        RAISE NOTICE 'coupons ainda nao existe (AutoMigrate nao rodou) — pulando funded_by. Rode run_all.sh de novo apos o primeiro boot.';
+        RETURN;
+    END IF;
+
+    ALTER TABLE coupons
+        ADD COLUMN IF NOT EXISTS funded_by VARCHAR(20) NOT NULL DEFAULT 'platform';
+
+    -- Trava os valores aceitos no banco, não só no Go: quem escrever direto no
+    -- Postgres (script, correção manual) não consegue inventar um terceiro
+    -- valor que o split não saiba tratar.
     IF NOT EXISTS (
         SELECT 1 FROM pg_constraint WHERE conname = 'coupons_funded_by_check'
     ) THEN

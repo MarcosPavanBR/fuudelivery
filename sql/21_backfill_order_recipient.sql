@@ -25,9 +25,26 @@
 -- Idempotente: pode rodar N vezes; reexecucao so preenche o que segue NULL.
 -- ============================================================================
 
--- 0. Defesa: garante que as colunas tipadas existem.
-ALTER TABLE order_documents ADD COLUMN IF NOT EXISTS establishment_id BIGINT;
-ALTER TABLE order_documents ADD COLUMN IF NOT EXISTS user_phone VARCHAR(32);
+-- 0. Defesa: order_documents é criada pelo AutoMigrate do GORM, não por SQL.
+-- Num banco NOVO, antes do primeiro boot da aplicação, ela não existe — e sem
+-- este guarda o script abortava a suíte, levando junto os scripts 22, 23 e 24.
+DO $$
+BEGIN
+    IF to_regclass('public.order_documents') IS NULL THEN
+        RAISE NOTICE 'order_documents ainda nao existe (AutoMigrate nao rodou) — pulando o backfill. Rode run_all.sh de novo apos o primeiro boot.';
+        RETURN;
+    END IF;
+
+    ALTER TABLE order_documents ADD COLUMN IF NOT EXISTS establishment_id BIGINT;
+    ALTER TABLE order_documents ADD COLUMN IF NOT EXISTS user_phone VARCHAR(32);
+END $$;
+
+-- 1 e 2. Backfill, também sob o guarda de existência da tabela.
+DO $$
+BEGIN
+    IF to_regclass('public.order_documents') IS NULL THEN
+        RETURN;
+    END IF;
 
 -- 1. Backfill do establishment_id (somente onde NULL ou 0 — nunca sobrescreve).
 UPDATE order_documents
@@ -43,6 +60,7 @@ UPDATE order_documents
  WHERE (user_phone IS NULL OR user_phone = '')
    AND payload->'user'->>'phone' IS NOT NULL
    AND payload->'user'->>'phone' <> '';
+END $$;
 
 -- 3. Verificacao: pedidos que CONTINUAM sem destinatario conhecido.
 --    Estes seguem recusando cobranca (correto — nao ha para quem creditar),

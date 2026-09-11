@@ -80,7 +80,7 @@ END
 $$;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON unmatched_orders TO app_backend;
-GRANT USAGE, SELECT ON SEQUENCES IN SCHEMA public TO app_backend;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_backend;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON unmatched_orders TO service_role;
 

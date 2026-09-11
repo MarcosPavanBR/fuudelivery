@@ -36,9 +36,9 @@ CREATE TABLE IF NOT EXISTS recipients (
     CONSTRAINT chk_recipients_transfer CHECK (transfer_interval IN ('daily', 'weekly', 'monthly'))
 );
 
-CREATE INDEX idx_recipients_user ON recipients (user_type, user_id);
-CREATE INDEX idx_recipients_gateway ON recipients (gateway, gateway_recipient_id);
-CREATE INDEX idx_recipients_active ON recipients (status) WHERE status = 'active';
+CREATE INDEX IF NOT EXISTS idx_recipients_user ON recipients (user_type, user_id);
+CREATE INDEX IF NOT EXISTS idx_recipients_gateway ON recipients (gateway, gateway_recipient_id);
+CREATE INDEX IF NOT EXISTS idx_recipients_active ON recipients (status) WHERE status = 'active';
 
 COMMENT ON TABLE recipients IS
     'Recebedores multi-gateway. Cada participante (restaurante/entregador) '
@@ -78,7 +78,7 @@ END
 $$;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON recipients TO app_backend;
-GRANT USAGE, SELECT ON SEQUENCES IN SCHEMA public TO app_backend;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_backend;
 
 INSERT INTO schema_migrations (version, description)
 VALUES ('14_recipients', 'Cria tabela recipients para recebedores multi-gateway (split automático)')

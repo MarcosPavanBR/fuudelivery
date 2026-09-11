@@ -15,16 +15,37 @@
 --      → impede crédito duplicado de pontos para o mesmo pedido
 -- ============================================================================
 
+-- coupon_usages e loyalty_transactions são criadas pelo AutoMigrate do GORM,
+-- não por script SQL. Num banco NOVO, onde a aplicação ainda não subiu, elas
+-- não existem e o CREATE INDEX abortava a suíte inteira — os scripts 18 a 24
+-- nunca chegavam a rodar. Os guardas abaixo deixam este script rodar antes OU
+-- depois do primeiro boot: sem as tabelas ele avisa e segue; com elas, cria os
+-- índices. Rodar run_all.sh de novo depois do boot fecha a lacuna.
+
 -- 1) Coupon usage: unique por (coupon, usuario, pedido)
 -- Permite que o MESMO pedido use cupons DIFERENTES, mas não o mesmo cupom.
-CREATE UNIQUE INDEX IF NOT EXISTS uq_coupon_usage_per_order
-    ON coupon_usages (coupon_id, user_phone, order_id);
+DO $$
+BEGIN
+    IF to_regclass('public.coupon_usages') IS NULL THEN
+        RAISE NOTICE 'coupon_usages ainda nao existe (AutoMigrate nao rodou) — pulando uq_coupon_usage_per_order. Rode run_all.sh de novo apos o primeiro boot da aplicacao.';
+    ELSE
+        EXECUTE 'CREATE UNIQUE INDEX IF NOT EXISTS uq_coupon_usage_per_order
+                 ON coupon_usages (coupon_id, user_phone, order_id)';
+    END IF;
+END $$;
 
 -- 2) Loyalty earn: unique por (pedido, tipo=earn, usuario)
 -- Permite outros tipos (redeem, bonus) para o mesmo pedido, mas não dois "earn".
-CREATE UNIQUE INDEX IF NOT EXISTS uq_loyalty_earn_per_order
-    ON loyalty_transactions (order_id, user_phone)
-    WHERE type = 'earn';
+DO $$
+BEGIN
+    IF to_regclass('public.loyalty_transactions') IS NULL THEN
+        RAISE NOTICE 'loyalty_transactions ainda nao existe (AutoMigrate nao rodou) — pulando uq_loyalty_earn_per_order. Rode run_all.sh de novo apos o primeiro boot da aplicacao.';
+    ELSE
+        EXECUTE 'CREATE UNIQUE INDEX IF NOT EXISTS uq_loyalty_earn_per_order
+                 ON loyalty_transactions (order_id, user_phone)
+                 WHERE type = ''earn''';
+    END IF;
+END $$;
 
 -- Registra a migration
 INSERT INTO schema_migrations (version, description)

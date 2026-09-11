@@ -26,7 +26,7 @@ CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires_at
 
 -- Conceder acesso ao role da aplicação
 GRANT SELECT, INSERT, UPDATE, DELETE ON refresh_tokens TO app_backend;
-GRANT USAGE, SELECT ON SEQUENCES IN SCHEMA public TO app_backend;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_backend;
 
 -- Conceder acesso ao service_role (REST/Supabase)
 GRANT SELECT, INSERT, UPDATE, DELETE ON refresh_tokens TO service_role;

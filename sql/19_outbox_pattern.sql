@@ -22,17 +22,17 @@ CREATE TABLE IF NOT EXISTS outbox_events (
 );
 
 -- Índices para consultas eficientes
-CREATE INDEX idx_outbox_events_unprocessed 
+CREATE INDEX IF NOT EXISTS idx_outbox_events_unprocessed 
 ON outbox_events (created_at ASC) 
 WHERE processed_at IS NULL AND processing_at IS NULL;
 
-CREATE INDEX idx_outbox_events_aggregate 
+CREATE INDEX IF NOT EXISTS idx_outbox_events_aggregate 
 ON outbox_events (aggregate_type, aggregate_id);
 
-CREATE INDEX idx_outbox_events_event_type 
+CREATE INDEX IF NOT EXISTS idx_outbox_events_event_type 
 ON outbox_events (event_type);
 
-CREATE INDEX idx_outbox_events_processed 
+CREATE INDEX IF NOT EXISTS idx_outbox_events_processed 
 ON outbox_events (processed_at DESC);
 
 -- Comentário na tabela

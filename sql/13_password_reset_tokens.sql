@@ -83,7 +83,7 @@ END
 $$;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON password_reset_tokens TO app_backend;
-GRANT USAGE, SELECT ON SEQUENCES IN SCHEMA public TO app_backend;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_backend;
 
 -- service_role (chave SUPABASE_SERVICE_ROLE_KEY usada em REST/Storage)
 GRANT SELECT, INSERT, UPDATE, DELETE ON password_reset_tokens TO service_role;

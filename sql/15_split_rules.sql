@@ -43,9 +43,9 @@ CREATE TABLE IF NOT EXISTS payment_split_rules (
     CONSTRAINT chk_split_fixed_value CHECK (fixed_value IS NULL OR fixed_value > 0)
 );
 
-CREATE INDEX idx_split_payment ON payment_split_rules (payment_id);
-CREATE INDEX idx_split_recipient ON payment_split_rules (recipient_id);
-CREATE INDEX idx_split_pending ON payment_split_rules (status) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_split_payment ON payment_split_rules (payment_id);
+CREATE INDEX IF NOT EXISTS idx_split_recipient ON payment_split_rules (recipient_id);
+CREATE INDEX IF NOT EXISTS idx_split_pending ON payment_split_rules (status) WHERE status = 'pending';
 
 COMMENT ON TABLE payment_split_rules IS
     'Regras de split por pagamento. Cada linha = uma porção do valor para um recebedor. '
@@ -82,7 +82,7 @@ END
 $$;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON payment_split_rules TO app_backend;
-GRANT USAGE, SELECT ON SEQUENCES IN SCHEMA public TO app_backend;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_backend;
 
 INSERT INTO schema_migrations (version, description)
 VALUES ('15_split_rules', 'Cria tabela payment_split_rules para split automático de pagamentos')

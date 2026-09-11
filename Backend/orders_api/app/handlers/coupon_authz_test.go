@@ -53,7 +53,10 @@ func setupCouponAuthz(t *testing.T) *fiber.App {
 
 	app := fiber.New()
 	app.Post("/coupons", CreateCoupon)
+	app.Get("/coupons", ListCoupons)
+	app.Get("/coupons/:id", GetCoupon)
 	app.Delete("/coupons/:id", DeleteCoupon)
+	app.Post("/coupons/apply", ApplyCoupon)
 	app.Post("/coupons/referral", GenerateReferralCoupon)
 	return app
 }

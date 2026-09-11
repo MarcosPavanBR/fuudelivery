@@ -319,7 +319,18 @@ func initDispatchEngine(db *gorm.DB) {
 	// Zone resolver: consulta PostgreSQL via GORM
 	zoneResolver := &zoneDBResolver{DB: db}
 
-	matchingEngine = dispatchServices.NewMatchingEngine(courierStore, zoneResolver)
+	// DLQ PERSISTENTE, não em memória. A NewDLQStore in-memory descarta o pedido
+	// mais antigo em SILÊNCIO quando enche (matching_engine.go:52,
+	// `d.orders = d.orders[1:]`) e perde tudo num restart — e restart aqui é
+	// rotina, não exceção: o free tier do Render derruba o processo por
+	// inatividade. Pedido não casado que some é pedido pago que nunca recebe
+	// entregador, sem nada no backend percebendo.
+	//
+	// A PostgresDLQStore e o construtor WithDLQ já existiam, testados, com a
+	// tabela criada em sql/17_unmatched_orders.sql — só nunca tinham sido
+	// ligados aqui.
+	matchingEngine = dispatchServices.NewMatchingEngineWithDLQ(
+		courierStore, zoneResolver, dispatchServices.NewPostgresDLQStore(db))
 
 	// Callback: quando um pedido e matchado, publica no canal de delivery_updates
 	matchingEngine.OnMatch = func(orderID string, courierID int64) {

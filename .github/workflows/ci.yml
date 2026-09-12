@@ -359,6 +359,65 @@ jobs:
         run: bash scripts/verify-deploy_e2e_test.sh
 
   # ──────────────────────────────────────────────
+  # Migrações SQL — a suíte roda até o fim num banco vazio?
+  # ──────────────────────────────────────────────
+  # A suíte sql/ ficou QUEBRADA por semanas sem ninguém notar: cinco scripts
+  # tinham `GRANT USAGE, SELECT ON SEQUENCES IN SCHEMA public`, que o Postgres
+  # nunca aceitou (falta o ALL). Com ON_ERROR_STOP=1, o primeiro erro abortava
+  # o run_all.sh inteiro — e como o backend sobe com AutoMigrate, tudo parecia
+  # bem enquanto as travas do dinheiro (UNIQUE, índice parcial, CHECK)
+  # simplesmente não existiam no banco. Só apareceu quando alguém colou os
+  # scripts à mão e viu o 42601.
+  #
+  # Três passadas de propósito: a primeira prova que roda do zero, a segunda e
+  # a terceira provam que é idempotente — que é o que permite reaplicar num
+  # banco de produção já migrado sem medo.
+  sql-migrations:
+    name: Migrações SQL — do zero e idempotentes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Subir Postgres 16
+        run: |
+          docker run -d --name pg-sql -p 5432:5432 \
+            -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=test -e POSTGRES_DB=postgres postgres:16-alpine
+          until docker exec pg-sql psql -U postgres -d postgres -c 'SELECT 1' >/dev/null 2>&1; do sleep 1; done
+
+      - name: Criar as roles que o Supabase fornece
+        # sql/00 e sql/06 pressupõem service_role, anon e authenticated, que
+        # existem no Supabase e não num Postgres cru. Criá-las aqui reproduz o
+        # alvo real; sem isso o teste validaria um banco que não é o de
+        # produção.
+        run: |
+          docker exec pg-sql psql -U postgres -d postgres -c "
+            CREATE ROLE service_role NOLOGIN;
+            CREATE ROLE anon NOLOGIN;
+            CREATE ROLE authenticated NOLOGIN;"
+
+      - name: Três passadas do run_all.sh
+        env:
+          DB_CONNECTION_STRING: postgresql://postgres:test@localhost:5432/postgres
+        run: |
+          set -euo pipefail
+          for passada in 1 2 3; do
+            echo "═══ passada $passada ═══"
+            echo "sim" | bash ./sql/run_all.sh
+          done
+
+      - name: Falsificar as checagens do pre-launch-check
+        # Não basta a suíte rodar: o verificador que o Marcos usa para decidir
+        # o lançamento precisa saber dizer NÃO. Este teste derruba cada trava
+        # do dinheiro e exige que o veredito vire BLOQUEADO.
+        env:
+          TEST_DB_URL: postgresql://postgres:test@localhost:5432/postgres
+        run: bash scripts/pre-launch-check_test.sh
+
+      - name: Limpar
+        if: always()
+        run: docker rm -f pg-sql 2>/dev/null || true
+
+  # ──────────────────────────────────────────────
   # Vulnerability scanning — all Go modules
   # ──────────────────────────────────────────────
   govulncheck:

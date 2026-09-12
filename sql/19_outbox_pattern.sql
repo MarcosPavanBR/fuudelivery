@@ -1,6 +1,20 @@
 -- Migration 19: Outbox Pattern para Garantia de Entrega de Eventos
 -- Data: 2026-08-30
 -- Descrição: Implementa padrão Transactional Outbox para consistência entre DB e filas
+--
+-- ATENÇÃO — ESTA TABELA NÃO TEM LEITOR (verificado em 2026-09-12).
+--
+-- Nenhum código Go escreve ou lê outbox_events. O `pkg/outbox` que existia foi
+-- apagado em 1065e9a por ser código morto, e a garantia de entrega do caminho
+-- do dinheiro passou a vir da reconciliação periódica
+-- (payment_api/app/handlers/reconciliation.go), que se apoia no UNIQUE
+-- uq_wallet_txns_credit_ref (sql/11) para poder reprocessar sem duplicar.
+--
+-- A tabela fica de pé de propósito: dropar tabela em produção por estética é
+-- risco sem prêmio, e a estrutura serve se um outbox de verdade for escrito
+-- depois. Mas NÃO procure backlog aqui — ela está e continuará vazia, e um
+-- monitor que a consulte vai relatar "0 eventos pendentes" para sempre, o que
+-- não significa saúde nenhuma.
 
 -- Tabela outbox_events armazena eventos pendentes de publicação
 CREATE TABLE IF NOT EXISTS outbox_events (
@@ -132,3 +146,7 @@ COMMIT;
 
 -- Worker externo lê eventos pendentes e publica no Redis Stream
 */
+
+INSERT INTO schema_migrations (version, description)
+VALUES ('19', 'outbox_pattern')
+ON CONFLICT DO NOTHING;

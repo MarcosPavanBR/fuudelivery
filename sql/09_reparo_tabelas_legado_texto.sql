@@ -62,3 +62,15 @@ BEGIN
         END IF;
     END LOOP;
 END $$;
+
+-- Registro na tabela de controle.
+--
+-- Faltava aqui (e no 19). Consequência prática: quem quisesse responder "a
+-- suíte rodou até o fim?" contando as linhas de schema_migrations recebia um
+-- número menor que o de scripts aplicados, e não dava para distinguir "rodou
+-- inteira" de "abortou no meio" — exatamente a pergunta que ficou em aberto
+-- quando o run_all.sh morria no GRANT ... ON SEQUENCES sem ALL (corrigido em
+-- d770f4b).
+INSERT INTO schema_migrations (version, description)
+VALUES ('09_reparo_tabelas_legado_texto', 'Renomeia tabelas legadas vazias com id TEXT que bloqueavam o CREATE TABLE IF NOT EXISTS dos scripts 01-03')
+ON CONFLICT DO NOTHING;

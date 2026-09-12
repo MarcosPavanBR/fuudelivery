@@ -6,6 +6,18 @@ está nos documentos linkados.
 **Estado do código:** pronto. `master` verde no CI. Nada aqui depende de mais
 desenvolvimento.
 
+**Antes e depois de cada passo abaixo, rode:**
+
+```bash
+export DB_CONNECTION_STRING="postgresql://..."   # a mesma do backend
+./scripts/pre-launch-check.sh
+```
+
+Ele olha os três lugares (repositório, Render e Supabase) e devolve
+`PRONTO` · `PRONTO COM RESSALVAS` · `BLOQUEADO`. É somente leitura — não
+escreve nada. O que ele **não** consegue ver está listado na saída dele
+mesmo: rotação de chave, teste de fumaça e monitor externo.
+
 ---
 
 ## 1. BLOQUEADOR — rotacionar as chaves do Supabase
@@ -130,7 +142,8 @@ A tabela já é criada sozinha pelo `AutoMigrate`. O que falta sem a migração 
 os CHECKs: faixa de CEP invertida, CEP fora de 0–99999999 e frete negativo
 passariam a ser aceitos pelo banco.
 
-Cole `sql/24_delivery_region_fees.sql` no SQL Editor (é idempotente) e confira:
+Cole `sql/24_delivery_region_fees.sql` no SQL Editor (é idempotente) e confira
+com `./scripts/pre-launch-check.sh --so-banco`, ou à mão:
 
 ```sql
 SELECT conname FROM pg_constraint

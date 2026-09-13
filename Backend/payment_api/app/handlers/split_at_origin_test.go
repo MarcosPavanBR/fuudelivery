@@ -66,12 +66,12 @@ func TestSplitAtOriginEnabled_NasceDesligado(t *testing.T) {
 	}
 }
 
-// TestResolveSplitAtOrigin_FlagDesligado: com o flag off, resolve nunca tenta
-// nada (nem toca no banco) — devolve ok=false direto.
-func TestResolveSplitAtOrigin_FlagDesligado(t *testing.T) {
+// TestResolveOriginCharge_FlagDesligado: com o flag off, resolve nunca tenta
+// nada (nem toca no banco) — devolve OK=false direto (fluxo antigo).
+func TestResolveOriginCharge_FlagDesligado(t *testing.T) {
 	t.Setenv("SPLIT_AT_ORIGIN_ENABLED", "false")
-	_, _, ok := resolveSplitAtOrigin(&models.Payment{})
-	if ok {
-		t.Error("com o flag desligado, resolveSplitAtOrigin tem que devolver ok=false")
+	plan := resolveOriginCharge(&models.Payment{})
+	if plan.OK {
+		t.Error("com o flag desligado, resolveOriginCharge tem que devolver OK=false")
 	}
 }

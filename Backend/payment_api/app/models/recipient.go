@@ -36,6 +36,12 @@ const (
 	RecipientBlocked = "blocked"
 )
 
+// Modos de recebimento (espelham chk_recipients_payment_mode de sql/28).
+const (
+	PaymentModeSplit   = "split"
+	PaymentModeRepasse = "repasse"
+)
+
 // Recipient — linha da tabela `recipients`.
 type Recipient struct {
 	ID                 int64  `gorm:"primaryKey;column:id" json:"id"`
@@ -45,6 +51,9 @@ type Recipient struct {
 	GatewayRecipientID string `gorm:"column:gateway_recipient_id" json:"gateway_recipient_id"`
 	Status             string `gorm:"column:status" json:"status"`
 	MPUserID           string `gorm:"column:mp_user_id" json:"mp_user_id,omitempty"`
+	// PaymentMode: "split" (comissão retida no ato) ou "repasse" (loja recebe
+	// 100% e deve frete+comissão). Ver sql/28.
+	PaymentMode string `gorm:"column:payment_mode;default:split" json:"payment_mode"`
 
 	// Tokens cifrados. json:"-" para NUNCA vazarem numa resposta de API.
 	AccessTokenEnc  []byte     `gorm:"column:access_token_enc" json:"-"`

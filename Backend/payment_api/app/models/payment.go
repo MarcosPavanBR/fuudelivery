@@ -97,7 +97,10 @@ type Payment struct {
 	// SplitAtOrigin: a fatia da loja caiu direto na conta do gateway dela
 	// (marketplace). O settle NÃO credita a carteira interna do estabelecimento
 	// para estes — a loja já recebeu. Ver sql/26.
-	SplitAtOrigin   bool       `gorm:"column:split_at_origin;default:false" json:"split_at_origin"`
+	SplitAtOrigin bool `gorm:"column:split_at_origin;default:false" json:"split_at_origin"`
+	// Repasse: pagamento em modo repasse — a loja recebeu 100% e deve
+	// frete+comissão. O settle cria a dívida (establishment_debts). Ver sql/28.
+	Repasse         bool       `gorm:"column:repasse;default:false" json:"repasse"`
 	ApprovedBy      string     `gorm:"column:approved_by" json:"approved_by,omitempty"`
 	RefundedAt      *time.Time `gorm:"column:refunded_at" json:"refunded_at,omitempty"`
 	RejectedAt      *time.Time `gorm:"column:rejected_at" json:"rejected_at,omitempty"`

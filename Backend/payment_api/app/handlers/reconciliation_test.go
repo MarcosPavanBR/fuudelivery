@@ -250,3 +250,38 @@ func TestReconciliacao_SplitNaOrigem_NaoCreditaCarteira(t *testing.T) {
 	require.Equal(t, 0, segunda.Pending, "depois de liquidado, não aparece mais como pendente")
 	require.InDelta(t, 0.0, getWalletByUser(t, 42).Balance, 0.001)
 }
+
+// TestReconciliacao_Repasse_CriaDivida trava a mecânica do repasse no settle: a
+// loja recebeu 100% (repasse), então o settle NÃO credita a carteira dela E
+// cria a dívida (frete + comissão). Falsificável: sem recordRepasseDebt, a
+// dívida some (open=0) e o teste quebra.
+func TestReconciliacao_Repasse_CriaDivida(t *testing.T) {
+	cleanup := setupCheckoutE2EEnv(t)
+	defer cleanup()
+
+	// Amount=100, DeliveryAmount=10 (do helper). Split 5/85 default →
+	// comissão 5,00 + frete 10,00 = dívida de 15,00.
+	pagamento := pagamentoNaoLiquidado("order-repasse", "charge-repasse", 5*time.Minute)
+	pagamento.SplitAtOrigin = true
+	pagamento.Repasse = true
+	seedPayment(t, &pagamento)
+	seedWallet(t, 42, "establishment", 0)
+
+	require.Equal(t, 1, ReconcilePaymentsOnce().Healed)
+
+	// Carteira NÃO creditada (a loja recebeu direto).
+	require.InDelta(t, 0.0, getWalletByUser(t, 42).Balance, 0.001,
+		"repasse: a carteira interna da loja não pode ser creditada")
+	require.Equal(t, int64(0), countLedger(t, 42, "credit", "", "charge-repasse"))
+
+	// Dívida criada: frete (10) + comissão (5) = 15,00 = 1500 centavos.
+	open, err := models.OpenDebtTotalCents(models.DB, 42)
+	require.NoError(t, err)
+	require.Equal(t, int64(1500), open, "a loja deve frete + comissão")
+
+	// Segunda passada não duplica a dívida (idempotente por pedido).
+	ReconcilePaymentsOnce()
+	open, err = models.OpenDebtTotalCents(models.DB, 42)
+	require.NoError(t, err)
+	require.Equal(t, int64(1500), open, "reprocessar o settle não pode duplicar a dívida")
+}

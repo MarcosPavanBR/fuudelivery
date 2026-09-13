@@ -50,49 +50,62 @@ func splitConfigFor(establishmentID int64) (platformPct, establishmentPct float6
 	return 5.0, 85.0
 }
 
-// resolveSplitAtOrigin decide se ESTA cobrança vai por split na origem e, se
-// sim, devolve o token do vendedor e a application_fee em centavos.
+// originChargePlan é o resultado da resolução: como cobrar esta venda no modo
+// marketplace. OK=false significa "vai pelo fluxo antigo (custódia)".
+type originChargePlan struct {
+	SellerToken string // access_token do vendedor (Bearer da cobrança)
+	AppFeeCents int64  // comissão retida no ato (0 no repasse)
+	Repasse     bool   // true = loja recebe 100% e deve frete+comissão (dívida no settle)
+	OK          bool
+}
+
+// resolveOriginCharge decide se ESTA cobrança vai direto pra conta da loja
+// (marketplace) e como: split (comissão retida via application_fee) ou repasse
+// (fee=0, loja deve frete+comissão depois). A escolha é por loja, em
+// recipients.payment_mode.
 //
-// Falha SEMPRE em direção ao fluxo antigo (ok=false): flag desligado, loja sem
+// Falha SEMPRE em direção ao fluxo antigo (OK=false): flag desligado, loja sem
 // conta ativa, token expirado, cofre indisponível ou qualquer erro. Nunca
-// derruba a venda por causa do split — quem não pode ir pela rota nova vai pela
-// antiga. Bloquear a venda só entra depois, e é outra decisão.
-func resolveSplitAtOrigin(payment *models.Payment) (sellerToken string, appFeeCents int64, ok bool) {
-	if !splitAtOriginEnabled() {
-		return "", 0, false
-	}
-	if models.DB == nil {
-		return "", 0, false
+// derruba a venda — quem não pode ir pela rota nova vai pela antiga.
+func resolveOriginCharge(payment *models.Payment) originChargePlan {
+	if !splitAtOriginEnabled() || models.DB == nil {
+		return originChargePlan{}
 	}
 
 	recipient, err := models.ActiveRecipient(models.DB, "mercadopago", "establishment", payment.EstablishmentID)
 	if err != nil {
 		// Inclui ErrNoActiveRecipient (loja não conectou): fluxo antigo.
-		return "", 0, false
+		return originChargePlan{}
 	}
 	if recipient.TokenExpired(time.Now()) {
 		log.Printf("[SPLIT-ORIGEM] estabelecimento %d com token MP expirado — caindo no fluxo antigo até reconectar", payment.EstablishmentID)
-		return "", 0, false
+		return originChargePlan{}
 	}
 
 	box, err := secretbox.FromEnv("SECRET_ENCRYPTION_KEY")
 	if err != nil {
 		log.Printf("[SPLIT-ORIGEM] cofre indisponível (%v) — caindo no fluxo antigo", err)
-		return "", 0, false
+		return originChargePlan{}
 	}
 	token, err := recipient.AccessToken(box)
 	if err != nil || token == "" {
 		log.Printf("[SPLIT-ORIGEM] não consegui decifrar o token do estabelecimento %d (%v) — fluxo antigo", payment.EstablishmentID, err)
-		return "", 0, false
+		return originChargePlan{}
 	}
 
+	// Repasse: a loja recebe 100% (fee=0) e passa a dever frete+comissão. O
+	// settle cria a dívida. Não precisa nem calcular o split para a cobrança.
+	if recipient.PaymentMode == models.PaymentModeRepasse {
+		return originChargePlan{SellerToken: token, AppFeeCents: 0, Repasse: true, OK: true}
+	}
+
+	// Split: a comissão da plataforma é retida no ato via application_fee.
 	platformPct, establishmentPct := splitConfigFor(payment.EstablishmentID)
 	split, err := services.CalculateSplitRules(payment, platformPct, establishmentPct)
 	if err != nil {
 		log.Printf("[SPLIT-ORIGEM] cálculo de split falhou para o pedido %s (%v) — fluxo antigo", payment.OrderID, err)
-		return "", 0, false
+		return originChargePlan{}
 	}
-
 	fee := applicationFeeCents(toCents(payment.Amount), toCents(split.EstablishmentAmt))
-	return token, fee, true
+	return originChargePlan{SellerToken: token, AppFeeCents: fee, Repasse: false, OK: true}
 }

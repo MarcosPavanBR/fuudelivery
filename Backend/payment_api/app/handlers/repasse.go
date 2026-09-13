@@ -1,12 +1,15 @@
 package handlers
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/carloshomar/fuudelivery/payment_api/app/models"
+	"github.com/carloshomar/fuudelivery/payment_api/app/services"
 )
 
 // Modelo de repasse: o restaurante recebe o pedido direto e DEVE à plataforma o
@@ -66,4 +69,35 @@ func EstablishmentBlockedByDebt(establishmentID int64) (blocked bool, openCents,
 		return false, 0, limitCents
 	}
 	return debtBlocksNewOrder(openCents, limitCents), openCents, limitCents
+}
+
+// recordRepasseDebt cria a dívida da loja para um pagamento em repasse: ela
+// recebeu 100%, então deve o frete (dinheiro do entregador) + a comissão da
+// plataforma. Idempotente por pedido (CreateDebt usa ON CONFLICT no order_id),
+// então o settle reprocessado não duplica a dívida.
+//
+// O cashback do cliente NÃO entra na dívida: no modelo 4→2 ele é despesa da
+// plataforma, paga da comissão que ela cobra — mesma lógica do split.
+func recordRepasseDebt(payment *models.Payment, now time.Time) error {
+	platformPct, establishmentPct := splitConfigFor(payment.EstablishmentID)
+	split, err := services.CalculateSplitRules(payment, platformPct, establishmentPct)
+	if err != nil {
+		return fmt.Errorf("calcular split para a dívida: %w", err)
+	}
+	created, err := models.CreateDebt(models.DB, &models.EstablishmentDebt{
+		EstablishmentID:  payment.EstablishmentID,
+		OrderID:          payment.OrderID,
+		PaymentID:        payment.ID,
+		DeliveryAmount:   split.DeliveryAmt, // frete (dinheiro do entregador)
+		CommissionAmount: split.PlatformFee, // comissão da plataforma
+		CreatedAt:        now,
+	})
+	if err != nil {
+		return err
+	}
+	if created {
+		log.Printf("[REPASSE] dívida criada: loja %d deve %.2f (frete %.2f + comissão %.2f) do pedido %s",
+			payment.EstablishmentID, split.DeliveryAmt+split.PlatformFee, split.DeliveryAmt, split.PlatformFee, payment.OrderID)
+	}
+	return nil
 }

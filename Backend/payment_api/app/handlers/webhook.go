@@ -404,15 +404,25 @@ func settlePaymentApproved(payment *models.Payment) error {
 	// pagamento já está CONFIRMED aqui e o guard nunca dispararia.)
 	if payment.EstablishmentCreditedAt == nil && payment.Status != "REFUNDED" {
 		if payment.SplitAtOrigin {
-			// Split na origem: a fatia da loja JÁ caiu direto na conta MP dela.
-			// Creditar a carteira interna aqui seria pagar duas vezes. Só marca
-			// como liquidado para a reconciliação não reprocessar. O que a
-			// plataforma deve (entregador, cashback) sai da application_fee que
-			// ela recebeu, pelos mesmos fluxos de sempre — não pela carteira da
-			// loja.
+			// Split/repasse na origem: a loja JÁ recebeu direto na conta MP
+			// dela. Creditar a carteira interna aqui seria pagar duas vezes. Só
+			// marca como liquidado para a reconciliação não reprocessar.
 			setFields["establishment_credited_at"] = now
-			log.Printf("[WALLET] Pagamento %s liquidado por split na origem — carteira do estabelecimento %d NÃO creditada (loja recebeu direto)",
-				abacatepayID, payment.EstablishmentID)
+
+			// No REPASSE a loja recebeu 100% (application_fee=0), então ela DEVE
+			// à plataforma o frete + a comissão. Registra a dívida (idempotente
+			// por pedido). No split puro não há dívida — a comissão já foi
+			// retida no ato.
+			if payment.Repasse {
+				if err := recordRepasseDebt(payment, now); err != nil {
+					// Não engole: sem a dívida, a plataforma perde a comissão e o
+					// frete silenciosamente. Sobe para a reconciliação tentar de
+					// novo (establishment_credited_at ainda não foi persistido).
+					return fmt.Errorf("registrar dívida de repasse do pedido %s: %w", payment.OrderID, err)
+				}
+			}
+			log.Printf("[WALLET] Pagamento %s liquidado na origem (repasse=%v) — carteira do estabelecimento %d NÃO creditada (loja recebeu direto)",
+				abacatepayID, payment.Repasse, payment.EstablishmentID)
 		} else {
 			// Usa as regras recém-calculadas (ainda não persistidas em payment).
 			credit := establishmentShare(models.SplitRules(splitRules))

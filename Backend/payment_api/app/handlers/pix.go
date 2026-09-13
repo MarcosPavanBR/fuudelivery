@@ -95,6 +95,7 @@ func GeneratePIX(c *fiber.Ctx) error {
 	// PreferredGateway trava no MP: uma cobrança com token de vendedor NÃO pode
 	// cair no fallback para outro gateway (perderia o split → custódia).
 	splitAtOrigin := false
+	repasse := false
 	{
 		tmp := &models.Payment{
 			OrderID:          req.OrderID,
@@ -105,13 +106,14 @@ func GeneratePIX(c *fiber.Ctx) error {
 			EstablishmentID:  req.EstablishmentID,
 			CustomerID:       req.CustomerID,
 		}
-		if token, feeCents, ok := resolveSplitAtOrigin(tmp); ok {
-			gatewayReq.SellerAccessToken = token
-			gatewayReq.ApplicationFeeCents = feeCents
+		if plan := resolveOriginCharge(tmp); plan.OK {
+			gatewayReq.SellerAccessToken = plan.SellerToken
+			gatewayReq.ApplicationFeeCents = plan.AppFeeCents
 			gatewayReq.PreferredGateway = "mercadopago"
 			splitAtOrigin = true
-			log.Printf("[SPLIT-ORIGEM] pedido %s: cobrança no MP do estabelecimento %d, application_fee=%d centavos",
-				req.OrderID, req.EstablishmentID, feeCents)
+			repasse = plan.Repasse
+			log.Printf("[SPLIT-ORIGEM] pedido %s: cobrança no MP do estabelecimento %d (repasse=%v, application_fee=%d centavos)",
+				req.OrderID, req.EstablishmentID, plan.Repasse, plan.AppFeeCents)
 		}
 	}
 
@@ -146,6 +148,7 @@ func GeneratePIX(c *fiber.Ctx) error {
 		QRCodeBase64:     resp.PIXQRCodeBase64,
 		AbacatePayID:     resp.GatewayID,
 		SplitAtOrigin:    splitAtOrigin,
+		Repasse:          repasse,
 		CreatedAt:        time.Now(),
 	}
 

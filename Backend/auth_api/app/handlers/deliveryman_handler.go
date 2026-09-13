@@ -204,6 +204,18 @@ func UpdateDeliveryManWallet(c *fiber.Ctx) error {
 		if tokenErr != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
 		}
+		
+		// Validate entity type to prevent cross-table identity confusion
+		entityType, entityErr := middlewares.GetEntityTypeFromToken(c)
+		if entityErr != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token: entity type not found"})
+		}
+		
+		// Only deliverymen (not clients or users) can update deliveryman wallets
+		if entityType != "deliveryman" {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Invalid token type for this operation"})
+		}
+		
 		dmID, _ := strconv.ParseInt(deliveryManID, 10, 64)
 		if tokenUserID != dmID {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})

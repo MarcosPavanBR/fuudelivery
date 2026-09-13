@@ -3,9 +3,12 @@
 package handlers
 
 import (
+	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/carloshomar/fuudelivery/payment_api/app/models"
+	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/require"
 )
 
@@ -101,4 +104,44 @@ func mustFindDebt(t *testing.T, orderID string) models.EstablishmentDebt {
 	var d models.EstablishmentDebt
 	require.NoError(t, models.DB.Where("order_id = ?", orderID).First(&d).Error)
 	return d
+}
+
+// TestDenyChargeIfIndebted trava a cobrança na ponta do pagamento: com o repasse
+// ligado e a loja acima do limite, a cobrança é recusada com 409; abaixo do
+// limite, passa. É uma das duas pontas da trava (a outra é a vitrine).
+func TestDenyChargeIfIndebted(t *testing.T) {
+	cleanup := setupCheckoutE2EEnv(t)
+	defer cleanup()
+	t.Setenv("REPASSE_ENABLED", "true")
+	t.Setenv("REPASSE_CREDIT_LIMIT_CENTS", "2000") // R$20
+
+	app := fiber.New()
+	app.Get("/charge/:est", func(c *fiber.Ctx) error {
+		est, _ := strconv.ParseInt(c.Params("est"), 10, 64)
+		if denyChargeIfIndebted(c, est) {
+			return nil
+		}
+		return c.SendString("ok")
+	})
+
+	// Loja 50 sem dívida: passa.
+	resp, err := app.Test(httptest.NewRequest("GET", "/charge/50", nil))
+	require.NoError(t, err)
+	require.Equal(t, fiber.StatusOK, resp.StatusCode, "sem dívida, a cobrança passa")
+
+	// Cria dívida de 25,00 (> 20,00) para a loja 50.
+	_, err = models.CreateDebt(models.DB, &models.EstablishmentDebt{
+		EstablishmentID: 50, OrderID: "ord-deny", DeliveryAmount: 20, CommissionAmount: 5,
+	})
+	require.NoError(t, err)
+
+	resp, err = app.Test(httptest.NewRequest("GET", "/charge/50", nil))
+	require.NoError(t, err)
+	require.Equal(t, fiber.StatusConflict, resp.StatusCode, "acima do limite, a cobrança é recusada (409)")
+
+	// Com o repasse DESLIGADO, a mesma dívida não bloqueia.
+	t.Setenv("REPASSE_ENABLED", "false")
+	resp, err = app.Test(httptest.NewRequest("GET", "/charge/50", nil))
+	require.NoError(t, err)
+	require.Equal(t, fiber.StatusOK, resp.StatusCode, "repasse desligado: não bloqueia")
 }

@@ -186,6 +186,11 @@ func ProcessPayment(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Pedido inválido para cobrança"})
 	}
 
+	// Trava de crédito do repasse (no-op com o repasse desligado).
+	if denyChargeIfIndebted(c, req.EstablishmentID) {
+		return nil
+	}
+
 	router, err := getPaymentRouter(c)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Payment router unavailable"})

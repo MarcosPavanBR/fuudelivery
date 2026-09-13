@@ -121,6 +121,13 @@ services:
       # em sandbox. Desligado = todo pagamento segue no fluxo antigo.
       - key: SPLIT_AT_ORIGIN_ENABLED
         sync: false
+      # Repasse (plano B): loja recebe 100%% e deve frete+comissão. Nasce
+      # desligado; limite de dívida por loja em REPASSE_CREDIT_LIMIT_CENTS
+      # (default R$500). Ligue só com o processo de cobrança definido.
+      - key: REPASSE_ENABLED
+        sync: false
+      - key: REPASSE_CREDIT_LIMIT_CENTS
+        sync: false
 
       # ── Bootstrap do primeiro admin ───────────────────────
       # ADMIN_BOOTSTRAP_SECRET foi REMOVIDA daqui de propósito.

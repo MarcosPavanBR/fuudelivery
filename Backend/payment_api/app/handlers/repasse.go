@@ -10,6 +10,7 @@ import (
 
 	"github.com/carloshomar/fuudelivery/payment_api/app/models"
 	"github.com/carloshomar/fuudelivery/payment_api/app/services"
+	"github.com/gofiber/fiber/v2"
 )
 
 // Modelo de repasse: o restaurante recebe o pedido direto e DEVE à plataforma o
@@ -69,6 +70,29 @@ func EstablishmentBlockedByDebt(establishmentID int64) (blocked bool, openCents,
 		return false, 0, limitCents
 	}
 	return debtBlocksNewOrder(openCents, limitCents), openCents, limitCents
+}
+
+// denyChargeIfIndebted é a trava de crédito no ato da cobrança (uma das duas
+// pontas que o Marcos pediu; a outra é a vitrine, no orders_api). Escreve a
+// recusa e devolve true se a loja estourou o limite de repasse em aberto.
+//
+// Uso: if denyChargeIfIndebted(c, estID) { return nil }
+//
+// Com o repasse desligado, EstablishmentBlockedByDebt devolve false e isto
+// nunca recusa — nenhum efeito no fluxo atual.
+func denyChargeIfIndebted(c *fiber.Ctx, establishmentID int64) bool {
+	blocked, openCents, limitCents := EstablishmentBlockedByDebt(establishmentID)
+	if !blocked {
+		return false
+	}
+	log.Printf("[REPASSE] cobrança recusada: estabelecimento %d com dívida em aberto %d >= limite %d centavos",
+		establishmentID, openCents, limitCents)
+	_ = c.Status(fiber.StatusConflict).JSON(fiber.Map{
+		"error":           "Estabelecimento com repasse pendente acima do limite. Regularize para voltar a receber pedidos.",
+		"open_debt_cents": openCents,
+		"limit_cents":     limitCents,
+	})
+	return true
 }
 
 // recordRepasseDebt cria a dívida da loja para um pagamento em repasse: ela

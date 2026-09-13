@@ -176,6 +176,15 @@ func (r *Router) CreateTransactionWithFallback(
 	var lastErr error
 
 	for _, entry := range entries {
+		// PreferredGateway trava a cobrança num gateway só (sem fallback). Uma
+		// cobrança com split na origem carrega o token de um vendedor de um
+		// gateway específico; cair no fallback para outro gateway ignoraria o
+		// token e jogaria o dinheiro em custódia. Melhor falhar do que
+		// misrotear dinheiro.
+		if req.PreferredGateway != "" && entry.gateway.Name() != req.PreferredGateway {
+			continue
+		}
+
 		// Pula se circuit breaker aberto
 		if entry.cb.IsOpen() {
 			log.Printf("[ROUTER] Gateway %s skipped: circuit breaker open",

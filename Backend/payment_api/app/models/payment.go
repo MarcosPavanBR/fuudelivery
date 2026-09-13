@@ -94,11 +94,15 @@ type Payment struct {
 	ConfirmedAt             *time.Time `gorm:"column:confirmed_at" json:"confirmed_at,omitempty"`
 	WalletCreditedAt        *time.Time `gorm:"column:wallet_credited_at" json:"wallet_credited_at,omitempty"`
 	EstablishmentCreditedAt *time.Time `gorm:"column:establishment_credited_at" json:"establishment_credited_at,omitempty"`
-	ApprovedBy              string     `gorm:"column:approved_by" json:"approved_by,omitempty"`
-	RefundedAt              *time.Time `gorm:"column:refunded_at" json:"refunded_at,omitempty"`
-	RejectedAt              *time.Time `gorm:"column:rejected_at" json:"rejected_at,omitempty"`
-	RejectedBy              string     `gorm:"column:rejected_by" json:"rejected_by,omitempty"`
-	RejectionReason         string     `gorm:"column:rejection_reason" json:"rejection_reason,omitempty"`
+	// SplitAtOrigin: a fatia da loja caiu direto na conta do gateway dela
+	// (marketplace). O settle NÃO credita a carteira interna do estabelecimento
+	// para estes — a loja já recebeu. Ver sql/26.
+	SplitAtOrigin   bool       `gorm:"column:split_at_origin;default:false" json:"split_at_origin"`
+	ApprovedBy      string     `gorm:"column:approved_by" json:"approved_by,omitempty"`
+	RefundedAt      *time.Time `gorm:"column:refunded_at" json:"refunded_at,omitempty"`
+	RejectedAt      *time.Time `gorm:"column:rejected_at" json:"rejected_at,omitempty"`
+	RejectedBy      string     `gorm:"column:rejected_by" json:"rejected_by,omitempty"`
+	RejectionReason string     `gorm:"column:rejection_reason" json:"rejection_reason,omitempty"`
 }
 
 // TableName fixa o nome da tabela.

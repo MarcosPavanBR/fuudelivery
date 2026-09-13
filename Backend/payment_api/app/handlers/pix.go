@@ -89,6 +89,32 @@ func GeneratePIX(c *fiber.Ctx) error {
 		// omitir para não tomar 422 do gateway.
 	}
 
+	// Split na origem: se a loja conectou o MP e o recurso está ligado, a
+	// cobrança vai no token dela com application_fee — a fatia dela cai direto
+	// na conta dela. Caso contrário, segue no fluxo antigo (custódia). O
+	// PreferredGateway trava no MP: uma cobrança com token de vendedor NÃO pode
+	// cair no fallback para outro gateway (perderia o split → custódia).
+	splitAtOrigin := false
+	{
+		tmp := &models.Payment{
+			OrderID:          req.OrderID,
+			Amount:           req.Amount,
+			DeliveryAmount:   req.DeliveryAmount,
+			DiscountAmount:   req.DiscountAmount,
+			DiscountFundedBy: req.DiscountFundedBy,
+			EstablishmentID:  req.EstablishmentID,
+			CustomerID:       req.CustomerID,
+		}
+		if token, feeCents, ok := resolveSplitAtOrigin(tmp); ok {
+			gatewayReq.SellerAccessToken = token
+			gatewayReq.ApplicationFeeCents = feeCents
+			gatewayReq.PreferredGateway = "mercadopago"
+			splitAtOrigin = true
+			log.Printf("[SPLIT-ORIGEM] pedido %s: cobrança no MP do estabelecimento %d, application_fee=%d centavos",
+				req.OrderID, req.EstablishmentID, feeCents)
+		}
+	}
+
 	resp, err := router.CreateTransactionWithFallback(c.Context(), gatewayReq)
 	if err != nil {
 		log.Printf("[PIX] Erro criando cobrança via router: %v", err)
@@ -119,6 +145,7 @@ func GeneratePIX(c *fiber.Ctx) error {
 		PixCopyPaste:     resp.PIXCopyPaste,
 		QRCodeBase64:     resp.PIXQRCodeBase64,
 		AbacatePayID:     resp.GatewayID,
+		SplitAtOrigin:    splitAtOrigin,
 		CreatedAt:        time.Now(),
 	}
 

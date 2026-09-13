@@ -117,6 +117,10 @@ services:
         sync: false
       - key: MERCADOPAGO_OAUTH_RESULT_URL
         sync: false
+      # Liga o split na origem. Nasce desligado; ligue (=true) só após validar
+      # em sandbox. Desligado = todo pagamento segue no fluxo antigo.
+      - key: SPLIT_AT_ORIGIN_ENABLED
+        sync: false
 
       # ── Bootstrap do primeiro admin ───────────────────────
       # ADMIN_BOOTSTRAP_SECRET foi REMOVIDA daqui de propósito.

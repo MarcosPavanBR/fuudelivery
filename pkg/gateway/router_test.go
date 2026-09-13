@@ -324,3 +324,51 @@ func TestCircuitBreaker_MeioAbertoDepoisDoTimeout(t *testing.T) {
 		t.Error("passado o timeout, o circuito deve permitir a requisição de teste (half-open)")
 	}
 }
+
+// TestRouter_PreferredGatewayTravaSemFallback: com PreferredGateway setado, a
+// cobrança vai SÓ naquele gateway. É a trava que impede uma cobrança com split
+// na origem (token do vendedor) de cair no fallback para outro gateway, onde o
+// token seria ignorado e o dinheiro entraria em custódia.
+func TestRouter_PreferredGatewayTravaSemFallback(t *testing.T) {
+	abacate := newFakeGateway("abacatepay", MethodPIX)
+	mp := newFakeGateway("mercadopago", MethodPIX)
+	r := NewRouter(abacate, mp) // abacate é o primeiro da ordem
+
+	req := pixRequest()
+	req.PreferredGateway = "mercadopago"
+
+	resp, err := r.CreateTransactionWithFallback(context.Background(), req)
+	if err != nil {
+		t.Fatalf("esperava sucesso no gateway preferido, veio erro: %v", err)
+	}
+	if resp.Gateway != "mercadopago" {
+		t.Errorf("esperava mercadopago, veio %s", resp.Gateway)
+	}
+	if abacate.createCalls != 0 {
+		t.Error("o gateway preferido NÃO era o abacatepay — ele não podia ser chamado")
+	}
+	if mp.createCalls != 1 {
+		t.Errorf("mercadopago devia ser chamado uma vez, foi %d", mp.createCalls)
+	}
+}
+
+// TestRouter_PreferredGatewayIndisponivelNaoFazFallback: se o gateway preferido
+// falha, a cobrança FALHA — não cai para outro. Misrotear o dinheiro é pior que
+// falhar a cobrança.
+func TestRouter_PreferredGatewayIndisponivelNaoFazFallback(t *testing.T) {
+	abacate := newFakeGateway("abacatepay", MethodPIX)
+	mp := newFakeGateway("mercadopago", MethodPIX)
+	mp.err = errors.New("mp fora do ar")
+	r := NewRouter(abacate, mp)
+
+	req := pixRequest()
+	req.PreferredGateway = "mercadopago"
+
+	_, err := r.CreateTransactionWithFallback(context.Background(), req)
+	if err == nil {
+		t.Fatal("gateway preferido falhou — a cobrança devia falhar, não cair para o abacatepay")
+	}
+	if abacate.createCalls != 0 {
+		t.Error("não podia ter caído no fallback para abacatepay")
+	}
+}

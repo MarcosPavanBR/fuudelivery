@@ -167,6 +167,14 @@ type TransactionRequest struct {
 	// SellerAccessToken preenchido.
 	ApplicationFeeCents int64
 
+	// PreferredGateway, quando preenchido, obriga a cobrança a ir NESTE gateway
+	// (pelo Name()), sem fallback. É o que impede uma cobrança com split na
+	// origem (token do vendedor de um gateway específico) de cair no fallback
+	// para outro gateway, onde o token seria ignorado e o dinheiro entraria em
+	// custódia — o oposto do que o split existe para garantir. Se o gateway
+	// nomeado estiver indisponível, a cobrança FALHA em vez de misroutear.
+	PreferredGateway string
+
 	// ── Pré-autorização (apenas credit_card) ────────────────────
 
 	// Capture controla se a transação deve ser capturada imediatamente.

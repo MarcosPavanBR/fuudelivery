@@ -93,10 +93,10 @@ func setupCheckoutE2EEnv(t *testing.T) func() {
 	require.NoError(t, err, "conectar no Postgres de teste")
 
 	// Isolamento: dropa e recria as tabelas do domínio de pagamentos.
-	for _, table := range []string{"wallet_transactions", "wallets", "payments"} {
+	for _, table := range []string{"wallet_transactions", "wallets", "payments", "establishment_debts"} {
 		require.NoError(t, gormDB.Exec("DROP TABLE IF EXISTS "+table+" CASCADE").Error)
 	}
-	require.NoError(t, gormDB.AutoMigrate(&models.Payment{}, &models.Wallet{}, &models.WalletTxn{}))
+	require.NoError(t, gormDB.AutoMigrate(&models.Payment{}, &models.Wallet{}, &models.WalletTxn{}, &models.EstablishmentDebt{}))
 	models.DB = gormDB
 
 	// Mongo desativado nos testes: dual-write vira no-op (helpers checam nil).

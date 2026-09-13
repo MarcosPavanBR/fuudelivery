@@ -1374,6 +1374,11 @@ func setupPaymentRoutes(app *fiber.App, router *gateway.Router) {
 	// Status da cobrança por pedido (polling do app do cliente pós-PIX).
 	paymentGroup.Get("/order/:order_id", protectedRoute, rateLimitMiddleware(30), paymentHandlers.GetPaymentByOrder)
 	paymentGroup.Get("/reports/establishment/:id", protectedRoute, paymentHandlers.GetEstablishmentReport)
+	// OAuth do Mercado Pago (split na origem): o connect exige o JWT do dono; o
+	// callback é o redirect do MP e NÃO carrega JWT — a identidade vem do state
+	// assinado (ver oauth_mp.go). Por isso o callback fica sem protectedRoute.
+	paymentGroup.Get("/gateways/mercadopago/connect", protectedRoute, rateLimitMiddleware(20), paymentHandlers.ConnectMercadoPago)
+	paymentGroup.Get("/gateways/mercadopago/callback", rateLimitMiddleware(20), paymentHandlers.MercadoPagoCallback)
 	paymentGroup.Post("/asaas/wallet/create", protectedRoute, rateLimitMiddleware(20), paymentHandlers.CreateAsaasWallet)
 	paymentGroup.Get("/asaas/wallet/:walletId/status", adminRequired, paymentHandlers.GetAsaasWalletStatus)
 	paymentGroup.Post("/asaas/payment/split", protectedRoute, rateLimitMiddleware(20), paymentHandlers.CreateAsaasSplitPayment)

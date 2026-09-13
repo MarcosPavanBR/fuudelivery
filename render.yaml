@@ -100,6 +100,24 @@ services:
       - key: MERCADOPAGO_WEBHOOK_SECRET
         sync: false
 
+      # ── Split na origem (marketplace Mercado Pago) ────────
+      # Cofre AES-256-GCM dos tokens OAuth dos lojistas. openssl rand -hex 32.
+      # Sem ela, conectar conta MP dá 503 (falha fechada). Nunca comitar valor.
+      - key: SECRET_ENCRYPTION_KEY
+        sync: false
+      # App de marketplace da plataforma (client_id/secret) + redirect e o
+      # segredo que assina o `state` do OAuth. Redirect tem que bater com o MP.
+      - key: MERCADOPAGO_APP_ID
+        sync: false
+      - key: MERCADOPAGO_CLIENT_SECRET
+        sync: false
+      - key: MERCADOPAGO_OAUTH_REDIRECT
+        sync: false
+      - key: MERCADOPAGO_OAUTH_STATE_SECRET
+        sync: false
+      - key: MERCADOPAGO_OAUTH_RESULT_URL
+        sync: false
+
       # ── Bootstrap do primeiro admin ───────────────────────
       # ADMIN_BOOTSTRAP_SECRET foi REMOVIDA daqui de propósito.
       #

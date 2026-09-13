@@ -43,6 +43,13 @@ type CreatePaymentRequest struct {
 	// ExternalReference é o ID do pedido.
 	ExternalReference string `json:"external_reference,omitempty"`
 
+	// ApplicationFee é a comissão da plataforma, em reais, no modelo
+	// marketplace. Quando a cobrança é criada com o access_token do VENDEDOR
+	// (split na origem), o MP deposita (valor − taxa do MP − application_fee)
+	// na conta do vendedor e a application_fee na conta da plataforma. Zero ou
+	// ausente = sem split (cobrança na conta do próprio token).
+	ApplicationFee float64 `json:"application_fee,omitempty"`
+
 	// Metadata dados extras.
 	Metadata map[string]string `json:"metadata,omitempty"`
 

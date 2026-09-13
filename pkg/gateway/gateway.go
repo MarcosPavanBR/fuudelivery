@@ -153,6 +153,20 @@ type TransactionRequest struct {
 	// Slice vazio = sem split (pagamento entra na conta principal do gateway).
 	SplitRules []SplitRule
 
+	// ── Split na origem (marketplace) ──────────────────────────
+
+	// SellerAccessToken é o access_token OAuth da conta do VENDEDOR
+	// (estabelecimento) no gateway. Quando presente, a cobrança é criada em
+	// nome do vendedor e a fatia dele cai DIRETO na conta dele — o dinheiro da
+	// venda não passa pela plataforma. Vazio = cobrança na conta da plataforma
+	// (modelo antigo, de custódia).
+	SellerAccessToken string
+
+	// ApplicationFeeCents é a comissão da plataforma, em centavos, retida do
+	// pagamento criado no token do vendedor. Só tem efeito com
+	// SellerAccessToken preenchido.
+	ApplicationFeeCents int64
+
 	// ── Pré-autorização (apenas credit_card) ────────────────────
 
 	// Capture controla se a transação deve ser capturada imediatamente.

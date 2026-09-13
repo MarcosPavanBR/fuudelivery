@@ -82,6 +82,12 @@ func (g *MercadoPagoGateway) CreateTransaction(
 		Metadata:          req.Metadata,
 	}
 
+	// Split na origem: a comissão da plataforma vira application_fee no
+	// pagamento criado com o token do vendedor. Em reais, como o valor.
+	if req.ApplicationFeeCents > 0 {
+		paymentReq.ApplicationFee = float64(req.ApplicationFeeCents) / 100.0
+	}
+
 	// Dados do cartão
 	if req.CardData != nil && req.PaymentMethod != gateway.MethodPIX {
 		paymentReq.Token = req.CardData.Token
@@ -103,6 +109,13 @@ func (g *MercadoPagoGateway) CreateTransaction(
 	headers := map[string]string{}
 	if req.IdempotencyKey != "" {
 		headers["X-Idempotency-Key"] = req.IdempotencyKey
+	}
+	// Split na origem: cobra em nome do VENDEDOR. O header Authorization
+	// sobrescreve o token da plataforma (doRequestWithHeaders aplica os headers
+	// customizados DEPOIS do default). Sem o token do vendedor, a cobrança cai
+	// na conta da plataforma — o modelo antigo de custódia.
+	if req.SellerAccessToken != "" {
+		headers["Authorization"] = "Bearer " + req.SellerAccessToken
 	}
 	respBody, err := g.client.postWithHeaders("/payments", paymentReq, headers)
 	if err != nil {

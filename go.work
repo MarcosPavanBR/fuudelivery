@@ -10,4 +10,5 @@ use (
 	./pkg/gateway
 	./pkg/health
 	./pkg/queue
+	./pkg/secretbox
 )

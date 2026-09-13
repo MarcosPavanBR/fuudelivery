@@ -12,6 +12,7 @@ require (
 	github.com/carloshomar/fuudelivery/pkg/gateway v0.0.0
 	github.com/carloshomar/fuudelivery/pkg/health v0.0.0
 	github.com/carloshomar/fuudelivery/pkg/queue v0.0.0
+	github.com/carloshomar/fuudelivery/pkg/secretbox v0.0.0
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/gofiber/contrib/websocket v1.3.4
 	github.com/gofiber/fiber/v2 v2.52.15
@@ -112,3 +113,5 @@ replace github.com/carloshomar/fuudelivery/pkg/queue => ../../pkg/queue
 replace github.com/carloshomar/fuudelivery/pkg/health => ../../pkg/health
 
 replace github.com/carloshomar/fuudelivery/pkg/gateway => ../../pkg/gateway
+
+replace github.com/carloshomar/fuudelivery/pkg/secretbox => ../../pkg/secretbox

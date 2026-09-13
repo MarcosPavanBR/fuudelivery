@@ -379,18 +379,32 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Subir Postgres 16
+        # Espera pelo servidor REAL via TCP, não via socket. O entrypoint do
+        # postgres:16-alpine sobe um servidor TEMPORÁRIO só-socket durante o
+        # initdb e depois o reinicia como o definitivo. Um readiness por socket
+        # (docker exec psql sem -h) passa cedo demais — pega o temporário — e a
+        # etapa seguinte corre bem na janela em que o socket some no restart
+        # (erro real visto: "connection to server on socket ... No such file").
+        # pg_isready por TCP (-h 127.0.0.1) só responde quando o definitivo,
+        # que escuta em TCP, está de pé. Corrida eliminada, não mascarada.
         run: |
           docker run -d --name pg-sql -p 5432:5432 \
             -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=test -e POSTGRES_DB=postgres postgres:16-alpine
-          until docker exec pg-sql psql -U postgres -d postgres -c 'SELECT 1' >/dev/null 2>&1; do sleep 1; done
+          for i in $(seq 1 60); do
+            docker exec pg-sql pg_isready -h 127.0.0.1 -p 5432 -U postgres >/dev/null 2>&1 && break
+            sleep 1
+          done
+          docker exec pg-sql pg_isready -h 127.0.0.1 -p 5432 -U postgres
 
       - name: Criar as roles que o Supabase fornece
         # sql/00 e sql/06 pressupõem service_role, anon e authenticated, que
         # existem no Supabase e não num Postgres cru. Criá-las aqui reproduz o
         # alvo real; sem isso o teste validaria um banco que não é o de
-        # produção.
+        # produção. Conexão por TCP (-h 127.0.0.1 + PGPASSWORD) pelo mesmo
+        # motivo da etapa acima — o socket pode não estar de pé ainda.
         run: |
-          docker exec pg-sql psql -U postgres -d postgres -c "
+          docker exec -e PGPASSWORD=test pg-sql \
+            psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "
             CREATE ROLE service_role NOLOGIN;
             CREATE ROLE anon NOLOGIN;
             CREATE ROLE authenticated NOLOGIN;"

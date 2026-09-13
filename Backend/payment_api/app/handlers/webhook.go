@@ -403,22 +403,34 @@ func settlePaymentApproved(payment *models.Payment) error {
 	// updateLocalPaymentStatus ANTES de publishPaymentApproved, então o
 	// pagamento já está CONFIRMED aqui e o guard nunca dispararia.)
 	if payment.EstablishmentCreditedAt == nil && payment.Status != "REFUNDED" {
-		// Usa as regras recém-calculadas (ainda não persistidas em payment).
-		credit := establishmentShare(models.SplitRules(splitRules))
-		if credit > 0 {
-			_, wErr := adjustEstablishmentWallet(payment.EstablishmentID, credit, abacatepayID, payment.OrderID, now)
-			switch {
-			case errors.Is(wErr, models.ErrDuplicateCredit):
-				log.Printf("[WALLET] Crédito já aplicado para %s — replay idempotente ignorado", abacatepayID)
-				setFields["establishment_credited_at"] = now
-			case wErr != nil:
-				// Não engole: sem isto, o pagamento era persistido sem
-				// establishment_credited_at e nada nunca voltava para tentar.
-				return fmt.Errorf("creditar carteira do estabelecimento %d (payment=%s): %w",
-					payment.EstablishmentID, abacatepayID, wErr)
-			default:
-				setFields["establishment_credited_at"] = now
-				log.Printf("[WALLET] Carteira do estabelecimento %d creditada em %.2f (payment=%s)", payment.EstablishmentID, credit, abacatepayID)
+		if payment.SplitAtOrigin {
+			// Split na origem: a fatia da loja JÁ caiu direto na conta MP dela.
+			// Creditar a carteira interna aqui seria pagar duas vezes. Só marca
+			// como liquidado para a reconciliação não reprocessar. O que a
+			// plataforma deve (entregador, cashback) sai da application_fee que
+			// ela recebeu, pelos mesmos fluxos de sempre — não pela carteira da
+			// loja.
+			setFields["establishment_credited_at"] = now
+			log.Printf("[WALLET] Pagamento %s liquidado por split na origem — carteira do estabelecimento %d NÃO creditada (loja recebeu direto)",
+				abacatepayID, payment.EstablishmentID)
+		} else {
+			// Usa as regras recém-calculadas (ainda não persistidas em payment).
+			credit := establishmentShare(models.SplitRules(splitRules))
+			if credit > 0 {
+				_, wErr := adjustEstablishmentWallet(payment.EstablishmentID, credit, abacatepayID, payment.OrderID, now)
+				switch {
+				case errors.Is(wErr, models.ErrDuplicateCredit):
+					log.Printf("[WALLET] Crédito já aplicado para %s — replay idempotente ignorado", abacatepayID)
+					setFields["establishment_credited_at"] = now
+				case wErr != nil:
+					// Não engole: sem isto, o pagamento era persistido sem
+					// establishment_credited_at e nada nunca voltava para tentar.
+					return fmt.Errorf("creditar carteira do estabelecimento %d (payment=%s): %w",
+						payment.EstablishmentID, abacatepayID, wErr)
+				default:
+					setFields["establishment_credited_at"] = now
+					log.Printf("[WALLET] Carteira do estabelecimento %d creditada em %.2f (payment=%s)", payment.EstablishmentID, credit, abacatepayID)
+				}
 			}
 		}
 	}

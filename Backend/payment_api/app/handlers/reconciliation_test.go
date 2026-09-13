@@ -214,3 +214,39 @@ func TestReconciliacao_NaoReescreveConfirmedAt(t *testing.T) {
 	require.WithinDuration(t, horaReal, *depois.ConfirmedAt, time.Second,
 		"a reconciliação liquidou o pagamento, mas NÃO pode reescrever a hora em que ele foi confirmado")
 }
+
+// TestReconciliacao_SplitNaOrigem_NaoCreditaCarteira trava a garantia da Fase 3:
+// um pagamento marcado split_at_origin foi pago direto na conta MP da loja, então
+// o settle NÃO pode creditar a carteira interna dela (seria pagar duas vezes) —
+// mas TEM que marcar establishment_credited_at, senão a reconciliação fica
+// reprocessando para sempre.
+func TestReconciliacao_SplitNaOrigem_NaoCreditaCarteira(t *testing.T) {
+	cleanup := setupCheckoutE2EEnv(t)
+	defer cleanup()
+
+	pagamento := pagamentoNaoLiquidado("order-recon-split", "charge-recon-split", 5*time.Minute)
+	pagamento.SplitAtOrigin = true // a loja recebeu direto
+	seedPayment(t, &pagamento)
+	seedWallet(t, 42, "establishment", 0)
+
+	stats := ReconcilePaymentsOnce()
+	require.Equal(t, 1, stats.Pending, "o job encontra o pagamento não liquidado")
+	require.Equal(t, 1, stats.Healed, "e o marca como liquidado")
+
+	// A carteira interna da loja continua ZERADA — o dinheiro foi direto pra
+	// conta MP dela, não pela plataforma.
+	require.InDelta(t, 0.0, getWalletByUser(t, 42).Balance, 0.001,
+		"split na origem: a carteira interna da loja NÃO pode ser creditada")
+	require.Equal(t, int64(0), countLedger(t, 42, "credit", "", "charge-recon-split"),
+		"não pode haver lançamento de crédito no ledger para split na origem")
+
+	// Mas ficou marcado como liquidado, senão o job tentaria para sempre.
+	liquidado := findPaymentByAbacate(t, "charge-recon-split")
+	require.NotNil(t, liquidado.EstablishmentCreditedAt,
+		"establishment_credited_at precisa ficar gravado mesmo sem crédito interno")
+
+	// Segunda passada não muda nada (idempotente).
+	segunda := ReconcilePaymentsOnce()
+	require.Equal(t, 0, segunda.Pending, "depois de liquidado, não aparece mais como pendente")
+	require.InDelta(t, 0.0, getWalletByUser(t, 42).Balance, 0.001)
+}

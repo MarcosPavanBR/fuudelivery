@@ -1379,6 +1379,7 @@ func setupPaymentRoutes(app *fiber.App, router *gateway.Router) {
 	// assinado (ver oauth_mp.go). Por isso o callback fica sem protectedRoute.
 	paymentGroup.Get("/gateways/mercadopago/connect", protectedRoute, rateLimitMiddleware(20), paymentHandlers.ConnectMercadoPago)
 	paymentGroup.Get("/gateways/mercadopago/callback", rateLimitMiddleware(20), paymentHandlers.MercadoPagoCallback)
+	paymentGroup.Get("/gateways/mercadopago/status", protectedRoute, paymentHandlers.StatusMercadoPago)
 	paymentGroup.Post("/asaas/wallet/create", protectedRoute, rateLimitMiddleware(20), paymentHandlers.CreateAsaasWallet)
 	paymentGroup.Get("/asaas/wallet/:walletId/status", adminRequired, paymentHandlers.GetAsaasWalletStatus)
 	paymentGroup.Post("/asaas/payment/split", protectedRoute, rateLimitMiddleware(20), paymentHandlers.CreateAsaasSplitPayment)

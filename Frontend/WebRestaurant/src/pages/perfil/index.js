@@ -16,6 +16,7 @@ import { toast } from "react-toastify";
 import Texts from "../../constants/Texts";
 import restaurantModel from "../../services/restaurant.model";
 import BusinessHoursEditor from "../../components/BusinessHoursEditor";
+import ConectarMercadoPago from "../../components/ConectarMercadoPago";
 
 const inputClass = "input";
 const RequiredMark = () => <span className="text-red-500">*</span>;
@@ -272,6 +273,9 @@ function Perfil() {
             </div>
           </div>
         </div>
+
+        {/* Conta de recebimento (split na origem) */}
+        <ConectarMercadoPago />
 
         {/* Business Hours */}
         <BusinessHoursEditor establishmentId={getUser()?.establishment_id || getUser()?.establishment?.id || getUser()?.sub} />

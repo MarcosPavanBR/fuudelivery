@@ -119,6 +119,29 @@ func ActiveRecipient(db *gorm.DB, gateway, userType string, userID int64) (*Reci
 	return &r, nil
 }
 
+// FindRecipient busca o recebedor por (gateway, userType, userID) em QUALQUER
+// status. Devolve (nil, nil) quando não existe — para a tela de status
+// distinguir "nunca conectou" de "conectou e expirou". Não confundir com
+// ActiveRecipient, que só devolve os ativos e é o usado no caminho de cobrança.
+func FindRecipient(db *gorm.DB, gateway, userType string, userID int64) (*Recipient, error) {
+	var r Recipient
+	err := db.Where("gateway = ? AND user_type = ? AND user_id = ?", gateway, userType, userID).
+		First(&r).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("buscar recebedor (%s/%s/%d): %w", gateway, userType, userID, err)
+	}
+	return &r, nil
+}
+
+// TokenExpired diz se o token do recebedor já passou da validade. Um recebedor
+// ativo mas expirado precisa reconectar (ou o job de refresh renovar).
+func (r *Recipient) TokenExpired(now time.Time) bool {
+	return r.TokenExpiresAt != nil && now.After(*r.TokenExpiresAt)
+}
+
 // UpsertRecipient insere ou atualiza o recebedor pela chave natural
 // (user_type, user_id, gateway) — a mesma do UNIQUE uq_recipients_user_gateway.
 // Usado no callback do OAuth: reconectar a conta sobrescreve os tokens em vez

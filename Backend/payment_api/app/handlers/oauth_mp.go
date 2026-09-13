@@ -218,6 +218,42 @@ func MercadoPagoCallback(c *fiber.Ctx) error {
 	return redirectResult(c, true)
 }
 
+// StatusMercadoPago informa se o estabelecimento tem a conta MP conectada, para
+// a tela do painel mostrar o estado. Read-only, autorizado por recurso.
+//
+// GET /payment/gateways/mercadopago/status
+func StatusMercadoPago(c *fiber.Ctx) error {
+	estID, err := middlewares.GetEstablishmentIDFromToken(c)
+	if err != nil || estID <= 0 {
+		role, _ := middlewares.GetUserRoleFromToken(c)
+		if role == "admin" {
+			if q := c.Query("establishment_id"); q != "" {
+				estID, _ = strconv.ParseInt(q, 10, 64)
+			}
+		}
+	}
+	if estID <= 0 {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "sem establishment_id no token"})
+	}
+
+	r, err := models.FindRecipient(models.DB, "mercadopago", "establishment", estID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "falha ao consultar recebedor"})
+	}
+	if r == nil {
+		return c.JSON(fiber.Map{"connected": false})
+	}
+
+	expired := r.TokenExpired(time.Now())
+	return c.JSON(fiber.Map{
+		"connected":  r.Status == models.RecipientActive && !expired,
+		"status":     r.Status,
+		"expired":    expired,
+		"mp_user_id": r.MPUserID,
+		"expires_at": r.TokenExpiresAt,
+	})
+}
+
 // redirectResult manda o browser de volta ao painel com um marcador de
 // sucesso/erro. A URL base vem do env; sem ela, responde JSON (útil em teste).
 func redirectResult(c *fiber.Ctx, ok bool) error {

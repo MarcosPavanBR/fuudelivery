@@ -74,6 +74,24 @@ export const requestWithdraw = async (data) => {
   return response.data;
 };
 
+// === SPLIT NA ORIGEM (Mercado Pago marketplace) ===
+//
+// Conectar a conta MP do restaurante faz a fatia dele cair DIRETO na conta
+// dele — o dinheiro da venda não passa pela plataforma. O establishment vem do
+// JWT; não é preciso passar o ID.
+
+// Estado da conexão: { connected, status, expired, mp_user_id, expires_at }.
+export const getMercadoPagoStatus = async () => {
+  const response = await api.get("/payments/gateways/mercadopago/status");
+  return response.data;
+};
+
+// Inicia o OAuth: devolve { authorize_url } para redirecionar o lojista ao MP.
+export const connectMercadoPago = async () => {
+  const response = await api.get("/payments/gateways/mercadopago/connect");
+  return response.data;
+};
+
 // === HEALTH (monolito) ===
 
 export const getPaymentHealth = async () => {
@@ -90,4 +108,6 @@ export default {
   getExtract,
   requestWithdraw,
   getPaymentHealth,
+  getMercadoPagoStatus,
+  connectMercadoPago,
 };

@@ -1,11 +1,11 @@
 module github.com/carloshomar/fuudelivery/auth_api
 
-go 1.25.0
+go 1.26.0
 
 require (
-	github.com/gofiber/fiber/v2 v2.52.12
-	golang.org/x/crypto v0.55.0
-	gorm.io/driver/postgres v1.6.2
+	github.com/gofiber/fiber/v2 v2.52.15
+	golang.org/x/crypto v0.57.0
+	gorm.io/driver/postgres v1.6.3
 	gorm.io/gorm v1.31.2
 )
 
@@ -31,9 +31,9 @@ require (
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v1.61.0 // indirect
-	golang.org/x/sync v0.22.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.41.0 // indirect
+	golang.org/x/sync v0.23.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
 )
 
 replace github.com/carloshomar/fuudelivery/pkg/health => ../../pkg/health

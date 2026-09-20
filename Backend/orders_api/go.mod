@@ -5,8 +5,9 @@ go 1.25.0
 require (
 	github.com/carloshomar/fuudelivery/auth_api v0.0.0-00010101000000-000000000000
 	github.com/gofiber/fiber/v2 v2.52.15
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/stretchr/testify v1.12.1
-	gorm.io/driver/postgres v1.6.2
+	gorm.io/driver/postgres v1.6.3
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.2
 )
@@ -15,7 +16,6 @@ replace github.com/carloshomar/fuudelivery/auth_api => ../auth_api
 
 require (
 	github.com/andybalholm/brotli v1.1.1 // indirect
-	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect

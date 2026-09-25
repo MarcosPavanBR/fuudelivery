@@ -4,7 +4,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/auth_api/app/models"
 	"github.com/gofiber/fiber/v2"
 )
@@ -336,9 +335,4 @@ func ListSponsoredByZone(c *fiber.Ctx) error {
 		"total":    len(sponsors),
 		"sponsors": sponsors,
 	})
-}
-
-// helper: extrai user_id do token (usada pelos handlers que recebem user context)
-func getSponsoredUserID(c *fiber.Ctx) (int64, error) {
-	return middlewares.GetUserIDFromToken(c)
 }

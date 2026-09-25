@@ -62,10 +62,9 @@ type RouterSelection struct {
 //
 // Thread-safe: pode ser usado concorrentemente.
 type Router struct {
-	mu        sync.RWMutex
-	gateways  []gatewayEntry
-	strategy  RouterSelectionStrategy
-	fallbacks []Gateway // Gateways de último recurso (ex: AbacatePay PIX)
+	mu       sync.RWMutex
+	gateways []gatewayEntry
+	strategy RouterSelectionStrategy
 }
 
 type gatewayEntry struct {

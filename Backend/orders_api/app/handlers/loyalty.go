@@ -40,16 +40,6 @@ func lookupServerOrderTotal(orderID string) (float64, bool) {
 	return *row.Total, true
 }
 
-// hasLoyaltyEarnForOrder evita crédito duplicado de pontos para o mesmo
-// pedido (webhook + chamada manual concorrentes).
-func hasLoyaltyEarnForOrder(orderID string) bool {
-	var count int64
-	models.DB.Model(&models.LoyaltyTransaction{}).
-		Where("order_id = ? AND type = ?", orderID, "earn").
-		Count(&count)
-	return count > 0
-}
-
 func getTier(points int) string {
 	switch {
 	case points >= 1500:

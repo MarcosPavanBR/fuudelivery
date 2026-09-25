@@ -57,11 +57,6 @@ func (c *Client) get(path string) ([]byte, error) {
 	return c.doRequest("GET", path, nil, nil)
 }
 
-// put envia uma requisição PUT com retry.
-func (c *Client) put(path string, body interface{}) ([]byte, error) {
-	return c.doRequest("PUT", path, body, nil)
-}
-
 // doRequest executa uma requisição HTTP com retry e backoff exponencial.
 func (c *Client) doRequest(method, path string, body interface{}, extraHeaders map[string]string) ([]byte, error) {
 	if c.apiKey == "" {

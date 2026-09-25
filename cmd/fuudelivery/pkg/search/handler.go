@@ -143,7 +143,7 @@ func NewHandler(db *gorm.DB) fiber.Handler {
 			})
 		}
 
-		limit := 20
+		limit := maxResults
 		establishments, err := searchEstablishments(db, query, limit)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{

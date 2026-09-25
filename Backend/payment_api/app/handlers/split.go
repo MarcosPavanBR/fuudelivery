@@ -70,9 +70,3 @@ func ProcessSplit(c *fiber.Ctx) error {
 		"message":     "Payment split processed successfully",
 	})
 }
-
-// notifySplitToOrderQueue — stub mantido para compatibilidade.
-// RabbitMQ foi removido. O monolito gerencia filas via Redis.
-func notifySplitToOrderQueue(orderID, paymentID string, rules []models.SplitRule) {
-	log.Printf("[SPLIT] Notificacao de split: order=%s payment=%s (RabbitMQ removido, ignora)", orderID, paymentID)
-}

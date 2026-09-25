@@ -53,11 +53,6 @@ func (c *Client) put(path string, body interface{}) ([]byte, error) {
 	return c.doRequest("PUT", path, body)
 }
 
-// delete envia uma requisição DELETE com retry.
-func (c *Client) delete(path string) ([]byte, error) {
-	return c.doRequest("DELETE", path, nil)
-}
-
 // doRequest executa uma requisição HTTP com retry.
 func (c *Client) doRequest(method, path string, body interface{}) ([]byte, error) {
 	var bodyReader io.Reader

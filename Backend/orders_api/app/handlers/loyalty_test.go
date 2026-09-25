@@ -5,25 +5,7 @@ package handlers
 
 import (
 	"testing"
-
-	"github.com/carloshomar/fuudelivery/orders_api/app/models"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 )
-
-func setupLoyaltyTestDB() *gorm.DB {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	if err != nil {
-		return nil
-	}
-	// Migra todas as tabelas necessárias para os testes de loyalty
-	db.AutoMigrate(
-		&models.LoyaltyPoints{},
-		&models.LoyaltyTransaction{},
-		&models.Order{},
-	)
-	return db
-}
 
 // === Testes de getTier ===
 

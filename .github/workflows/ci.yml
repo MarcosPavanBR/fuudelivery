@@ -88,7 +88,8 @@ jobs:
           until docker exec pg-it psql -U test -d postgres -c 'SELECT 1' >/dev/null 2>&1; do sleep 1; done
           for i in $(seq 1 30); do
             if docker exec pg-it psql -U test -d postgres \
-              -c "CREATE DATABASE it_password_reset" -c "CREATE DATABASE it_split_metrics" -c "CREATE DATABASE it_admin_bootstrap"; then break; fi
+              -c "CREATE DATABASE it_password_reset" -c "CREATE DATABASE it_split_metrics" -c "CREATE DATABASE it_admin_bootstrap" \
+              -c "CREATE DATABASE it_auth_api" -c "CREATE DATABASE it_upload"; then break; fi
             sleep 2
           done
           echo "Services ready."
@@ -116,6 +117,21 @@ jobs:
         env:
           POSTGRES_TEST_URI: postgres://test:test@localhost:5432/it_admin_bootstrap?sslmode=disable
         run: go test -tags=integration -v -count=1 -timeout 10m -run 'TestAdminBootstrap' ./
+
+      # Pacotes inteiros, sem -run: um nome errado não deixa o passo verde à
+      # toa. Os testes de Postgres destes pacotes (horários com dia fechado,
+      # assinatura nascendo pendente, dono do upload) só existem com a tag e
+      # falham em CI sem POSTGRES_TEST_URI (requirePostgres).
+      - name: Run auth_api integration (horários + assinatura)
+        working-directory: Backend/auth_api
+        env:
+          POSTGRES_TEST_URI: postgres://test:test@localhost:5432/it_auth_api?sslmode=disable
+        run: go test -tags=integration -v -count=1 -timeout 10m ./app/handlers/
+
+      - name: Run upload integration (dono da entidade)
+        env:
+          POSTGRES_TEST_URI: postgres://test:test@localhost:5432/it_upload?sslmode=disable
+        run: go test -tags=integration -v -count=1 -timeout 10m ./pkg/upload/
 
       - name: Cleanup Docker services
         if: always()

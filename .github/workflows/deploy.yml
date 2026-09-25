@@ -12,6 +12,10 @@ on:
         required: false
         type: string
 
+# Token do GITHUB_TOKEN só lê: nenhum job deste workflow escreve no repo.
+permissions:
+  contents: read
+
 jobs:
   # Gate: só permite deploy se o CI Gate passou (ou em disparo manual).
   # Este job SEMPRE roda; se o CI falhou, falha o pipeline e bloqueia o deploy.
@@ -205,7 +209,7 @@ jobs:
             service_id_secret: RENDER_SERVICE_ID_ADMIN
     steps:
       - name: Checkout (para o script check_spa_routes.py)
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: GET /routes e confere rewrite SPA
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}

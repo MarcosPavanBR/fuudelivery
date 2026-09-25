@@ -16,15 +16,19 @@ on:
     # Dom 06:00 UTC — opcional; remova se não quiser carga recorrente
     - cron: '0 6 * * 0'
 
+# Token do GITHUB_TOKEN só lê: nenhum job deste workflow escreve no repo.
+permissions:
+  contents: read
+
 jobs:
   load-test:
     name: Load Test — k6
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Run k6 load test
-        uses: grafana/k6-action@v0.3.1
+        uses: grafana/k6-action@e4714b734f2b0afaabeb7b4a69142745548ab9ec # v0.3.1
         with:
           filename: scripts/load-test/k6.js
         env:

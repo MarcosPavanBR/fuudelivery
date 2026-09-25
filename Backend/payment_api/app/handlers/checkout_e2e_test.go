@@ -953,7 +953,10 @@ func TestCheckoutE2E_WebhookRealFlow_Refund(t *testing.T) {
 	count = countLedger(t, 44, "debit", "", "charge-e2e-refund-low")
 	require.Equal(t, int64(0), count)
 
-	// === Cenario 5: cashback do cliente (receiver_type customer) revertido ===
+	// === Cenario 5: fatia customer do split NAO e debitada do cliente ===
+	// O settle nao credita a fatia "customer" em carteira nenhuma (so a fatia
+	// da loja e o top-up movem carteira). Debita-la no estorno tirava dinheiro
+	// real do cliente.
 	cashback := models.Payment{
 		OrderID:         "order-e2e-refund-cashback",
 		CustomerID:      503,
@@ -974,9 +977,9 @@ func TestCheckoutE2E_WebhookRealFlow_Refund(t *testing.T) {
 	seedPayment(t, &cashback)
 
 	// Carteira do estabelecimento (com credito do share 82) e carteira do
-	// cliente (com credito de cashback 3).
+	// cliente so com saldo proprio.
 	seedWallet(t, 45, "establishment", 182.0)
-	seedWallet(t, 503, "customer", 13.0) // 10 de saldo previo + 3 de cashback
+	seedWallet(t, 503, "customer", 10.0)
 
 	cashbackRefund := []byte(`{"event":"billing.refunded","charge":{"id":"charge-e2e-refund-cashback","status":"REFUNDED","amount":100.00}}`)
 	postWebhook(t, cashbackRefund)
@@ -985,11 +988,10 @@ func TestCheckoutE2E_WebhookRealFlow_Refund(t *testing.T) {
 	require.InDelta(t, 100.0, wallet.Balance, 0.01, "chargeback reverte o credito do estabelecimento (182 - 82)")
 
 	wallet = getWalletByUser(t, 503)
-	require.InDelta(t, 10.0, wallet.Balance, 0.01, "chargeback reverte o cashback do cliente (13 - 3)")
+	require.InDelta(t, 10.0, wallet.Balance, 0.01, "chargeback nao debita cashback que nunca foi creditado")
 
-	// Ledger: debito do cashback do cliente gravado
 	count = countLedger(t, 503, "debit", "", "charge-e2e-refund-cashback")
-	require.Equal(t, int64(1), count, "deve existir 1 debito de cashback do cliente no ledger")
+	require.Equal(t, int64(0), count, "nenhum debito no ledger do cliente")
 
 	// === Cenario 6: top-up de carteira quando o pagamento foi usado ===
 	topup := models.Payment{

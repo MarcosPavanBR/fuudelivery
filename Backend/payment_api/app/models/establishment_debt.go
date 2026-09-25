@@ -108,6 +108,23 @@ func MarkDebtPaid(db *gorm.DB, debtID int64, settledBy string) error {
 	return nil
 }
 
+// WaiveOpenDebtForOrder perdoa a dívida EM ABERTO de um pedido (ex.: pedido
+// estornado). Idempotente: dívida já perdoada, paga ou inexistente não muda e
+// devolve waived=false.
+func WaiveOpenDebtForOrder(db *gorm.DB, orderID, settledBy string) (waived bool, err error) {
+	res := db.Model(&EstablishmentDebt{}).
+		Where("order_id = ? AND status = ?", orderID, DebtOpen).
+		Updates(map[string]interface{}{
+			"status":     DebtWaived,
+			"settled_at": time.Now(),
+			"settled_by": settledBy,
+		})
+	if res.Error != nil {
+		return false, fmt.Errorf("perdoar dívida do pedido %s: %w", orderID, res.Error)
+	}
+	return res.RowsAffected > 0, nil
+}
+
 // roundMoney arredonda reais para 2 casas (mesma intenção do roundCents do
 // split_calculator, replicada aqui para o pacote models não depender de
 // services).

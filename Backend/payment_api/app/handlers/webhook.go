@@ -115,20 +115,6 @@ func establishmentShare(rules models.SplitRules) float64 {
 	return share
 }
 
-// customerCashbackShare soma o valor destinado ao cliente nas split rules do
-// pagamento (receiver_type == "customer") — o cashback creditado na carteira
-// do cliente quando o pagamento é confirmado. Também precisa ser revertido no
-// estorno, além do crédito do estabelecimento.
-func customerCashbackShare(rules models.SplitRules) float64 {
-	var share float64
-	for _, rule := range rules {
-		if rule.ReceiverType == "customer" {
-			share += rule.Amount
-		}
-	}
-	return share
-}
-
 // reverseWalletCredit debita um valor da carteira do usuário de forma
 // atômica via AdjustWalletBalance (transação + SELECT FOR UPDATE + guarda de
 // saldo). Retorna true se o débito foi realmente aplicado. Usado pelo
@@ -166,12 +152,17 @@ func reverseWalletCredit(userID int64, amount float64, abacatepayID, description
 }
 
 // processPaymentRefund trata o estorno/chargeback de um pagamento:
-//  1. Reverte os créditos de carteira (somente se o pagamento estava
-//     CONFIRMED — só assim houve crédito a reverter):
-//     a. o crédito do estabelecimento (share do split);
-//     b. o crédito de cashback do cliente (receiver_type == "customer");
-//     c. o top-up de carteira, quando o pagamento foi usado pelo cliente
-//     (wallet_credited_at preenchido);
+//  1. Reverte SÓ o que o settle de fato creditou (somente se o pagamento
+//     estava CONFIRMED — só assim houve crédito a reverter):
+//     a. o crédito do estabelecimento (share do split) — só na custódia; no
+//     split na origem a carteira interna nunca foi creditada, e no repasse a
+//     dívida do pedido é perdoada (a loja devolveu o dinheiro ao cliente);
+//     b. o top-up de carteira, quando o pagamento foi usado pelo cliente
+//     (wallet_credited_at preenchido).
+//     A fatia "customer" do split NÃO é revertida: o settle não a credita em
+//     carteira nenhuma, então debitá-la tirava dinheiro real do cliente — e,
+//     por usar a mesma referência, fazia o guard de idempotência pular a
+//     reversão do top-up;
 //  2. Publica o evento PAYMENT_REFUNDED nas filas order_updates/payment_updates
 //     para o monolito notificar o cliente em tempo real;
 //  3. Marca o pagamento como REFUNDED + refunded_at.
@@ -198,25 +189,22 @@ func processPaymentRefund(abacatepayID string) {
 	// split/crédito de carteira ou top-up. Pagamentos PENDING/EXPIRED não têm
 	// nada a reverter.
 	if payment.Status == "CONFIRMED" {
-		// 1. Crédito do estabelecimento (share do split)
-		reverseWalletCredit(
-			payment.EstablishmentID,
-			establishmentShare(payment.SplitRules),
-			abacatepayID,
-			"Refund/chargeback: estorno do pagamento "+payment.OrderID,
-			now,
-		)
+		// 1. Crédito do estabelecimento (share do split). No split na origem
+		// a loja recebeu direto na conta MP e o estorno sai de lá — debitar a
+		// carteira interna tiraria a fatia do saldo de OUTROS pedidos dela.
+		if !payment.SplitAtOrigin {
+			reverseWalletCredit(
+				payment.EstablishmentID,
+				establishmentShare(payment.SplitRules),
+				abacatepayID,
+				"Refund/chargeback: estorno do pagamento "+payment.OrderID,
+				now,
+			)
+		} else if payment.Repasse {
+			waiveRepasseDebt(payment.OrderID)
+		}
 
-		// 2. Crédito de cashback do cliente (receiver_type == "customer")
-		reverseWalletCredit(
-			payment.CustomerID,
-			customerCashbackShare(payment.SplitRules),
-			abacatepayID,
-			"Refund/chargeback: estorno do cashback do pagamento "+payment.OrderID,
-			now,
-		)
-
-		// 3. Top-up de carteira quando o pagamento foi usado pelo cliente
+		// 2. Top-up de carteira quando o pagamento foi usado pelo cliente
 		// (o crédito do top-up é o valor total do pagamento).
 		if payment.WalletCreditedAt != nil {
 			reverseWalletCredit(

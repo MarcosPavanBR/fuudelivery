@@ -125,3 +125,20 @@ func recordRepasseDebt(payment *models.Payment, now time.Time) error {
 	}
 	return nil
 }
+
+// waiveRepasseDebt perdoa a dívida de repasse de um pedido estornado: o
+// estorno sai da conta MP da loja, então ela não fica com o frete nem com a
+// comissão que devia. Sem isto a dívida seguia aberta e contando para a trava
+// de crédito. Best-effort como o resto do estorno: loga e segue.
+func waiveRepasseDebt(orderID string) {
+	waived, err := models.WaiveOpenDebtForOrder(models.DB, orderID, "refund")
+	switch {
+	case err != nil:
+		log.Printf("[REPASSE] falha ao perdoar a dívida do pedido estornado %s: %v", orderID, err)
+	case waived:
+		log.Printf("[REPASSE] dívida do pedido %s perdoada (pagamento estornado)", orderID)
+	default:
+		// Já paga (ou inexistente): devolver o que a loja repassou é acerto manual.
+		log.Printf("[REPASSE] pedido %s estornado sem dívida em aberto — se já foi paga, acertar manualmente", orderID)
+	}
+}

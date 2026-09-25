@@ -7,7 +7,9 @@ package handlers
 import (
 	"time"
 
+	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/orders_api/app/dto"
+	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -32,6 +34,13 @@ func ScheduleOrder(c *fiber.Ctx) error {
 		return c.Status(404).JSON(fiber.Map{"error": "Order not found"})
 	}
 
+	if !canScheduleOrder(c, doc) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
+	}
+	if !scheduledTime.After(time.Now()) {
+		return c.Status(400).JSON(fiber.Map{"error": "Scheduled time must be in the future"})
+	}
+
 	err = patchOrderDoc(doc, func(p *dto.RequestPayload) {
 		p.ScheduledAt = &scheduledTime
 		p.IsScheduled = true
@@ -41,4 +50,15 @@ func ScheduleOrder(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"message": "Order scheduled", "scheduled_at": scheduledTime})
+}
+
+// canScheduleOrder: reagendar é do cliente dono do pedido (telefone do token)
+// ou da loja do pedido/admin. Antes, qualquer usuário logado reagendava o
+// pedido de qualquer um.
+func canScheduleOrder(c *fiber.Ctx, doc *models.OrderDocument) bool {
+	if canActOnEstablishment(c, doc.EstablishmentID) {
+		return true
+	}
+	tokenPhone, err := middlewares.GetUserPhoneFromToken(c)
+	return err == nil && tokenPhone != "" && doc.UserPhone == tokenPhone
 }

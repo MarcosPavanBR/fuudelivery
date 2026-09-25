@@ -269,6 +269,14 @@ func InsertDelivery(c *fiber.Ctx) error {
 		})
 	}
 
+	// IDOR: a taxa de entrega é dinheiro — só o dono da loja (ou admin) define.
+	if request.EstablishmentID == 0 || !canActOnEstablishment(c, int64(request.EstablishmentID)) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
+	}
+	if request.FixedTaxa < 0 || request.PerKm < 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Taxa de entrega não pode ser negativa"})
+	}
+
 	newDelivery := models.Delivery{
 		EstablishmentID: request.EstablishmentID,
 		FixedTaxa:       request.FixedTaxa,

@@ -17,6 +17,7 @@ const RegisterEstablishment = lazy(
 );
 const Reports = lazy(() => import("./pages/reports/Reports"));
 const Destaque = lazy(() => import("./pages/destaque"));
+const Avaliacoes = lazy(() => import("./pages/avaliacoes"));
 const ResetarSenha = lazy(() => import("./pages/resetar-senha"));
 
 const RouteFallback = () => (
@@ -104,6 +105,14 @@ export default function PrivateRoute() {
         element={
           <Suspense fallback={<RouteFallback />}>
             <ChangePassword />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/avaliacoes"
+        element={
+          <Suspense fallback={<RouteFallback />}>
+            <Avaliacoes />
           </Suspense>
         }
       />

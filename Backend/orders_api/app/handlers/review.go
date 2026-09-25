@@ -3,6 +3,7 @@ package handlers
 import (
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
@@ -34,42 +35,39 @@ func CreateReview(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Order is not finished yet"})
 	}
 
-	var existing models.Review
-	result := models.DB.Where("order_id = ?", req.OrderID).First(&existing)
-	if result.Error == nil {
-		return c.Status(400).JSON(fiber.Map{"error": "You have already reviewed this order"})
-	}
-
-	// Verifica se o revisor é o dono do pedido ou o estabelecimento
+	// Só quem fez o pedido avalia, e o telefone vem do TOKEN. Antes bastava
+	// o telefone do corpo bater com o do token: qualquer cliente avaliava
+	// pedido de qualquer outra pessoa (nota falsa na concorrência) e ainda
+	// ganhava os pontos; o admin creditava pontos a um telefone qualquer.
 	tokenPhone, phoneErr := middlewares.GetUserPhoneFromToken(c)
-	isOwner := phoneErr == nil && tokenPhone == req.UserPhone
-	isAdmin := false
-	if !isOwner {
-		role, roleErr := middlewares.GetUserRoleFromToken(c)
-		if roleErr == nil && role == "admin" {
-			isAdmin = true
-		}
+	if phoneErr != nil || tokenPhone == "" || !samePhone(tokenPhone, doc.UserPhone) {
+		return c.Status(403).JSON(fiber.Map{"error": "Só quem fez o pedido pode avaliar"})
 	}
-	if !isOwner && !isAdmin {
-		return c.Status(403).JSON(fiber.Map{"error": "Only the order owner or admin can review"})
-	}
+	req.UserPhone = doc.UserPhone
 
-	establishmentID := uint(doc.EstablishmentID)
+	var existing models.Review
+	if models.DB.Where("order_id = ?", req.OrderID).First(&existing).Error == nil {
+		return c.Status(409).JSON(fiber.Map{"error": "Este pedido já foi avaliado"})
+	}
 
 	review := models.Review{
 		OrderID:         req.OrderID,
-		EstablishmentID: establishmentID,
+		EstablishmentID: uint(doc.EstablishmentID),
 		UserPhone:       req.UserPhone,
-		UserName:        req.UserName,
+		UserName:        clipText(req.UserName, 60),
 		ProductID:       req.ProductID,
 		Rating:          req.Rating,
-		Comment:         req.Comment,
-		ImageURL:        req.ImageURL,
-		IsAnonymous:     req.IsAnonymous,
+		Comment:         clipText(req.Comment, maxReviewText),
+		// Foto: não há upload no app e um link qualquer vira pixel de
+		// rastreio na tela da loja. Fica de fora até existir upload próprio.
+		ImageURL:    "",
+		IsAnonymous: req.IsAnonymous,
 	}
 
 	if err := models.DB.Create(&review).Error; err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": "Failed to save review"})
+		// Duas avaliações simultâneas do mesmo pedido: o índice único de
+		// order_id barra a segunda.
+		return c.Status(409).JSON(fiber.Map{"error": "Este pedido já foi avaliado"})
 	}
 
 	if req.UserPhone != "" {
@@ -112,6 +110,53 @@ func CreateReview(c *fiber.Ctx) error {
 	})
 }
 
+// maxReviewText limita comentário e resposta da loja.
+const maxReviewText = 500
+
+// clipText apara e corta em n caracteres (runas, não bytes).
+func clipText(s string, n int) string {
+	s = strings.TrimSpace(s)
+	if r := []rune(s); len(r) > n {
+		return strings.TrimSpace(string(r[:n]))
+	}
+	return s
+}
+
+// samePhone compara telefones ignorando formatação ("+55 11 9..." vs
+// "5511 9...").
+func samePhone(a, b string) bool {
+	digits := func(s string) string {
+		return strings.Map(func(r rune) rune {
+			if r >= '0' && r <= '9' {
+				return r
+			}
+			return -1
+		}, s)
+	}
+	da, db := digits(a), digits(b)
+	return da != "" && da == db
+}
+
+func toReviewResponse(r models.Review) dto.ReviewResponse {
+	userName := r.UserName
+	if r.IsAnonymous {
+		userName = ""
+	}
+	out := dto.ReviewResponse{
+		ID:           r.ID,
+		Rating:       r.Rating,
+		Comment:      r.Comment,
+		UserName:     userName,
+		ImageURL:     r.ImageURL,
+		CreatedAt:    r.CreatedAt.Format(time.RFC3339),
+		ResponseText: r.ResponseText,
+	}
+	if r.ResponseAt != nil {
+		out.ResponseAt = r.ResponseAt.Format(time.RFC3339)
+	}
+	return out
+}
+
 func GetEstablishmentReviews(c *fiber.Ctx) error {
 	establishmentID := c.Params("id")
 	page, _ := strconv.Atoi(c.Query("page", "1"))
@@ -144,19 +189,9 @@ func GetEstablishmentReviews(c *fiber.Ctx) error {
 		Where("establishment_id = ?", establishmentID).
 		Scan(&avgRating)
 
-	var responses []dto.ReviewResponse
+	responses := []dto.ReviewResponse{}
 	for _, r := range reviews {
-		userName := r.UserName
-		if r.IsAnonymous {
-			userName = ""
-		}
-		responses = append(responses, dto.ReviewResponse{
-			Rating:    r.Rating,
-			Comment:   r.Comment,
-			UserName:  userName,
-			ImageURL:  r.ImageURL,
-			CreatedAt: r.CreatedAt.Format(time.RFC3339),
-		})
+		responses = append(responses, toReviewResponse(r))
 	}
 
 	return c.JSON(fiber.Map{
@@ -176,19 +211,9 @@ func GetProductReviews(c *fiber.Ctx) error {
 		Order("created_at desc").
 		Find(&reviews)
 
-	var responses []dto.ReviewResponse
+	responses := []dto.ReviewResponse{}
 	for _, r := range reviews {
-		userName := r.UserName
-		if r.IsAnonymous {
-			userName = ""
-		}
-		responses = append(responses, dto.ReviewResponse{
-			Rating:    r.Rating,
-			Comment:   r.Comment,
-			UserName:  userName,
-			ImageURL:  r.ImageURL,
-			CreatedAt: r.CreatedAt.Format(time.RFC3339),
-		})
+		responses = append(responses, toReviewResponse(r))
 	}
 
 	return c.JSON(fiber.Map{
@@ -208,6 +233,7 @@ func RespondToReview(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
 	}
 
+	req.ResponseText = clipText(req.ResponseText, maxReviewText)
 	if req.ResponseText == "" {
 		return c.Status(400).JSON(fiber.Map{"error": "Response text is required"})
 	}
@@ -248,19 +274,11 @@ func GetUserReviews(c *fiber.Ctx) error {
 		Order("created_at desc").
 		Find(&reviews)
 
-	var responses []dto.ReviewResponse
+	responses := []dto.ReviewResponse{}
 	for _, r := range reviews {
-		userName := r.UserName
-		if r.IsAnonymous {
-			userName = ""
-		}
-		responses = append(responses, dto.ReviewResponse{
-			Rating:    r.Rating,
-			Comment:   r.Comment,
-			UserName:  userName,
-			ImageURL:  r.ImageURL,
-			CreatedAt: r.CreatedAt.Format(time.RFC3339),
-		})
+		item := toReviewResponse(r)
+		item.OrderID = r.OrderID
+		responses = append(responses, item)
 	}
 
 	return c.JSON(fiber.Map{

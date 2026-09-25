@@ -12,11 +12,18 @@ type CreateReviewRequest struct {
 }
 
 type ReviewResponse struct {
+	ID        uint   `json:"id"`
 	Rating    int    `json:"rating"`
 	Comment   string `json:"comment"`
 	UserName  string `json:"user_name,omitempty"`
 	ImageURL  string `json:"image_url,omitempty"`
 	CreatedAt string `json:"created_at"`
+	// Resposta pública da loja (RespondToReview).
+	ResponseText string `json:"response_text,omitempty"`
+	ResponseAt   string `json:"response_at,omitempty"`
+	// Só em GET /reviews/user/:phone: o app do cliente sabe quais pedidos
+	// já avaliou.
+	OrderID string `json:"order_id,omitempty"`
 }
 
 type RespondReviewRequest struct {

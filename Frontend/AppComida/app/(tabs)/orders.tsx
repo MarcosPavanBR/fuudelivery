@@ -3,6 +3,7 @@ import {
   ScrollView,
   StyleSheet,
   TouchableOpacity,
+  Alert,
   type ViewStyle,
 } from "react-native";
 import { Text, View } from "@/components/Themed";
@@ -19,10 +20,16 @@ import ReorderButton from "@/components/ReorderButton";
 import { useCartApi } from "@/contexts/ApiCartContext";
 import { useNavigation } from "expo-router";
 import LiveTrackingReadonly from "@/components/LiveTrackingReadonly";
+import ReviewBox from "@/components/ReviewBox";
+import api from "@/services/api";
+import { orderEstablishmentId, paidTotal, rebuildCart } from "@/helpers/reorder";
 
 export default function TabTwoScreen() {
   const { getUserData } = useApi();
-  const { addCart, cleanCart } = useCartApi();
+  const { addCart, cleanCart, setEstablishment } = useCartApi();
+  // Avaliações do cliente por pedido (order_id → avaliação).
+  const [reviews, setReviews] = useState<Record<string, any>>({});
+  const [userName, setUserName] = useState("");
   const navigation = useNavigation();
   const [myOrders, setMyOrders] = useState([]);
   const isFocused = useIsFocused();
@@ -48,25 +55,58 @@ export default function TabTwoScreen() {
     }
 
     setUserHasPhone(true);
+    setUserName(userData?.name || "");
     const data = await orderModel.getOrders(userData?.phone);
     setMyOrders(sortObjectsByLastModified(data));
+    try {
+      const { data: rv } = await api.get("/reviews/user/" + encodeURIComponent(userData.phone));
+      const byOrder: Record<string, any> = {};
+      (rv?.reviews || []).forEach((r: any) => {
+        if (r.order_id) byOrder[r.order_id] = r;
+      });
+      setReviews(byOrder);
+    } catch {
+      // Sem avaliações carregadas: o botão aparece e o servidor recusa
+      // duplicada com mensagem.
+    }
   }
 
-  const handleReorder = (cart: any[]) => {
-    cleanCart();
-    cart.forEach((item: any) => addCart(item));
-    navigation.navigate("cart");
-  };
-
-  // Total real do pedido = soma dos itens + taxa de entrega.
-  // Antes exibia apenas a taxa de entrega como se fosse o total.
-  const orderTotal = (e: any) => {
-    const items = (e.cart || []).reduce(
-      (sum: number, item: any) =>
-        sum + (item.item?.Price || item.item?.price || 0) * (item.quantity || 1),
-      0
-    );
-    return items + (e.deliveryValue || 0);
+  // Repetir pedido: carrega a loja e o cardápio ATUAIS e remonta o carrinho
+  // (helpers/reorder.ts). Antes o carrinho ia com a loja que estivesse
+  // aberta no app e os preços antigos — o servidor recusava o pedido.
+  const handleReorder = async (order: any) => {
+    const estId = orderEstablishmentId(order);
+    if (!estId) {
+      Alert.alert("Repetir pedido", "Não foi possível identificar a loja deste pedido.");
+      return;
+    }
+    try {
+      const [est, open, products] = await Promise.all([
+        api.get("/establishments/" + estId),
+        api.get(`/establishments/${estId}/is-open`).catch(() => ({ data: {} as any })),
+        api.get("/products/" + estId),
+      ]);
+      const { cart, removed, priceChanged } = rebuildCart(order.cart || [], products.data || []);
+      if (cart.length === 0) {
+        Alert.alert("Repetir pedido", "Nenhum item deste pedido está disponível agora.");
+        return;
+      }
+      setEstablishment({
+        ...est.data,
+        is_open: open.data?.is_open,
+        opens_at: open.data?.opens_at,
+        opens_day: open.data?.opens_day,
+      });
+      cleanCart();
+      cart.forEach((item: any) => addCart(item));
+      const notes: string[] = [];
+      if (removed.length) notes.push(`Fora do cardápio agora: ${removed.join(", ")}.`);
+      if (priceChanged) notes.push("Alguns preços mudaram desde o último pedido.");
+      if (notes.length) Alert.alert("Repetir pedido", notes.join("\n"));
+      navigation.navigate("cart" as never);
+    } catch {
+      Alert.alert("Repetir pedido", "Não foi possível carregar o cardápio. Tente de novo.");
+    }
   };
 
   const toggleExpand = (orderId: string) => {
@@ -127,7 +167,7 @@ export default function TabTwoScreen() {
                 <View style={styles.container2}>
                   <View style={styles.container3}>
                     <Image
-                      source={{ uri: e?.establishment?.image }}
+                      source={{ uri: e?.establishment?.image ?? e?.establishment?.Image }}
                       style={styles.imageStyle}
                     />
                     <Text style={styles.text}>{e?.establishment?.name}</Text>
@@ -213,14 +253,22 @@ export default function TabTwoScreen() {
 
                   <Text style={[styles.sectionTitle, { marginTop: 10 }]}>Total</Text>
                   <Text style={styles.totalText}>
-                    {helpers.formatCurrency(orderTotal(e))}
+                    {helpers.formatCurrency(paidTotal(e))}
                   </Text>
 
                   {e.status === "FINISHED" && (
-                    <ReorderButton
-                      cart={e.cart || []}
-                      onReorder={handleReorder}
-                    />
+                    <>
+                      <ReviewBox
+                        orderId={orderId}
+                        existing={reviews[orderId]}
+                        userName={userName}
+                        onDone={getMyOrders}
+                      />
+                      <ReorderButton
+                        cart={e.cart || []}
+                        onReorder={() => handleReorder(e)}
+                      />
+                    </>
                   )}
                 </View>
               )}

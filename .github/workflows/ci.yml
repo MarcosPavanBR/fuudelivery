@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [master]
 
+# Token do GITHUB_TOKEN só lê: nenhum job deste workflow escreve no repo.
+permissions:
+  contents: read
+
 jobs:
   # ──────────────────────────────────────────────
   # Go modules — matrix strategy
@@ -29,9 +33,9 @@ jobs:
       run:
         working-directory: ${{ matrix.module }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           # Alinhar com go.work/go.mod (1.25). govulncheck exige 1.25+.
           go-version: "1.25.x"
@@ -70,9 +74,9 @@ jobs:
       run:
         working-directory: cmd/fuudelivery
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           # Alinhar com go.work/go.mod (1.25). govulncheck exige 1.25+.
           go-version: "1.25.x"
@@ -128,9 +132,9 @@ jobs:
       run:
         working-directory: Backend/payment_api
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           # Alinhar com go.work/go.mod (1.25). govulncheck exige 1.25+.
           go-version: "1.25.x"
@@ -209,7 +213,7 @@ jobs:
 
       - name: Upload test output
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: payment-api-test-output
           path: /tmp/test-output.txt
@@ -226,9 +230,9 @@ jobs:
       run:
         working-directory: Backend/orders_api
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: "1.25.x"
           cache-dependency-path: Backend/orders_api/go.sum
@@ -284,9 +288,9 @@ jobs:
       run:
         working-directory: Backend/delivery_api
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: "1.25.x"
           cache-dependency-path: Backend/delivery_api/go.sum
@@ -323,9 +327,9 @@ jobs:
     name: Lint — gofmt (all modules)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           # Alinhar com go.work/go.mod (1.25). govulncheck exige 1.25+.
           go-version: "1.25.x"
@@ -350,7 +354,7 @@ jobs:
     name: Monitor — verify-deploy.sh
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Testes de leitura do /health (com jq e sem jq)
         run: bash scripts/verify-deploy_test.sh
@@ -376,7 +380,7 @@ jobs:
     name: Migrações SQL — do zero e idempotentes
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Subir Postgres 16
         # Espera pelo servidor REAL via TCP, não via socket. O entrypoint do
@@ -450,13 +454,15 @@ jobs:
           - Backend/chat_api
           - pkg/health
           - pkg/queue
+          - pkg/gateway    # adapters dos gateways de pagamento
+          - pkg/secretbox  # cofre dos tokens OAuth dos lojistas
     defaults:
       run:
         working-directory: ${{ matrix.module }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           # govulncheck v1.2.0+ exige Go 1.25+
           go-version: "1.25.x"
@@ -483,7 +489,7 @@ jobs:
     name: Check mobile API URL consistency
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Run URL consistency check
         run: bash scripts/check-mobile-urls.sh
@@ -498,7 +504,7 @@ jobs:
     name: Check CSS @layer (no unlayered rules)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Run checker unit test
         run: node scripts/check-unlayered-css.test.cjs
@@ -513,7 +519,7 @@ jobs:
     name: Check workflow YAML + bash syntax
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Run checker self-test
         run: python3 scripts/check-workflows.py --self-test
@@ -531,9 +537,9 @@ jobs:
       run:
         working-directory: Frontend/WebRestaurant
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: "20"
           cache: "npm"
@@ -556,9 +562,9 @@ jobs:
       run:
         working-directory: Frontend/WebAdmin
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: "20"
           cache: "npm"
@@ -593,24 +599,28 @@ jobs:
       run:
         working-directory: ${{ matrix.dir }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: "20"
           cache: "npm"
           cache-dependency-path: ${{ matrix.dir }}/package-lock.json
 
+      # npm ci: audita exatamente o lockfile que vai para produção (npm install
+      # podia re-resolver a árvore e esconder o que o lock realmente trava).
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Run npm audit
-        # --omit=dev ignora devDependencies; --audit-level=critical so falha
-        # em vulnerabilidades criticas (moderate/high sao reportadas mas nao bloqueiam).
+        # --omit=dev ignora devDependencies; --audit-level=high falha em
+        # vulnerabilidades altas e críticas (moderate é reportada mas não
+        # bloqueia). Era critical: o axios 1.6.8 do AppRestaurante, com
+        # advisory alto de vazamento de credencial, passava.
         # Retry 3x com backoff: o registry.npmjs.org retorna 503 intermitente.
         run: |
           for attempt in 1 2 3; do
-            if npm audit --omit=dev --audit-level=critical; then
+            if npm audit --omit=dev --audit-level=high; then
               exit 0
             fi
             echo "Attempt $attempt failed, waiting 15s..."
@@ -626,7 +636,7 @@ jobs:
     name: ShellCheck — scripts .sh
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Run ShellCheck on all .sh scripts
         # -S warning: bloqueia warnings e errors, ignora style/info.
@@ -658,9 +668,9 @@ jobs:
       run:
         working-directory: ${{ matrix.app }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: '20'
           cache: 'npm'

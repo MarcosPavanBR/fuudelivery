@@ -13,6 +13,7 @@ import (
 	"github.com/carloshomar/fuudelivery/auth_api/app/models"
 	"github.com/carloshomar/fuudelivery/pkg/storage"
 	"github.com/gofiber/fiber/v2"
+	"gorm.io/gorm"
 )
 
 var store *storage.SupabaseStorage
@@ -35,8 +36,7 @@ func HandleImageUpload(c *fiber.Ctx) error {
 		return c.Status(503).JSON(fiber.Map{"error": "Storage nao configurado. Configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY."})
 	}
 
-	userID, err := middlewares.GetUserIDFromToken(c)
-	if err != nil {
+	if _, err := middlewares.GetUserIDFromToken(c); err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
 	}
 
@@ -52,7 +52,7 @@ func HandleImageUpload(c *fiber.Ctx) error {
 		if entityID == "" {
 			return c.Status(400).JSON(fiber.Map{"error": "entityId é obrigatório para " + entity})
 		}
-		if !checkOwnership(userID, entity, entityID) {
+		if !canUploadFor(c, entity, entityID) {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "You can only upload images for your own establishment"})
 		}
 	}
@@ -139,54 +139,47 @@ func HandleImageUpload(c *fiber.Ctx) error {
 	})
 }
 
-// checkOwnership verifica se o usuario autenticado e dono da entidade.
-// Para products/categories/additionals, verifica se pertencem ao establishment do usuario.
-func checkOwnership(userID int64, entity, entityID string) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
-	var user models.User
-	if err := models.DB.WithContext(ctx).First(&user, userID).Error; err != nil {
+// canUploadFor decide se o token pode enviar imagem para a entidade
+// (products/categories/additionals). Admin passa; os demais só para
+// entidades do establishment_id DO TOKEN — a mesma regra de
+// canActOnEstablishment.
+//
+// Antes o id do token era buscado na tabela users. Clientes, usuários de loja
+// e entregadores têm sequências de id independentes: o cliente de id 5
+// herdava a loja do usuário 5 e enviava imagens para os produtos dela.
+func canUploadFor(c *fiber.Ctx, entity, entityID string) bool {
+	if role, _ := middlewares.GetUserRoleFromToken(c); role == "admin" {
+		return true
+	}
+	estID, err := middlewares.GetEstablishmentIDFromToken(c)
+	if err != nil || estID <= 0 {
 		return false
 	}
+	return entityBelongsTo(models.DB, entity, entityID, estID)
+}
 
-	if user.EstablishmentID == 0 {
-		return false // usuario sem restaurante vinculado
+// entityBelongsTo confere se a entidade é do estabelecimento. As três
+// tabelas têm establishment_id (additionals também: o JOIN antigo por
+// additionals.product_id usava uma coluna que não existe, e o upload de
+// adicional dava 403 para todo mundo).
+func entityBelongsTo(db *gorm.DB, entity, entityID string, establishmentID int64) bool {
+	table := map[string]string{
+		"products":    "products",
+		"categories":  "categories",
+		"additionals": "additionals",
+	}[entity]
+	if table == "" || db == nil {
+		return false
 	}
-
-	switch entity {
-	case "products":
-		var count int64
-		models.DB.WithContext(ctx).Table("products").
-			Where("id = ? AND establishment_id = ?", entityID, user.EstablishmentID).
-			Count(&count)
-		return count > 0
-	case "categories":
-		var count int64
-		models.DB.WithContext(ctx).Table("categories").
-			Where("id = ? AND establishment_id = ?", entityID, user.EstablishmentID).
-			Count(&count)
-		return count > 0
-	case "additionals":
-		// Additionals estao vinculados via product -> establishment
-		var count int64
-		models.DB.WithContext(ctx).Table("additionals").
-			Joins("JOIN products ON products.id = additionals.product_id").
-			Where("additionals.id = ? AND products.establishment_id = ?", entityID, user.EstablishmentID).
-			Count(&count)
-		return count > 0
-	case "restaurants":
-		// Dono do estabelecimento (ou admin, tratado antes da chamada).
-		var est models.Establishment
-		if err := models.DB.WithContext(ctx).Select("id").
-			Where("id = ? AND owner_id = ?", entityID, user.ID).First(&est).Error; err != nil {
-			return false
-		}
-		return true
-	default:
-		// reviews/avatars: conteúdo do próprio usuário autenticado.
-		return true
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	var count int64
+	if err := db.WithContext(ctx).Table(table).
+		Where("id = ? AND establishment_id = ?", entityID, establishmentID).
+		Count(&count).Error; err != nil {
+		return false
 	}
+	return count > 0
 }
 
 // parseUint helper para converter string para uint.

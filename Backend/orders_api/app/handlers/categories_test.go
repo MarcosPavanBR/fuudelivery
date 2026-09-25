@@ -1,14 +1,16 @@
 package handlers
 
 import (
+	"fmt"
 	"io"
 
 	"bytes"
+	"net/http/httptest"
+	"testing"
+
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"net/http/httptest"
-	"testing"
 )
 
 func TestCreateCategories_InvalidPayload(t *testing.T) {
@@ -72,6 +74,10 @@ func TestGetCategoriesWithProducts_Cardapio(t *testing.T) {
 	if err := db.Model(&cat).Association("Products").Append(&prod); err != nil {
 		t.Fatal(err)
 	}
+	bacon := models.Additional{Name: "Bacon extra", EstablishmentID: 7}
+	if err := db.Model(&prod).Association("Additional").Append(&bacon); err != nil {
+		t.Fatal(err)
+	}
 
 	app := newTestApp()
 	app.Get("/categories/product/:establishmentId", GetCategoriesWithProducts)
@@ -85,5 +91,48 @@ func TestGetCategoriesWithProducts_Cardapio(t *testing.T) {
 	}
 	if !bytes.Contains(body, []byte("X-Burger")) {
 		t.Fatalf("cardápio sem o produto: %s", body)
+	}
+	if !bytes.Contains(body, []byte("Bacon extra")) {
+		t.Fatalf("cardápio sem os adicionais do produto: %s", body)
+	}
+}
+
+// O cardápio fazia uma consulta de produtos POR categoria (N+1). Com
+// Preload o número de consultas não cresce com o número de categorias.
+func TestGetCategoriesWithProducts_ConsultasNaoCrescem(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&models.Category{}, &models.Product{}, &models.Additional{}); err != nil {
+		t.Fatal(err)
+	}
+	prev := models.DB
+	models.DB = db
+	defer func() { models.DB = prev }()
+
+	for i := 0; i < 12; i++ {
+		cat := models.Category{Name: fmt.Sprintf("Cat %d", i), EstablishmentID: 7}
+		db.Create(&cat)
+		prod := models.Product{Name: fmt.Sprintf("Prod %d", i), EstablishmentID: 7}
+		db.Create(&prod)
+		db.Model(&cat).Association("Products").Append(&prod)
+	}
+
+	var consultas int
+	db.Callback().Query().After("gorm:query").Register("conta_consultas", func(*gorm.DB) { consultas++ })
+
+	app := newTestApp()
+	app.Get("/categories/product/:establishmentId", GetCategoriesWithProducts)
+	resp, err := app.Test(httptest.NewRequest("GET", "/categories/product/7", nil))
+	if err != nil || resp.StatusCode != 200 {
+		t.Fatalf("status %v err %v", resp.StatusCode, err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if !bytes.Contains(body, []byte("Prod 11")) {
+		t.Fatalf("cardápio incompleto: %s", body)
+	}
+	if consultas > 4 {
+		t.Fatalf("%d consultas para 12 categorias: N+1", consultas)
 	}
 }

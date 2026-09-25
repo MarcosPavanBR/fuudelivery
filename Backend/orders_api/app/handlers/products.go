@@ -126,22 +126,13 @@ func GetByEstablishmentIdWithRelations(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to parse request body"})
 	}
 
+	// Devolve as categorias COM os produtos. A versão anterior montava a
+	// lista com produtos num laço N+1, descartava e devolvia só as categorias.
 	var categories []models.Category
-	var categoriesWithProducts []models.CategoryProducts
-
-	models.DB.Where(&models.Category{
+	if err := models.DB.Preload("Products").Where(&models.Category{
 		EstablishmentID: uint(establishmentId),
-	}).Find(&categories)
-
-	for _, category := range categories {
-		var products []models.Product
-
-		models.DB.Model(&category).Association("Products").Find(&products)
-
-		categoriesWithProducts = append(categoriesWithProducts, models.CategoryProducts{
-			Category: category,
-		})
-
+	}).Find(&categories).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch categories"})
 	}
 
 	return c.JSON(&categories)

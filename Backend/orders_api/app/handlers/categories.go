@@ -103,19 +103,20 @@ func GetCategoriesWithProducts(c *fiber.Ctx) error {
 	var categories []models.Category
 	var categoriesWithProducts []dto.CategorieRequest
 
-	if err := models.DB.Where(&models.Category{
+	// Preload carrega produtos e adicionais de TODAS as categorias num número
+	// fixo de consultas. O laço antigo fazia uma consulta por categoria (N+1)
+	// em toda abertura de cardápio.
+	if err := models.DB.Preload("Products.Additional").Where(&models.Category{
 		EstablishmentID: uint(establishmentID),
 	}).Find(&categories).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch categories"})
 	}
 
 	for _, category := range categories {
-		var products []models.Product
-
-		if err := models.DB.Model(&category).Preload("Additional").Association("Products").Find(&products); err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch products"})
+		products := category.Products
+		if products == nil {
+			products = []models.Product{}
 		}
-
 		categoriesWithProducts = append(categoriesWithProducts,
 			dto.CategorieRequest{
 				Id:              category.ID,

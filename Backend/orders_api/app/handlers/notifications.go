@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
 )
@@ -17,9 +18,38 @@ type PushTicket struct {
 }
 
 type RegisterPushTokenRequest struct {
+	// UserID e UserType do corpo são IGNORADOS (mantidos só para o JSON dos
+	// apps continuar válido): a identidade vem do token. Ver pushIdentity.
 	UserID    int64  `json:"user_id"`
 	UserType  string `json:"user_type"`
 	PushToken string `json:"push_token"`
+}
+
+// pushIdentity devolve de quem é o push token, a partir do JWT. O user_type
+// segue o que os leitores consultam: "client" (sendStatusPushNotification),
+// "restaurant" e "deliveryman".
+//
+// Antes o corpo mandava: qualquer usuário logado substituía o token de push
+// de outro (upsert por user_id+user_type) e passava a receber as
+// notificações de pedido dele. E o AppComida mandava "customer", que nenhum
+// leitor consulta — o cliente nunca recebia push de status.
+func pushIdentity(c *fiber.Ctx) (int64, string, bool) {
+	userID, err := middlewares.GetUserIDFromToken(c)
+	if err != nil || userID <= 0 {
+		return 0, "", false
+	}
+	role, _ := middlewares.GetUserRoleFromToken(c)
+	switch {
+	case role == "client":
+		return userID, "client", true
+	case role == "":
+		// GenerateJWTDeliveryMan não põe role no token.
+		return userID, "deliveryman", true
+	}
+	if estID, eErr := middlewares.GetEstablishmentIDFromToken(c); eErr == nil && estID > 0 {
+		return userID, "restaurant", true
+	}
+	return userID, role, true
 }
 
 func RegisterPushToken(c *fiber.Ctx) error {
@@ -31,6 +61,12 @@ func RegisterPushToken(c *fiber.Ctx) error {
 	if req.PushToken == "" {
 		return c.Status(400).JSON(fiber.Map{"error": "push_token is required"})
 	}
+
+	userID, userType, ok := pushIdentity(c)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+	}
+	req.UserID, req.UserType = userID, userType
 
 	db := models.DB
 	if db == nil {

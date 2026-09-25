@@ -112,7 +112,7 @@ func GetCategoriesWithProducts(c *fiber.Ctx) error {
 	for _, category := range categories {
 		var products []models.Product
 
-		if err := models.DB.Model(&category).Preload("Additional").Association("Products").Find(&products).Error; err != nil {
+		if err := models.DB.Model(&category).Preload("Additional").Association("Products").Find(&products); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch products"})
 		}
 

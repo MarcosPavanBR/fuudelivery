@@ -1840,6 +1840,11 @@ func main() {
 		go paymentHandlers.StartPaymentReconciliation(5 * time.Minute)
 	}()
 
+	// Tickets de WebSocket emitidos e nunca consumidos ficariam no mapa para
+	// sempre: sem esta limpeza, qualquer usuário logado cresce a memória do
+	// processo chamando POST /auth/ws-ticket em loop.
+	cleanupWSTickets()
+
 	// Start background workers
 	var wg sync.WaitGroup
 	wg.Add(1)

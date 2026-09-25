@@ -5,22 +5,28 @@
 > de pagamento ativo vive em `payment_api` (embutido no monolito `cmd/fuudelivery`).
 > As menções a `Backend/payment_api (monolith)` neste documento são **históricas** — não edite,
 > não busque e não rode comandos apontando para esse diretório.
-> **Última atualização:** 2026-07-31
+> **Última atualização:** 2026-09-25 (auditoria 360°: gitleaks no histórico completo, 662 commits)
 
 ## 🔴 Prioridade 0 — Exposição de Credenciais
 
-O arquivo `.fuudelivery-config/CREDENTIALS.md` foi commitado no repositório público. O arquivo foi removido do tracking, **mas o conteúdo permanece no histórico do git**.
+O repositório é **público** (confirmado em 2026-09-25). `.fuudelivery-config/CREDENTIALS.md`
+(commit `abdcedd`) e `.fuudelivery-config/DOCUMENTATION.md`/`.html` (commits `4af3087`,
+`9a3fc3b`, `87ea64f`, `085480d`) foram removidos do tracking, **mas o conteúdo segue no
+histórico do git**. A árvore atual está limpa (gitleaks `dir`: só placeholders).
 
-| Credencial | Serviço | Status |
+| Credencial exposta no histórico | Onde | Status |
 |---|---|---|
-| MongoDB Atlas password | Banco de dados | ⚠️ Precisa rotação |
-| Redis password | Fila/pubsub | ✅ Gerenciado pelo Render |
-| Supabase password | PostgreSQL | ⚠️ Precisa rotação |
-| AbacatePay API Key | Gateway de pagamento | ⚠️ Precisa rotação |
-| AbacatePay Webhook Secret | Webhooks | ⚠️ Precisa rotação |
-| JWT Secret | Autenticação | ✅ Configurado (log.Fatal se vazio) |
-| Render API Token | Deploy | ⚠️ Exposto em scripts/set-render-env.sh |
-| Admin password | Login admin | ✅ Configurado via Render API |
+| MongoDB Atlas (string de conexão com senha) | CREDENTIALS.md, DOCUMENTATION.md | ⚠️ Rotação não confirmada |
+| Redis (string de conexão com senha; provedor externo, não é o Render) | CREDENTIALS.md | ⚠️ Rotação não confirmada |
+| Render API Token (`rnd_…`, 3 ocorrências) | CREDENTIALS.md | ⚠️ Rotação não confirmada — dá leitura de TODAS as env vars de produção e deploy |
+| AbacatePay API Key + Webhook Secret | CREDENTIALS.md, DOCUMENTATION.md | ⚠️ Rotação não confirmada |
+| Senha do Supabase (PostgreSQL) | (registro anterior deste documento) | ⚠️ Rotação não confirmada |
+| JWT_SECRET fallback no Backend/Payment arquivado | `Backend/Payment/config/config.go` (histórico) | ⚠️ Confirmar que produção não usa esse valor |
+
+**Ordem obrigatória:** revogar e reemitir TUDO acima primeiro; só depois limpar o
+histórico (seção abaixo). Apagar do histórico sem revogar não resolve — o repositório já
+esteve público com os valores. Verificar também o repositório `fuudelivery-backend`, que é
+público e não foi auditado.
 
 ### Guia Completo de Rotação de Credenciais
 
@@ -149,13 +155,13 @@ O repositório `github.com/MarcosPavanBR/fuudelivery` é público. Considere:
 ## Checklist de Segurança para Produção
 
 - [ ] CREDENTIALS.md removido do histórico do git (BFG)
-- [ ] .env removido do histórico do git (BFG)
+- [x] `.env` do histórico sem segredo (verificado 2026-09-25: `Frontend/WebRestaurant/.env` só tinha URLs)
 - [ ] Todas as credenciais rotacionadas (Atlas, Supabase, Redis, AbacatePay, JWT, Render)
 - [ ] Senha do admin alterada para forte (16+ caracteres)
 - [x] Rate limiting em login, registro e pagamento (✅ Implementado — ver seção abaixo)
-- [x] govulncheck e npm audit no CI (✅ Implementado)
-- [ ] Repo verified como público (ou tornar privado)
-- [ ] Nenhum `.env` com credenciais de produção commitado
+- [x] govulncheck (inclui `pkg/gateway` e `pkg/secretbox`) e npm audit bloqueando a partir de **alto** no CI
+- [x] Visibilidade verificada: **público** (2026-09-25) — decidir entre tornar privado ou limpar o histórico após a rotação
+- [x] Nenhum `.env` com credenciais de produção na árvore atual (gitleaks `dir`, 2026-09-25)
 
 ---
 

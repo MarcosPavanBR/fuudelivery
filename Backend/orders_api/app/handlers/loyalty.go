@@ -250,7 +250,7 @@ func EarnPointsForOrder(userPhone, orderID string, orderValue float64) error {
 		return err
 	}
 
-	log.Printf("[LOYALTY] %s ganhou %d pontos (pedido %s, valor %.2f)", userPhone, pointsEarned, orderID, orderValue)
+	log.Printf("[LOYALTY] %s ganhou %d pontos (pedido %s, valor %.2f)", maskPhone(userPhone), pointsEarned, orderID, orderValue)
 	return nil
 }
 

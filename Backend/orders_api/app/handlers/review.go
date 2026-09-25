@@ -82,14 +82,14 @@ func CreateReview(c *fiber.Ctx) error {
 				Tier:      "bronze",
 			}
 			if err := models.DB.Create(&loyalty).Error; err != nil {
-				log.Printf("[REVIEW] Erro ao criar loyalty para %s: %v", req.UserPhone, err)
+				log.Printf("[REVIEW] Erro ao criar loyalty para %s: %v", maskPhone(req.UserPhone), err)
 			}
 		}
 
 		loyalty.Points += 5
 		loyalty.UpdatedAt = time.Now()
 		if err := models.DB.Save(&loyalty).Error; err != nil {
-			log.Printf("[REVIEW] Erro ao atualizar loyalty para %s: %v", req.UserPhone, err)
+			log.Printf("[REVIEW] Erro ao atualizar loyalty para %s: %v", maskPhone(req.UserPhone), err)
 		}
 
 		transaction := models.LoyaltyTransaction{
@@ -101,7 +101,7 @@ func CreateReview(c *fiber.Ctx) error {
 			CreatedAt:   time.Now(),
 		}
 		if err := models.DB.Create(&transaction).Error; err != nil {
-			log.Printf("[REVIEW] Erro ao registrar transação para %s: %v", req.UserPhone, err)
+			log.Printf("[REVIEW] Erro ao registrar transação para %s: %v", maskPhone(req.UserPhone), err)
 		}
 	}
 

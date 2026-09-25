@@ -62,7 +62,7 @@ func CreateOrder(c *fiber.Ctx, sendMessageToClient func(clientID int64, message 
 	if tokenPhone, tErr := middlewares.GetUserPhoneFromToken(c); tErr == nil && tokenPhone != "" {
 		request.User.Phone = tokenPhone
 	} else {
-		log.Printf("[ORDER] Pedido sem telefone no token — user.phone do corpo segue (%q)", request.User.Phone)
+		log.Printf("[ORDER] Pedido sem telefone no token — user.phone do corpo segue (%s)", maskPhone(request.User.Phone))
 	}
 
 	// O user_id vem do token, não do corpo: é ele que decide se a assinatura
@@ -460,7 +460,7 @@ func sendStatusPushNotification(order dto.RequestPayload, status string) {
 	if err := models.DB.Table("clients").
 		Where("phone = ?", userPhone).
 		Pluck("id", &clientIDs).Error; err != nil {
-		log.Printf("[PUSH] Erro ao buscar cliente por phone=%s: %v", userPhone, err)
+		log.Printf("[PUSH] Erro ao buscar cliente por phone=%s: %v", maskPhone(userPhone), err)
 		return
 	}
 	if len(clientIDs) == 0 {

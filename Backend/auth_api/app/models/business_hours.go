@@ -3,14 +3,14 @@ package models
 import "time"
 
 type BusinessHours struct {
-	ID              uint   `gorm:"primaryKey"`
-	EstablishmentID uint   `gorm:"uniqueIndex:idx_est_day;not null"`
-	DayOfWeek       int    `gorm:"uniqueIndex:idx_est_day;not null"`
-	IsOpen          bool   `gorm:"default:true"`
-	OpenTime        string `gorm:"type:varchar(5)"`
-	CloseTime       string `gorm:"type:varchar(5)"`
-	BreakStartTime  string `gorm:"type:varchar(5)"`
-	BreakEndTime    string `gorm:"type:varchar(5)"`
+	ID              uint   `gorm:"primaryKey" json:"id"`
+	EstablishmentID uint   `gorm:"uniqueIndex:idx_est_day;not null" json:"establishment_id"`
+	DayOfWeek       int    `gorm:"uniqueIndex:idx_est_day;not null" json:"day_of_week"`
+	IsOpen          bool   `gorm:"default:true" json:"is_open"`
+	OpenTime        string `gorm:"type:varchar(5)" json:"open_time"`
+	CloseTime       string `gorm:"type:varchar(5)" json:"close_time"`
+	BreakStartTime  string `gorm:"type:varchar(5)" json:"break_start_time"`
+	BreakEndTime    string `gorm:"type:varchar(5)" json:"break_end_time"`
 }
 
 func (BusinessHours) TableName() string {

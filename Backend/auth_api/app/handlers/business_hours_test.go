@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http/httptest"
 	"os"
 	"testing"
@@ -115,5 +116,20 @@ func TestBusinessHours_GravaDiaFechado(t *testing.T) {
 	}
 	if h := load(); h.IsOpen || h.BreakStartTime != "" {
 		t.Fatalf("fechar pelo bulk não gravou: %+v", h)
+	}
+}
+
+// O editor de horários do WebRestaurant lê day_of_week/is_open/open_time. Sem
+// tags json o GET devolvia DayOfWeek/IsOpen e o painel nunca mostrava os
+// horários salvos.
+func TestBusinessHours_JSONEmSnakeCase(t *testing.T) {
+	b, err := json.Marshal(models.BusinessHours{DayOfWeek: 2, IsOpen: false, OpenTime: "09:00"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, campo := range []string{`"day_of_week":2`, `"is_open":false`, `"open_time":"09:00"`, `"establishment_id"`} {
+		if !bytes.Contains(b, []byte(campo)) {
+			t.Errorf("JSON sem %s: %s", campo, b)
+		}
 	}
 }

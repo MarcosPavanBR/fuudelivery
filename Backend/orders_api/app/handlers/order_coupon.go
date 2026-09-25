@@ -31,6 +31,7 @@ import (
 	"github.com/carloshomar/fuudelivery/orders_api/app/dto"
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // couponApplication é o que o cupom fez com o pedido.
@@ -47,6 +48,10 @@ type couponApplication struct {
 // errCouponUnavailable é o cupom que existia na validação e não existia mais
 // no consumo: acabou o estoque de usos entre uma coisa e outra.
 var errCouponUnavailable = errors.New("cupom não está mais disponível")
+
+// errCouponUserLimit é o limite por usuário atingido DENTRO da transação de
+// consumo — o caso de pedidos simultâneos do mesmo telefone.
+var errCouponUserLimit = errors.New("você já atingiu o limite de usos deste cupom")
 
 // roundReais fixa o valor em centavos. Sem isto o desconto percentual entra no
 // total com a cauda binária do float e o pedido fecha em R$47,299999999999997,
@@ -141,12 +146,31 @@ func applyCouponToOrder(code, orderID, tokenPhone string, establishmentID int64,
 // UPDATE afetar linha; o outro recebe errCouponUnavailable e o pedido é
 // recusado em vez de gerar dois descontos com um uso só.
 //
-// Resíduo conhecido e assumido: o limite POR USUÁRIO ainda é verificado por
-// leitura (em ValidateCouponInternal), então dois pedidos disparados no mesmo
-// instante pelo mesmo telefone podem passar dos dois. O teto global — que é o
-// que limita o prejuízo total de uma promoção — está fechado aqui.
+// O limite POR USUÁRIO também é fechado aqui. ValidateCouponInternal o
+// confere por leitura, e pedidos simultâneos do mesmo telefone passavam todos
+// por ela (reproduzido: 15 descontos em 30 pedidos paralelos num cupom de 1
+// por cliente). Com limite por usuário, a transação trava a linha do cupom
+// (FOR UPDATE) antes de recontar os usos do telefone: os consumos do MESMO
+// cupom viram fila, e a recontagem enxerga o uso que o anterior gravou.
 func consumeCoupon(coupon *models.Coupon, orderID, userPhone string, discount float64) error {
 	return models.DB.Transaction(func(tx *gorm.DB) error {
+		if coupon.MaxUsesPerUser > 0 && userPhone != "" {
+			var locked models.Coupon
+			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+				Select("id").First(&locked, coupon.ID).Error; err != nil {
+				return errCouponUnavailable
+			}
+			var used int64
+			if err := tx.Model(&models.CouponUsage{}).
+				Where("coupon_id = ? AND user_phone = ?", coupon.ID, userPhone).
+				Count(&used).Error; err != nil {
+				return err
+			}
+			if used >= int64(coupon.MaxUsesPerUser) {
+				return errCouponUserLimit
+			}
+		}
+
 		q := tx.Model(&models.Coupon{}).
 			Where("id = ? AND is_active = ?", coupon.ID, true)
 		if coupon.MaxUses > 0 {

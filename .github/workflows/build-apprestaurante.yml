@@ -43,6 +43,11 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+        # O padrão da action é "tools platform-tools"; o pacote "tools" é
+        # obsoleto e o cmdline-tools 16.0 do runner não o tem mais — sem isto
+        # o sdkmanager sai com erro ("Failed to find package 'tools'").
+        with:
+          packages: platform-tools
 
       - name: Prebuild (gera projeto nativo)
         run: npx expo prebuild --platform android --no-install --clean

@@ -1,16 +1,49 @@
 import React, { useState } from "react";
 import { Draggable } from "@hello-pangea/dnd";
 import helper from "../helpers/helper";
-import { orderTotal, paymentType, selectedAdditionals } from "./orderCard";
 import Texts from "../constants/Texts";
-import { FiChevronDown, FiChevronUp, FiUser, FiPhone } from "react-icons/fi";
+import {
+  actionsFor,
+  elapsedLabel,
+  isLate,
+  itemName,
+  orderTotal,
+  paymentType,
+  selectedAdditionals,
+  shortOrderId,
+} from "./orderCard";
+import { FiChevronDown, FiChevronUp, FiClock, FiPhone, FiCalendar } from "react-icons/fi";
 
-const Task = ({ task, index }) => {
-  const [showItems, setShowItems] = useState(false);
+const formatTime = (iso) => {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return "";
+  return new Date(t).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+};
 
-  const total = orderTotal(task.data);
-  const payment = paymentType(task.data);
+const Task = ({ task, index, onAction, now }) => {
+  const [showItems, setShowItems] = useState(task.data?.status === "AWAIT_APPROVE");
+  const [confirming, setConfirming] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const data = task.data || {};
+  const payment = paymentType(data);
   const paymentLabel = Texts[payment] ?? (payment || "—");
+  const late = isLate(data, now);
+  const actions = actionsFor(data);
+  const cart = data.cart || [];
+  const itemsCount = cart.reduce((s, c) => s + (c.quantity || 0), 0);
+  const courier = data.deliveryman && Number(data.deliveryman.id) > 0 ? data.deliveryman : null;
+
+  const run = async (action) => {
+    if (action.confirm && confirming !== action.to) {
+      setConfirming(action.to);
+      return;
+    }
+    setConfirming(null);
+    setBusy(true);
+    await onAction?.(task.id, action.to);
+    setBusy(false);
+  };
 
   return (
     <Draggable id={task.id} draggableId={task.id} index={index} type="TASK">
@@ -19,136 +52,90 @@ const Task = ({ task, index }) => {
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
-          className={`bg-white rounded-xl p-4 border border-gray-100 transition-all duration-200 ${
-            snapshot.isDragging
-              ? "shadow-modal scale-[1.02] rotate-1"
-              : "shadow-card hover:shadow-card-hover"
-          }`}
+          className={`bg-white rounded-xl p-4 border transition-all duration-200 ${
+            late ? "border-red-300 ring-2 ring-red-100" : "border-gray-100"
+          } ${snapshot.isDragging ? "shadow-modal scale-[1.02] rotate-1" : "shadow-card hover:shadow-card-hover"}`}
         >
-          {/* Header */}
-          <div className="flex items-start justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <div
-                className="w-8 h-8 rounded-lg flex items-center justify-center"
-                style={{ background: "#FEF2F2", color: "#DC2626" }}
-              >
-                <FiUser className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="font-bold text-sm text-gray-900">
-                  {task.data.user?.nome ?? "Cliente"}
-                </p>
-                <div className="flex items-center gap-1 text-gray-500">
-                  <FiPhone className="h-3 w-3" />
-                  <span className="text-xs">{task.data.user?.phone ?? "—"}</span>
-                </div>
-              </div>
-            </div>
+          {/* Número, hora e tempo decorrido */}
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold tracking-wider text-gray-400">{shortOrderId(task.id)}</span>
+            <span
+              className={`inline-flex items-center gap-1 text-xs font-medium ${late ? "text-red-600" : "text-gray-500"}`}
+              title={data.created_at ? new Date(data.created_at).toLocaleString("pt-BR") : ""}
+            >
+              <FiClock className="h-3 w-3" />
+              {formatTime(data.created_at)} · {elapsedLabel(data.created_at, now)}
+            </span>
           </div>
 
-          {/* Payment & Total */}
+          {data.status === "SCHEDULED" && data.scheduled_at && (
+            <div className="mb-2 inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">
+              <FiCalendar className="h-3 w-3" /> Agendado para {new Date(data.scheduled_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+            </div>
+          )}
+
+          {/* Cliente */}
+          <div className="mb-3">
+            <p className="font-bold text-sm text-gray-900">{data.user?.nome || "Cliente"}</p>
+            {data.user?.phone && (
+              <p className="flex items-center gap-1 text-xs text-gray-500">
+                <FiPhone className="h-3 w-3" /> {data.user.phone}
+              </p>
+            )}
+          </div>
+
+          {/* Pagamento e total */}
           <div className="flex items-center justify-between mb-3">
             <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
               {paymentLabel}
             </span>
-            <span className="text-lg font-bold" style={{ color: "#DC2626" }}>
-              {helper.formatCurrency(total)}
-            </span>
+            <span className="text-lg font-bold text-gray-900">{helper.formatCurrency(orderTotal(data))}</span>
           </div>
 
-          {/* Delivery Code */}
-          {task.data?.deliveryman?.id != 0 && task.data?.deliveryman && (
-            <div className="mb-3 p-2.5 rounded-lg bg-yellow-50 border border-yellow-100">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-yellow-700 font-medium">
-                  Código
-                </span>
-                <span className="font-bold text-yellow-800">
-                  {/* Código gerado pelo servidor (coluna pickup_code);
-                      fallback local só para pedidos legados sem código. */}
-                  {task.data.pickup_code ??
-                    helper.genCode(task.data._id, task.data.establishment.id)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between mt-1">
-                <span className="text-xs text-yellow-700 font-medium">
-                  Cliente
-                </span>
-                <span className="font-bold text-yellow-800">
-                  {helper.genCode(task.data._id)}
-                </span>
-              </div>
+          {/* Código de retirada: o entregador informa este código ao retirar. */}
+          {data.pickup_code && (
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-1 p-2.5 rounded-lg bg-yellow-50 border border-yellow-100">
+              <span className="text-xs text-yellow-800 font-medium">Código de retirada</span>
+              <span className="font-mono font-bold tracking-widest text-yellow-900">{data.pickup_code}</span>
             </div>
           )}
 
-          {/* Deliveryman Info */}
-          {task.data?.deliveryman && task.data?.deliveryman?.id != 0 && (
+          {courier && (
             <div className="mb-3 p-2.5 rounded-lg bg-blue-50 border border-blue-100">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-blue-700">
-                  {Texts.entregador}
+              <p className="text-xs text-blue-700">{Texts.entregador}</p>
+              <p className="text-sm font-semibold text-blue-900 truncate">{courier.name || "—"}</p>
+              {courier.status && (
+                <span className="mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                  {Texts[courier.status] || courier.status}
                 </span>
-                <span className="text-sm font-semibold text-blue-900">
-                  {task.data?.deliveryman?.name}
-                </span>
-              </div>
-              {task.data?.deliveryman?.phone && (
-                <div className="flex items-center justify-between mt-1">
-                  <span className="text-xs text-blue-700">{Texts.phone}</span>
-                  <span className="text-sm text-blue-900">
-                    {task.data?.deliveryman?.phone}
-                  </span>
-                </div>
               )}
-              <div className="flex items-center justify-between mt-1">
-                <span className="text-xs text-blue-700">{Texts.status}</span>
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                  {Texts[task.data?.deliveryman?.status]}
-                </span>
-              </div>
             </div>
           )}
 
-          {/* Cart Items Toggle */}
+          {/* Itens */}
           <button
+            type="button"
             onClick={() => setShowItems(!showItems)}
             className="w-full flex items-center justify-between p-2.5 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors text-sm"
           >
             <span className="font-medium text-gray-700">
-              {Texts.itens_carrinho}
+              Itens do pedido ({itemsCount})
             </span>
-            {showItems ? (
-              <FiChevronUp className="h-4 w-4 text-gray-500" />
-            ) : (
-              <FiChevronDown className="h-4 w-4 text-gray-500" />
-            )}
+            {showItems ? <FiChevronUp className="h-4 w-4 text-gray-500" /> : <FiChevronDown className="h-4 w-4 text-gray-500" />}
           </button>
-
           {showItems && (
-            <div className="mt-2 space-y-2 animate-slide-up">
-              {task.data.cart.map((item, idx) => (
-                <div
-                  key={idx}
-                  className={`p-2.5 rounded-lg bg-gray-50 ${
-                    idx !== task.data.cart.length - 1 ? "border-b border-gray-100" : ""
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">
-                      <span className="font-bold">{item.quantity}x</span>{" "}
-                      <span className="font-medium text-gray-900">
-                        {item.item.name}
-                      </span>
-                    </span>
-                  </div>
+            <div className="mt-2 space-y-1.5 animate-slide-up">
+              {cart.map((item, idx) => (
+                <div key={idx} className="p-2 rounded-lg bg-gray-50">
+                  <p className="text-sm">
+                    <span className="font-bold">{item.quantity}x</span>{" "}
+                    <span className="font-medium text-gray-900">{itemName(item)}</span>
+                  </p>
                   {selectedAdditionals(item).length > 0 && (
                     <div className="mt-1 flex flex-wrap gap-1">
-                      {selectedAdditionals(item).map((additional, aidx) => (
-                        <span
-                          key={aidx}
-                          className="text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-600"
-                        >
-                          {additional.name}
+                      {selectedAdditionals(item).map((a, aidx) => (
+                        <span key={aidx} className="text-xs px-2 py-0.5 rounded-full bg-white border border-gray-200 text-gray-600">
+                          + {a.name}
                         </span>
                       ))}
                     </div>
@@ -156,6 +143,35 @@ const Task = ({ task, index }) => {
                 </div>
               ))}
             </div>
+          )}
+
+          {/* Ações: botões grandes, para tablet na cozinha (arrastar continua valendo). */}
+          {actions.length > 0 && (
+            <div className="mt-3 flex gap-2">
+              {actions.map((a) => {
+                const isConfirming = confirming === a.to;
+                const base = "flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors disabled:opacity-50";
+                const style =
+                  a.kind === "danger"
+                    ? isConfirming
+                      ? "bg-red-600 text-white hover:bg-red-700"
+                      : "bg-white border border-red-200 text-red-600 hover:bg-red-50"
+                    : "bg-[#DC2626] text-white hover:bg-[#B91C1C]";
+                return (
+                  <button key={a.to} type="button" disabled={busy} onClick={() => run(a)} className={`${base} ${style}`}>
+                    {isConfirming ? `Confirmar: ${a.label.toLowerCase()}` : a.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {confirming && (
+            <p className="mt-2 text-xs text-gray-500">
+              {actions.find((a) => a.to === confirming)?.confirm}{" "}
+              <button type="button" className="font-semibold text-gray-700 underline" onClick={() => setConfirming(null)}>
+                Voltar
+              </button>
+            </p>
           )}
         </div>
       )}

@@ -67,16 +67,12 @@ const LoginPage = () => {
             </p>
           </div>
           <div className="mt-12 flex gap-6 justify-center">
-            {[
-              { num: "100+", label: "Restaurantes" },
-              { num: "50k+", label: "Pedidos/mês" },
-              { num: "4.9", label: "Avaliação" },
-            ].map((stat) => (
-              <div key={stat.label} className="text-center">
-                <div className="text-2xl font-bold" style={{ color: "#F59E0B" }}>
-                  {stat.num}
-                </div>
-                <div className="text-white/60 text-sm mt-1">{stat.label}</div>
+            {/* Eram números fixos ("100+ restaurantes, 50k+ pedidos/mês,
+                4.9") sem relação com dado real — propaganda que a
+                plataforma não pode sustentar. Benefícios concretos no lugar. */}
+            {["Pedidos em tempo real", "Cardápio sempre atualizado", "Repasse direto na sua conta"].map((b) => (
+              <div key={b} className="text-center text-sm font-medium text-white/80 max-w-[8rem]">
+                {b}
               </div>
             ))}
           </div>

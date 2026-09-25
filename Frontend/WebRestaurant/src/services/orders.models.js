@@ -1,4 +1,5 @@
 import api from "./api";
+import { displayColumn } from "../components/orderCard";
 
 async function getOrders(id) {
   // Propaga o erro: engolir aqui fazia o Kanban mostrar "Nenhum pedido"
@@ -16,7 +17,7 @@ async function getOrders(id) {
     .map((e) => {
       return {
         id: e._id,
-        column: e.status,
+        column: displayColumn(e.status),
         data: {
           ...e,
         },

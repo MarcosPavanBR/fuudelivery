@@ -2,7 +2,7 @@ import React from "react";
 import { Droppable } from "@hello-pangea/dnd";
 import Task from "./Task";
 
-const Column = ({ column, tasks }) => {
+const Column = ({ column, tasks, onAction, now }) => {
   return (
     <div className="flex flex-col rounded-2xl overflow-hidden border border-gray-100 bg-gray-50/50 shadow-card">
       {/* Column Header */}
@@ -31,7 +31,7 @@ const Column = ({ column, tasks }) => {
             }`}
           >
             {tasks.map((task, index) => (
-              <Task key={task.id} task={task} index={index} />
+              <Task key={task.id} task={task} index={index} onAction={onAction} now={now} />
             ))}
             {tasks.length === 0 && !snapshot.isDraggingOver && (
               <div className="h-full min-h-[170px] flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 text-gray-300">

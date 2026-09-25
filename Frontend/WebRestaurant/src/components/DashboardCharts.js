@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import api from "../services/api";
+import { countToday, formatBRL, localDayKey, topProducts, weekdayLabel } from "./dashboardStats";
 
 const DashboardCharts = ({ establishmentId }) => {
   const [stats, setStats] = useState({
@@ -28,27 +29,22 @@ const DashboardCharts = ({ establishmentId }) => {
       );
       const report = reportRes.data;
 
-      // Busca pedidos de hoje
-      let todayOrders = 0;
+      // Pedidos (a mesma lista do Kanban): pedidos de hoje e mais vendidos.
+      let orders = [];
       try {
         const ordersRes = await api.get(`/orders/${establishmentId}`);
-        const orders = ordersRes.data || [];
-        const today = new Date().toISOString().split("T")[0];
-        todayOrders = orders.filter((o) => {
-          const orderDate = new Date(o.created_at || o.CreatedAt);
-          return orderDate.toISOString().split("T")[0] === today;
-        }).length;
+        orders = ordersRes.data || [];
       } catch {
-        // Se falhar, usa 0 (endpoint pode não existir ainda)
-        todayOrders = 0;
+        orders = [];
       }
+      const todayOrders = countToday(orders);
+      const todayKey = localDayKey(Date.now());
 
-      // Mapeia receita por dia para o formato da UI
-      const dayNames = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
       const revenueByDay = (report.revenue_by_day || []).map((d) => {
-        const date = new Date(d.date || d.Date);
+        const date = String(d.date || d.Date || "").slice(0, 10);
         return {
-          day: dayNames[date.getDay()] || d.date,
+          day: weekdayLabel(date),
+          isToday: date === todayKey,
           value: Math.round(d.revenue || d.Revenue || 0),
         };
       });
@@ -58,7 +54,7 @@ const DashboardCharts = ({ establishmentId }) => {
         todayOrders,
         weekRevenue: report.total_revenue || 0,
         avgTicket: report.avg_ticket || 0,
-        popularProducts: [], // TODO: endpoint de produtos mais vendidos
+        popularProducts: topProducts(orders),
         revenueByDay: revenueByDay.length > 0
           ? revenueByDay
           : ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map((day) => ({
@@ -122,13 +118,13 @@ const DashboardCharts = ({ establishmentId }) => {
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
         </svg>
       ),
-      color: "#DC2626",
+      color: "#111827",
       bg: "#FEF2F2",
       accent: "linear-gradient(135deg, #DC2626, #FF6B35)",
     },
     {
       label: "Receita da Semana",
-      value: `R$ ${stats.weekRevenue.toFixed(2)}`,
+      value: formatBRL(stats.weekRevenue),
       icon: (
         <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -140,7 +136,7 @@ const DashboardCharts = ({ establishmentId }) => {
     },
     {
       label: "Ticket Médio",
-      value: `R$ ${stats.avgTicket.toFixed(2)}`,
+      value: formatBRL(stats.avgTicket),
       icon: (
         <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
           <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
@@ -188,8 +184,9 @@ const DashboardCharts = ({ establishmentId }) => {
         ))}
       </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
       {/* Revenue Chart */}
-      <div className="bg-white rounded-2xl p-6 shadow-card border border-gray-100 mb-6">
+      <div className="bg-white rounded-2xl p-6 shadow-card border border-gray-100 lg:col-span-2">
         <h3 className="text-lg font-bold text-gray-900 mb-6">
           Receita por Dia
         </h3>
@@ -199,21 +196,21 @@ const DashboardCharts = ({ establishmentId }) => {
               <div key={i} className="flex flex-col items-center flex-1 h-full justify-end">
                 {day.value > 0 && (
                   <span className="text-xs font-semibold text-gray-700 mb-2">
-                    R${day.value}
+                    {formatBRL(day.value, true)}
                   </span>
                 )}
                 <div
                   className="w-full rounded-t-lg transition-all duration-500 hover:opacity-80 cursor-pointer"
                   style={{
                     height: `${Math.max((day.value / maxRevenue) * 160, day.value > 0 ? 8 : 2)}px`,
-                    background:
-                      i === 5 || i === 6
-                        ? "linear-gradient(180deg, #F59E0B, #F59E0B)"
-                        : "linear-gradient(180deg, #DC2626, #FF6B35)",
+                    // Hoje em destaque (âmbar); os demais dias na cor da marca.
+                    background: day.isToday
+                      ? "linear-gradient(180deg, #F59E0B, #FBBF24)"
+                      : "linear-gradient(180deg, #DC2626, #FF6B35)",
                   }}
                 />
-                <span className="text-xs font-medium text-gray-500 mt-2">
-                  {day.day}
+                <span className={`text-xs mt-2 ${day.isToday ? "font-bold text-amber-600" : "font-medium text-gray-500"}`}>
+                  {day.isToday ? "Hoje" : day.day}
                 </span>
               </div>
             ))}
@@ -231,10 +228,10 @@ const DashboardCharts = ({ establishmentId }) => {
         )}
       </div>
 
-      {/* Popular Products - placeholder until endpoint exists */}
+      {/* Mais vendidos nos últimos 7 dias, a partir dos pedidos. */}
       <div className="bg-white rounded-2xl p-6 shadow-card border border-gray-100">
         <h3 className="text-lg font-bold text-gray-900 mb-4">
-          Produtos Mais Vendidos
+          Mais vendidos <span className="text-sm font-normal text-gray-400">· 7 dias</span>
         </h3>
         {stats.popularProducts.length > 0 ? (
           <div className="space-y-3">
@@ -244,7 +241,7 @@ const DashboardCharts = ({ establishmentId }) => {
                 className="flex items-center gap-4 p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors"
               >
                 <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm"
+                  className="w-10 h-10 flex-shrink-0 rounded-xl flex items-center justify-center text-white font-bold text-sm"
                   style={{
                     background:
                       i === 0
@@ -273,12 +270,10 @@ const DashboardCharts = ({ establishmentId }) => {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
               </svg>
             </div>
-            <p className="font-medium text-gray-500">Dados de produtos em breve</p>
-            <p className="text-xs text-gray-400 mt-1">
-              Os produtos mais vendidos aparecerão aqui
-            </p>
+            <p className="font-medium text-gray-500">Nenhuma venda nos últimos 7 dias</p>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

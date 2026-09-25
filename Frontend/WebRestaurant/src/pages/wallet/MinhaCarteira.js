@@ -10,7 +10,6 @@ import {
   FaWallet,
   FaArrowUp,
   FaArrowDown,
-  FaLock,
   FaMoneyBillWave,
   FaHistory,
   FaSpinner,
@@ -237,57 +236,25 @@ export default function MinhaCarteira() {
   return (
     <MenuLayout>
     <div className="max-w-4xl mx-auto p-4 space-y-6">
-      {/* Status do servidor de pagamentos */}
-      <div className="flex items-center gap-2 text-sm">
-        <div
-          className={`w-2 h-2 rounded-full ${
-            paymentOnline ? "bg-green-400" : "bg-red-400"
-          }`}
-        />
-        <span className="text-gray-400">
-          Servidor de pagamentos:{" "}
-          {paymentOnline ? "Online" : "Offline"}
-        </span>
-      </div>
-
-      {/* Cards de saldo */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="card rounded-xl p-6">
-          <div className="flex items-center gap-2 mb-3">
-            <FaWallet className="text-green-500" />
-            <span className="text-gray-500 text-sm">Saldo Disponível</span>
-          </div>
-          <p className="text-3xl font-bold text-green-500">
-            {formatCurrency(wallet?.available)}
-          </p>
-          <p className="text-gray-400 text-xs mt-1">Pronto para saque</p>
+      {paymentOnline === false && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Não foi possível falar com o servidor de pagamentos agora. Os valores
+          abaixo podem estar desatualizados.
         </div>
+      )}
 
-        <div className="card rounded-xl p-6">
-          <div className="flex items-center gap-2 mb-2">
-            <FaSpinner className="text-yellow-500" />
-            <span className="text-gray-500 text-sm">Saldo Pendente</span>
-          </div>
-          <p className="text-3xl font-bold text-yellow-500">
-            {formatCurrency(wallet?.pending)}
-          </p>
-          <p className="text-gray-400 text-xs mt-1">
-            Aguardando aprovação do sistema
-          </p>
+      {/* Saldo. "Pendente" e "bloqueado" saíram: o servidor não retém valor
+          (sempre voltavam R$ 0,00) — mostrar esses cards sugeria uma retenção
+          que não existe. */}
+      <div className="card rounded-xl p-6">
+        <div className="flex items-center gap-2 mb-3">
+          <FaWallet className="text-green-500" />
+          <span className="text-gray-500 text-sm">Saldo disponível</span>
         </div>
-
-        <div className="card rounded-xl p-6">
-          <div className="flex items-center gap-2 mb-2">
-            <FaLock className="text-red-400" />
-            <span className="text-gray-500 text-sm">Saldo Bloqueado</span>
-          </div>
-          <p className="text-3xl font-bold text-red-400">
-            {formatCurrency(wallet?.blocked)}
-          </p>
-          <p className="text-gray-400 text-xs mt-1">
-            Retido por disputa ou estorno
-          </p>
-        </div>
+        <p className="text-3xl font-bold text-green-600">
+          {formatCurrency(wallet?.available)}
+        </p>
+        <p className="text-gray-400 text-xs mt-1">Pronto para saque</p>
       </div>
 
       {/* Totais */}
@@ -500,12 +467,12 @@ export default function MinhaCarteira() {
       {/* Info sobre o fluxo */}
       <div className="card rounded-xl p-4">
         <p className="text-gray-400 text-xs leading-relaxed">
-          <strong className="text-gray-600">Como funciona:</strong> Após a
-          entrega ser confirmada, o pagamento fica pendente por 48h (janela
-          anti-fraude). Pagamentos de baixo risco são aprovados automaticamente
-          pelo sistema. Pagamentos de alto valor ou alto risco passam por análise
-          de compliance. Após aprovação, o valor é creditado na sua carteira e
-          fica disponível para saque.
+          <strong className="text-gray-600">Como funciona:</strong> quando o
+          pagamento de um pedido é confirmado, a sua parte (o valor do pedido
+          menos a comissão da plataforma e o frete do entregador) entra na hora
+          no saldo disponível. Se o pedido for estornado, o mesmo valor sai do
+          saldo. Com a conta Mercado Pago conectada, o valor cai direto na sua
+          conta e não passa por esta carteira.
         </p>
       </div>
     </div>

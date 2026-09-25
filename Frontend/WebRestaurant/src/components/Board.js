@@ -2,7 +2,7 @@ import React from "react";
 import { DragDropContext } from "@hello-pangea/dnd";
 import Column from "./Column";
 
-const Board = ({ columns, tasks, onDragEnd }) => {
+const Board = ({ columns, tasks, onDragEnd, onAction, now }) => {
   return (
     <DragDropContext onDragEnd={onDragEnd}>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 animate-fade-in">
@@ -11,7 +11,8 @@ const Board = ({ columns, tasks, onDragEnd }) => {
             key={column.id}
             column={column}
             tasks={tasks.filter((task) => task.column === column.id)}
-            onDragEnd={onDragEnd}
+            onAction={onAction}
+            now={now}
           />
         ))}
       </div>

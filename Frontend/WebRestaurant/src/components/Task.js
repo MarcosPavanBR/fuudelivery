@@ -1,27 +1,16 @@
 import React, { useState } from "react";
 import { Draggable } from "@hello-pangea/dnd";
 import helper from "../helpers/helper";
+import { orderTotal, paymentType, selectedAdditionals } from "./orderCard";
 import Texts from "../constants/Texts";
 import { FiChevronDown, FiChevronUp, FiUser, FiPhone } from "react-icons/fi";
 
 const Task = ({ task, index }) => {
   const [showItems, setShowItems] = useState(false);
 
-  const calculateFinalPrice = ({ item, quantity, additionals = [] }) => {
-    const additionalPricesSum = (additionals || []).reduce((sum, additionalId) => {
-      const additional = (item.additional || []).find((a) => a.ID === additionalId);
-      return sum + (additional?.price || 0);
-    }, 0);
-    return (quantity || 0) * ((item.price || 0) + (additionalPricesSum || 0));
-  };
-
-  const subTotal =
-    (task.data.cart || [])
-      .map((e) => calculateFinalPrice(e))
-      .reduce((e, f) => e + f, 0) || 0;
-
-  const paymentLabel =
-    Texts[task.data.paymentmethod?.type] ?? task.data.paymentmethod?.type ?? "—";
+  const total = orderTotal(task.data);
+  const payment = paymentType(task.data);
+  const paymentLabel = Texts[payment] ?? (payment || "—");
 
   return (
     <Draggable id={task.id} draggableId={task.id} index={index} type="TASK">
@@ -63,7 +52,7 @@ const Task = ({ task, index }) => {
               {paymentLabel}
             </span>
             <span className="text-lg font-bold" style={{ color: "#DC2626" }}>
-              {helper.formatCurrency(subTotal)}
+              {helper.formatCurrency(total)}
             </span>
           </div>
 
@@ -152,9 +141,9 @@ const Task = ({ task, index }) => {
                       </span>
                     </span>
                   </div>
-                  {item.item.additional?.length > 0 && (
+                  {selectedAdditionals(item).length > 0 && (
                     <div className="mt-1 flex flex-wrap gap-1">
-                      {item.item.additional.map((additional, aidx) => (
+                      {selectedAdditionals(item).map((additional, aidx) => (
                         <span
                           key={aidx}
                           className="text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-600"

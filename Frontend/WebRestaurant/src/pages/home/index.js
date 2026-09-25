@@ -17,6 +17,9 @@ const columns = [
   { id: "APPROVED", title: "Aceito", background: "linear-gradient(135deg, #3B82F6, #60A5FA)" },
   { id: "PREPARING", title: "Em preparo", background: "linear-gradient(135deg, #F59E0B, #FBBF24)" },
   { id: "DONE", title: "Pronto p/ entrega", background: "linear-gradient(135deg, #10B981, #34D399)" },
+  // O entregador leva o pedido a IN_ROUTE_DELIVERY ao sair com ele; sem esta
+  // coluna o card sumia do quadro até a entrega.
+  { id: "IN_ROUTE_DELIVERY", title: "A caminho", background: "linear-gradient(135deg, #7C3AED, #A78BFA)" },
 ];
 
 const Home = () => {

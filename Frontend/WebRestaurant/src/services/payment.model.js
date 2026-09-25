@@ -1,6 +1,7 @@
 import api from "./api";
 
-// O monolito expõe a carteira do restaurante em /wallet/establishment/*.
+// O monolito expõe a carteira do restaurante em /wallets/establishment/*
+// (grupo /wallets em cmd/fuudelivery/routes.go). Estava /wallet/ — 404.
 // O estabelecimento autenticado vem do JWT — não é preciso passar o ID.
 // NOTA: usar paths relativos (ex: /wallet/establishment/balance) pois o
 // axios instance já tem o baseURL configurado — NÃO concatenar com
@@ -12,7 +13,7 @@ import api from "./api";
 // Saldo + totais do ledger: { available, pending, blocked, total_earned,
 // total_withdrawn, last_updated }
 export const getWallet = async () => {
-  const response = await api.get("/wallet/establishment/balance");
+  const response = await api.get("/wallets/establishment/balance");
   return response.data;
 };
 
@@ -25,7 +26,7 @@ export const getExtract = async (limit = 20, cursor = "") => {
   if (cursor) params.append("cursor", cursor);
 
   const response = await api.get(
-    `/wallet/establishment/transactions?${params.toString()}`
+    `/wallets/establishment/transactions?${params.toString()}`
   );
   return response.data;
 };
@@ -60,7 +61,7 @@ export function newIdempotencyKey() {
 export const requestWithdraw = async (data) => {
   const idempotencyKey = data.idempotencyKey || newIdempotencyKey();
   const response = await api.post(
-    "/wallet/establishment/withdraw",
+    "/wallets/establishment/withdraw",
     {
       amount: data.amount,
       destination: data.destination,

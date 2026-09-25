@@ -35,7 +35,7 @@ export default function WalletScreen() {
       const userId = String(u.id);
       const userPhone = u.phone ? String(u.phone) : userId;
       const [walletRes, loyaltyRes, historyRes] = await Promise.all([
-        api.get(`/wallet/balance/${userId}`).catch(() => null),
+        api.get(`/wallets/balance/${userId}`).catch(() => null),
         api.get(`/loyalty/balance/${userPhone}`).catch(() => null),
         api.get(`/loyalty/history/${userPhone}`).catch(() => null),
       ]);
@@ -47,7 +47,17 @@ export default function WalletScreen() {
         setLoyalty(loyaltyRes.data);
       }
       if (historyRes?.data) {
-        setHistory(Array.isArray(historyRes.data) ? historyRes.data : []);
+        // O servidor devolve o modelo Go sem tags JSON (Description,
+        // CreatedAt, Type, Points); a tela lia as minúsculas e o histórico
+        // saía sem texto e com "Invalid Date".
+        setHistory(
+          (Array.isArray(historyRes.data) ? historyRes.data : []).map((t: any) => ({
+            description: t.description ?? t.Description ?? "",
+            created_at: t.created_at ?? t.CreatedAt,
+            type: t.type ?? t.Type,
+            points: Number(t.points ?? t.Points ?? 0),
+          }))
+        );
       }
     } catch (err) {
       console.error("Wallet fetch error:", err);

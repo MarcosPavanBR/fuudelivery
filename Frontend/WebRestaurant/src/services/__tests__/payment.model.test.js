@@ -30,7 +30,7 @@ describe("requestWithdraw — chave de idempotência", () => {
     await requestWithdraw({ ...saque, idempotencyKey: "chave-fixa" });
 
     const [url, body, config] = mockedPost.mock.calls[0];
-    expect(url).toBe("/wallet/establishment/withdraw");
+    expect(url).toBe("/wallets/establishment/withdraw");
     expect(body.idempotency_key).toBe("chave-fixa");
     // Também no header: há proxy que descarta header desconhecido, e o
     // backend aceita as duas formas.

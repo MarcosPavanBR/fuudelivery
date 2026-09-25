@@ -96,6 +96,10 @@ func setupAuthRoutes(app *fiber.App) {
 	app.Post("/delivery-man/login", rateLimitMiddleware(10), authHandlers.LoginDeliveryMan)
 	app.Post("/delivery-man/register", rateLimitMiddleware(5), authHandlers.CreateDeliveryMan)
 	app.Get("/delivery-man", adminRequired, authHandlers.ListAllDeliveryMen)
+	// Cadastro de entregador pelo admin (WebAdmin > Entregadores > Novo). A
+	// tela chamava POST /delivery-man, que não existia; o público segue em
+	// /delivery-man/register.
+	app.Post("/delivery-man", adminRequired, authHandlers.CreateDeliveryMan)
 	app.Put("/delivery-man/:id", adminRequired, authHandlers.UpdateDeliveryMan)
 	app.Delete("/delivery-man/:id", adminRequired, authHandlers.DeleteDeliveryMan)
 	app.Put("/delivery-man/:id/wallet", protectedRoute, authHandlers.UpdateDeliveryManWallet)
@@ -291,6 +295,9 @@ func setupPaymentRoutes(app *fiber.App, router *gateway.Router) {
 	paymentGroup.Get("/all", adminRequired, paymentHandlers.ListAllPayments)
 	paymentGroup.Get("/", adminRequired, paymentHandlers.ListAllPayments)
 	paymentGroup.Get("/stats", adminRequired, paymentHandlers.GetPaymentStats)
+	// Lista de carteiras do painel Financeiro do admin. O handler existia e o
+	// WebAdmin chamava GET /wallets, mas a rota nunca foi registrada (404).
+	walletGroup.Get("/", adminRequired, paymentHandlers.ListWallets)
 	walletGroup.Get("/balance/:user_id", protectedRoute, paymentHandlers.GetBalance)
 	walletGroup.Get("/establishment/balance", protectedRoute, paymentHandlers.GetEstablishmentWallet)
 	walletGroup.Get("/establishment/transactions", protectedRoute, paymentHandlers.GetEstablishmentTransactions)

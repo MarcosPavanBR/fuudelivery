@@ -67,7 +67,7 @@ export default function Financeiro() {
         paymentApi.get("/payments/stats").then(r => r.data).catch(() => ({})),
         paymentApi.get("/payments/").then(r => r.data).catch(() => []),
         paymentApi.get("/wallets").then(r => r.data).catch(() => []),
-        paymentApi.get("/chargebacks").then(r => r.data).catch(() => ({})),
+        paymentApi.get("/payments/chargebacks").then(r => r.data).catch(() => ({})),
       ]);
       setStats(s);
       setPayments(Array.isArray(p) ? p : []);
@@ -86,7 +86,7 @@ export default function Financeiro() {
     if (filters.payment_id) params.append("payment_id", filters.payment_id);
     const qs = params.toString();
     try {
-      const { data } = await paymentApi.get("/chargebacks" + (qs ? "?" + qs : ""));
+      const { data } = await paymentApi.get("/payments/chargebacks" + (qs ? "?" + qs : ""));
       setChargebacks(Array.isArray(data?.chargebacks) ? data.chargebacks : []);
       setCbSummary(data?.summary || { credit_total: 0, debit_total: 0, net: 0 });
     } catch (e) { toast.error("Erro ao buscar chargebacks: " + e.message); }

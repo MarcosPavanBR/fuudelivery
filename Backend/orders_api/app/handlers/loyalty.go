@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"crypto/rand"
+	"errors"
 	"log"
 	"math"
 	"math/big"
@@ -12,6 +13,7 @@ import (
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
 	"github.com/gofiber/fiber/v2"
 
+	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
@@ -81,6 +83,35 @@ func generateCashbackCode() (string, error) {
 	return "CASHBACK-" + string(b), nil
 }
 
+// lockLoyaltyAccount devolve a conta de pontos do telefone TRAVADA dentro de
+// tx, criando-a se ainda não existir (create=true).
+//
+// Antes cada caminho fazia FOR UPDATE NOWAIT e tratava QUALQUER erro como
+// "conta não existe": com dois pedidos do mesmo cliente aprovados juntos, o
+// segundo não conseguia o lock e criava uma SEGUNDA conta (reproduzido: 20
+// créditos simultâneos, até 8 contas para o mesmo telefone), dividindo os
+// pontos. Agora um advisory lock por telefone serializa ler-ou-criar — sem
+// depender de índice único, que o AutoMigrate não consegue criar sobre
+// duplicatas já existentes (sql/29 funde as duplicatas e cria o índice).
+// O lock espera em vez de falhar: a transação é curta.
+func lockLoyaltyAccount(tx *gorm.DB, phone string, create bool) (models.LoyaltyPoints, error) {
+	var loyalty models.LoyaltyPoints
+	if tx.Dialector.Name() == "postgres" {
+		if err := tx.Exec("SELECT pg_advisory_xact_lock(hashtext(?))", "loyalty:"+phone).Error; err != nil {
+			return loyalty, err
+		}
+	}
+	err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where("user_phone = ?", phone).
+		Order("id").
+		First(&loyalty).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) && create {
+		loyalty = models.LoyaltyPoints{UserPhone: phone, Points: 0, Tier: "bronze"}
+		err = tx.Create(&loyalty).Error
+	}
+	return loyalty, err
+}
+
 func EarnPoints(c *fiber.Ctx) error {
 	tokenPhone, err := middlewares.GetUserPhoneFromToken(c)
 	if err != nil {
@@ -110,18 +141,9 @@ func EarnPoints(c *fiber.Ctx) error {
 	tx := models.DB.Begin()
 	defer tx.Rollback()
 
-	var loyalty models.LoyaltyPoints
-	if err := tx.Clauses(clause.Locking{Strength: "UPDATE", Options: "NOWAIT"}).
-		Where("user_phone = ?", req.UserPhone).
-		First(&loyalty).Error; err != nil {
-		loyalty = models.LoyaltyPoints{
-			UserPhone: req.UserPhone,
-			Points:    0,
-			Tier:      "bronze",
-		}
-		if err := tx.Create(&loyalty).Error; err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Erro ao criar conta de fidelidade"})
-		}
+	loyalty, err := lockLoyaltyAccount(tx, req.UserPhone, true)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Erro ao criar conta de fidelidade"})
 	}
 
 	var earnCount int64
@@ -184,18 +206,9 @@ func EarnPointsForOrder(userPhone, orderID string, orderValue float64) error {
 	tx := models.DB.Begin()
 	defer tx.Rollback()
 
-	var loyalty models.LoyaltyPoints
-	if err := tx.Clauses(clause.Locking{Strength: "UPDATE", Options: "NOWAIT"}).
-		Where("user_phone = ?", userPhone).
-		First(&loyalty).Error; err != nil {
-		loyalty = models.LoyaltyPoints{
-			UserPhone: userPhone,
-			Points:    0,
-			Tier:      "bronze",
-		}
-		if err := tx.Create(&loyalty).Error; err != nil {
-			return err
-		}
+	loyalty, err := lockLoyaltyAccount(tx, userPhone, true)
+	if err != nil {
+		return err
 	}
 
 	var earnCount int64
@@ -267,11 +280,12 @@ func RedeemPoints(c *fiber.Ctx) error {
 	tx := models.DB.Begin()
 	defer tx.Rollback()
 
-	var loyalty models.LoyaltyPoints
-	if err := tx.Clauses(clause.Locking{Strength: "UPDATE", Options: "NOWAIT"}).
-		Where("user_phone = ?", req.UserPhone).
-		First(&loyalty).Error; err != nil {
+	loyalty, err := lockLoyaltyAccount(tx, req.UserPhone, false)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return c.Status(404).JSON(fiber.Map{"error": "Usuário não encontrado"})
+	}
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Erro ao ler pontos"})
 	}
 
 	if req.Points <= 0 {

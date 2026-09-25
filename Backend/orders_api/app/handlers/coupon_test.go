@@ -4,18 +4,11 @@
 package handlers
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
-	"time"
 
 	"github.com/carloshomar/fuudelivery/orders_api/app/dto"
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
-	"github.com/gofiber/fiber/v2"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -267,64 +260,4 @@ func TestCouponValidation_Messages(t *testing.T) {
 	}
 }
 
-// === Testes de race condition ===
-
-func TestApplyCoupon_RaceCondition(t *testing.T) {
-	db := setupCouponTestDB()
-	if db == nil {
-		t.Skip("SQLite unavailable (needs CGO)")
-	}
-	// Race condition tests require Postgres (SQLite ignores FOR UPDATE NOWAIT)
-	t.Skip("Race condition tests require Postgres -- SQLite does not support NOWAIT locking")
-	models.DB = db
-
-	coupon := models.Coupon{
-		Code:          "RACE10",
-		DiscountType:  "PERCENTAGE",
-		DiscountValue: 10,
-		MaxUses:       2,
-		IsActive:      true,
-		StartDate:     time.Now().Add(-time.Hour),
-		ExpiryDate:    time.Now().Add(time.Hour),
-	}
-	result := models.DB.Create(&coupon)
-	if result.Error != nil {
-		t.Fatalf("Failed to create coupon: %v", result.Error)
-	}
-
-	successCount := 0
-	mu := sync.Mutex{}
-	var wg sync.WaitGroup
-
-	for i := 0; i < 5; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			app := fiber.New()
-			app.Post("/coupons/apply", ApplyCoupon)
-
-			body, _ := json.Marshal(map[string]interface{}{
-				"code":        "RACE10",
-				"user_phone":  "+5511999900001",
-				"order_id":    fmt.Sprintf("order-%d", time.Now().UnixNano()),
-				"order_value": 100,
-			})
-			req := httptest.NewRequest("POST", "/coupons/apply", bytes.NewReader(body))
-			req.Header.Set("Content-Type", "application/json")
-
-			resp, err := app.Test(req, -1)
-			if err == nil && resp.StatusCode == 200 {
-				mu.Lock()
-				successCount++
-				mu.Unlock()
-			}
-		}()
-	}
-
-	wg.Wait()
-	// With proper database constraints, only MaxUses (2) should succeed
-	// This test validates that at least some requests succeed
-	if successCount < 1 || successCount > 5 {
-		t.Errorf("Expected between 1 and 5 successful coupon uses, got %d", successCount)
-	}
-}
+// Testes de concorrência: ver *_race_integration_test.go (Postgres).

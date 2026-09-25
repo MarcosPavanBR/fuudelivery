@@ -4,15 +4,9 @@
 package handlers
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"net/http/httptest"
-	"sync"
 	"testing"
 
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
-	"github.com/gofiber/fiber/v2"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -295,91 +289,4 @@ func TestEarnPointsForOrder_Validation(t *testing.T) {
 	}
 }
 
-// === Testes de race condition ===
-
-func TestEarnPointsForOrder_RaceCondition(t *testing.T) {
-	db := setupLoyaltyTestDB()
-	if db == nil {
-		t.Skip("SQLite unavailable (needs CGO)")
-	}
-	// Race condition tests require Postgres (SQLite ignores FOR UPDATE NOWAIT)
-	t.Skip("Race condition tests require Postgres -- SQLite does not support NOWAIT locking")
-	models.DB = db
-
-	var wg sync.WaitGroup
-	successCount := 0
-	mu := sync.Mutex{}
-
-	for i := 0; i < 5; i++ {
-		wg.Add(1)
-		go func(iteration int) {
-			defer wg.Done()
-			orderID := fmt.Sprintf("order-race-%d", iteration)
-			err := EarnPointsForOrder("+5511999900001", orderID, 50.0)
-			if err == nil {
-				mu.Lock()
-				successCount++
-				mu.Unlock()
-			}
-		}(i)
-	}
-
-	wg.Wait()
-	// With proper database constraints, results should be consistent
-	// This test validates that at least some requests succeed
-	if successCount < 1 || successCount > 5 {
-		t.Errorf("Expected between 1 and 5 successful earns, got %d", successCount)
-	}
-}
-
-func TestRedeemPoints_RaceCondition(t *testing.T) {
-	db := setupLoyaltyTestDB()
-	if db == nil {
-		t.Skip("SQLite unavailable (needs CGO)")
-	}
-	// Race condition tests require Postgres (SQLite ignores FOR UPDATE NOWAIT)
-	t.Skip("Race condition tests require Postgres -- SQLite does not support NOWAIT locking")
-	models.DB = db
-
-	loyalty := models.LoyaltyPoints{
-		UserPhone: "+5511999900001",
-		Points:    100,
-		Tier:      "bronze",
-	}
-	models.DB.Create(&loyalty)
-
-	var wg sync.WaitGroup
-	successCount := 0
-	mu := sync.Mutex{}
-
-	for i := 0; i < 3; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			app := fiber.New()
-			app.Post("/loyalty/redeem", RedeemPoints)
-
-			body, _ := json.Marshal(map[string]interface{}{
-				"user_phone": "+5511999900001",
-				"points":     10,
-				"order_id":   "order-1",
-			})
-			req := httptest.NewRequest("POST", "/loyalty/redeem", bytes.NewReader(body))
-			req.Header.Set("Content-Type", "application/json")
-
-			resp, err := app.Test(req, -1)
-			if err == nil && resp.StatusCode == 200 {
-				mu.Lock()
-				successCount++
-				mu.Unlock()
-			}
-		}()
-	}
-
-	wg.Wait()
-	// Due to race conditions, actual success count may vary
-	// In production with proper locking, only 10 redeems of 10 points each would succeed
-	if successCount < 1 {
-		t.Errorf("Expected at least 1 successful redeem, got %d", successCount)
-	}
-}
+// Testes de concorrência: ver *_race_integration_test.go (Postgres).

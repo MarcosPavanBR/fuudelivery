@@ -803,6 +803,24 @@ func claimsParticipateInSolicitation(claims jwt.MapClaims, s deliveryModels.Deli
 	return false
 }
 
+// chatUserTypeFromClaims decide o sender_type do chat pelo token, com o
+// mesmo mapeamento do push: cliente → "client", usuário de loja (tem
+// establishment_id) → "restaurant", token sem role (GenerateJWTDeliveryMan)
+// → "deliveryman", admin → "admin".
+func chatUserTypeFromClaims(claims jwt.MapClaims) string {
+	role, _ := claims["role"].(string)
+	switch role {
+	case "client", "admin":
+		return role
+	case "":
+		return "deliveryman"
+	}
+	if v, ok := claims["establishment_id"].(float64); ok && v > 0 {
+		return "restaurant"
+	}
+	return role
+}
+
 // wsCanAccessOrder autoriza um token JWT a acessar dados em tempo real de um
 // pedido (WebSocket de localização da entrega e de chat).
 //
@@ -964,7 +982,8 @@ func setupWebSocketRoutes(app *fiber.App) {
 			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Forbidden"}}`))
 			return
 		}
-		chatHandlers.HandleChatWebSocket(c)
+		// O tipo do remetente vem do token, nunca do :userType da URL.
+		chatHandlers.HandleChatWebSocketAs(c, chatUserTypeFromClaims(claims))
 	}))
 
 	// --- FUU PULSE: Real-time delivery location ---

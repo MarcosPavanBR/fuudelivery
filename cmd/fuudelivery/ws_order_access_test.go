@@ -40,3 +40,19 @@ func TestClaimsParticipateInSolicitation(t *testing.T) {
 		}
 	}
 }
+
+// O sender_type do chat vem do token: um cliente não se apresenta como loja
+// ou suporte trocando o :userType da URL.
+func TestChatUserTypeFromClaims(t *testing.T) {
+	casos := map[string]jwt.MapClaims{
+		"client":      {"id": float64(7), "role": "client"},
+		"restaurant":  {"id": float64(3), "role": "user", "establishment_id": float64(42)},
+		"deliveryman": {"id": float64(9)},
+		"admin":       {"id": float64(1), "role": "admin"},
+	}
+	for want, claims := range casos {
+		if got := chatUserTypeFromClaims(claims); got != want {
+			t.Errorf("%v: got %q, want %q", claims, got, want)
+		}
+	}
+}

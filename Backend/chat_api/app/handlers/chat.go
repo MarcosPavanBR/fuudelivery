@@ -121,10 +121,20 @@ func broadcastToRoom(orderID string, sender *websocket.Conn, message []byte) {
 	}
 }
 
+// HandleChatWebSocket usa o userType da URL. Mantido para quem ainda sobe o
+// chat_api isolado; o monólito usa HandleChatWebSocketAs com o tipo tirado
+// do token.
 func HandleChatWebSocket(c *websocket.Conn) {
+	HandleChatWebSocketAs(c, c.Params("userType"))
+}
+
+// HandleChatWebSocketAs trata a conexão de chat com o tipo de remetente
+// decidido por quem autenticou a conexão. O tipo vira o sender_type gravado
+// em cada mensagem: vindo da URL, um cliente se apresentava como
+// "restaurant" ou "support" para o outro lado da conversa.
+func HandleChatWebSocketAs(c *websocket.Conn, userType string) {
 	orderID := c.Params("orderId")
 	userIDStr := c.Params("userId")
-	userType := c.Params("userType")
 
 	userID, err := strconv.ParseInt(userIDStr, 10, 64)
 	if err != nil {

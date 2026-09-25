@@ -1417,9 +1417,13 @@ func setupPaymentRoutes(app *fiber.App, router *gateway.Router) {
 	paymentGroup.Get("/gateways/mercadopago/connect", protectedRoute, rateLimitMiddleware(20), paymentHandlers.ConnectMercadoPago)
 	paymentGroup.Get("/gateways/mercadopago/callback", rateLimitMiddleware(20), paymentHandlers.MercadoPagoCallback)
 	paymentGroup.Get("/gateways/mercadopago/status", protectedRoute, paymentHandlers.StatusMercadoPago)
-	paymentGroup.Post("/asaas/wallet/create", protectedRoute, rateLimitMiddleware(20), paymentHandlers.CreateAsaasWallet)
+	// Asaas legado — só admin. Os handlers aceitam do corpo valor, carteira de
+	// destino e percentual do split (sem conferir com pedido nem dono) e criam
+	// subcontas com qualquer CPF/CNPJ sob a conta da plataforma. Nenhum app
+	// chama estas rotas; o pagamento do cliente passa pelo router.
+	paymentGroup.Post("/asaas/wallet/create", adminRequired, rateLimitMiddleware(20), paymentHandlers.CreateAsaasWallet)
 	paymentGroup.Get("/asaas/wallet/:walletId/status", adminRequired, paymentHandlers.GetAsaasWalletStatus)
-	paymentGroup.Post("/asaas/payment/split", protectedRoute, rateLimitMiddleware(20), paymentHandlers.CreateAsaasSplitPayment)
+	paymentGroup.Post("/asaas/payment/split", adminRequired, rateLimitMiddleware(20), paymentHandlers.CreateAsaasSplitPayment)
 }
 
 func setupSponsoredRoutes(app *fiber.App) {

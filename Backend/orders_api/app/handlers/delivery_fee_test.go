@@ -236,3 +236,27 @@ func TestComputeOrderTotal_SemConfigNaoDerrubaOPedido(t *testing.T) {
 		t.Fatalf("esperava total 50.00 (2 × 25, sem frete), veio %.2f", total)
 	}
 }
+
+// O adicional é por unidade: 2 lanches com bacon são 2 bacons. O app mostra
+// quantidade × (preço + adicionais) e cobra o order_total do servidor, que
+// somava o adicional uma vez por linha — o cliente via um total e pagava
+// menos, e a loja perdia o adicional de toda unidade extra.
+func TestComputeOrderTotal_AdicionalMultiplicaPelaQuantidade(t *testing.T) {
+	setupDeliveryFeeTestDB(t)
+	seedDelivery(t, 1, 5.00, 2.00)
+	seedProduct(t, 100, 1, 30.00)
+	if err := models.DB.Create(&models.Additional{ID: 7, Name: "Bacon", Price: 4.00, EstablishmentID: 1}).Error; err != nil {
+		t.Fatal(err)
+	}
+	seedRegiao(t, "Centro", "01000000", "01999999", 11.00)
+
+	cart := []dto.CartItem{{Item: dto.Item{ID: 100}, Quantity: 2, Additionals: []int{7}}}
+	total, _, err := computeOrderTotal(cart, endereco("01310100"), 1, nil)
+	if err != nil {
+		t.Fatalf("erro inesperado: %v", err)
+	}
+	// 2 × (30 + 4) = 68 de itens + 11 de frete = 79.
+	if total != 79.00 {
+		t.Fatalf("esperava 79.00 (2 × (30 + 4) + 11), veio %.2f", total)
+	}
+}

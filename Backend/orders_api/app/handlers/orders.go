@@ -242,7 +242,9 @@ func computeOrderTotal(cart []dto.CartItem, loc dto.Location, establishmentID in
 			if a.EstablishmentID != uint(establishmentID) {
 				return 0, 0, fmt.Errorf("adicional %d não pertence a este estabelecimento", a.ID)
 			}
-			subtotal += a.Price
+			// Por unidade: os apps (cliente e loja) mostram
+			// quantidade × (preço + adicionais), e é esse o total cobrado.
+			subtotal += a.Price * float64(ci.Quantity)
 		}
 	}
 

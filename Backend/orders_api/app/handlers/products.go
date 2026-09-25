@@ -19,14 +19,14 @@ func GetByEstablishmentId(c *fiber.Ctx) error {
 
 	var product []models.Product
 
-	if err := models.DB.Where(&models.Product{
-		EstablishmentID: uint(establishmentId),
-	}).Preload("Additional").Find(&product).Error; err != nil {
+	// Uma consulta, filtrada pela loja, com as duas relações. Havia um
+	// segundo Find(&product) SEM filtro só para o Preload das categorias —
+	// ele recarregava a tabela inteira, e o cardápio de cada loja vinha com os
+	// produtos de todas as lojas.
+	if err := models.DB.Where("establishment_id = ?", establishmentId).
+		Preload("Additional").Preload("Categories").
+		Find(&product).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch products"})
-	}
-
-	if err := models.DB.Preload("Categories").Find(&product).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch product categories"})
 	}
 
 	return c.JSON(&product)

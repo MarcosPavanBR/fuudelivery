@@ -129,7 +129,8 @@ func TestDefaultSplitRules_CaminosMinimos(t *testing.T) {
 	if rules[0].Percentage != 5.0 {
 		t.Errorf("rules[0].Percentage=%.1f, esperava 5.0", rules[0].Percentage)
 	}
-	expectedPlatform := 100.0 * 0.05
+	// 5% = 5.00, mais o resto que ninguém aloca (100 - 5 - 85 - 7 = 3.00).
+	expectedPlatform := 100.0*0.05 + 3.0
 	if rules[0].Amount != expectedPlatform {
 		t.Errorf("rules[0].Amount=%.2f, esperava %.2f", rules[0].Amount, expectedPlatform)
 	}

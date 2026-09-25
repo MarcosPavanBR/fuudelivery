@@ -118,8 +118,8 @@ func establishmentShare(rules models.SplitRules) float64 {
 // reverseWalletCredit debita um valor da carteira do usuário de forma
 // atômica via AdjustWalletBalance (transação + SELECT FOR UPDATE + guarda de
 // saldo). Retorna true se o débito foi realmente aplicado. Usado pelo
-// chargeback para reverter os créditos de split (estabelecimento e cashback
-// do cliente) e o top-up de carteira.
+// chargeback para reverter o crédito de split do estabelecimento e o top-up
+// de carteira.
 //
 // Nota: nunca deixa saldo negativo; se a carteira não existe ou o saldo é
 // insuficiente, o débito é recusado e logado.
@@ -159,10 +159,10 @@ func reverseWalletCredit(userID int64, amount float64, abacatepayID, description
 //     dívida do pedido é perdoada (a loja devolveu o dinheiro ao cliente);
 //     b. o top-up de carteira, quando o pagamento foi usado pelo cliente
 //     (wallet_credited_at preenchido).
-//     A fatia "customer" do split NÃO é revertida: o settle não a credita em
-//     carteira nenhuma, então debitá-la tirava dinheiro real do cliente — e,
-//     por usar a mesma referência, fazia o guard de idempotência pular a
-//     reversão do top-up;
+//     Pagamentos antigos ainda podem ter a fatia "customer" no split_rules
+//     gravado (ela saiu do split em 2026-09-25). Ela NÃO é revertida: o
+//     settle nunca a creditou, então debitá-la tiraria dinheiro real do
+//     cliente;
 //  2. Publica o evento PAYMENT_REFUNDED nas filas order_updates/payment_updates
 //     para o monolito notificar o cliente em tempo real;
 //  3. Marca o pagamento como REFUNDED + refunded_at.

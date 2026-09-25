@@ -332,8 +332,8 @@ export default function Cupons() {
             </div>
             <p className="mt-3 flex items-start gap-2 text-xs text-gray-500">
               <FiAlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              O entregador recebe o frete cheio nos dois casos, e o cashback do
-              cliente não muda. Cupom maior que a margem de quem banca acaba
+              O entregador recebe o frete cheio nos dois casos. Cupom maior que
+              a margem de quem banca acaba
               respingando no outro lado — o pedido só distribui o que foi pago.
             </p>
           </div>

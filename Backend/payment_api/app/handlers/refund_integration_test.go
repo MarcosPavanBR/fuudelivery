@@ -87,9 +87,10 @@ func TestEstorno_Repasse_PerdoaDivida(t *testing.T) {
 	require.InDelta(t, 200.0, getWalletByUser(t, 42).Balance, 0.001)
 }
 
-// TestEstorno_NaoDebitaCashbackNuncaCreditado: o settle não credita cashback
-// na carteira do cliente (só a fatia da loja e o top-up movem carteira). O
-// estorno debitava essa "fatia customer" do saldo real do cliente.
+// TestEstorno_NaoDebitaCashbackNuncaCreditado: o estorno debitava do saldo
+// real do cliente uma "fatia customer" que o settle nunca creditou. A fatia
+// saiu do split (2026-09-25); o teste trava que o saldo do cliente não é
+// tocado mesmo com percentuais que deixam resto.
 func TestEstorno_NaoDebitaCashbackNuncaCreditado(t *testing.T) {
 	cleanup := setupCheckoutE2EEnv(t)
 	defer cleanup()
@@ -100,8 +101,8 @@ func TestEstorno_NaoDebitaCashbackNuncaCreditado(t *testing.T) {
 	p := pagamentoNaoLiquidado("order-refund-cashback", "charge-refund-cashback", time.Minute)
 	liquidarEEstornar(t, &p)
 
-	require.Greater(t, customerCashbackAmount(findPaymentByAbacate(t, "charge-refund-cashback").SplitRules), 0.0,
-		"pré-condição: o split tem fatia customer")
+	require.Equal(t, 0.0, customerCashbackAmount(findPaymentByAbacate(t, "charge-refund-cashback").SplitRules),
+		"não existe mais fatia customer no split")
 	require.InDelta(t, 50.0, getWalletByUser(t, 100).Balance, 0.001,
 		"o estorno não pode tirar do cliente um cashback que nunca foi creditado")
 	require.Equal(t, int64(0), countLedger(t, 100, "debit", "", "charge-refund-cashback"))

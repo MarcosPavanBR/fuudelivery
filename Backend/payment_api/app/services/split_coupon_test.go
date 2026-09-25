@@ -23,11 +23,11 @@ import (
 // somaDasPartes é o invariante que vale em todo caso: o split aloca exatamente
 // o que o cliente pagou, nem mais nem menos.
 func somaDasPartes(r *SplitResult) float64 {
-	return roundCents(r.PlatformFee + r.EstablishmentAmt + r.DeliveryAmt + r.CustomerCredit)
+	return roundCents(r.PlatformFee + r.EstablishmentAmt + r.DeliveryAmt)
 }
 
 // Pedido de referência: R$100 de bruto, R$10 de frete, 10% plataforma / 80%
-// loja. Sem cupom: plataforma 10, loja 80, entrega 10, cashback 0.
+// loja. Sem cupom: plataforma 10, loja 80, entrega 10.
 func semCupom() *models.Payment {
 	return &models.Payment{Amount: 100.0, DeliveryAmount: 10.0, CustomerID: 42}
 }
@@ -52,10 +52,8 @@ func TestSplitComCupom_PlataformaBancaSozinha(t *testing.T) {
 		"o restaurante não pode pagar uma promoção da plataforma")
 	// O entregador também não entra na conta da promoção.
 	assert.Equal(t, base.DeliveryAmt, res.DeliveryAmt)
-	// E o cashback do cliente não encolhe por ele ter usado um cupom.
-	assert.Equal(t, base.CustomerCredit, res.CustomerCredit)
 
-	assert.Equal(t, 95.0, somaDasPartes(res), "as quatro partes somam o pago")
+	assert.Equal(t, 95.0, somaDasPartes(res), "as partes somam o pago")
 }
 
 func TestSplitComCupom_EstabelecimentoBancaSozinho(t *testing.T) {
@@ -74,7 +72,6 @@ func TestSplitComCupom_EstabelecimentoBancaSozinho(t *testing.T) {
 	assert.Equal(t, base.PlatformFee, res.PlatformFee,
 		"a plataforma não paga uma promoção do restaurante")
 	assert.Equal(t, base.DeliveryAmt, res.DeliveryAmt)
-	assert.Equal(t, base.CustomerCredit, res.CustomerCredit)
 
 	assert.Equal(t, 95.0, somaDasPartes(res))
 }
@@ -130,7 +127,7 @@ func TestSplitComCupom_NaoRateiaAPromocaoEntreOsDois(t *testing.T) {
 // A fatia do financiador zera primeiro — mas o desconto pode ser maior do que
 // tudo o que ele tem para dar, e aí a diferença sai do outro lado por
 // aritmética, não por escolha: o split só distribui o que o cliente pagou.
-// Bruto 100 (plataforma 10, loja 80, entrega 10, cashback 0), cupom de 30 pela
+// Bruto 100 (plataforma 10, loja 80, entrega 10), cupom de 30 pela
 // plataforma, cliente paga 70. A plataforma dá seus 10; sobram 20 que não
 // existem em lugar nenhum além da fatia da loja, porque 80 + 10 de entrega já
 // passa dos 70 recebidos.
@@ -254,7 +251,6 @@ func TestSplitSemCupom_NaoMudaNada(t *testing.T) {
 	assert.Equal(t, 10.0, res.PlatformFee)
 	assert.Equal(t, 80.0, res.EstablishmentAmt)
 	assert.Equal(t, 10.0, res.DeliveryAmt)
-	assert.Equal(t, 0.0, res.CustomerCredit)
 	assert.Equal(t, 100.0, somaDasPartes(res))
 }
 

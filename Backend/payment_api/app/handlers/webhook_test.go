@@ -89,8 +89,9 @@ func TestDefaultSplitRules_NoDelivery(t *testing.T) {
 	}
 }
 
-func TestDefaultSplitRules_CustomerCredit(t *testing.T) {
-	// When delivery is low, customer gets credit
+// Não existe mais fatia "customer": o resto é da plataforma (o cashback era
+// calculado e nunca creditado; decisão de produto de 2026-09-25).
+func TestDefaultSplitRules_RestoVaiParaPlataforma(t *testing.T) {
 	payment := &models.Payment{
 		Amount:          200.0,
 		DeliveryAmount:  0,
@@ -100,18 +101,16 @@ func TestDefaultSplitRules_CustomerCredit(t *testing.T) {
 
 	rules := defaultSplitRules(payment, 5.0, 85.0)
 
-	// Platform: 10.0, Establishment: 170.0, Customer: 20.0
-	hasCustomer := false
+	// Platform: 10.0 + resto 20.0 = 30.0; Establishment: 170.0.
 	for _, rule := range rules {
-		if rule.ReceiverType == "customer" {
-			hasCustomer = true
-			if rule.Amount <= 0 {
-				t.Errorf("Customer credit should be positive: got %f", rule.Amount)
+		switch rule.ReceiverType {
+		case "customer":
+			t.Errorf("não deveria haver regra de cashback: %+v", rule)
+		case "platform":
+			if rule.Amount != 30.0 {
+				t.Errorf("plataforma: got %.2f, want 30.00 (10 + resto 20)", rule.Amount)
 			}
 		}
-	}
-	if !hasCustomer {
-		t.Error("Expected customer credit rule")
 	}
 }
 

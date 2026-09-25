@@ -14,9 +14,9 @@ import (
 // ou 2.9997) e esse valor ia direto pro ledger e pro gateway — lançamentos com
 // fração de centavo que fazem a conta não fechar na conciliação.
 //
-// Só as parcelas DERIVADAS são arredondadas; o customerCredit continua sendo
-// calculado como resto (total - as outras três), o que preserva o invariante
-// documentado de que as quatro partes somam exatamente o total.
+// Só as parcelas DERIVADAS são arredondadas; o resto (total - as outras
+// partes) vai para a plataforma, o que preserva o invariante de que as partes
+// somam exatamente o total.
 func roundCents(v float64) float64 {
 	return math.Round(v*100) / 100
 }
@@ -31,7 +31,6 @@ type SplitResult struct {
 	PlatformFee      float64
 	EstablishmentAmt float64
 	DeliveryAmt      float64
-	CustomerCredit   float64
 }
 
 // CalculateSplitRules calcula as regras de split de forma determinística e
@@ -39,8 +38,11 @@ type SplitResult struct {
 //
 // Regras:
 //   - Se deliveryAmount >= total: platform e establishment são zerados.
-//   - platformFee + establishmentAmount + deliveryAmount + customerCredit == total.
-//   - customerCredit é o "troco" para cashback do cliente.
+//   - platformFee + establishmentAmount + deliveryAmount == total.
+//   - O "resto" (o que as porcentagens e a entrega não alocam) é da
+//     plataforma. Não há fatia de cashback do cliente: ela era calculada mas
+//     nada a creditava (decisão de produto de 2026-09-25: sai do split até
+//     existir um programa de cashback de verdade).
 func CalculateSplitRules(payment *models.Payment, platformPct, establishmentPct float64) (*SplitResult, error) {
 	total := payment.Amount
 	deliveryAmount := payment.DeliveryAmount
@@ -67,14 +69,12 @@ func CalculateSplitRules(payment *models.Payment, platformPct, establishmentPct 
 	establishmentAmount := roundCents(gross * (establishmentPct / 100.0))
 
 	// O desconto sai INTEIRO do lado que banca. As outras fatias ficam como
-	// ficariam sem cupom nenhum — inclusive o cashback do cliente, que é o
-	// resto e por isso não muda: a promoção não pode encolher o cashback de
-	// quem usou o cupom.
+	// ficariam sem cupom nenhum.
 	//
 	// Se a fatia de quem banca não cobre o desconto, ela ZERA — quem banca dá
 	// tudo o que tem antes de o outro lado perder um centavo. O que ainda
-	// faltar depois disso é absorvido pelo cashback (o resto) e, se nem ele
-	// bastar, pela cláusula `allocated > total` mais abaixo, que reduz o
+	// faltar depois disso é absorvido pela cláusula `allocated > total` mais
+	// abaixo, que reduz o
 	// estabelecimento. Isso não é escolha: o split só distribui o que o
 	// cliente pagou, e um cupom acima da margem de quem o ofereceu não cria
 	// dinheiro. É por isso que o caso é logado — significa cupom criado além
@@ -139,11 +139,10 @@ func CalculateSplitRules(payment *models.Payment, platformPct, establishmentPct 
 		}
 	}
 
-	// Resto: absorve qualquer resíduo do arredondamento acima, mantendo
-	// a soma das quatro partes exatamente igual ao total.
-	customerCredit := roundCents(total - platformFee - establishmentAmount - deliveryAmount)
-	if customerCredit < 0 {
-		customerCredit = 0
+	// Resto: vai para a plataforma e absorve o resíduo do arredondamento,
+	// mantendo a soma das partes exatamente igual ao total.
+	if rest := roundCents(total - platformFee - establishmentAmount - deliveryAmount); rest > 0 {
+		platformFee = roundCents(platformFee + rest)
 	}
 
 	rules := []models.SplitRule{
@@ -170,20 +169,10 @@ func CalculateSplitRules(payment *models.Payment, platformPct, establishmentPct 
 		})
 	}
 
-	if customerCredit > 0 {
-		rules = append(rules, models.SplitRule{
-			ReceiverID:   payment.CustomerID,
-			ReceiverType: "customer",
-			Amount:       customerCredit,
-			Percentage:   0,
-		})
-	}
-
 	return &SplitResult{
 		Rules:            rules,
 		PlatformFee:      platformFee,
 		EstablishmentAmt: establishmentAmount,
 		DeliveryAmt:      deliveryAmount,
-		CustomerCredit:   customerCredit,
 	}, nil
 }

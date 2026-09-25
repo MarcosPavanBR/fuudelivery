@@ -214,24 +214,19 @@ func TestCheckoutE2E_PaymentWebhookToSplit(t *testing.T) {
 	require.Equal(t, "PENDING", stored.Status)
 
 	splitRules := defaultSplitRules(&stored, 5.0, 85.0)
-	// amount=89.90, delivery=7.00: 5%+85%+delivery = 87.91 -> sobra 1.99
-	// de cashback -> regra "customer" adicionada -> 4 regras.
-	require.Len(t, splitRules, 4)
+	// amount=89.90, delivery=7.00: 5%+85%+delivery = 87.92 -> o resto vai
+	// para a plataforma (não há fatia de cashback) -> 3 regras.
+	require.Len(t, splitRules, 3)
 
 	require.Equal(t, "platform", splitRules[0].ReceiverType)
-	require.InDelta(t, 89.90*0.05, splitRules[0].Amount, 0.01)
+	// 4.495 -> 4.50 (centavo) + resto 1.98 = 6.48; soma 6.48+76.42+7.00 = 89.90.
+	require.InDelta(t, 6.48, splitRules[0].Amount, 0.001)
 
 	require.Equal(t, "establishment", splitRules[1].ReceiverType)
 	require.InDelta(t, 89.90*0.85, splitRules[1].Amount, 0.01)
 
 	require.Equal(t, "deliveryman", splitRules[2].ReceiverType)
 	require.InDelta(t, 7.00, splitRules[2].Amount, 0.01)
-
-	require.Equal(t, "customer", splitRules[3].ReceiverType)
-	// Valores arredondados a centavo: 4.495 -> 4.50 e 76.415 -> 76.42
-	// (nao existe meio centavo pagavel), entao o resto do cashback e 1.98,
-	// nao 1.99. A soma continua exata: 4.50+76.42+7.00+1.98 = 89.90.
-	require.InDelta(t, 1.98, splitRules[3].Amount, 0.001)
 
 	totalSplit := 0.0
 	for _, r := range splitRules {
@@ -248,7 +243,7 @@ func TestCheckoutE2E_PaymentWebhookToSplit(t *testing.T) {
 
 	confirmed := findPaymentByAbacate(t, "charge-e2e-test-001")
 	require.Equal(t, "CONFIRMED", confirmed.Status)
-	require.Len(t, confirmed.SplitRules, 4)
+	require.Len(t, confirmed.SplitRules, 3)
 	require.NotNil(t, confirmed.ConfirmedAt)
 
 	orderMsg := map[string]interface{}{
@@ -709,11 +704,12 @@ func TestCheckoutE2E_WebhookRealFlow_Cashback(t *testing.T) {
 	require.Equal(t, "CONFIRMED", stored.Status)
 	require.NotNil(t, stored.ConfirmedAt)
 
-	// 4 receivers: platform + establishment + deliveryman + customer (cashback)
-	require.Len(t, stored.SplitRules, 4, "cashback > 0 deve gerar a 4a regra (customer)")
+	// 3 receivers: platform (com o resto) + establishment + deliveryman. Não
+	// existe mais regra "customer": o cashback nunca era creditado.
+	require.Len(t, stored.SplitRules, 3, "o resto vai para a plataforma, sem regra customer")
 
 	require.Equal(t, "platform", stored.SplitRules[0].ReceiverType)
-	require.InDelta(t, 89.90*0.05, stored.SplitRules[0].Amount, 0.01)
+	require.InDelta(t, 6.48, stored.SplitRules[0].Amount, 0.001, "4.50 + resto 1.98")
 
 	require.Equal(t, "establishment", stored.SplitRules[1].ReceiverType)
 	require.Equal(t, int64(42), stored.SplitRules[1].ReceiverID)
@@ -721,11 +717,6 @@ func TestCheckoutE2E_WebhookRealFlow_Cashback(t *testing.T) {
 
 	require.Equal(t, "deliveryman", stored.SplitRules[2].ReceiverType)
 	require.InDelta(t, 7.00, stored.SplitRules[2].Amount, 0.01)
-
-	require.Equal(t, "customer", stored.SplitRules[3].ReceiverType)
-	require.Equal(t, int64(777), stored.SplitRules[3].ReceiverID, "cashback vai para o customer_id do pagamento")
-	// Mesmo arredondamento a centavo do teste acima: resto = 1.98.
-	require.InDelta(t, 1.98, stored.SplitRules[3].Amount, 0.001)
 
 	// O total dividido nunca excede o valor pago (nenhum centavo inventado).
 	totalSplit := 0.0
@@ -757,7 +748,7 @@ func TestCheckoutE2E_WebhookRealFlow_Cashback(t *testing.T) {
 
 	stored = findPaymentByAbacate(t, "charge-e2e-cashback-001")
 	require.Equal(t, "CONFIRMED", stored.Status, "reprocessar webhook nao pode regredir o status")
-	require.Len(t, stored.SplitRules, 4, "reprocessar nao pode duplicar split rules")
+	require.Len(t, stored.SplitRules, 3, "reprocessar nao pode duplicar split rules")
 
 	// Reprocessar nao credita a carteira de novo (idempotencia do credito)
 	estWallet = getWalletByUser(t, 42)
@@ -1102,11 +1093,12 @@ func TestCheckoutE2E_WebhookRealFlow_ZoneSplitConfig(t *testing.T) {
 	stored := findPaymentByAbacate(t, "charge-e2e-zone-split")
 	require.Equal(t, "CONFIRMED", stored.Status)
 
-	// Split com percentuais da zona: 7/80/10 + cashback 3 -> 4 regras.
-	require.Len(t, stored.SplitRules, 4)
+	// Split com percentuais da zona: 7/80/10; o resto (3) vai para a
+	// plataforma -> 3 regras.
+	require.Len(t, stored.SplitRules, 3)
 
 	require.Equal(t, "platform", stored.SplitRules[0].ReceiverType)
-	require.InDelta(t, 7.0, stored.SplitRules[0].Amount, 0.01, "7% de 100")
+	require.InDelta(t, 10.0, stored.SplitRules[0].Amount, 0.01, "7% de 100 + resto 3")
 	require.InDelta(t, 7.0, stored.SplitRules[0].Percentage, 0.01)
 
 	require.Equal(t, "establishment", stored.SplitRules[1].ReceiverType)
@@ -1115,9 +1107,6 @@ func TestCheckoutE2E_WebhookRealFlow_ZoneSplitConfig(t *testing.T) {
 
 	require.Equal(t, "deliveryman", stored.SplitRules[2].ReceiverType)
 	require.InDelta(t, 10.0, stored.SplitRules[2].Amount, 0.01)
-
-	require.Equal(t, "customer", stored.SplitRules[3].ReceiverType)
-	require.InDelta(t, 3.0, stored.SplitRules[3].Amount, 0.01, "cashback: 100-7-80-10")
 
 	// O total dividido nunca excede o valor pago.
 	totalSplit := 0.0

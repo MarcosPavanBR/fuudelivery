@@ -100,8 +100,9 @@ func denyChargeIfIndebted(c *fiber.Ctx, establishmentID int64) bool {
 // plataforma. Idempotente por pedido (CreateDebt usa ON CONFLICT no order_id),
 // então o settle reprocessado não duplica a dívida.
 //
-// O cashback do cliente NÃO entra na dívida: no modelo 4→2 ele é despesa da
-// plataforma, paga da comissão que ela cobra — mesma lógica do split.
+// A comissão (split.PlatformFee) já inclui o resto que as porcentagens não
+// alocam: desde 2026-09-25 não há fatia de cashback no split, esse resto é
+// da plataforma — e, no repasse, a loja o recebeu e o deve.
 func recordRepasseDebt(payment *models.Payment, now time.Time) error {
 	platformPct, establishmentPct := splitConfigFor(payment.EstablishmentID)
 	split, err := services.CalculateSplitRules(payment, platformPct, establishmentPct)

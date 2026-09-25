@@ -21,15 +21,15 @@ func TestCalculateSplitRules_NormalCase(t *testing.T) {
 	// 10% platform = 10.0
 	// 80% establishment = 80.0
 	// delivery = 10.0
-	// customer credit = 0.0
 	assert.Equal(t, 10.0, result.PlatformFee)
 	assert.Equal(t, 80.0, result.EstablishmentAmt)
 	assert.Equal(t, 10.0, result.DeliveryAmt)
-	assert.Equal(t, 0.0, result.CustomerCredit)
-	assert.Equal(t, 3, len(result.Rules)) // platform, establishment, delivery (no customerCredit)
+	assert.Equal(t, 3, len(result.Rules)) // platform, establishment, delivery
 }
 
-func TestCalculateSplitRules_WithCashback(t *testing.T) {
+// O resto (o que as porcentagens e a entrega não alocam) é da plataforma:
+// não existe mais fatia "customer" — ela era calculada e nunca creditada.
+func TestCalculateSplitRules_RestoVaiParaPlataforma(t *testing.T) {
 	payment := &models.Payment{
 		Amount:         100.0,
 		DeliveryAmount: 5.0,
@@ -40,12 +40,15 @@ func TestCalculateSplitRules_WithCashback(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 
-	// 10% platform = 10.0
+	// 10% platform = 10.0 + resto (100 - 10 - 80 - 5 = 5.0) = 15.0
 	// 80% establishment = 80.0
 	// delivery = 5.0
-	// customer credit = 100 - 10 - 80 - 5 = 5.0
-	assert.Equal(t, 5.0, result.CustomerCredit)
-	assert.Equal(t, 4, len(result.Rules)) // platform, establishment, delivery, customer
+	assert.Equal(t, 15.0, result.PlatformFee)
+	assert.Equal(t, 80.0, result.EstablishmentAmt)
+	assert.Equal(t, 3, len(result.Rules)) // platform, establishment, delivery
+	for _, r := range result.Rules {
+		assert.NotEqual(t, "customer", r.ReceiverType, "não há mais fatia de cashback")
+	}
 }
 
 func TestCalculateSplitRules_DeliveryExceedsTotal(t *testing.T) {
@@ -68,7 +71,6 @@ func TestCalculateSplitRules_DeliveryExceedsTotal(t *testing.T) {
 
 	// delivery is clamped to payment amount
 	assert.Equal(t, 50.0, result.DeliveryAmt)
-	assert.Equal(t, 0.0, result.CustomerCredit)
 
 	// total of all rules should equal payment amount
 	total := 0.0
@@ -90,7 +92,9 @@ func TestCalculateSplitRules_ZeroDelivery(t *testing.T) {
 	assert.NotNil(t, result)
 
 	assert.Equal(t, 0.0, result.DeliveryAmt)
-	assert.Equal(t, 3, len(result.Rules)) // platform, establishment, customer
+	// Sem entrega: platform (10 + resto 10) e establishment.
+	assert.Equal(t, 2, len(result.Rules))
+	assert.Equal(t, 20.0, result.PlatformFee)
 }
 
 func TestCalculateSplitRules_TotalSum(t *testing.T) {
@@ -103,7 +107,7 @@ func TestCalculateSplitRules_TotalSum(t *testing.T) {
 	result, err := CalculateSplitRules(payment, 10, 80)
 	assert.NoError(t, err)
 
-	totalDistributed := result.PlatformFee + result.EstablishmentAmt + result.DeliveryAmt + result.CustomerCredit
+	totalDistributed := result.PlatformFee + result.EstablishmentAmt + result.DeliveryAmt
 	assert.InDelta(t, payment.Amount, totalDistributed, 0.001)
 }
 
@@ -122,8 +126,9 @@ func TestCalculateSplitRules_ArredondaCentavos(t *testing.T) {
 	result, err := CalculateSplitRules(payment, 3, 87)
 	assert.NoError(t, err)
 
-	// 99.99 * 0.03 = 2.9997  -> 3.00
-	assert.Equal(t, 3.00, result.PlatformFee, "taxa da plataforma deve ficar em centavos exatos")
+	// 99.99 * 0.03 = 2.9997 -> 3.00, mais o resto que ninguém aloca
+	// (99.99 - 3.00 - 86.99 - 7.77 = 2.23) -> 5.23
+	assert.Equal(t, 5.23, result.PlatformFee, "taxa da plataforma deve ficar em centavos exatos")
 	// 99.99 * 0.87 = 86.9913 -> 86.99
 	assert.Equal(t, 86.99, result.EstablishmentAmt, "parte do estabelecimento deve ficar em centavos exatos")
 
@@ -134,10 +139,10 @@ func TestCalculateSplitRules_ArredondaCentavos(t *testing.T) {
 			"regra %s tem fração de centavo: %v", r.ReceiverType, r.Amount)
 	}
 
-	// O invariante documentado continua valendo: as quatro partes somam o total.
-	totalDistribuido := result.PlatformFee + result.EstablishmentAmt + result.DeliveryAmt + result.CustomerCredit
+	// O invariante documentado continua valendo: as partes somam o total.
+	totalDistribuido := result.PlatformFee + result.EstablishmentAmt + result.DeliveryAmt
 	assert.InDelta(t, payment.Amount, totalDistribuido, 0.001,
-		"arredondar não pode quebrar a soma — o customerCredit absorve o resto")
+		"arredondar não pode quebrar a soma — a plataforma absorve o resto")
 }
 
 // TestCalculateSplitRules_NaoSuperAloca cobre o ramo que os outros testes não
@@ -168,16 +173,15 @@ func TestCalculateSplitRules_NaoSuperAloca(t *testing.T) {
 			r, err := CalculateSplitRules(p, c.platPct, c.estPct)
 			assert.NoError(t, err)
 
-			soma := r.PlatformFee + r.EstablishmentAmt + r.DeliveryAmt + r.CustomerCredit
+			soma := r.PlatformFee + r.EstablishmentAmt + r.DeliveryAmt
 			assert.LessOrEqual(t, soma, c.total+0.001,
 				"split alocou %.2f para um pagamento de %.2f", soma, c.total)
 			assert.InDelta(t, c.total, soma, 0.011,
-				"as quatro partes devem somar o total")
+				"as partes devem somar o total")
 
 			// Nenhuma parcela negativa.
 			assert.GreaterOrEqual(t, r.PlatformFee, 0.0)
 			assert.GreaterOrEqual(t, r.EstablishmentAmt, 0.0)
-			assert.GreaterOrEqual(t, r.CustomerCredit, 0.0)
 
 			// A soma das regras emitidas também não pode passar do total.
 			somaRegras := 0.0

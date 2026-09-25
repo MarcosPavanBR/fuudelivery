@@ -31,8 +31,8 @@ func splitAtOriginEnabled() bool {
 
 // applicationFeeCents calcula a comissão da plataforma no modelo de 4→2 partes
 // que o Marcos escolheu: a loja recebe a fatia dela direto; a application_fee é
-// TODO o resto (total − fatia da loja), e dela a plataforma paga entregador e
-// cashback. Nunca negativa.
+// TODO o resto (total − fatia da loja), e dela a plataforma paga o
+// entregador. Nunca negativa.
 func applicationFeeCents(totalCents, establishmentShareCents int64) int64 {
 	fee := totalCents - establishmentShareCents
 	if fee < 0 {

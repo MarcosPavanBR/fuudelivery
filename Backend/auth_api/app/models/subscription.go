@@ -78,7 +78,10 @@ func GetPlanBenefits(plan string) (freeDeliveryAbove, cashbackPct float64) {
 	case PlanBasic:
 		return 30.0, 0
 	case PlanPremium:
-		return 0, 5.0 // frete grátis SEM valor mínimo + 5% cashback
+		// Frete grátis SEM valor mínimo. Sem cashback: a plataforma não credita
+		// cashback em lugar nenhum (decisão de 2026-09-25), então o plano não
+		// promete o que não entrega.
+		return 0, 0
 	default:
 		return 30.0, 0
 	}

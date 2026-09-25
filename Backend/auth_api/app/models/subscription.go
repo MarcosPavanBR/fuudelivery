@@ -10,7 +10,11 @@ const (
 
 // Status da assinatura
 const (
-	SubscriptionActive    = "active"
+	SubscriptionActive = "active"
+	// SubscriptionPending: criada pelo usuário, aguardando pagamento. Não dá
+	// benefício nenhum (o frete grátis só lê status=active); quem ativa é o
+	// admin via PUT /subscriptions/:id depois de confirmar o pagamento.
+	SubscriptionPending   = "pending"
 	SubscriptionCancelled = "cancelled"
 	SubscriptionExpired   = "expired"
 )
@@ -22,7 +26,7 @@ type Subscription struct {
 	UserID uint   `gorm:"not null;uniqueIndex:idx_subscription_user" json:"user_id"`
 	Plan   string `gorm:"size:20;not null;default:'basic'" json:"plan"`
 
-	// Status: active, cancelled, expired
+	// Status: pending, active, cancelled, expired
 	Status string `gorm:"size:20;not null;default:'active'" json:"status"`
 
 	// Valor mensal da assinatura (R$)

@@ -58,8 +58,9 @@ func CreateSubscription(c *fiber.Ctx) error {
 
 	// Verifica se ja existe assinatura ativa
 	var existing models.Subscription
-	if err := models.DB.Where("user_id = ? AND status = ?", userID, models.SubscriptionActive).First(&existing).Error; err == nil {
-		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "User already has an active subscription"})
+	if err := models.DB.Where("user_id = ? AND status IN ?", userID,
+		[]string{models.SubscriptionActive, models.SubscriptionPending}).First(&existing).Error; err == nil {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "User already has an active or pending subscription"})
 	}
 
 	amount := models.GetPlanAmount(req.Plan)
@@ -67,9 +68,12 @@ func CreateSubscription(c *fiber.Ctx) error {
 	now := time.Now()
 
 	sub := models.Subscription{
-		UserID:             uint(userID),
-		Plan:               req.Plan,
-		Status:             models.SubscriptionActive,
+		UserID: uint(userID),
+		Plan:   req.Plan,
+		// Nasce PENDENTE: não há cobrança neste fluxo, e uma assinatura
+		// ativa aqui dava frete grátis (premium: sem mínimo) de graça a
+		// qualquer usuário logado. Ativação só pelo admin após o pagamento.
+		Status:             models.SubscriptionPending,
 		Amount:             amount,
 		FreeDeliveryAbove:  freeDeliveryAbove,
 		CashbackPct:        cashbackPct,
@@ -82,7 +86,7 @@ func CreateSubscription(c *fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"message":      "Subscription created successfully",
+		"message":      "Subscription created — awaiting payment confirmation",
 		"subscription": sub,
 	})
 }
@@ -114,20 +118,35 @@ func CancelSubscription(c *fiber.Ctx) error {
 	})
 }
 
-// RenewSubscription renova a assinatura por mais um mes.
-// POST /api/subscriptions/renew
+// RenewSubscription renova a assinatura de um usuário por mais um mês.
+// POST /api/subscriptions/renew  {"user_id": 123}
+//
+// Só admin: renovar sem cobrança estendia (ou reativava) o frete grátis a
+// cada chamada. O admin renova depois de confirmar o pagamento do período.
 func RenewSubscription(c *fiber.Ctx) error {
-	userID, err := getUserID(c)
-	if err != nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+	if role, rErr := middlewares.GetUserRoleFromToken(c); rErr != nil || role != "admin" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Renovação exige confirmação de pagamento pelo admin"})
 	}
+	var req struct {
+		UserID int64 `json:"user_id"`
+	}
+	if err := c.BodyParser(&req); err != nil || req.UserID <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "user_id is required"})
+	}
+	userID := req.UserID
 
 	var sub models.Subscription
 	if err := models.DB.Where("user_id = ?", userID).Order("created_at desc").First(&sub).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "No subscription found"})
 	}
 
-	if sub.Status == models.SubscriptionExpired {
+	if sub.Status == models.SubscriptionPending {
+		// Primeiro pagamento confirmado: ativa com o período começando agora.
+		sub.Status = models.SubscriptionActive
+		now := time.Now()
+		sub.CurrentPeriodStart = now
+		sub.CurrentPeriodEnd = now.AddDate(0, 1, 0)
+	} else if sub.Status == models.SubscriptionExpired {
 		// Reativa se expirou: novo periodo
 		sub.Status = models.SubscriptionActive
 		now := time.Now()

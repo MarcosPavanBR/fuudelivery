@@ -39,7 +39,7 @@ docker run -d --name mongodb -p 27017:27017 mongo:6
 # Set up the monolith
 cd cmd/fuudelivery
 go mod tidy
-go run main.go
+go run .
 ```
 
 ### Frontend Setup
@@ -613,7 +613,7 @@ lsof -i :3000
 kill -9 <PID>
 
 # Or use a different port
-PORT=3001 go run main.go
+PORT=3001 go run .
 ```
 
 ### `go build` Failures

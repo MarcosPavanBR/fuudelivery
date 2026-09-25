@@ -247,7 +247,7 @@ Os módulos Go individuais seguem a convenção `app/{handlers,models,routes,dto
 cp .env.example .env   # preencha JWT_SECRET e DB_CONNECTION_STRING (obrigatórios)
 cd cmd/fuudelivery
 go mod tidy
-go run main.go          # porta 3000 (configurável via PORT)
+go run .          # porta 3000 (configurável via PORT)
 ```
 
 > Em `GO_ENV=production` o processo aborta o startup se `JWT_SECRET` ou `DB_CONNECTION_STRING` estiverem ausentes. Graceful shutdown de 10s.

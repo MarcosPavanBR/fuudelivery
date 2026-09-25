@@ -220,7 +220,7 @@ cp .env.example .env
 ```bash
 # Backend (monolito)
 cd cmd/fuudelivery
-go run main.go
+go run .
 
 # Frontend (em outro terminal)
 cd Frontend/WebAdmin

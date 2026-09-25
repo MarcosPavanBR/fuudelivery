@@ -725,7 +725,7 @@ cat >> "$MASTER_REPORT" << EOF
    \`\`\`
 4. **Executar o backend:**
    \`\`\`bash
-   cd cmd/fuudelivery && go run main.go
+   cd cmd/fuudelivery && go run .
    \`\`\`
 
 ---

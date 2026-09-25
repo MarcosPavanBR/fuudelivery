@@ -121,7 +121,7 @@ cp .env.example .env
 # 2. Backend
 cd cmd/fuudelivery
 go mod tidy
-go run main.go
+go run .
 
 # 3. Frontend (em outro terminal)
 cd Frontend/WebAdmin

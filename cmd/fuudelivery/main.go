@@ -14,6 +14,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/joho/godotenv"
+	"gorm.io/gorm"
 
 	// Models (database initialization)
 	"github.com/carloshomar/fuudelivery/auth_api/app/models"
@@ -228,7 +229,7 @@ func main() {
 
 	// Busca full-text basica (Fase 3 — construcao nova): GET /search?q=...
 	// Busca estabelecimentos e produtos no PostgreSQL (ILIKE + scoring).
-	app.Get("/search", search.NewHandler(models.DB))
+	app.Get("/search", search.NewHandler(func() *gorm.DB { return models.DB }))
 
 	// Mount all routes
 	setupWebSocketRoutes(app)

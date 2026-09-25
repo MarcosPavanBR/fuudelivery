@@ -132,9 +132,20 @@ func searchProducts(db *gorm.DB, query string, limit int) ([]ProductResult, erro
 }
 
 // NewHandler cria o handler de GET /search.
-// db aponta para o banco principal (Postgres) que contem establishments e products.
-func NewHandler(db *gorm.DB) fiber.Handler {
+// getDB devolve o banco principal (Postgres) com establishments e products.
+//
+// Recebe uma FUNÇÃO que devolve o banco, não o *gorm.DB: a rota é registrada
+// no main antes de a goroutine de inicialização conectar o Postgres, então
+// passar models.DB direto capturava nil e toda busca dava panic (500) para
+// sempre. O banco é lido a cada requisição; sem ele, 503.
+func NewHandler(getDB func() *gorm.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		db := getDB()
+		if db == nil {
+			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+				"error": "Busca indisponível: banco ainda conectando",
+			})
+		}
 		query := strings.TrimSpace(c.Query("q"))
 		if !isSearchable(query) {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{

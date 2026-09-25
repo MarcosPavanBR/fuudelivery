@@ -18,6 +18,12 @@ export const getApiUrl = (): string => {
 export const getWsUrl = (): string =>
   process.env.EXPO_PUBLIC_WS_URL || getApiUrl().replace(/^http/, "ws")
 
+// Site da loja (WebRestaurant, references/URLS.md) — o app do cliente só
+// abre a página de cadastro de restaurante nele.
+export const getStoreSignupUrl = (): string =>
+  (process.env.EXPO_PUBLIC_STORE_WEB_URL || "https://fuudelivery-web.onrender.com") +
+  "/cadastrar-restaurante"
+
 export async function requestWsTicket(jwt: string): Promise<string> {
   const res = await fetch(`${getApiUrl()}/auth/ws-ticket`, {
     method: "POST",
@@ -31,4 +37,4 @@ export async function requestWsTicket(jwt: string): Promise<string> {
   return data.ticket
 }
 
-export default { getApiUrl, getWsUrl, requestWsTicket }
+export default { getApiUrl, getWsUrl, getStoreSignupUrl, requestWsTicket }

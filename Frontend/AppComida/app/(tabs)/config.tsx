@@ -11,9 +11,7 @@ import Colors from "@/constants/Colors";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import Texts from "@/constants/Texts";
 import { useNavigation } from "expo-router";
-
-const STORE_SIGNUP_URL =
-  (process.env.EXPO_PUBLIC_STORE_WEB_URL || "https://fuudelivery-web.onrender.com") + "/cadastrar-restaurante";
+import { getStoreSignupUrl } from "@/config/api";
 
 export default function Perfil() {
   const { logout, getUserData } = useApi();
@@ -91,7 +89,7 @@ export default function Perfil() {
             todo cliente recebia 403. */}
         <TouchableOpacity
           style={styles.onboardingButton}
-          onPress={() => Linking.openURL(STORE_SIGNUP_URL)}
+          onPress={() => Linking.openURL(getStoreSignupUrl())}
         >
           <Text style={styles.onboardingButtonText}>Tem um restaurante? Cadastre-se</Text>
           <Ionicons name="open-outline" size={16} color={Colors.light.white} />

@@ -14,7 +14,7 @@
 DO $$
 BEGIN
     IF to_regclass('public.products') IS NULL THEN
-        RAISE NOTICE 'products ainda nao existe (rode sql/01) — pulando sql/30.';
+        RAISE NOTICE 'products ainda nao existe (criada pelo AutoMigrate do orders_api) — pulando sql/30.';
     ELSE
         ALTER TABLE products ADD COLUMN IF NOT EXISTS available BOOLEAN NOT NULL DEFAULT true;
     END IF;

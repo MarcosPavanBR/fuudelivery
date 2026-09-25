@@ -26,14 +26,13 @@ export function mergeHours(loaded) {
 }
 
 // Dia aberto precisa de abertura e fechamento; fechamento antes da abertura
-// é aceito (turno que vira a madrugada, ex.: 18:00 às 02:00).
+// é aceito (turno que vira a madrugada, ex.: 18:00 às 02:00) e horários
+// iguais ("00:00 às 00:00") são 24 h — a mesma regra do servidor
+// (Backend/auth_api/app/models/opening.go).
 export function validateHours(hours) {
   for (const h of hours) {
     if (h.is_open && (!h.open_time || !h.close_time)) {
       return `Informe abertura e fechamento de ${DAYS[h.day_of_week]}.`;
-    }
-    if (h.is_open && h.open_time === h.close_time) {
-      return `Abertura e fechamento iguais em ${DAYS[h.day_of_week]}.`;
     }
   }
   return null;
@@ -60,7 +59,7 @@ export function summarizeHours(hours) {
   if (open.length === 0) return "Fechado";
   const same = open.every((h) => h.open_time === open[0].open_time && h.close_time === open[0].close_time);
   if (!same) return "Horários variados — veja a grade";
-  const range = `${open[0].open_time}–${open[0].close_time}`;
+  const range = open[0].open_time === open[0].close_time ? "24 h" : `${open[0].open_time}–${open[0].close_time}`;
   if (open.length === 7) return `Todos os dias, ${range}`;
   const days = open.map((h) => h.day_of_week);
   const consecutive = days.every((d, i) => i === 0 || d === days[i - 1] + 1);

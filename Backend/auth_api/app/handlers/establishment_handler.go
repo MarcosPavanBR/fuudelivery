@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"log"
-	"strconv"
 	"strings"
 	"time"
 
@@ -218,12 +217,16 @@ func GetEstablishments(c *fiber.Ctx) error {
 	}
 	return c.JSON(establishment)
 }
+
+// ListEstablishments é a vitrine do app do cliente: lojas com o botão
+// "Aberto" ligado, cada uma com o status pela grade de horários, a nota
+// média e o selo de patrocinado. Ordem em models.OrderListing.
 func ListEstablishments(c *fiber.Ctx) error {
 	var establishments []models.Establishment
-	if err := models.DB.Where("open_data IS NOT NULL").Find(&establishments).Error; err != nil {
+	if err := models.DB.Where("open_data IS NOT NULL").Order("name asc").Find(&establishments).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to list establishments"})
 	}
-	return c.JSON(establishments)
+	return c.JSON(models.BuildListing(models.DB, establishments, time.Now()))
 }
 
 // canManageEstablishment decide se o usuário autenticado pode operar sobre o
@@ -442,83 +445,4 @@ func DeleteEstablishment(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"message": "Establishment deleted successfully"})
-}
-
-// EstablishmentWithSponsor carrega metadados de patrocinio para um estabelecimento.
-type EstablishmentWithSponsor struct {
-	models.Establishment
-	IsSponsored     bool   `json:"is_sponsored"`
-	SponsorPlan     string `json:"sponsor_plan,omitempty"`
-	SponsorPriority int    `json:"sponsor_priority,omitempty"`
-	HasBanner       bool   `json:"has_banner,omitempty"`
-}
-
-// ListEstablishmentsRanked retorna estabelecimentos abertos ordenados com patrocinados no topo.
-// GET /establishments/ranked?zone_id=1
-//
-// Lógica:
-// 1. Busca todos os estabelecimentos abertos
-// 2. Se zone_id informado, filtra os que pertencem a essa zona
-// 3. Aplica RankListings: patrocinados ativos no topo (ordenados por priority decrescente)
-// 4. Não-patrocinados vêm depois, na ordem original
-func ListEstablishmentsRanked(c *fiber.Ctx) error {
-	zoneIDStr := c.Query("zone_id")
-	if zoneIDStr == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "zone_id query parameter is required"})
-	}
-
-	zoneID, err := strconv.ParseUint(zoneIDStr, 10, 64)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid zone_id"})
-	}
-
-	// Busca estabelecimentos abertos
-	var establishments []models.Establishment
-	query := models.DB.Where("open_data IS NOT NULL")
-
-	// Se zone_id informado, filtra por zona
-	query = query.Where("zone_id = ?", zoneID)
-
-	if err := query.Order("name asc").Find(&establishments).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to list establishments"})
-	}
-
-	// Aplica ranking: patrocinados no topo
-	ranked := models.RankListings(uint(zoneID), establishments)
-
-	result := make([]EstablishmentWithSponsor, 0, len(ranked))
-	for _, est := range ranked {
-		item := EstablishmentWithSponsor{
-			Establishment: est,
-		}
-
-		// Verifica se é patrocinado
-		sponsor, err := models.GetSponsoredByEstablishment(est.ID, uint(zoneID))
-		if err == nil && sponsor != nil && sponsor.IsActive() && sponsor.Priority > 0 {
-			item.IsSponsored = true
-			item.SponsorPlan = sponsor.Plan
-			item.SponsorPriority = sponsor.Priority
-			item.HasBanner = sponsor.HasBanner
-		}
-
-		result = append(result, item)
-	}
-
-	return c.JSON(fiber.Map{
-		"zone_id":         zoneID,
-		"total":           len(result),
-		"total_sponsored": countSponsored(result),
-		"establishments":  result,
-	})
-}
-
-// countSponsored conta quantos estabelecimentos são patrocinados.
-func countSponsored(list []EstablishmentWithSponsor) int {
-	count := 0
-	for _, e := range list {
-		if e.IsSponsored {
-			count++
-		}
-	}
-	return count
 }

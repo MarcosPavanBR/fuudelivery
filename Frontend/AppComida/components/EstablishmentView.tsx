@@ -3,6 +3,7 @@ import { View, Text, Image, StyleSheet, TouchableOpacity } from "react-native";
 import Colors from "@/constants/Colors";
 import helpers from "@/helpers/helpers";
 import Texts from "@/constants/Texts";
+import { closedLabel, isStoreOpen, ratingLabel } from "@/helpers/storeStatus";
 
 const EstablishmentView = ({
   item,
@@ -25,18 +26,27 @@ const EstablishmentView = ({
   }, []);
 
   return (
-    <TouchableOpacity onPress={onPress} style={styles.establishmentContainer}>
+    <TouchableOpacity
+      onPress={onPress}
+      style={[styles.establishmentContainer, !isStoreOpen(item) && { opacity: 0.55 }]}
+    >
       {item.image ? (
         <Image source={{ uri: item.image }} style={styles.establishmentImage} />
       ) : null}
       <View style={styles.establishmentDetails}>
+        {item.is_sponsored ? (
+          // Anúncio identificado como tal (CDC art. 36).
+          <Text style={styles.sponsored}>Patrocinado</Text>
+        ) : null}
         <Text style={styles.establishmentName}>{item.name}</Text>
         <Text style={styles.description} numberOfLines={2}>
           {item.description}
         </Text>
         <Text style={styles.description}>
-          {distance ? distance?.toFixed(1) : null} {distance ? Texts.km : null}
+          <Text style={styles.rating}>{ratingLabel(item)}</Text>
+          {distance ? `  ·  ${distance.toFixed(1)} ${Texts.km}` : ""}
         </Text>
+        {closedLabel(item) ? <Text style={styles.closed}>{closedLabel(item)}</Text> : null}
       </View>
     </TouchableOpacity>
   );
@@ -75,6 +85,26 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
   },
 
+  sponsored: {
+    alignSelf: "flex-start",
+    fontSize: 10.5,
+    fontWeight: "600",
+    color: Colors.light.secondaryText,
+    borderWidth: 1,
+    borderColor: Colors.light.tabIconDefault,
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  rating: {
+    color: "#B45309",
+    fontWeight: "600",
+  },
+  closed: {
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: "#B91C1C",
+  },
   description: {
     width: "95%",
     color: Colors.light.secondaryText,

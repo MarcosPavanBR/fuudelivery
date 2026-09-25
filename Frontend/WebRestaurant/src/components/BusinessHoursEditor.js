@@ -20,6 +20,10 @@ const BusinessHoursEditor = ({ hours, onChange }) => {
         </div>
         <h3 className="text-lg font-bold text-gray-900 dark:text-white">Horário de Funcionamento</h3>
       </div>
+      <p className="mb-3 text-xs text-gray-500">
+        Fora destes horários a loja aparece como fechada e não recebe pedidos. Turno que passa da
+        meia-noite: ex. 18:00 às 02:00. Aberto 24 h: 00:00 às 00:00.
+      </p>
 
       <div className="space-y-2">
         {hours.map((day, i) => (

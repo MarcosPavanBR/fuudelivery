@@ -107,13 +107,15 @@ func CheckEstablishmentOpen(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid ID"})
 	}
 
-	isOpen, err := models.IsEstablishmentOpen(id)
+	status, err := models.EstablishmentOpeningNow(id)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": "Failed to check hours"})
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Establishment not found"})
 	}
 
 	return c.JSON(fiber.Map{
-		"is_open":          isOpen,
+		"is_open":          status.IsOpen,
+		"opens_at":         status.OpensAt,
+		"opens_day":        status.OpensDay,
 		"establishment_id": id,
 	})
 }

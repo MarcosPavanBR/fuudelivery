@@ -63,6 +63,7 @@ func ConnectDatabase() {
 		&Zone{},
 		&Subscription{},
 		&SponsoredListing{},
+		&SponsorBooking{},
 		&Client{},
 		&RefreshToken{},
 		&PasswordResetToken{},

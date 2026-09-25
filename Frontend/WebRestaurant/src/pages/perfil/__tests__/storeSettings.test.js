@@ -20,6 +20,12 @@ describe("horários", () => {
     expect(mergeHours(null)).toEqual(defaultHours());
   });
 
+  it("horários iguais são 24 h", () => {
+    const h = defaultHours().map((d) => ({ ...d, is_open: true, open_time: "00:00", close_time: "00:00" }));
+    expect(validateHours(h)).toBeNull();
+    expect(summarizeHours(h)).toBe("Todos os dias, 24 h");
+  });
+
   it("validateHours barra dia aberto sem horário e aceita virada da madrugada", () => {
     const h = defaultHours();
     expect(validateHours(h)).toBeNull();

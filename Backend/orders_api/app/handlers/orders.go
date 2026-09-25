@@ -386,14 +386,16 @@ func GetEstablishment(establishmentID int64) (*dto.Establishment, error) {
 }
 
 // checkEstablishmentOpen verifica se o estabelecimento está aberto antes de
-// aceitar pedidos. Consulta diretamente o Postgres (mesmo banco do monolito)
-// para evitar latência de HTTP loopback e falhas de porta.
+// aceitar pedidos: botão "Aberto" do painel E a grade de horários (no fuso
+// da loja). Antes só o botão contava — a loja que esquecia de desligar
+// recebia pedido de madrugada. Mesma regra do app do cliente
+// (authModels.OpeningAt).
 func checkEstablishmentOpen(establishmentID int64) (bool, error) {
-	var establishment authModels.Establishment
-	if err := authModels.DB.First(&establishment, establishmentID).Error; err != nil {
+	status, err := authModels.EstablishmentOpeningNow(uint(establishmentID))
+	if err != nil {
 		return false, fmt.Errorf("establishment not found: %w", err)
 	}
-	return establishment.OpenData != nil, nil
+	return status.IsOpen, nil
 }
 
 func UpdateOrderStatus(c *fiber.Ctx, sendMessageToClient func(clientID int64, message []byte) error) error {

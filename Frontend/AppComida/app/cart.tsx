@@ -25,6 +25,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import PaymentComponent from "@/components/PaymentComponent";
 import { useApi } from "@/contexts/ApiContext";
+import { closedLabel } from "@/helpers/storeStatus";
 
 // Mesmo cálculo do OrderSummaryWithTotal: item.Price + adicionais x quantidade.
 // Módulo-level (não preso ao componente) para poder ser testado sem
@@ -58,6 +59,9 @@ const cart = () => {
   } = useCartApi();
 
   const [load, setLoad] = useState(false);
+  // Loja fechada (grade de horários / botão da loja): não deixa finalizar.
+  // O servidor recusa do mesmo jeito; aqui só evita a surpresa no fim.
+  const closedText = closedLabel(establishment);
   const [pixData, setPixData] = useState<{
     qrCodeBase64: string;
     copyPaste: string;
@@ -282,11 +286,13 @@ const cart = () => {
       </ScrollView>
       {cart.length > 0 && (
         <TouchableOpacity
-          style={{ ...styles.btns, opacity: !distance || load ? 0.8 : 1 }}
+          style={{ ...styles.btns, opacity: !distance || load || closedText ? 0.6 : 1 }}
           onPress={() => handlerSubmit()}
-          disabled={!distance || load}
+          disabled={!distance || load || !!closedText}
         >
-          {!load ? (
+          {closedText ? (
+            <Text style={styles.txtFinal}>{closedText}</Text>
+          ) : !load ? (
             <>
               <Text style={styles.txtFinal}>{Texts.finalizar_pagamento}</Text>
               <MaterialIcons name="check" size={20} color={Colors.light.white} />

@@ -79,7 +79,6 @@ func setupAuthRoutes(app *fiber.App) {
 	app.Put("/users/:id/password", protectedRoute, authHandlers.ChangePassword)
 
 	app.Get("/establishments", authHandlers.ListEstablishments)
-	app.Get("/establishments/ranked", authHandlers.ListEstablishmentsRanked)
 	app.Get("/establishments/:id", authHandlers.GetEstablishments)
 	app.Post("/establishments", adminRequired, authHandlers.CreateEstablishment)
 	app.Put("/establishments/status/handler/:id", protectedRoute, authHandlers.HandlerEstablishmentStatus)
@@ -338,22 +337,17 @@ func setupPaymentRoutes(app *fiber.App, router *gateway.Router) {
 }
 
 func setupSponsoredRoutes(app *fiber.App) {
-	// Rotas de patrocínio (admin)
-	sponsored := app.Group("/sponsored", adminRequired)
-	sponsored.Get("/", authHandlers.ListSponsoredListings)
-	sponsored.Get("/:id", authHandlers.GetSponsoredListing)
-	sponsored.Post("/", authHandlers.CreateSponsoredListing)
-	sponsored.Put("/:id", authHandlers.UpdateSponsoredListing)
-	sponsored.Post("/:id/cancel", authHandlers.CancelSponsoredListing)
-	sponsored.Post("/:id/renew", authHandlers.RenewSponsoredListing)
-
-	// Rotas públicas/de consulta
-	sponsored.Get("/by-establishment/:id", protectedRoute, authHandlers.GetEstablishmentSponsorship)
-	sponsored.Get("/by-zone/:id", authHandlers.ListSponsoredByZone)
-
-	// === Endpoint público de destaque (não requer auth) ===
-	// GET /establishments/featured?zone_id=1&limit=8
-	app.Get("/establishments/featured", authHandlers.GetFeaturedEstablishments)
+	// Destaque patrocinado POR DIA (payment_api/app/handlers/sponsor.go).
+	// Prefixo novo de propósito: o grupo antigo /sponsored (mensal, aposentado)
+	// era app.Group(..., adminRequired), que prende TODA rota sob o prefixo —
+	// as "públicas" dele também exigiam admin.
+	app.Get("/sponsorship/offer", protectedRoute, paymentHandlers.GetSponsorOffer)
+	app.Post("/sponsorship/bookings", protectedRoute, rateLimitMiddleware(20), paymentHandlers.CreateSponsorBooking)
+	app.Post("/sponsorship/bookings/:id/cancel", protectedRoute, paymentHandlers.CancelSponsorBooking)
+	app.Get("/sponsorship/bookings", adminRequired, paymentHandlers.ListSponsorBookings)
+	app.Post("/sponsorship/bookings/:id/confirm", adminRequired, paymentHandlers.ConfirmSponsorPayment)
+	// Quem aparece em destaque na vitrine sai de GET /establishments
+	// (is_sponsored), já na ordem do rodízio.
 }
 
 func setupSubscriptionRoutes(app *fiber.App) {

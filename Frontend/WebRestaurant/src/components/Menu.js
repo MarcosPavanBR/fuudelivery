@@ -9,6 +9,7 @@ import {
   FiX,
   FiCreditCard,
   FiBarChart2,
+  FiTrendingUp,
 } from "react-icons/fi";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -122,6 +123,11 @@ const SideMenu = ({ isOpen, isMobile, onClose }) => {
       title: "Minha Carteira",
       href: "/carteira",
       icon: <FiCreditCard className="h-5 w-5" />,
+    },
+    {
+      title: "Destaque",
+      href: "/destaque",
+      icon: <FiTrendingUp className="h-5 w-5" />,
     },
     {
       title: "Relatórios",

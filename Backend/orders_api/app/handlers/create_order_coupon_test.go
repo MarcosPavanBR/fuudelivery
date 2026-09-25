@@ -38,7 +38,7 @@ func setupCreateOrder(t *testing.T) *fiber.App {
 	if err := models.DB.AutoMigrate(&models.OrderDocument{}); err != nil {
 		t.Fatalf("migrar order_documents: %v", err)
 	}
-	if err := authModels.DB.AutoMigrate(&authModels.Establishment{}); err != nil {
+	if err := authModels.DB.AutoMigrate(&authModels.Establishment{}, &authModels.BusinessHours{}); err != nil {
 		t.Fatalf("migrar establishments: %v", err)
 	}
 
@@ -358,5 +358,37 @@ func TestCreateOrder_CupomNaoQueimaQuandoEstabelecimentoFechado(t *testing.T) {
 	resp2, out2 := postPedido(t, app, token, corpoDoPedido(`"coupon_code":"UNICO"`))
 	if resp2.StatusCode != fiber.StatusOK {
 		t.Fatalf("esperava 200 com o estabelecimento aberto (o uso foi devolvido), veio %d (%v)", resp2.StatusCode, out2)
+	}
+}
+
+// Botão "Aberto" ligado não basta: fora da grade de horários o pedido é
+// recusado. Antes só o botão contava e a loja que esquecia de desligar
+// recebia pedido de madrugada.
+func TestCreateOrder_ForaDoHorarioRecusa(t *testing.T) {
+	app := setupCreateOrder(t)
+	token := tokenComTelefone(t, "+5511999900002")
+
+	// Todos os dias fechados na grade (o botão segue ligado pelo setup).
+	for d := 0; d < 7; d++ {
+		if err := authModels.DB.Create(&authModels.BusinessHours{
+			EstablishmentID: 1, DayOfWeek: d, IsOpen: false,
+		}).Error; err != nil {
+			t.Fatalf("semear horário: %v", err)
+		}
+		// default:true do GORM engole o false no Create.
+		authModels.DB.Model(&authModels.BusinessHours{}).
+			Where("establishment_id = 1 AND day_of_week = ?", d).Update("is_open", false)
+	}
+
+	resp, out := postPedido(t, app, token, corpoDoPedido(""))
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("esperava 400 fora do horário, veio %d (%v)", resp.StatusCode, out)
+	}
+
+	// Aberto 24 h, todos os dias ("00:00 às 00:00"): o mesmo pedido passa.
+	authModels.DB.Model(&authModels.BusinessHours{}).Where("establishment_id = 1").
+		Updates(map[string]interface{}{"is_open": true, "open_time": "00:00", "close_time": "00:00"})
+	if r2, o2 := postPedido(t, app, token, corpoDoPedido("")); r2.StatusCode != fiber.StatusOK {
+		t.Fatalf("esperava 200 dentro do horário, veio %d (%v)", r2.StatusCode, o2)
 	}
 }

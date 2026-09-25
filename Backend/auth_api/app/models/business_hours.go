@@ -1,7 +1,5 @@
 package models
 
-import "time"
-
 type BusinessHours struct {
 	ID              uint   `gorm:"primaryKey" json:"id"`
 	EstablishmentID uint   `gorm:"uniqueIndex:idx_est_day;not null" json:"establishment_id"`
@@ -15,37 +13,6 @@ type BusinessHours struct {
 
 func (BusinessHours) TableName() string {
 	return "business_hours"
-}
-
-func IsEstablishmentOpen(establishmentID uint) (bool, error) {
-	now := time.Now()
-	currentWeekday := int(now.Weekday())
-	currentMinutes := now.Hour()*60 + now.Minute()
-
-	var hours BusinessHours
-	if err := DB.Where("establishment_id = ? AND day_of_week = ?", establishmentID, currentWeekday).First(&hours).Error; err != nil {
-		return false, err
-	}
-
-	if !hours.IsOpen {
-		return false, nil
-	}
-
-	openMinutes := parseTimeToMinutes(hours.OpenTime)
-	closeMinutes := parseTimeToMinutes(hours.CloseTime)
-
-	if currentMinutes >= openMinutes && currentMinutes <= closeMinutes {
-		if hours.BreakStartTime != "" && hours.BreakEndTime != "" {
-			breakStart := parseTimeToMinutes(hours.BreakStartTime)
-			breakEnd := parseTimeToMinutes(hours.BreakEndTime)
-			if currentMinutes >= breakStart && currentMinutes <= breakEnd {
-				return false, nil
-			}
-		}
-		return true, nil
-	}
-
-	return false, nil
 }
 
 func parseTimeToMinutes(timeStr string) int {

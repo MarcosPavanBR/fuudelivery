@@ -13,6 +13,7 @@ const Financeiro = lazy(() => import("./pages/Financeiro.jsx"));
 const Settings = lazy(() => import("./pages/Settings.jsx"));
 const PasswordResets = lazy(() => import("./pages/PasswordResets.jsx"));
 const Cupons = lazy(() => import("./pages/Cupons.jsx"));
+const Destaques = lazy(() => import("./pages/Destaques.jsx"));
 const Regioes = lazy(() => import("./pages/Regioes.jsx"));
 import Layout from "./components/Layout.jsx";
 import { FiLoader } from "react-icons/fi";
@@ -93,6 +94,7 @@ function AppRoutes() {
         <Route path="/payments" element={<Navigate to="/financeiro" replace />} />
         <Route path="/financeiro" element={<Financeiro />} />
         <Route path="/cupons" element={<Cupons />} />
+        <Route path="/destaques" element={<Destaques />} />
         <Route path="/regioes" element={<Regioes />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/password-resets" element={<PasswordResets />} />

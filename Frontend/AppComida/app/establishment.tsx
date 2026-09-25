@@ -23,6 +23,7 @@ import { useCartApi } from "@/contexts/ApiCartContext";
 import ProductCategory from "./pages/products/ProductCategory";
 import helpers from "@/helpers/helpers";
 import Texts from "@/constants/Texts";
+import { closedLabel } from "@/helpers/storeStatus";
 
 export default function Establishment() {
   const [cadProdcts, setCadProdcts] = useState<any[]>([]);
@@ -85,6 +86,13 @@ export default function Establishment() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <HeaderMain hiddenOpen={true} hiddenBack={false} />
+      {closedLabel(establishment) ? (
+        <View style={styles.closedBanner}>
+          <Text style={styles.closedBannerText}>
+            {closedLabel(establishment)}. Você pode ver o cardápio, mas o pedido só é aceito com a loja aberta.
+          </Text>
+        </View>
+      ) : null}
 
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={18} color={Colors.light.secondaryText} />
@@ -141,6 +149,18 @@ export default function Establishment() {
 }
 
 const styles = StyleSheet.create({
+  closedBanner: {
+    marginHorizontal: 12,
+    marginBottom: 8,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: "#FEF2F2",
+  },
+  closedBannerText: {
+    fontSize: 13,
+    color: "#B91C1C",
+    fontWeight: "500",
+  },
   container: {
     flex: 1,
     backgroundColor: Colors.light.background,

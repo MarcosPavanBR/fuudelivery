@@ -23,10 +23,17 @@ histórico do git**. A árvore atual está limpa (gitleaks `dir`: só placeholde
 | Senha do Supabase (PostgreSQL) | (registro anterior deste documento) | ⚠️ Rotação não confirmada |
 | JWT_SECRET fallback no Backend/Payment arquivado | `Backend/Payment/config/config.go` (histórico) | ⚠️ Confirmar que produção não usa esse valor |
 
-**Ordem obrigatória:** revogar e reemitir TUDO acima primeiro; só depois limpar o
-histórico (seção abaixo). Apagar do histórico sem revogar não resolve — o repositório já
-esteve público com os valores. Verificar também o repositório `fuudelivery-backend`, que é
-público e não foi auditado.
+**O que resolve é revogar.** Revogar e reemitir TUDO acima, nos painéis de cada serviço
+(guia abaixo). Verificar também o repositório `fuudelivery-backend`, que é público e não
+foi auditado.
+
+**Decisão (2026-09-25): não reescrever o histórico e não tornar o repositório privado.**
+- Depois da rotação, os valores no histórico não abrem mais nada.
+- Reescrever o histórico (BFG + force-push no `master`) quebra todo clone existente e
+  não apaga as cópias que já saíram (forks, clones, caches, commits acessíveis por SHA).
+- Tornar privado no plano gratuito limita o GitHub Actions a 2.000 min/mês; este CI roda
+  30 jobs + 3 builds de APK por push e estouraria a cota.
+A seção "Limpar Histórico do Git" abaixo fica só como referência, caso a decisão mude.
 
 ### Guia Completo de Rotação de Credenciais
 
@@ -119,7 +126,7 @@ openssl rand -hex 16
 # 4. Atualize ADMIN_PASSWORD no Render (Payment Service)
 ```
 
-### Limpar Histórico do Git (BFG Repo-Cleaner)
+### Limpar Histórico do Git (BFG Repo-Cleaner) — opcional, não adotado (ver decisão acima)
 
 Mesmo após remover `CREDENTIALS.md` do tracking, o conteúdo permanece no histórico.
 
@@ -154,13 +161,13 @@ O repositório `github.com/MarcosPavanBR/fuudelivery` é público. Considere:
 
 ## Checklist de Segurança para Produção
 
-- [ ] CREDENTIALS.md removido do histórico do git (BFG)
+- [x] Histórico: decisão de NÃO reescrever (2026-09-25) — revogar é o que resolve
 - [x] `.env` do histórico sem segredo (verificado 2026-09-25: `Frontend/WebRestaurant/.env` só tinha URLs)
 - [ ] Todas as credenciais rotacionadas (Atlas, Supabase, Redis, AbacatePay, JWT, Render)
 - [ ] Senha do admin alterada para forte (16+ caracteres)
 - [x] Rate limiting em login, registro e pagamento (✅ Implementado — ver seção abaixo)
 - [x] govulncheck (inclui `pkg/gateway` e `pkg/secretbox`) e npm audit bloqueando a partir de **alto** no CI
-- [x] Visibilidade verificada: **público** (2026-09-25) — decidir entre tornar privado ou limpar o histórico após a rotação
+- [x] Visibilidade verificada: **público** (2026-09-25) — decisão: continua público (ver acima)
 - [x] Nenhum `.env` com credenciais de produção na árvore atual (gitleaks `dir`, 2026-09-25)
 
 ---

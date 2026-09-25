@@ -1,92 +1,47 @@
-import React, { useState, useEffect } from "react";
-import api from "../services/api";
-import { FiClock, FiSave, FiLoader } from "react-icons/fi";
+import React from "react";
+import { FiClock } from "react-icons/fi";
+import { DAYS } from "../pages/perfil/storeSettings";
 
-const DAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
-
-const BusinessHoursEditor = ({ establishmentId }) => {
-  const [hours, setHours] = useState(
-    DAYS.map((_, i) => ({
-      day_of_week: i,
-      is_open: i !== 0,
-      open_time: "08:00",
-      close_time: "22:00",
-      break_start_time: "",
-      break_end_time: "",
-    }))
-  );
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    loadHours();
-  }, []);
-
-  const loadHours = async () => {
-    try {
-      const { data } = await api.get(`/establishments/${establishmentId}/hours`);
-      if (data.length > 0) {
-        const merged = hours.map((h) => {
-          const existing = data.find((d) => d.day_of_week === h.day_of_week);
-          return existing || h;
-        });
-        setHours(merged);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
+// Grade semanal de funcionamento. Controlado pela página Ajustes: quem salva
+// é o botão único "Salvar alterações" (antes havia um segundo botão só para
+// os horários, e um campo de texto "Horário Funcionamento" que repetia isto).
+const BusinessHoursEditor = ({ hours, onChange }) => {
   const updateDay = (index, field, value) => {
     const updated = [...hours];
     updated[index] = { ...updated[index], [field]: value };
-    setHours(updated);
-  };
-
-  const saveHours = async () => {
-    setSaving(true);
-    try {
-      await api.post(
-        "/establishments/hours/bulk",
-        hours.map((h) => ({ ...h, establishment_id: establishmentId }))
-      );
-      alert("Horários salvos!");
-    } catch (e) {
-      alert("Erro ao salvar");
-    }
-    setSaving(false);
+    onChange(updated);
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-card p-6">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="p-2.5 rounded-xl bg-red-50">
+    <div className="card p-6">
+      <div className="flex items-center gap-2 mb-4">
+        <div className="p-2 rounded-lg bg-red-50">
           <FiClock className="h-5 w-5" style={{ color: "#DC2626" }} />
         </div>
-        <h3 className="text-lg font-bold text-gray-900">Horário de Funcionamento</h3>
+        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Horário de Funcionamento</h3>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-2">
         {hours.map((day, i) => (
           <div
-            key={i}
-            className="flex items-center gap-4 p-4 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors"
+            key={day.day_of_week}
+            className="flex flex-wrap items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-800"
           >
-            <div className="w-24">
-              <span className="font-semibold text-sm text-gray-900">{DAYS[i]}</span>
-            </div>
+            <span className="w-20 font-semibold text-sm text-gray-900 dark:text-white">{DAYS[day.day_of_week]}</span>
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
-                checked={day.is_open}
+                checked={!!day.is_open}
                 onChange={(e) => updateDay(i, "is_open", e.target.checked)}
                 className="w-4 h-4 rounded border-gray-300 accent-red-600"
               />
-              <span className="text-sm text-gray-600">Aberto</span>
+              <span className="text-sm text-gray-600 dark:text-gray-300">{day.is_open ? "Aberto" : "Fechado"}</span>
             </label>
             {day.is_open && (
               <div className="flex items-center gap-2 ml-auto">
                 <input
                   type="time"
+                  aria-label={`Abertura ${DAYS[day.day_of_week]}`}
                   value={day.open_time}
                   onChange={(e) => updateDay(i, "open_time", e.target.value)}
                   className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm"
@@ -94,6 +49,7 @@ const BusinessHoursEditor = ({ establishmentId }) => {
                 <span className="text-gray-400 text-sm">às</span>
                 <input
                   type="time"
+                  aria-label={`Fechamento ${DAYS[day.day_of_week]}`}
                   value={day.close_time}
                   onChange={(e) => updateDay(i, "close_time", e.target.value)}
                   className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm"
@@ -102,27 +58,6 @@ const BusinessHoursEditor = ({ establishmentId }) => {
             )}
           </div>
         ))}
-      </div>
-
-      <div className="mt-6 flex justify-end">
-        <button
-          onClick={saveHours}
-          disabled={saving}
-          className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white font-semibold text-sm transition-all duration-200 hover:shadow-lg disabled:opacity-50"
-          style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
-        >
-          {saving ? (
-            <>
-              <FiLoader className="animate-spin h-4 w-4" />
-              Salvando...
-            </>
-          ) : (
-            <>
-              <FiSave className="h-4 w-4" />
-              Salvar Horários
-            </>
-          )}
-        </button>
       </div>
     </div>
   );

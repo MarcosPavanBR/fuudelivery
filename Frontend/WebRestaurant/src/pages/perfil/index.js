@@ -11,11 +11,22 @@ import {
   FiGrid,
   FiLock,
   FiCamera,
+  FiImage,
+  FiCrosshair,
 } from "react-icons/fi";
 import { toast } from "react-toastify";
 import Texts from "../../constants/Texts";
 import restaurantModel from "../../services/restaurant.model";
 import BusinessHoursEditor from "../../components/BusinessHoursEditor";
+import {
+  defaultHours,
+  establishmentPayload,
+  geocodeAddress,
+  hoursPayload,
+  mergeHours,
+  needsGeocode,
+  validateHours,
+} from "./storeSettings";
 import ConectarMercadoPago from "../../components/ConectarMercadoPago";
 
 const inputClass = "input";
@@ -30,6 +41,13 @@ function Perfil() {
     () => localStorage.getItem("fuu_restaurant_avatar") || getUser()?.avatar_url || ""
   );
   const fileInputRef = useRef(null);
+  const logoInputRef = useRef(null);
+  const [hours, setHours] = useState(defaultHours);
+  const [savedAddress, setSavedAddress] = useState("");
+  const [locating, setLocating] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const sessionUser = getUser();
+  const estId = sessionUser?.establishment_id || sessionUser?.establishment?.id || sessionUser?.sub;
 
   const handlerEstablishment = (target) => {
     setEstablishment({ ...establishment, [target.name]: target.value });
@@ -40,10 +58,14 @@ function Perfil() {
     try {
       const userData = getUser();
       if (!userData) { setLoading(false); return; }
-      const estId = userData.establishment_id || userData.establishment?.id || userData.sub;
       if (!estId) { setLoading(false); return; }
-      const { data } = await api.get("/establishments/" + estId);
+      const [{ data }, hoursResp] = await Promise.all([
+        api.get("/establishments/" + estId),
+        api.get(`/establishments/${estId}/hours`).catch(() => ({ data: [] })),
+      ]);
       setEstablishment(data);
+      setSavedAddress(data?.location_string || "");
+      setHours(mergeHours(hoursResp.data));
       setUser({ name: userData.name || "", email: userData.email || "" });
 
       // Avatar persistido no backend (fonte da verdade), com cache local.
@@ -91,13 +113,70 @@ function Perfil() {
     }
   };
 
+  // Logo da loja por upload (antes era um campo de URL para colar).
+  const handleLogoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/") || file.type.includes("svg")) {
+      toast.error("Selecione uma imagem JPG, PNG ou WEBP");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Imagem muito grande (máx. 5MB)");
+      return;
+    }
+    setUploadingLogo(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const { data } = await api.post(`/upload/restaurants/${estId}`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      if (!data?.url) throw new Error("Upload sem URL");
+      setEstablishment((prev) => ({ ...prev, image: data.url }));
+      toast.info("Logo enviada. Clique em Salvar alterações para aplicar.");
+    } catch (err) {
+      toast.error(err?.response?.data?.error || "Erro ao enviar a logo");
+    }
+    setUploadingLogo(false);
+  };
+
+  const locate = async (est = establishment) => {
+    setLocating(true);
+    const coords = await geocodeAddress(est.location_string);
+    setLocating(false);
+    if (coords) setEstablishment((prev) => ({ ...prev, ...coords }));
+    return coords;
+  };
+
   async function submit(e) {
     e.preventDefault();
+    const hoursError = validateHours(hours);
+    if (hoursError) {
+      toast.error(hoursError);
+      return;
+    }
     setLoading(true);
-    const estId = getUser()?.establishment_id || getUser()?.establishment?.id || getUser()?.sub;
-    const resp = await restaurantModel.updateEstablishment(estId, establishment);
-    if (resp) toast.success(Texts.restaurant_update);
-    else toast.error(Texts.restaurant_error);
+
+    let est = establishment;
+    if (needsGeocode(savedAddress, est)) {
+      const coords = await locate(est);
+      if (coords) {
+        est = { ...est, ...coords };
+      } else {
+        toast.warn("Não encontramos o endereço no mapa. Confira rua, número e cidade — a distância de entrega usa essa localização.");
+      }
+    }
+
+    const [okEst, okHours] = await Promise.all([
+      restaurantModel.updateEstablishment(estId, establishmentPayload(est, hours)),
+      api.post("/establishments/hours/bulk", hoursPayload(hours, estId)).then(() => true, () => false),
+    ]);
+    if (okEst) setSavedAddress(est.location_string || "");
+    if (okEst && okHours) toast.success(Texts.restaurant_update);
+    else if (!okEst) toast.error(Texts.restaurant_error);
+    else toast.error("Dados salvos, mas houve erro ao salvar os horários.");
     setLoading(false);
   }
 
@@ -231,20 +310,27 @@ function Perfil() {
               </label>
               <input type="number" min={1} max={100} name="max_distance_delivery" required onChange={({ target }) => handlerEstablishment(target)} value={establishment.max_distance_delivery} className={inputClass} />
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
-                Horário Funcionamento <RequiredMark />
-              </label>
-              <input name="horarioFuncionamento" maxLength={50} required onChange={({ target }) => handlerEstablishment(target)} value={establishment.horarioFuncionamento} className={inputClass} />
-            </div>
           </div>
 
           <div className="mt-4">
-            <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
-              URL Logo <RequiredMark />
-            </label>
-            <input name="image" required onChange={({ target }) => handlerEstablishment(target)} value={establishment.image}
-              className={inputClass} placeholder="https://..." />
+            <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Logo</label>
+            <div className="flex items-center gap-4">
+              <div className="w-20 h-20 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden dark:border-gray-700 dark:bg-gray-800">
+                {establishment.image ? (
+                  <img src={establishment.image} alt="Logo da loja" className="w-full h-full object-cover" />
+                ) : (
+                  <FiImage className="h-7 w-7 text-gray-300" />
+                )}
+              </div>
+              <div>
+                <button type="button" className="btn btn-ghost" disabled={uploadingLogo} onClick={() => logoInputRef.current?.click()}>
+                  {uploadingLogo ? <FiLoader className="h-4 w-4 animate-spin" /> : <FiCamera className="h-4 w-4" />}
+                  {establishment.image ? "Trocar logo" : "Enviar logo"}
+                </button>
+                <p className="mt-1 text-xs text-gray-500">JPG, PNG ou WEBP até 5MB. Aparece para o cliente no app.</p>
+              </div>
+              <input ref={logoInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={handleLogoUpload} className="hidden" />
+            </div>
           </div>
         </div>
 
@@ -262,23 +348,37 @@ function Perfil() {
             </label>
             <input name="location_string" maxLength={250} required onChange={({ target }) => handlerEstablishment(target)} value={establishment.location_string} className={inputClass} />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Latitude</label>
-              <input type="number" name="lat" required disabled onChange={({ target }) => handlerEstablishment(target)} value={establishment.lat} className={inputClass} />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Longitude</label>
-              <input type="number" name="long" required disabled onChange={({ target }) => handlerEstablishment(target)} value={establishment.long} className={inputClass} />
-            </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <button type="button" className="btn btn-ghost" disabled={locating || !establishment.location_string}
+              onClick={async () => {
+                const c = await locate();
+                if (c) toast.success("Localização encontrada. Salve para aplicar.");
+                else toast.warn("Não encontramos o endereço no mapa. Confira rua, número e cidade.");
+              }}>
+              {locating ? <FiLoader className="h-4 w-4 animate-spin" /> : <FiCrosshair className="h-4 w-4" />}
+              Localizar no mapa
+            </button>
+            {Number(establishment.lat) && Number(establishment.long) ? (
+              <a
+                className="text-sm text-gray-600 underline underline-offset-2"
+                href={`https://www.openstreetmap.org/?mlat=${establishment.lat}&mlon=${establishment.long}#map=17/${establishment.lat}/${establishment.long}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Ver no mapa ({Number(establishment.lat).toFixed(5)}, {Number(establishment.long).toFixed(5)})
+              </a>
+            ) : (
+              <span className="text-sm text-amber-700">Loja ainda sem localização — o cálculo de distância não funciona até localizar.</span>
+            )}
           </div>
+          <p className="mt-2 text-xs text-gray-500">A localização é buscada pelo endereço ao salvar, quando ele muda.</p>
         </div>
 
         {/* Conta de recebimento (split na origem) */}
         <ConectarMercadoPago />
 
         {/* Business Hours */}
-        <BusinessHoursEditor establishmentId={getUser()?.establishment_id || getUser()?.establishment?.id || getUser()?.sub} />
+        <BusinessHoursEditor hours={hours} onChange={setHours} />
 
         {/* Save Button */}
         <div className="flex justify-end">
@@ -292,7 +392,7 @@ function Perfil() {
             ) : (
               <FiSave className="h-5 w-5" />
             )}
-            Salvar Alterações
+            Salvar alterações
           </button>
         </div>
       </form>

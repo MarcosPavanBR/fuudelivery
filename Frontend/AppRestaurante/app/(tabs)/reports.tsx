@@ -9,6 +9,26 @@ import { useFocusEffect } from "expo-router/react-navigation";
 import api from "@/services/api";
 import { useApi } from "@/contexts/ApiContext";
 
+// O pedido vem com created_at, order_total e status do servidor
+// (CANCELLED/DENIED); a tela lia createdAt, total e "cancelled" e mostrava
+// tudo zerado.
+const NOT_SOLD = new Set(["CANCELLED", "DENIED"]);
+
+export function computeStats(orders: any[], now = new Date()) {
+  const today = now.toDateString();
+  const weekAgo = new Date(now);
+  weekAgo.setDate(weekAgo.getDate() - 7);
+  const when = (o: any) => new Date(o.created_at || o.createdAt || 0);
+  const todayOrders = orders.filter((o) => when(o).toDateString() === today && !NOT_SOLD.has(o.status));
+  const weekOrders = orders.filter((o) => when(o) >= weekAgo && !NOT_SOLD.has(o.status));
+  const weekRevenue = weekOrders.reduce((sum, o) => sum + (o.order_total ?? o.total ?? 0), 0);
+  return {
+    todayOrders: todayOrders.length,
+    weekRevenue,
+    avgTicket: weekOrders.length > 0 ? weekRevenue / weekOrders.length : 0,
+  };
+}
+
 export default function ReportsScreen() {
   const { getUserData } = useApi();
   const user = getUserData();
@@ -27,27 +47,8 @@ export default function ReportsScreen() {
       const ordersResp = await api.get(`/orders/${establishmentId}`);
       const orders = ordersResp.data || [];
 
-      const today = new Date().toDateString();
-      const todayOrders = orders.filter(
-        (o: any) => new Date(o.createdAt).toDateString() === today
-      );
-
-      const weekAgo = new Date();
-      weekAgo.setDate(weekAgo.getDate() - 7);
-      const weekOrders = orders.filter(
-        (o: any) => new Date(o.createdAt) >= weekAgo && o.status !== "cancelled"
-      );
-      const weekRevenue = weekOrders.reduce(
-        (sum: number, o: any) => sum + (o.total || 0),
-        0
-      );
-      const avgTicket = weekOrders.length > 0 ? weekRevenue / weekOrders.length : 0;
-
-      setStats({
-        todayOrders: todayOrders.length,
-        weekRevenue,
-        avgTicket,
-      });
+      const s = computeStats(orders);
+      setStats(s);
     } catch (e) {
       console.error("Erro ao carregar relatórios:", e);
     }

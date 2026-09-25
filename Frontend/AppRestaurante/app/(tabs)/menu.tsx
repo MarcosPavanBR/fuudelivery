@@ -26,6 +26,21 @@ interface Product {
   categories?: { id: number; name: string }[];
 }
 
+// GET /products/:id devolve o modelo Go sem tags JSON ("ID", "Name",
+// "Price", "Categories"); a tela lia as minúsculas e mostrava nome vazio e
+// "R$ undefined". Aceita os dois formatos.
+export function normalizeProduct(p: any): Product {
+  const cats = p?.Categories ?? p?.categories ?? [];
+  return {
+    id: p?.ID ?? p?.id,
+    name: p?.Name ?? p?.name ?? "",
+    description: p?.Description ?? p?.description,
+    price: Number(p?.Price ?? p?.price ?? 0),
+    image: p?.Image ?? p?.image,
+    categories: cats.map((c: any) => ({ id: c?.ID ?? c?.id, name: c?.Name ?? c?.name ?? "" })),
+  };
+}
+
 export default function MenuScreen() {
   const { getUserData } = useApi();
   const user = getUserData();
@@ -38,7 +53,7 @@ export default function MenuScreen() {
       const establishmentId = user?.establishment_id;
       if (!establishmentId) return;
       const resp = await api.get(`/products/${establishmentId}`);
-      setProducts(resp.data || []);
+      setProducts((resp.data || []).map(normalizeProduct));
     } catch (e) {
       console.error("Erro ao carregar cardápio:", e);
     }
@@ -73,7 +88,7 @@ export default function MenuScreen() {
             {item.description}
           </Text>
         ) : null}
-        <Text style={styles.productPrice}>R$ {item.price?.toFixed(2)}</Text>
+        <Text style={styles.productPrice}>R$ {item.price.toFixed(2).replace(".", ",")}</Text>
         {item.categories && item.categories.length > 0 && (
           <View style={styles.categoriesRow}>
             {item.categories.map((cat) => (

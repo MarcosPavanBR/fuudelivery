@@ -1260,3 +1260,33 @@ func TestMatchingEngine_DensityOverridesStage1(t *testing.T) {
 		t.Error("Expected match using density-expanded radius")
 	}
 }
+
+// As métricas POR ZONA alimentam a calibração automática
+// (calibration_job.calibrateZone). Os gravadores existiam mas nunca eram
+// chamados: toda zona caía no fallback de métrica GLOBAL.
+func TestMatchingEngine_MetricasPorZona(t *testing.T) {
+	store := NewCourierStore()
+	resolver := newMockZoneResolver()
+	resolver.resolveFunc = func(lat, lng float64) (uint, string, float64, error) {
+		if lat > -23.0 {
+			return 2, "Norte", 10.0, nil
+		}
+		return 1, "Centro", 10.0, nil
+	}
+	engine := NewMatchingEngine(store, resolver)
+
+	// Zona 1: entregador disponível → match. Zona 2: ninguém → sem match.
+	store.UpdateLocation(1, "Alice", -23.5505, -46.6333, "available")
+	engine.AttemptMatch(&dto.OrderDTO{OrderId: "z1", Establishment: dto.EstablishmentDTO{Lat: -23.5505, Long: -46.6333}})
+	engine.AttemptMatch(&dto.OrderDTO{OrderId: "z2", Establishment: dto.EstablishmentDTO{Lat: -22.0, Long: -46.6333}})
+
+	if got := engine.GetUnmatchedRateForZone(1); got != 0 {
+		t.Errorf("zona 1: taxa sem match %v, want 0", got)
+	}
+	if got := engine.GetUnmatchedRateForZone(2); got != 1 {
+		t.Errorf("zona 2: taxa sem match %v, want 1", got)
+	}
+	if got := engine.GetMatchTimeP90ForZone(1); got <= 0 {
+		t.Errorf("zona 1 deveria ter tempo de match registrado, tem %v", got)
+	}
+}

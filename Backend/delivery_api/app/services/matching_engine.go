@@ -311,12 +311,20 @@ func (m *MatchingEngine) AttemptMatch(order *dto.OrderDTO) *MatchResult {
 
 		elapsed := time.Since(startTime).Seconds() * 1000
 		m.recordMatchTime(elapsed)
+		// Por zona também: é o que calibration_job.calibrateZone lê. Sem
+		// isto toda zona caía no fallback de métrica global.
+		if zoneID > 0 {
+			m.recordMatchTimeForZone(zoneID, elapsed)
+		}
 
 		log.Printf("[MATCH] Order %s -> courier %d (%.1fkm, score=%.2f, stage=%d, %.0fms)",
 			order.OrderId, bestCandidate.DeliverymanID, result.DistanceKm,
 			float64(bestCandidate.score), result.StageReached, elapsed)
 
 		m.recordOrder(false)
+		if zoneID > 0 {
+			m.recordOrderForZone(zoneID, false)
+		}
 		return result
 	}
 
@@ -353,6 +361,9 @@ func (m *MatchingEngine) AttemptMatch(order *dto.OrderDTO) *MatchResult {
 		order.OrderId, zoneName, surge, fee, result.StageReached)
 
 	m.recordOrder(true)
+	if zoneID > 0 {
+		m.recordOrderForZone(zoneID, true)
+	}
 	return result
 }
 

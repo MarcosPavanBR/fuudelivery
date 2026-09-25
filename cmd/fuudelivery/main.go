@@ -1321,9 +1321,12 @@ func setupDispatchRoutes(app *fiber.App) {
 	dispatch.Post("/location", rateLimitMiddleware(120), dispatchHandler.UpdateLocation)
 	dispatch.Post("/status", rateLimitMiddleware(30), dispatchHandler.SetCourierStatus)
 
-	// Matching
-	dispatch.Post("/trigger", dispatchHandler.TriggerDispatch)
-	dispatch.Get("/nearby", dispatchHandler.NearbyCouriers)
+	// Matching — só admin. /nearby expõe nome e GPS ao vivo dos entregadores
+	// (dado pessoal) e /trigger com force incrementa a carga do entregador a
+	// cada chamada; com só protectedRoute, qualquer cliente logado fazia os
+	// dois. Nenhum app chama estas rotas: o dispatch real roda no processo.
+	dispatch.Post("/trigger", adminRequired, dispatchHandler.TriggerDispatch)
+	dispatch.Get("/nearby", adminRequired, dispatchHandler.NearbyCouriers)
 
 	// Dead-letter queue e metricas
 	dispatch.Get("/dlq", adminRequired, dispatchHandler.GetDLQ)

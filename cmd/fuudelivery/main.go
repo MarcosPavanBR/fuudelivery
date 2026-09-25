@@ -763,6 +763,46 @@ func (z *zoneDBResolver) GetZoneMetadata(zoneID uint) *dispatchServices.ZoneMeta
 	return meta
 }
 
+// claimsParticipateInSolicitation decide se o token participa do pedido já
+// despachado. Clientes, usuários de loja e entregadores vêm de tabelas
+// diferentes, com sequências de id independentes — então o "id" do token só
+// pode ser comparado com o id do MESMO tipo de conta:
+//   - entregador (token sem role, emitido por GenerateJWTDeliveryMan) ↔ delivery_man_id;
+//   - cliente (token com role e sem establishment_id) ↔ user_id;
+//   - loja: pelo claim establishment_id, nunca pelo id do usuário.
+//
+// Antes, id do token era comparado com user_id, establishment_id e
+// delivery_man_id ao mesmo tempo: o cliente de id 5 via o chat e a posição
+// do entregador de todo pedido da loja 5 ou do entregador 5.
+func claimsParticipateInSolicitation(claims jwt.MapClaims, s deliveryModels.DeliverySolicitation) bool {
+	tokenUserID, _ := claims["id"].(float64)
+	uid := int64(tokenUserID)
+	role, _ := claims["role"].(string)
+	phone, _ := claims["phone"].(string)
+	estID := int64(0)
+	if v, ok := claims["establishment_id"].(float64); ok {
+		estID = int64(v)
+	}
+
+	if estID != 0 && estID == s.EstablishmentID {
+		return true
+	}
+	if uid != 0 {
+		isDeliveryMan := role == "" || role == "deliveryman"
+		if isDeliveryMan && s.DeliveryManID != 0 && uid == s.DeliveryManID {
+			return true
+		}
+		if !isDeliveryMan && estID == 0 && uid == s.UserID {
+			return true
+		}
+	}
+	// Telefone vale só para cliente: o entregador também tem phone no token.
+	if role != "" && phone != "" && phone == s.UserPhone {
+		return true
+	}
+	return false
+}
+
 // wsCanAccessOrder autoriza um token JWT a acessar dados em tempo real de um
 // pedido (WebSocket de localização da entrega e de chat).
 //
@@ -790,13 +830,7 @@ func wsCanAccessOrder(claims jwt.MapClaims, orderID string) bool {
 		Where("order_id = ?", orderID).
 		First(&s).Error
 	if err == nil {
-		if uid != 0 && (uid == s.UserID || uid == s.EstablishmentID || (s.DeliveryManID != 0 && uid == s.DeliveryManID)) {
-			return true
-		}
-		if estID != 0 && estID == s.EstablishmentID {
-			return true
-		}
-		if phone != "" && phone == s.UserPhone {
+		if claimsParticipateInSolicitation(claims, s) {
 			return true
 		}
 	} else if err == gorm.ErrRecordNotFound {

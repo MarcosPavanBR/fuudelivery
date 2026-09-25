@@ -15,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 )
 
 type AsaasClient struct {
@@ -109,7 +110,7 @@ func (c *AsaasClient) doRequest(method, path string, body interface{}) ([]byte, 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("access_token", c.APIKey)
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("asaas request failed: %w", err)

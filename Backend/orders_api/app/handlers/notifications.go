@@ -52,6 +52,10 @@ func RegisterPushToken(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"message": "Token registered"})
 }
 
+// pushHTTPClient tem timeout: o http.Post padrão não tem, e um Expo lento
+// deixava a goroutine do push presa indefinidamente.
+var pushHTTPClient = &http.Client{Timeout: 10 * time.Second}
+
 func SendPushNotification(userID int64, userType, title, body string, data map[string]interface{}) error {
 	db := models.DB
 	if db == nil {
@@ -75,7 +79,7 @@ func SendPushNotification(userID int64, userType, title, body string, data map[s
 		return err
 	}
 
-	resp, err := http.Post("https://exp.host/--/api/v2/push/send", "application/json", bytes.NewReader(jsonData))
+	resp, err := pushHTTPClient.Post("https://exp.host/--/api/v2/push/send", "application/json", bytes.NewReader(jsonData))
 	if err != nil {
 		return err
 	}

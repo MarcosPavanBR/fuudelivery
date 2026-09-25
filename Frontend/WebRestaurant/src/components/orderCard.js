@@ -12,6 +12,8 @@ const pick = (obj, ...keys) => {
 };
 
 export const itemName = (cartItem) => pick(cartItem?.item, "Name", "name") ?? "Item";
+// Observação do cliente no item ("sem cebola"). Só texto — o React escapa.
+export const itemNote = (cartItem) => String(cartItem?.note || "").trim();
 const itemPrice = (cartItem) => Number(pick(cartItem?.item, "Price", "price") ?? 0);
 const additionalName = (a) => pick(a, "Name", "name") ?? "";
 

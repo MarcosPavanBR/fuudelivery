@@ -9,6 +9,7 @@ import additionalsModel from "../services/additionals.model";
 import Strings from "../constants/Strings";
 import categoryModel from "../services/category.model";
 import helper from "../helpers/helper";
+import { establishmentIdOf } from "../helpers/session";
 
 Modal.setAppElement("#root");
 
@@ -25,7 +26,7 @@ const ModalAddItens = ({
   const [editItem, setEditItem] = useState(null);
 
   const init = async () => {
-    const myid = getUser().id;
+    const myid = establishmentIdOf(getUser());
     setItems(
       isCategory
         ? await categoryModel.getCategories(myid)
@@ -38,13 +39,13 @@ const ModalAddItens = ({
     let finalItem = null;
     if (!isCategory) {
       finalItem = isCreate
-        ? await additionalsModel.createAdditional(items, editItem, getUser().id)
+        ? await additionalsModel.createAdditional(items, editItem, establishmentIdOf(getUser()))
         : await additionalsModel.updateAdditional(items, editItem);
       if (!finalItem) { toast.error(Texts.erro_cardapio); return; }
     } else {
       finalItem = isCreate
-        ? await categoryModel.createCategory(items, editItem, getUser().id)
-        : await categoryModel.updateCategory(items, editItem, getUser().id);
+        ? await categoryModel.createCategory(items, editItem, establishmentIdOf(getUser()))
+        : await categoryModel.updateCategory(items, editItem, establishmentIdOf(getUser()));
     }
     const tag = isCategory ? "Categories" : "Additional";
     if (item[tag].find((e) => e.ID === editItem.ID))

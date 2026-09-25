@@ -48,6 +48,7 @@ func CreateProduct(c *fiber.Ctx) error {
 		Price:           request.Price,
 		Image:           request.Image,
 		EstablishmentID: uint(request.EstablishmentID),
+		Available:       true,
 	}
 	if err := models.DB.Create(&product).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create product"})
@@ -92,14 +93,49 @@ func UpdateProduct(c *fiber.Ctx) error {
 	return c.JSON(existingProduct)
 }
 
+// SetProductAvailability pausa (esgotado) ou reativa um produto.
+// PUT /products/:id/availability {"available": false}
+func SetProductAvailability(c *fiber.Ctx) error {
+	productID := c.Params("id")
+	if !validID(productID) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ID inválido"})
+	}
+	var req struct {
+		Available *bool `json:"available"`
+	}
+	if err := c.BodyParser(&req); err != nil || req.Available == nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Informe available (true/false)"})
+	}
+
+	var product models.Product
+	if err := models.DB.Where("id = ?", productID).First(&product).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Product not found"})
+	}
+	if !canActOnEstablishment(c, int64(product.EstablishmentID)) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
+	}
+
+	// Update de UMA coluna: grava o false (Save/Updates com struct pulam o
+	// valor zero de um campo com default).
+	if err := models.DB.Model(&product).Update("available", *req.Available).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update product"})
+	}
+	product.Available = *req.Available
+	return c.JSON(product)
+}
+
 func CreateMultProducts(c *fiber.Ctx) error {
 	var requests []dto.ProductRequest
 	if err := c.BodyParser(&requests); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to parse request body"})
 	}
 
-	if len(requests) > 0 && !canActOnEstablishment(c, int64(requests[0].EstablishmentID)) {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
+	// Autoriza CADA item: conferir só o primeiro deixava o resto do lote
+	// criar produto no cardápio de outra loja.
+	for _, r := range requests {
+		if !canActOnEstablishment(c, int64(r.EstablishmentID)) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
+		}
 	}
 
 	var createdProducts []models.Product
@@ -111,6 +147,7 @@ func CreateMultProducts(c *fiber.Ctx) error {
 			Price:           request.Price,
 			Image:           request.Image,
 			EstablishmentID: uint(request.EstablishmentID),
+			Available:       true,
 		}
 
 		if err := models.DB.Create(&product).Error; err != nil {

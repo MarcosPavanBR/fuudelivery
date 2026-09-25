@@ -7,6 +7,7 @@ import {
   elapsedLabel,
   isLate,
   itemName,
+  itemNote,
   orderTotal,
   paymentType,
   selectedAdditionals,
@@ -119,7 +120,7 @@ const Task = ({ task, index, onAction, now }) => {
             className="w-full flex items-center justify-between p-2.5 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors text-sm"
           >
             <span className="font-medium text-gray-700">
-              Itens do pedido ({itemsCount})
+              Itens do pedido ({itemsCount}){cart.some(itemNote) ? " · com observação" : ""}
             </span>
             {showItems ? <FiChevronUp className="h-4 w-4 text-gray-500" /> : <FiChevronDown className="h-4 w-4 text-gray-500" />}
           </button>
@@ -131,6 +132,11 @@ const Task = ({ task, index, onAction, now }) => {
                     <span className="font-bold">{item.quantity}x</span>{" "}
                     <span className="font-medium text-gray-900">{itemName(item)}</span>
                   </p>
+                  {itemNote(item) && (
+                    <p className="mt-1 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900">
+                      Obs.: {itemNote(item)}
+                    </p>
+                  )}
                   {selectedAdditionals(item).length > 0 && (
                     <div className="mt-1 flex flex-wrap gap-1">
                       {selectedAdditionals(item).map((a, aidx) => (

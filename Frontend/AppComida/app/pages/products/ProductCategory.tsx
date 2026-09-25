@@ -26,6 +26,7 @@ const ProductCategory = ({ category }: any) => {
               onPress={() => handleProductPress(item)}
               style={{
                 ...styles.productContainer,
+                opacity: item.Available === false ? 0.5 : 1,
                 borderBottomWidth:
                   category.Products.length - 1 === index ? 0 : 1,
               }}
@@ -54,6 +55,9 @@ const ProductCategory = ({ category }: any) => {
                   <Text style={styles.priceValue}>
                     {helpers.formatCurrency(item.Price)}
                   </Text>
+                  {item.Available === false ? (
+                    <Text style={styles.soldOut}>  · Esgotado</Text>
+                  ) : null}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -130,6 +134,11 @@ const styles = StyleSheet.create({
   },
   priceValue: {
     fontSize: 14,
+  },
+  soldOut: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: Colors.light.secondaryText,
   },
 });
 

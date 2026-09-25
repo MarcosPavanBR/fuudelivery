@@ -30,9 +30,34 @@ interface Order {
   created_at?: string;
   order_total?: number;
   user?: { nome?: string; phone?: string };
-  cart?: { quantity?: number }[];
+  cart?: CartLine[];
   deliveryman?: { id?: number; name?: string };
   scheduled_at?: string;
+}
+
+interface CartLine {
+  quantity?: number;
+  additionals?: number[];
+  note?: string;
+  item?: Record<string, any>;
+}
+
+// Linhas do pedido para a cozinha: "2x Pizza (+ Bacon)" e a observação do
+// cliente. O card só mostrava a quantidade de itens — pelo celular não dava
+// para saber o que preparar. O servidor grava as chaves do DTO em Go
+// ("Name", "Additional", "ID"); pedido antigo pode vir em minúsculas.
+export function orderLines(cart: CartLine[] = []): { text: string; note: string }[] {
+  return cart.map((c) => {
+    const item = c.item || {};
+    const name = item.Name ?? item.name ?? "Item";
+    const offered: any[] = item.Additional ?? item.additional ?? [];
+    const extras = (c.additionals || [])
+      .map((id) => offered.find((a) => (a.ID ?? a.id) === id))
+      .filter(Boolean)
+      .map((a) => a.Name ?? a.name);
+    const text = `${c.quantity || 0}x ${name}${extras.length ? ` (+ ${extras.join(", ")})` : ""}`;
+    return { text, note: String(c.note || "").trim() };
+  });
 }
 
 // ─── Máquina de estado do pedido (lógica pura, testada em
@@ -231,6 +256,14 @@ export default function OrdersScreen() {
           🕐 {time} · {elapsedLabel(item.created_at, now)} · {itemsCount} {itemsCount === 1 ? "item" : "itens"}
         </Text>
         {hasCourier && <Text style={styles.orderTime}>🛵 {item.deliveryman?.name || "Entregador"}</Text>}
+        <View style={styles.lines}>
+          {orderLines(item.cart).map((l, i) => (
+            <View key={i}>
+              <Text style={styles.lineText}>{l.text}</Text>
+              {l.note ? <Text style={styles.lineNote}>Obs.: {l.note}</Text> : null}
+            </View>
+          ))}
+        </View>
         <Text style={styles.orderTotal}>R$ {total}</Text>
 
         {actions.length > 0 && (
@@ -309,6 +342,17 @@ const styles = StyleSheet.create({
   statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   statusText: { fontSize: 12, fontWeight: "600" },
   customerName: { fontSize: 14, color: "#374151", marginBottom: 4 },
+  lines: { marginTop: 6, gap: 4 },
+  lineText: { fontSize: 14, color: "#111827" },
+  lineNote: {
+    fontSize: 12,
+    color: "#92400E",
+    backgroundColor: "#FFFBEB",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginTop: 2,
+  },
   orderTime: { fontSize: 13, color: "#6B7280", marginBottom: 4 },
   orderTotal: { fontSize: 18, fontWeight: "700", color: "#DC2626", marginBottom: 12 },
   actions: { flexDirection: "row", gap: 8, justifyContent: "flex-end" },

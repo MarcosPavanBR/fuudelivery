@@ -9,6 +9,7 @@ import ordersModels from "../../services/orders.models";
 import { canMove, displayColumn, newPendingIds } from "../../components/orderCard";
 import { alertNewOrders, isSoundOn, setSoundOn, unlockAudio } from "../../services/newOrderAlert";
 import { FiBell, FiBellOff } from "react-icons/fi";
+import { establishmentIdOf } from "../../helpers/session";
 
 // Precisa espelhar exatamente as transições que o backend aceita
 // (validTransitions em Backend/orders_api/app/handlers/orders.go) — sem a
@@ -41,9 +42,9 @@ const Home = () => {
     if (!user) return;
     try {
       if (verifyFmode && !fmode) return;
-      // Mesma chave do DashboardCharts: establishment.id quando existir —
+      // Mesma chave do DashboardCharts: o establishment_id da sessão —
       // antes o Kanban usava user.id e divergia do dashboard.
-      const establishmentId = getUser()?.establishment?.id || getUser().id;
+      const establishmentId = establishmentIdOf(getUser());
       const orders = await ordersModels.getOrders(establishmentId);
       alertNewOrders(newPendingIds(seenIds.current, orders).length);
       seenIds.current = new Set(orders.map((o) => o.id));
@@ -164,7 +165,7 @@ const Home = () => {
       {/* Os pedidos são o trabalho principal da tela: vêm primeiro; os
           números da semana ficam abaixo. */}
       <div className="mt-8">
-        <DashboardCharts establishmentId={user?.establishment?.id || user?.id} />
+        <DashboardCharts establishmentId={establishmentIdOf(user)} />
       </div>
     </MenuLayout>
   );

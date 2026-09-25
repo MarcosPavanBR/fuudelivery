@@ -6,6 +6,7 @@ import {
   elapsedLabel,
   isLate,
   itemName,
+  itemNote,
   newPendingIds,
   orderTotal,
   paymentType,
@@ -120,5 +121,14 @@ describe("tempo e alerta", () => {
     expect(newPendingIds(null, orders)).toEqual([]);
     expect(newPendingIds(new Set(["a"]), orders)).toEqual(["c"]);
     expect(newPendingIds(new Set(["a", "c"]), orders)).toEqual([]);
+  });
+});
+
+describe("itemNote", () => {
+  it("lê a observação do item e ignora vazio", () => {
+    expect(itemNote({ note: "  sem cebola " })).toBe("sem cebola");
+    expect(itemNote({ note: "" })).toBe("");
+    expect(itemNote({})).toBe("");
+    expect(itemNote(null)).toBe("");
   });
 });

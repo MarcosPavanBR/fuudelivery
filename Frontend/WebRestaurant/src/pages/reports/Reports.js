@@ -12,6 +12,7 @@ import {
 } from "react-icons/fi";
 import api from "../../services/api";
 import MenuLayout from "../../components/Menu";
+import { establishmentIdOf } from "../../helpers/session";
 
 const Reports = () => {
   const { user } = useAuth();
@@ -34,7 +35,7 @@ const Reports = () => {
   const fetchStats = async () => {
     setLoading(true);
     try {
-      const establishmentId = user?.establishment?.id || user?.id;
+      const establishmentId = establishmentIdOf(user);
       const { data } = await api.get(
         `/payments/reports/establishment/${establishmentId}?period=${period}`
       );

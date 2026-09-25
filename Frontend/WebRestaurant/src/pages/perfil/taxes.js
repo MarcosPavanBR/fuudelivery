@@ -6,10 +6,11 @@ import deliveryModel from "../../services/delivery.model";
 import zoneModel from "../../services/zone.model";
 import { toast } from "react-toastify";
 import Texts from "../../constants/Texts";
+import { establishmentIdOf } from "../../helpers/session";
 
 function Taxes() {
   const { getUser } = useAuth();
-  const estId = getUser()?.establishment_id || getUser()?.establishment?.id || getUser()?.sub;
+  const estId = establishmentIdOf(getUser());
 
   const [body, setBody] = useState({
     establishmentId: estId,

@@ -17,6 +17,7 @@ import { toast } from "react-toastify";
 import Texts from "../constants/Texts";
 import api from "../services/api";
 import Logo from "./Logo";
+import { establishmentIdOf } from "../helpers/session";
 
 const TopMenu = ({ toggleMenu, isOpen }) => {
   const { getUser, openEstablishment, refreshOpen } = useAuth();
@@ -24,7 +25,7 @@ const TopMenu = ({ toggleMenu, isOpen }) => {
 
   const handlerBnt = async (res) => {
     try {
-      await api.put("/establishments/status/handler/" + (user?.establishment_id || user?.id));
+      await api.put("/establishments/status/handler/" + establishmentIdOf(user));
       await refreshOpen();
       // Decisão pelo valor clicado (res): usar openEstablishment do closure
       // mostrava toast invertido (estado stale antes do refresh).

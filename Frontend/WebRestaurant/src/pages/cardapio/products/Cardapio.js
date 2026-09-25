@@ -5,9 +5,11 @@ import SearchInput from "../../../components/SearchInput";
 import AddButton from "../../../components/AddButton";
 import Strings from "../../../constants/Strings";
 import Texts from "../../../constants/Texts";
-import productsModel from "../../../services/products.model";
+import productsModel, { isAvailable } from "../../../services/products.model";
+import { toast } from "react-toastify";
 import { useAuth } from "../../../context/AuthContext";
 import { FiLoader, FiPlus } from "react-icons/fi";
+import { establishmentIdOf } from "../../../helpers/session";
 
 const Cardapio = () => {
   const { getUser } = useAuth();
@@ -21,7 +23,7 @@ const Cardapio = () => {
   async function start() {
     setLoad(true);
     try {
-      const establishmentId = getUser()?.establishment?.id || getUser().id;
+      const establishmentId = establishmentIdOf(getUser());
       const products = await productsModel.getProducts(establishmentId);
       setItems(products);
       setLoadError(false);
@@ -35,6 +37,21 @@ const Cardapio = () => {
   async function onRefreshItens(item) {
     if (item && selectedItem) setSelectedItem(item);
     await start();
+  }
+
+  // Pausar/reativar na hora, sem abrir o modal. Otimista: volta se falhar.
+  async function toggleAvailability(product) {
+    const next = !isAvailable(product);
+    const apply = (value) =>
+      setItems((list) => list.map((p) => (p.ID === product.ID ? { ...p, Available: value } : p)));
+    apply(next);
+    try {
+      await productsModel.setAvailability(product.ID, next);
+      toast.success(next ? `${product.Name} voltou ao cardápio` : `${product.Name} marcado como esgotado`);
+    } catch (e) {
+      apply(!next);
+      toast.error(e?.response?.data?.error || "Não foi possível alterar o item");
+    }
   }
 
   async function save(item) {
@@ -97,6 +114,7 @@ const Cardapio = () => {
           setSelectedItem={setSelectedItem}
           onSave={save}
           onRefreshItens={onRefreshItens}
+          onToggleAvailability={toggleAvailability}
         />
       )}
     </MenuLayout>

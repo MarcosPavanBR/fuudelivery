@@ -77,6 +77,12 @@ describe("buildOrderPayload", () => {
     expect(body.user).toEqual({ id: 42, name: "Cliente" });
   });
 
+  it("leva a observação do item até o corpo do pedido (a cozinha lê cart[].note)", () => {
+    const cart = [{ item: { ID: 1 }, quantity: 1, additionals: [], note: "sem cebola" }];
+    const body = JSON.parse(JSON.stringify(buildOrderPayload({ ...baseParams, cart })));
+    expect(body.cart[0].note).toBe("sem cebola");
+  });
+
   it("troca de estabelecimento reflete no payload (regressão: taxa do restaurante errado)", () => {
     const outroEstablishment = { id: 99, name: "Outro Restaurante", max_distance_delivery: 5 };
     const body = buildOrderPayload({ ...baseParams, establishment: outroEstablishment, deliveryValue: 3.0 });

@@ -12,6 +12,8 @@ import {
   TouchableOpacity,
   RefreshControl,
   Image,
+  Switch,
+  Alert,
 } from "react-native";
 import { useFocusEffect } from "expo-router/react-navigation";
 import api from "@/services/api";
@@ -23,6 +25,7 @@ interface Product {
   description?: string;
   price: number;
   image?: string;
+  available: boolean;
   categories?: { id: number; name: string }[];
 }
 
@@ -37,6 +40,8 @@ export function normalizeProduct(p: any): Product {
     description: p?.Description ?? p?.description,
     price: Number(p?.Price ?? p?.price ?? 0),
     image: p?.Image ?? p?.image,
+    // Sem o campo (servidor antigo) = à venda.
+    available: (p?.Available ?? p?.available) !== false,
     categories: cats.map((c: any) => ({ id: c?.ID ?? c?.id, name: c?.Name ?? c?.name ?? "" })),
   };
 }
@@ -72,8 +77,23 @@ export default function MenuScreen() {
     setRefreshing(false);
   };
 
+  // Pausa (esgotado) ou reativa o item direto do celular. Otimista: volta
+  // se o servidor recusar.
+  const toggleAvailable = async (product: Product) => {
+    const next = !product.available;
+    const apply = (value: boolean) =>
+      setProducts((list) => list.map((p) => (p.id === product.id ? { ...p, available: value } : p)));
+    apply(next);
+    try {
+      await api.put(`/products/${product.id}/availability`, { available: next });
+    } catch (e: any) {
+      apply(!next);
+      Alert.alert("Erro", e?.response?.data?.error || "Não foi possível alterar o item.");
+    }
+  };
+
   const renderProduct = ({ item }: { item: Product }) => (
-    <View style={styles.productCard}>
+    <View style={[styles.productCard, !item.available && { opacity: 0.6 }]}>
       {item.image ? (
         <Image source={{ uri: item.image }} style={styles.productImage} />
       ) : (
@@ -98,6 +118,15 @@ export default function MenuScreen() {
             ))}
           </View>
         )}
+        <View style={styles.availableRow}>
+          <Text style={styles.availableText}>{item.available ? "À venda" : "Esgotado"}</Text>
+          <Switch
+            value={item.available}
+            onValueChange={() => toggleAvailable(item)}
+            trackColor={{ true: "#DC2626", false: "#D1D5DB" }}
+            accessibilityLabel={`${item.name}: ${item.available ? "à venda" : "esgotado"}`}
+          />
+        </View>
       </View>
     </View>
   );
@@ -132,6 +161,13 @@ export default function MenuScreen() {
 }
 
 const styles = StyleSheet.create({
+  availableRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 6,
+  },
+  availableText: { fontSize: 13, color: "#374151", fontWeight: "500" },
   container: { flex: 1, backgroundColor: "#F5F5F5" },
   list: { padding: 16, gap: 12 },
   center: { flex: 1, justifyContent: "center", alignItems: "center", gap: 12 },

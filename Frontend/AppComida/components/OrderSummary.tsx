@@ -35,6 +35,7 @@ const OrderSummary = ({ data, disabled }: any) => {
             quantityInit: item.quantity,
             title: Texts.novopedido,
             selectedsInit: item.additionals,
+            noteInit: item.note ?? "",
             itemId: item.id,
           });
         }}
@@ -46,6 +47,11 @@ const OrderSummary = ({ data, disabled }: any) => {
                 <Text style={styles.itemName}>
                   {item.item.Name ?? item.item.name}
                 </Text>
+                {item.note ? (
+                  <Text style={styles.itemNote} numberOfLines={2}>
+                    Obs.: {item.note}
+                  </Text>
+                ) : null}
                 <View style={styles.additionalContainer}>
                   {renderAdditionalItems(
                     (item.item.Additional ?? item.item.additional)?.filter(
@@ -133,6 +139,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "300",
     marginBottom: 5,
+  },
+  itemNote: {
+    fontSize: 12,
+    fontStyle: "italic",
+    color: Colors.light.secondaryText,
+    marginBottom: 4,
   },
   additionalContainer: {
     marginBottom: 10,

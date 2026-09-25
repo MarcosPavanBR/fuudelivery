@@ -26,6 +26,9 @@ type CartItem struct {
 	Additionals []int  `json:"additionals"`
 	Quantity    int    `json:"quantity"`
 	ID          string `json:"id"`
+	// Observação do cliente para a cozinha ("sem cebola"). Texto livre,
+	// normalizado em normalizeCartNotes.
+	Note string `json:"note,omitempty"`
 }
 
 type Coords struct {

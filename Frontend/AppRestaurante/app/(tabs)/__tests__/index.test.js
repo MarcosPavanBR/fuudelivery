@@ -16,6 +16,7 @@ import {
   activeOrders,
   shortOrderId,
   elapsedLabel,
+  orderLines,
 } from "../index";
 
 // Os status e as transições são os do servidor
@@ -118,5 +119,24 @@ describe("apresentação", () => {
     const t0 = Date.parse("2026-09-25T12:00:00Z");
     expect(elapsedLabel("2026-09-25T12:00:00Z", t0 + 12 * 60000)).toBe("há 12 min");
     expect(elapsedLabel(undefined, t0)).toBe("");
+  });
+});
+
+describe("orderLines", () => {
+  it("lista itens com adicionais escolhidos e observação", () => {
+    const cart = [
+      {
+        quantity: 2,
+        additionals: [2],
+        note: " sem cebola ",
+        item: { Name: "Pizza", Additional: [{ ID: 1, Name: "Borda" }, { ID: 2, Name: "Bacon" }] },
+      },
+      { quantity: 1, item: { name: "Refri" } },
+    ];
+    expect(orderLines(cart)).toEqual([
+      { text: "2x Pizza (+ Bacon)", note: "sem cebola" },
+      { text: "1x Refri", note: "" },
+    ]);
+    expect(orderLines(undefined)).toEqual([]);
   });
 });

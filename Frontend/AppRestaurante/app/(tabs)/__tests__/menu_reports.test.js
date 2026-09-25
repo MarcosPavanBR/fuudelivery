@@ -8,7 +8,12 @@ import { computeStats } from "../reports";
 describe("cardápio", () => {
   it("lê o produto no formato do servidor (Name/Price/Categories)", () => {
     const p = normalizeProduct({ ID: 1, Name: "Pizza", Price: 49.9, Categories: [{ ID: 2, Name: "Pizzas" }] });
-    expect(p).toEqual({ id: 1, name: "Pizza", description: undefined, price: 49.9, image: undefined, categories: [{ id: 2, name: "Pizzas" }] });
+    expect(p).toEqual({ id: 1, name: "Pizza", description: undefined, price: 49.9, image: undefined, available: true, categories: [{ id: 2, name: "Pizzas" }] });
+  });
+
+  it("lê o item pausado (Available=false) e trata ausência como à venda", () => {
+    expect(normalizeProduct({ ID: 1, Name: "X", Price: 1, Available: false }).available).toBe(false);
+    expect(normalizeProduct({ ID: 1, Name: "X", Price: 1 }).available).toBe(true);
   });
 
   it("aceita o formato antigo", () => {

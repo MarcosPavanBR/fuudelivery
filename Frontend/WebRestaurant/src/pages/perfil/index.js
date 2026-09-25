@@ -28,6 +28,7 @@ import {
   validateHours,
 } from "./storeSettings";
 import ConectarMercadoPago from "../../components/ConectarMercadoPago";
+import { establishmentIdOf } from "../../helpers/session";
 
 const inputClass = "input";
 const RequiredMark = () => <span className="text-red-500">*</span>;
@@ -47,7 +48,7 @@ function Perfil() {
   const [locating, setLocating] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const sessionUser = getUser();
-  const estId = sessionUser?.establishment_id || sessionUser?.establishment?.id || sessionUser?.sub;
+  const estId = establishmentIdOf(sessionUser);
 
   const handlerEstablishment = (target) => {
     setEstablishment({ ...establishment, [target.name]: target.value });

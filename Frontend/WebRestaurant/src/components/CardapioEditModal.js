@@ -8,6 +8,7 @@ import helper from "../helpers/helper";
 import ModalAddItens from "./ModalAddItens";
 import productsModel from "../services/products.model";
 import { FiX, FiSave, FiTrash2 } from "react-icons/fi";
+import { establishmentIdOf } from "../helpers/session";
 
 const getInitialFormData = (item) => ({
   ID: item?.ID || "",
@@ -61,7 +62,7 @@ const CardapioEditModal = ({
       Price: parseFloat(formData.Price),
       Id: parseInt(formData.ID) || null,
       ID: parseInt(formData.ID) || null,
-      EstablishmentId: getUser().id,
+      EstablishmentId: establishmentIdOf(getUser()),
       Categories: null,
     };
 

@@ -16,7 +16,9 @@ import (
 	"math"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	authModels "github.com/carloshomar/fuudelivery/auth_api/app/models"
@@ -74,6 +76,8 @@ func CreateOrder(c *fiber.Ctx, sendMessageToClient func(clientID int64, message 
 		u := uint(tokenIDOrZero(c))
 		subscriptionUserID = &u
 	}
+
+	normalizeCartNotes(request.Cart)
 
 	clientDeliveryValue := request.DeliveryValue
 	serverTotal, serverDelivery, totalErr := computeOrderTotal(
@@ -210,6 +214,28 @@ func CreateOrder(c *fiber.Ctx, sendMessageToClient func(clientID int64, message 
 	})
 }
 
+// maxItemNoteRunes limita a observação por item do carrinho.
+const maxItemNoteRunes = 140
+
+// normalizeCartNotes limpa a observação de cada item: tira caracteres de
+// controle (quebra de linha vira espaço), apara e corta em 140 caracteres.
+// O texto é exibido como texto puro no quadro da loja.
+func normalizeCartNotes(cart []dto.CartItem) {
+	for i := range cart {
+		note := strings.Map(func(r rune) rune {
+			if unicode.IsControl(r) {
+				return ' '
+			}
+			return r
+		}, cart[i].Note)
+		note = strings.Join(strings.Fields(note), " ")
+		if r := []rune(note); len(r) > maxItemNoteRunes {
+			note = strings.TrimSpace(string(r[:maxItemNoteRunes]))
+		}
+		cart[i].Note = note
+	}
+}
+
 // computeOrderTotal recalcula o total do pedido no servidor: preço de cada
 // produto e adicional vem da tabela do banco (não do payload do cliente),
 // multiplicado pela quantidade, somado ao frete da REGIÃO do endereço.
@@ -235,6 +261,9 @@ func computeOrderTotal(cart []dto.CartItem, loc dto.Location, establishmentID in
 		}
 		if p.EstablishmentID != uint(establishmentID) {
 			return 0, 0, fmt.Errorf("produto %d não pertence a este estabelecimento", p.ID)
+		}
+		if !p.Available {
+			return 0, 0, fmt.Errorf("%s está esgotado no momento", p.Name)
 		}
 		subtotal += p.Price * float64(ci.Quantity)
 

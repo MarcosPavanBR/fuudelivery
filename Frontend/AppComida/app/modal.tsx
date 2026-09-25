@@ -5,6 +5,7 @@ import {
   Text,
   Image,
   TouchableOpacity,
+  TextInput,
   Platform,
 } from "react-native";
 import { useNavigation, useLocalSearchParams } from "expo-router";
@@ -27,10 +28,16 @@ const ProductPage = () => {
     title,
     quantityInit = 1,
     selectedsInit = [],
+    noteInit = "",
     itemId,
   }: any = params;
 
+  // Item pausado pela loja (esgotado): dá para ver, não para pedir. O
+  // servidor também recusa o pedido — isto só evita a surpresa no fim.
+  const soldOut = item?.Available === false;
+
   const [quantity, setQuantity] = useState(quantityInit);
+  const [note, setNote] = useState<string>(noteInit);
   const [selectedsAdditional, setSelectedAdditionals] =
     useState<number[]>(selectedsInit);
 
@@ -96,6 +103,21 @@ const ProductPage = () => {
             onChange={addRemove}
           />
         ) : null}
+        {!soldOut ? (
+          <View style={styles.noteContainer}>
+            <Text style={styles.noteLabel}>Alguma observação?</Text>
+            <TextInput
+              value={note}
+              onChangeText={setNote}
+              placeholder="Ex.: sem cebola, ponto da carne..."
+              placeholderTextColor={Colors.light.secondaryText}
+              maxLength={140}
+              multiline
+              style={styles.noteInput}
+            />
+            <Text style={styles.noteCounter}>{note.length}/140</Text>
+          </View>
+        ) : null}
       </View>
       <View style={{ ...styles.mainContainer, paddingBottom: insets.bottom }}>
         <QuantitySelector
@@ -108,25 +130,22 @@ const ProductPage = () => {
           }
         />
         <TouchableOpacity
-          style={styles.btns}
+          style={{ ...styles.btns, opacity: soldOut ? 0.5 : 1 }}
+          disabled={soldOut}
           onPress={() => {
-            !itemId
-              ? addCart({
-                  item,
-                  additionals: selectedsAdditional,
-                  quantity,
-                })
-              : editCart({
-                  item,
-                  additionals: selectedsAdditional,
-                  quantity,
-                  id: itemId,
-                });
+            const trimmed = note.trim();
+            const entry = {
+              item,
+              additionals: selectedsAdditional,
+              quantity,
+              ...(trimmed ? { note: trimmed } : {}),
+            };
+            !itemId ? addCart(entry) : editCart({ ...entry, id: itemId });
             navigation.goBack();
           }}
         >
           <Text style={{ fontWeight: "500", color: Colors.light.white }}>
-            {!itemId ? Texts.add : Texts.alter}
+            {soldOut ? "Esgotado" : !itemId ? Texts.add : Texts.alter}
           </Text>
           <Text style={{ fontWeight: "500", color: Colors.light.white }}>
             {helpers.formatCurrency(calculateFinalPrice())}
@@ -185,6 +204,32 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "400",
     color: "green",
+  },
+  noteContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  noteLabel: {
+    fontSize: 14,
+    fontWeight: "500",
+    marginBottom: 6,
+    color: Colors.light.text,
+  },
+  noteInput: {
+    minHeight: 60,
+    borderWidth: 1,
+    borderColor: Colors.light.tabIconDefault,
+    borderRadius: 6,
+    padding: 10,
+    fontSize: 14,
+    textAlignVertical: "top",
+    color: Colors.light.text,
+  },
+  noteCounter: {
+    alignSelf: "flex-end",
+    fontSize: 11,
+    marginTop: 4,
+    color: Colors.light.secondaryText,
   },
 });
 

@@ -120,6 +120,8 @@ func setupOrdersRoutes(app *fiber.App) {
 	app.Delete("/products/delete/:id", protectedRoute, ordersHandlers.DeleteProduct)
 	app.Post("/products/multi-create", protectedRoute, ordersHandlers.CreateMultProducts)
 	app.Put("/products/update/:id", protectedRoute, ordersHandlers.UpdateProduct)
+	// Pausar/reativar item esgotado (Cardápio da loja).
+	app.Put("/products/:id/availability", protectedRoute, ordersHandlers.SetProductAvailability)
 	app.Post("/categories/create", protectedRoute, ordersHandlers.CreateCategories)
 	app.Get("/categories/:establishmentId", ordersHandlers.GetCategories)
 	app.Post("/categories/product", protectedRoute, ordersHandlers.CreateProductCategorie)

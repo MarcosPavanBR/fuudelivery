@@ -10,8 +10,9 @@
 -- contas em 20 créditos simultâneos, em teste). Os pontos ficavam divididos e
 -- o saldo lido dependia de qual linha o SELECT devolvia.
 --
--- O código já serializa por telefone (advisory lock em lockLoyaltyAccount).
--- Esta migração:
+-- O código já serializa por telefone (advisory lock em lockLoyaltyAccount), e
+-- o servidor aplica esta mesma fusão sozinho na subida
+-- (models.MergeDuplicateLoyaltyAccounts). Esta migração:
 --   1. FUNDE as duplicatas existentes na linha mais antiga (menor id):
 --      soma pontos, pedidos e gasto, e recalcula o nível pelas mesmas faixas
 --      do código (getTier: >=1500 ouro, >=500 prata, senão bronze);
@@ -30,7 +31,14 @@ BEGIN
         RETURN;
     END IF;
 
-    -- 1. Funde duplicatas na menor id de cada telefone.
+    -- 1. Funde duplicatas na menor id de cada telefone. A tabela fica
+    --    travada para escrita até o fim do bloco: um crédito de pontos
+    --    concorrente numa linha entre o UPDATE e o DELETE seria perdido.
+    --    Mesma lógica de models.MergeDuplicateLoyaltyAccounts, que roda
+    --    sozinha na subida do servidor — este arquivo fica para execução
+    --    manual e para o CI.
+    LOCK TABLE loyalty_points IN SHARE ROW EXCLUSIVE MODE;
+
     WITH somas AS (
         SELECT user_phone,
                MIN(id)           AS keep_id,

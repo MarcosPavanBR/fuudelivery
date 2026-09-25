@@ -84,5 +84,15 @@ func ConnectPostgresDatabase() {
 			"Execute scripts/migrate-batches.sql manualmente se necessario.", err)
 	}
 
+	// Contas de pontos duplicadas (bug do NOWAIT antigo): funde e trava com
+	// índice único na subida. Falha não impede o servidor de subir — o código
+	// novo já não cria duplicatas; isto só limpa o passado.
+	if merged, err := MergeDuplicateLoyaltyAccounts(database); err != nil {
+		log.Printf("[CRITICAL] Fusão de contas de pontos duplicadas falhou: %v "+
+			"(rode sql/29_loyalty_points_unique.sql manualmente)", err)
+	} else if merged > 0 {
+		log.Printf("[LOYALTY] %d telefone(s) com contas de pontos duplicadas fundidos na subida", merged)
+	}
+
 	DB = database
 }

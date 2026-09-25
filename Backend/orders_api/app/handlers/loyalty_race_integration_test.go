@@ -91,3 +91,50 @@ func TestFidelidade_MesmoPedidoEmParalelo(t *testing.T) {
 		t.Fatalf("pedido creditado mais de uma vez: %d pontos (esperava 10)", conta.Points)
 	}
 }
+
+// A fusão na subida (models.MergeDuplicateLoyaltyAccounts) limpa as contas
+// duplicadas que o bug antigo deixou em produção: soma na mais antiga,
+// recalcula o nível, apaga o resto e cria o índice único. Idempotente.
+func TestFidelidade_FusaoDeContasDuplicadasNaSubida(t *testing.T) {
+	setupLoyaltyRacePG(t)
+	db := models.DB
+	db.Exec("DROP INDEX IF EXISTS uq_loyalty_points_phone")
+	for _, c := range []models.LoyaltyPoints{
+		{UserPhone: "+551", Points: 300, TotalOrders: 3, TotalSpent: 30, Tier: "bronze"},
+		{UserPhone: "+551", Points: 250, TotalOrders: 2, TotalSpent: 25, Tier: "bronze"},
+		{UserPhone: "+551", Points: 10, TotalOrders: 1, TotalSpent: 10, Tier: "bronze"},
+		{UserPhone: "+552", Points: 40, TotalOrders: 1, TotalSpent: 40, Tier: "bronze"},
+	} {
+		c := c
+		if err := db.Create(&c).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	merged, err := models.MergeDuplicateLoyaltyAccounts(db)
+	if err != nil || merged != 1 {
+		t.Fatalf("merged=%d err=%v, want 1 telefone fundido", merged, err)
+	}
+	var contas []models.LoyaltyPoints
+	db.Where("user_phone = ?", "+551").Find(&contas)
+	if len(contas) != 1 {
+		t.Fatalf("+551 deveria ter 1 conta, tem %d", len(contas))
+	}
+	if c := contas[0]; c.Points != 560 || c.TotalOrders != 6 || c.TotalSpent != 65 || c.Tier != "prata" {
+		t.Fatalf("fusão errada: %+v", c)
+	}
+
+	var idx int64
+	db.Raw("SELECT COUNT(*) FROM pg_indexes WHERE indexname = 'uq_loyalty_points_phone'").Scan(&idx)
+	if idx != 1 {
+		t.Fatal("índice único não foi criado")
+	}
+	if err := db.Create(&models.LoyaltyPoints{UserPhone: "+552", Tier: "bronze"}).Error; err == nil {
+		t.Fatal("o índice único deveria recusar uma segunda conta para o mesmo telefone")
+	}
+
+	again, err := models.MergeDuplicateLoyaltyAccounts(db)
+	if err != nil || again != 0 {
+		t.Fatalf("segunda execução: merged=%d err=%v, want 0 e sem erro", again, err)
+	}
+}

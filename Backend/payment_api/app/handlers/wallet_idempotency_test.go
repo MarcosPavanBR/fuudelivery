@@ -250,7 +250,7 @@ func TestWalletIdempotency_Deduct(t *testing.T) {
 		return resp
 	}
 
-	walletType := walletTypeForUser(userID)
+	walletType := "customer"
 	seedWallet(t, userID, walletType, 100.0)
 
 	// Pedido real com total 25.00 e dono = telefone do token. É daqui que a

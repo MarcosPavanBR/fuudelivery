@@ -67,10 +67,11 @@ func CreateOrder(c *fiber.Ctx, sendMessageToClient func(clientID int64, message 
 
 	// O user_id vem do token, não do corpo: é ele que decide se a assinatura
 	// zera o frete, então deixar o cliente escolher seria dar frete grátis a
-	// quem pedisse.
+	// quem pedisse. E só de conta de CLIENTE: assinatura é do cliente, e o
+	// usuário de loja 5 pedindo não usa a assinatura do cliente 5.
 	var subscriptionUserID *uint
-	if tokenUserID, tErr := middlewares.GetUserIDFromToken(c); tErr == nil && tokenUserID > 0 {
-		u := uint(tokenUserID)
+	if middlewares.IsOwnAccount(c, middlewares.AccountClient, tokenIDOrZero(c)) {
+		u := uint(tokenIDOrZero(c))
 		subscriptionUserID = &u
 	}
 
@@ -181,9 +182,12 @@ func CreateOrder(c *fiber.Ctx, sendMessageToClient func(clientID int64, message 
 		})
 	}
 
+	// O pedido já está gravado: falha no aviso à loja é log, não erro. Antes
+	// voltava 500 aqui — o app entendia que o pedido falhou, repetia e criava
+	// outro, e ficava sem o order_total da resposta para cobrar.
 	jsonData, _ := json.Marshal(request)
 	if err := sendMessageToClient(request.EstablishmentId, jsonData); err != nil {
-		return err
+		log.Printf("[ORDER] aviso à loja %d sobre o pedido %s falhou: %v", request.EstablishmentId, orderID, err)
 	}
 
 	// O total vai na resposta porque o app precisa COBRAR exatamente este
@@ -300,6 +304,18 @@ var validTransitions = map[string]map[string]bool{
 	// DENIED, CANCELLED, FINISHED are terminal -- no outgoing transitions.
 }
 
+// tokenIDOrZero é o claim "id" do token (0 se não houver).
+func tokenIDOrZero(c *fiber.Ctx) int64 {
+	id, err := middlewares.GetUserIDFromToken(c)
+	if err != nil {
+		return 0
+	}
+	return id
+}
+
+// errOrderStatusChanged: a transição deixou de valer entre a leitura e o lock.
+var errOrderStatusChanged = errors.New("status do pedido mudou")
+
 func isValidOrderTransition(fromStatus, toStatus string) bool {
 	allowed, ok := validTransitions[fromStatus]
 	if !ok {
@@ -382,39 +398,47 @@ func UpdateOrderStatus(c *fiber.Ctx, sendMessageToClient func(clientID int64, me
 		})
 	}
 
-	// Payload atual para WebSocket e push notification.
-	var order dto.RequestPayload
-	_ = json.Unmarshal(doc.Payload, &order)
-
-	if requestBody.Status != "REQUEST_APPROVE" {
-		order.OrderId = doc.LegacyID
-		order.Status = requestBody.Status
-		// RabbitMQ removido — fila gerenciada pelo monolito via Redis
-		log.Printf("[ORDER] Order %s status update published", order.OrderId)
-	}
-
-	jsonData, _ := json.Marshal(requestBody)
-
-	if err := sendMessageToClient(doc.EstablishmentID, jsonData); err != nil {
-		return err
-	}
-
-	// Mutação única: status + código de retirada quando DONE. Grava no
-	// Postgres e espelha no Mongo best-effort (orders_pg.go).
-	err = patchOrderDoc(doc, func(p *dto.RequestPayload) {
+	// Mutação única: status + código de retirada quando DONE. patchOrderDoc
+	// relê o pedido sob lock; a transição é conferida de novo nessa versão —
+	// dois cliques ao mesmo tempo, ou o entregador finalizando no meio, não
+	// passam por cima um do outro.
+	err = patchOrderDoc(doc, func(d *models.OrderDocument, p *dto.RequestPayload) error {
+		if !isValidOrderTransition(d.Status, requestBody.Status) {
+			return errOrderStatusChanged
+		}
 		p.Status = requestBody.Status
 		if requestBody.Status == "DONE" {
-			// Código de retirada fica na coluna tipada (doc.PickupCode);
+			// Código de retirada fica na coluna tipada (d.PickupCode);
 			// o payload não tem esse campo por design.
-			doc.PickupCode = generateSecureCode()
+			d.PickupCode = generateSecureCode()
 		}
+		return nil
 	})
+	if errors.Is(err, errOrderStatusChanged) {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+			"error": "O status do pedido mudou enquanto você atualizava; recarregue",
+		})
+	}
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Erro ao atualizar ordem no banco de dados",
 		})
 	}
+	log.Printf("[ORDER] Order %s: %s", doc.LegacyID, doc.Status)
 
+	// Fila do entregador (delivery_solicitations): aprovado entra, cancelado
+	// e finalizado saem.
+	notifyOrderStatusChanged(doc)
+
+	// O aviso à loja vem DEPOIS de gravar: antes, uma falha no WebSocket
+	// devolvia erro e o status nem era salvo.
+	jsonData, _ := json.Marshal(requestBody)
+	if err := sendMessageToClient(doc.EstablishmentID, jsonData); err != nil {
+		log.Printf("[ORDER] aviso à loja %d sobre o pedido %s falhou: %v", doc.EstablishmentID, doc.LegacyID, err)
+	}
+
+	var order dto.RequestPayload
+	_ = json.Unmarshal(doc.Payload, &order)
 	go sendStatusPushNotification(order, requestBody.Status)
 
 	return c.JSON(fiber.Map{

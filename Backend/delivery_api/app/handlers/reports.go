@@ -6,7 +6,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/carloshomar/fuudelivery/delivery_api/app/dto"
 	"github.com/carloshomar/fuudelivery/delivery_api/app/models"
 )
 
@@ -40,10 +39,5 @@ func GetExtrato(c *fiber.Ctx) error {
 		})
 	}
 
-	orders := make([]dto.OrderDTO, 0, len(rows))
-	for _, row := range rows {
-		orders = append(orders, row.ToDTO())
-	}
-
-	return c.JSON(orders)
+	return c.JSON(courierOrderViews(rows, customerName))
 }

@@ -19,6 +19,7 @@ import (
 
 	// Queue + Health + Upload + Metrics + Search
 
+	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/pkg/queue"
 )
 
@@ -55,14 +56,24 @@ type statusEvent struct {
 // client_id explícito → user_id → courier_id (somente na fila de delivery).
 // Retorna 0 quando a mensagem é informativa (sem destinatário).
 func resolveStatusRecipient(queueName string, evt *statusEvent) int64 {
-	recipient := evt.ClientID
-	if recipient == 0 {
-		recipient = evt.UserID
+	_, id := resolveStatusRecipientAccount(queueName, evt)
+	return id
+}
+
+// resolveStatusRecipientAccount é resolveStatusRecipient com o tipo da conta:
+// client_id e user_id são clientes (o estorno publica em user_id o
+// CustomerID do pagamento); courier_id é entregador. O WebSocket separa as
+// conexões por tipo — o cliente 7 e o entregador 7 são pessoas diferentes.
+func resolveStatusRecipientAccount(queueName string, evt *statusEvent) (string, int64) {
+	switch {
+	case evt.ClientID != 0:
+		return middlewares.AccountClient, evt.ClientID
+	case evt.UserID != 0:
+		return middlewares.AccountClient, evt.UserID
+	case queueName == "delivery_updates" && evt.CourierID != 0:
+		return middlewares.AccountDeliveryMan, evt.CourierID
 	}
-	if recipient == 0 && queueName == "delivery_updates" {
-		recipient = evt.CourierID
-	}
-	return recipient
+	return "", 0
 }
 
 // processStatusUpdate decodifica uma mensagem de status da fila, registra no
@@ -79,12 +90,12 @@ func processStatusUpdate(queueName string, msg []byte) error {
 
 	// Mensagens sem destinatário (ex.: community_fallback) são informativas —
 	// apenas log, sem erro, para não ir para a DLQ indevidamente.
-	recipient := resolveStatusRecipient(queueName, &evt)
+	kind, recipient := resolveStatusRecipientAccount(queueName, &evt)
 	if recipient == 0 {
 		return nil
 	}
 
-	if err := sendMessageToClient(recipient, msg); err != nil {
+	if err := sendToWS(wsKey{kind, recipient}, msg); err != nil {
 		return fmt.Errorf("[QUEUE] %s: falha ao notificar cliente %d: %w", queueName, recipient, err)
 	}
 	return nil

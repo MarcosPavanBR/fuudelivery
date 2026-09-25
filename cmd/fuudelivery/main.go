@@ -165,8 +165,10 @@ func main() {
 		gatewaysCheck := health.GatewayCheck(registeredGateways)
 
 		// On cold start (DB not yet initialized), return 200 so Render health
-		// checks pass during the DB initialization window (up to 125s).
-		if models.DB == nil {
+		// checks pass during the DB initialization window (up to 125s). Vale
+		// até a inicialização INTEIRA terminar (readiness.go), não só o banco
+		// do auth.
+		if models.DB == nil || stillStarting(time.Now()) {
 			return c.Status(200).JSON(fiber.Map{
 				"status":  "starting",
 				"service": "fuudelivery",
@@ -231,6 +233,10 @@ func main() {
 	// Busca estabelecimentos e produtos no PostgreSQL (ILIKE + scoring).
 	app.Get("/search", search.NewHandler(func() *gorm.DB { return models.DB }))
 
+	// Pedido ↔ entrega (fila do entregador). Antes das rotas: nenhuma
+	// mudança de status pode chegar sem a ponte ligada.
+	wireCourierFlow()
+
 	// Mount all routes
 	setupWebSocketRoutes(app)
 	setupAuthRoutes(app)
@@ -286,6 +292,9 @@ func main() {
 
 		// Initialize dispatch engine (courier store + matching engine + handler)
 		initDispatchEngine(models.DB)
+
+		// Tudo conectado: o /health passa a responder com os checks reais.
+		initDone.Store(true)
 
 		// Reconciliação de pagamentos: a rede de segurança do caminho do
 		// dinheiro. Sobe AQUI, dentro da goroutine de inicialização, porque

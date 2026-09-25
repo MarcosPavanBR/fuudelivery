@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/delivery_api/app/dto"
 	"github.com/carloshomar/fuudelivery/delivery_api/app/services"
 	"github.com/gofiber/fiber/v2"
@@ -36,10 +35,11 @@ func (h *DispatchHandler) UpdateLocation(c *fiber.Ctx) error {
 	}
 
 	// Identidade do token: o body não define deliveryman_id — qualquer
-	// autenticado não injeta posição falsa de outro entregador.
-	courierID, aErr := middlewares.GetUserIDFromToken(c)
-	if aErr != nil {
-		return c.Status(401).JSON(fiber.Map{"error": "Invalid token"})
+	// autenticado não injeta posição falsa de outro entregador. E o token tem
+	// de ser de entregador: o cliente 5 punha no mapa o entregador 5.
+	courierID, denied := courierFromToken(c)
+	if denied != 0 {
+		return courierDenied(c, denied)
 	}
 
 	if req.Lat == 0 && req.Lng == 0 {
@@ -69,9 +69,9 @@ func (h *DispatchHandler) SetCourierStatus(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
-	courierID, aErr := middlewares.GetUserIDFromToken(c)
-	if aErr != nil {
-		return c.Status(401).JSON(fiber.Map{"error": "Invalid token"})
+	courierID, denied := courierFromToken(c)
+	if denied != 0 {
+		return courierDenied(c, denied)
 	}
 
 	validStatuses := map[string]bool{"available": true, "busy": true, "offline": true}
@@ -131,7 +131,7 @@ func (h *DispatchHandler) TriggerDispatch(c *fiber.Ctx) error {
 		if len(candidates) > 0 {
 			best := candidates[0]
 			dist := haversine(solicitation.Establishment.Lat, solicitation.Establishment.Long, best.Lat, best.Lng)
-			h.CourierStore.SetOrdersCount(best.DeliverymanID, best.CurrentOrders+1)
+			h.CourierStore.IncrementOrders(best.DeliverymanID)
 
 			return c.JSON(dto.DispatchResponse{
 				OrderID:     req.OrderID,

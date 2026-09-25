@@ -17,7 +17,7 @@ type Establishment struct {
 
 	OpenData *string `json:"open_data,omitempty"`
 
-	PaymentWalletID string `json:"payment_wallet_id,omitempty" gorm:"size:100"`
+	PaymentWalletID string `json:"-" gorm:"size:100"` // fora do JSON: GET /establishments e /establishments/:id são públicas
 
 	// ZoneID vincula o estabelecimento a uma praça/regiao
 	// que define as regras de split de pagamento (percentuais

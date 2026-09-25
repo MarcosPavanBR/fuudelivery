@@ -400,6 +400,37 @@ func TestListCoupons_DonoVeOProprioEGlobais(t *testing.T) {
 	}
 }
 
+// O role "establishment" que ListCoupons/GetCoupon exigiam não existe nos
+// tokens: o dono da loja tem role "user" ou "restaurant" e o establishment_id.
+// Toda loja real levava 403; o entregador continua fora.
+func TestCupons_LojaComTokenReal(t *testing.T) {
+	app := setupCouponAuthz(t)
+	c := models.Coupon{Code: "DALOJA", DiscountType: "FIXED", DiscountValue: 5, EstablishmentID: 7, IsActive: true}
+	models.DB.Create(&c)
+
+	sign := func(claims jwt.MapClaims) string {
+		claims["exp"] = time.Now().Add(time.Hour).Unix()
+		s, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(couponAuthzSecret))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	for _, role := range []string{"user", "restaurant"} {
+		dono := sign(jwt.MapClaims{"id": 3, "role": role, "account_type": "user", "establishment_id": 7})
+		if resp := doCoupon(t, app, "GET", "/coupons", dono, ""); resp.StatusCode != 200 {
+			t.Errorf("dono (role %s) listando: got %d, want 200", role, resp.StatusCode)
+		}
+		if resp := doCoupon(t, app, "GET", fmt.Sprintf("/coupons/%d", c.ID), dono, ""); resp.StatusCode != 200 {
+			t.Errorf("dono (role %s) lendo o próprio: got %d, want 200", role, resp.StatusCode)
+		}
+	}
+	entregador := sign(jwt.MapClaims{"id": 7, "account_type": "deliveryman", "establishment_id": 7})
+	if resp := doCoupon(t, app, "GET", "/coupons", entregador, ""); resp.StatusCode != 403 {
+		t.Errorf("entregador listando: got %d, want 403", resp.StatusCode)
+	}
+}
+
 // ── Leitura por id: o id na URL não é autorização ──
 
 func TestGetCoupon_ClienteNaoLeCupomPorID(t *testing.T) {

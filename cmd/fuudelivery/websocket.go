@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -175,7 +176,7 @@ func cleanupWSTickets() {
 // safeConn serializa escritas em UMA conexão WebSocket.
 // Por quê: gorilla/fasthttp ws não permite WriteMessage concorrente no mesmo
 // conn ("concurrent write to websocket connection"). Sem o wrapper, o push da
-// fila (sendMessageToClient) e o echo/read-loop do próprio handler escreviam
+// fila (sendToWS) e o echo/read-loop do próprio handler escreviam
 // no mesmo conn de goroutines diferentes — janela rara de panic.
 // wsMessageWriter é o subconjunto de *websocket.Conn usado pelo safeConn —
 // existe para os testes injetarem um writer falso sob -race.
@@ -205,25 +206,105 @@ func (s *safeConn) Close() error {
 	return nil
 }
 
-var wsClients = make(map[int64]*safeConn)
+// wsKey é o dono de uma conexão /ws/:id. Lojas, clientes e entregadores têm
+// sequências de id independentes: com o mapa indexado só pelo número, a loja
+// 7, o cliente 7 e o entregador 7 caíam no mesmo lugar — os avisos de pedido
+// novo da loja 7 (nome, telefone e endereço do cliente) iam para quem abrisse
+// /ws/7, e a loja só os recebia se o id do usuário dela fosse igual ao da loja.
+type wsKey struct {
+	kind string // middlewares.Account* ou wsKindEstablishment
+	id   int64
+}
+
+// wsKindEstablishment: usuários de loja recebem os avisos da LOJA (claim
+// establishment_id), que é para onde o orders_api manda.
+const wsKindEstablishment = "establishment"
+
+// maxWSConnsPerKey: várias abas da mesma conta (ou vários usuários da mesma
+// loja) recebem os avisos. Com uma conexão só por dono, cada aba derrubava a
+// outra; acima do teto, a mais antiga é fechada.
+const maxWSConnsPerKey = 5
+
+var wsClients = make(map[wsKey][]*safeConn)
 var wsClientsMu sync.Mutex
 
-func sendMessageToClient(clientID int64, message []byte) error {
+// wsKeyForClaims decide onde a conexão /ws/:id é registrada. O :id tem de ser
+// o id do token (wsUserIDMatches); a loja entra pelo establishment_id do token.
+func wsKeyForClaims(claims jwt.MapClaims, urlID string) (wsKey, bool) {
+	if !wsUserIDMatches(claims, urlID) {
+		return wsKey{}, false
+	}
+	id, _ := strconv.ParseInt(urlID, 10, 64)
+	kind := middlewares.AccountTypeFromClaims(claims)
+	if kind == middlewares.AccountUser {
+		if est, ok := claims["establishment_id"].(float64); ok && est > 0 {
+			return wsKey{wsKindEstablishment, int64(est)}, true
+		}
+	}
+	return wsKey{kind, id}, true
+}
+
+func registerWSConn(key wsKey, sc *safeConn) {
+	wsClientsMu.Lock()
+	conns := append(wsClients[key], sc)
+	var evicted *safeConn
+	if len(conns) > maxWSConnsPerKey {
+		evicted, conns = conns[0], conns[1:]
+	}
+	wsClients[key] = conns
+	wsClientsMu.Unlock()
+	if evicted != nil {
+		_ = evicted.Close()
+	}
+}
+
+func unregisterWSConn(key wsKey, sc *safeConn) {
 	wsClientsMu.Lock()
 	defer wsClientsMu.Unlock()
-	if client, ok := wsClients[clientID]; ok {
-		return client.WriteMessage(websocket.TextMessage, message)
+	kept := make([]*safeConn, 0, len(wsClients[key]))
+	for _, c := range wsClients[key] {
+		if c != sc {
+			kept = append(kept, c)
+		}
 	}
-	log.Printf("[WS] Message for client %d: %s", clientID, string(message))
-	return nil
+	if len(kept) == 0 {
+		delete(wsClients, key)
+		return
+	}
+	wsClients[key] = kept
+}
+
+// sendToWS escreve em todas as conexões do dono. Offline não é erro; o
+// conteúdo não vai para o log (tem dado de cliente).
+func sendToWS(key wsKey, message []byte) error {
+	wsClientsMu.Lock()
+	conns := append([]*safeConn(nil), wsClients[key]...)
+	wsClientsMu.Unlock()
+	if len(conns) == 0 {
+		log.Printf("[WS] %s %d offline (%d bytes não entregues)", key.kind, key.id, len(message))
+		return nil
+	}
+	var firstErr error
+	for _, c := range conns {
+		if err := c.WriteMessage(websocket.TextMessage, message); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+// sendToEstablishment avisa a loja — destino de todos os avisos do orders_api
+// (pedido novo, mudança de status, avanço do entregador).
+func sendToEstablishment(establishmentID int64, message []byte) error {
+	return sendToWS(wsKey{wsKindEstablishment, establishmentID}, message)
 }
 
 // claimsParticipateInSolicitation decide se o token participa do pedido já
 // despachado. Clientes, usuários de loja e entregadores vêm de tabelas
 // diferentes, com sequências de id independentes — então o "id" do token só
-// pode ser comparado com o id do MESMO tipo de conta:
-//   - entregador (token sem role, emitido por GenerateJWTDeliveryMan) ↔ delivery_man_id;
-//   - cliente (token com role e sem establishment_id) ↔ user_id;
+// é comparado com o id do MESMO tipo de conta (middlewares.AccountTypeFromClaims):
+//   - entregador ↔ delivery_man_id;
+//   - cliente ↔ user_id ou o telefone do pedido;
 //   - loja: pelo claim establishment_id, nunca pelo id do usuário.
 //
 // Antes, id do token era comparado com user_id, establishment_id e
@@ -232,46 +313,43 @@ func sendMessageToClient(clientID int64, message []byte) error {
 func claimsParticipateInSolicitation(claims jwt.MapClaims, s deliveryModels.DeliverySolicitation) bool {
 	tokenUserID, _ := claims["id"].(float64)
 	uid := int64(tokenUserID)
-	role, _ := claims["role"].(string)
 	phone, _ := claims["phone"].(string)
 	estID := int64(0)
 	if v, ok := claims["establishment_id"].(float64); ok {
 		estID = int64(v)
 	}
 
-	if estID != 0 && estID == s.EstablishmentID {
-		return true
+	switch middlewares.AccountTypeFromClaims(claims) {
+	case middlewares.AccountDeliveryMan:
+		return uid != 0 && s.DeliveryManID != 0 && uid == s.DeliveryManID
+	case middlewares.AccountClient:
+		// Telefone vale só para cliente: o entregador também tem phone no token.
+		return (uid != 0 && s.UserID != 0 && uid == s.UserID) ||
+			(phone != "" && phone == s.UserPhone)
+	default:
+		return estID != 0 && estID == s.EstablishmentID
 	}
-	if uid != 0 {
-		isDeliveryMan := role == "" || role == "deliveryman"
-		if isDeliveryMan && s.DeliveryManID != 0 && uid == s.DeliveryManID {
-			return true
-		}
-		if !isDeliveryMan && estID == 0 && uid == s.UserID {
-			return true
-		}
-	}
-	// Telefone vale só para cliente: o entregador também tem phone no token.
-	if role != "" && phone != "" && phone == s.UserPhone {
-		return true
-	}
-	return false
 }
 
 // chatUserTypeFromClaims decide o sender_type do chat pelo token, com o
-// mesmo mapeamento do push: cliente → "client", usuário de loja (tem
-// establishment_id) → "restaurant", token sem role (GenerateJWTDeliveryMan)
-// → "deliveryman", admin → "admin".
+// mesmo mapeamento do push: cliente → "client", entregador → "deliveryman",
+// admin → "admin", usuário de loja (tem establishment_id) → "restaurant".
 func chatUserTypeFromClaims(claims jwt.MapClaims) string {
-	role, _ := claims["role"].(string)
-	switch role {
-	case "client", "admin":
-		return role
-	case "":
+	switch middlewares.AccountTypeFromClaims(claims) {
+	case middlewares.AccountClient:
+		return "client"
+	case middlewares.AccountDeliveryMan:
 		return "deliveryman"
+	}
+	role, _ := claims["role"].(string)
+	if role == "admin" {
+		return "admin"
 	}
 	if v, ok := claims["establishment_id"].(float64); ok && v > 0 {
 		return "restaurant"
+	}
+	if role == "" {
+		return "user"
 	}
 	return role
 }
@@ -280,13 +358,16 @@ func chatUserTypeFromClaims(claims jwt.MapClaims) string {
 // pedido (WebSocket de localização da entrega e de chat).
 //
 // Defesa contra IDOR: autenticar não basta — o usuário só pode acompanhar
-// pedidos dos quais PARTICIPA. Os participantes são resolvidos de
-// delivery_solicitations (corte 3); se o pedido ainda não foi despachado,
-// cai para order_documents (corte 5) validando estabelecimento e telefone do
-// cliente. Admin sempre passa, com log de auditoria em toda negação.
+// pedidos dos quais PARTICIPA. Loja e cliente são conferidos no pedido
+// (order_documents) e o entregador na entrega (delivery_solicitations), cada
+// um pelo seu tipo de conta. Admin sempre passa, com log de auditoria em toda
+// negação.
 func wsCanAccessOrder(claims jwt.MapClaims, orderID string) bool {
 	if role, _ := claims["role"].(string); role == "admin" {
 		return true
+	}
+	if orderID == "" {
+		return false
 	}
 
 	tokenUserID, _ := claims["id"].(float64)
@@ -296,55 +377,76 @@ func wsCanAccessOrder(claims jwt.MapClaims, orderID string) bool {
 	if v, ok := claims["establishment_id"].(float64); ok {
 		estID = int64(v)
 	}
+	accountType := middlewares.AccountTypeFromClaims(claims)
 
-	var s deliveryModels.DeliverySolicitation
-	err := deliveryModels.DB.
-		Select("user_id", "user_phone", "establishment_id", "delivery_man_id").
-		Where("order_id = ?", orderID).
-		First(&s).Error
-	if err == nil {
-		if claimsParticipateInSolicitation(claims, s) {
-			return true
-		}
-	} else if err == gorm.ErrRecordNotFound {
-		// Pedido ainda sem solicitação de entrega (não despachado): valida
-		// estabelecimento e cliente direto do pedido.
+	if accountType != middlewares.AccountDeliveryMan && ordersModels.DB != nil {
 		var doc ordersModels.OrderDocument
-		if err2 := ordersModels.DB.
+		err := ordersModels.DB.
 			Select("establishment_id", "user_phone").
 			Where("legacy_id = ?", orderID).
-			First(&doc).Error; err2 == nil {
-			if estID != 0 && estID == doc.EstablishmentID {
+			First(&doc).Error
+		switch {
+		case err == nil:
+			if accountType == middlewares.AccountUser && estID != 0 && estID == doc.EstablishmentID {
 				return true
 			}
-			if phone != "" && phone == doc.UserPhone {
+			if accountType == middlewares.AccountClient && phone != "" && phone == doc.UserPhone {
 				return true
 			}
+		case !errors.Is(err, gorm.ErrRecordNotFound):
+			log.Printf("[WS-AUTH] erro consultando o pedido %s: %v", orderID, err)
 		}
-	} else {
-		log.Printf("[WS-AUTH] erro consultando participação do pedido %s: %v", orderID, err)
 	}
 
-	log.Printf("[WS-AUTH] acesso negado: user %d (est %d, role/phone verificados) tentou acessar pedido %s", uid, estID, orderID)
+	if deliveryModels.DB != nil {
+		var s deliveryModels.DeliverySolicitation
+		err := deliveryModels.DB.
+			Select("user_id", "user_phone", "establishment_id", "delivery_man_id").
+			Where("order_id = ?", orderID).
+			First(&s).Error
+		switch {
+		case err == nil:
+			if claimsParticipateInSolicitation(claims, s) {
+				return true
+			}
+		case !errors.Is(err, gorm.ErrRecordNotFound):
+			log.Printf("[WS-AUTH] erro consultando a entrega do pedido %s: %v", orderID, err)
+		}
+	}
+
+	log.Printf("[WS-AUTH] acesso negado: %s %d (est %d) tentou acessar pedido %s", accountType, uid, estID, orderID)
 	return false
 }
 
-// senderNameForChat resolve o nome de exibição do remetente direto do banco
-// (client → user → entregador). O nome enviado pelo cliente nunca é usado.
-func senderNameForChat(userID int64) string {
-	var client models.Client
-	if err := models.DB.Select("name").First(&client, userID).Error; err == nil && client.Name != "" {
-		return client.Name
+// senderNameForChat resolve o nome de exibição do remetente direto do banco,
+// na tabela do TIPO da conta — o cliente 5 não aparece com o nome do usuário
+// 5. O nome enviado pelo cliente nunca é usado.
+func senderNameForChat(claims jwt.MapClaims) string {
+	tokenUserID, _ := claims["id"].(float64)
+	id := int64(tokenUserID)
+	if id <= 0 || models.DB == nil {
+		return ""
 	}
-	var user models.User
-	if err := models.DB.Select("name").First(&user, userID).Error; err == nil && user.Name != "" {
-		return user.Name
+	var name string
+	var err error
+	switch middlewares.AccountTypeFromClaims(claims) {
+	case middlewares.AccountClient:
+		var client models.Client
+		err = models.DB.Select("name").First(&client, id).Error
+		name = client.Name
+	case middlewares.AccountDeliveryMan:
+		var dm models.DeliveryMan
+		err = models.DB.Select("name").First(&dm, id).Error
+		name = dm.Name
+	default:
+		var user models.User
+		err = models.DB.Select("name").First(&user, id).Error
+		name = user.Name
 	}
-	var dm models.DeliveryMan
-	if err := models.DB.Select("name").First(&dm, userID).Error; err == nil {
-		return dm.Name
+	if err != nil {
+		return ""
 	}
-	return ""
+	return name
 }
 
 func setupWebSocketRoutes(app *fiber.App) {
@@ -363,43 +465,23 @@ func setupWebSocketRoutes(app *fiber.App) {
 			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Invalid or expired ticket"}}`))
 			return
 		}
-		tokenUserID, _ := claims["id"].(float64)
-
 		clientIDStr := c.Params("id")
-		clientID, err := strconv.ParseInt(clientIDStr, 10, 64)
-		if err != nil {
+		if _, err := strconv.ParseInt(clientIDStr, 10, 64); err != nil {
 			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"Invalid client ID"}}`))
 			return
 		}
-		_ = tokenUserID // regra de comparação extraída em wsUserIDMatches (testável)
-		if !wsUserIDMatches(claims, clientIDStr) {
-			role, _ := claims["role"].(string)
-			if role != "admin" {
-				c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"User ID mismatch"}}`))
-				return
-			}
+		// Cada conta só se registra no próprio lugar (tipo + id); a loja, no
+		// da loja. O admin não entra mais no lugar de outro id: nenhuma tela
+		// usa isso, e era receber os pedidos de uma loja com o id certo.
+		key, ok := wsKeyForClaims(claims, clientIDStr)
+		if !ok {
+			c.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","payload":{"message":"User ID mismatch"}}`))
+			return
 		}
 
 		sc := &safeConn{conn: c}
-		wsClientsMu.Lock()
-		// Slot-steal: se outra conexão (aba antiga) já ocupa o slot, fecha-a
-		// antes de sobrescrever — senão a referência antiga vira lixo vivo
-		// (conn aberta que ninguém mais remove do mapa).
-		if old, ok := wsClients[clientID]; ok && old != sc {
-			_ = old.Close()
-		}
-		wsClients[clientID] = sc
-		wsClientsMu.Unlock()
-
-		defer func() {
-			wsClientsMu.Lock()
-			// Só remove se ainda somos nós (evita apagar a conn de uma
-			// aba nova que assumiu o slot enquanto esta morria).
-			if cur, ok := wsClients[clientID]; ok && cur == sc {
-				delete(wsClients, clientID)
-			}
-			wsClientsMu.Unlock()
-		}()
+		registerWSConn(key, sc)
+		defer unregisterWSConn(key, sc)
 
 		var (
 			mt   int
@@ -509,7 +591,7 @@ func setupWebSocketRoutes(app *fiber.App) {
 
 	// POST /delivery/location — deliveryman sends their GPS coordinates
 	app.Post("/delivery/location", protectedRoute, func(c *fiber.Ctx) error {
-		tokenUserID, err := middlewares.GetUserIDFromToken(c)
+		_, err := middlewares.GetUserIDFromToken(c)
 		if err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
 		}
@@ -527,10 +609,12 @@ func setupWebSocketRoutes(app *fiber.App) {
 			return c.Status(400).JSON(fiber.Map{"error": "order_id, lat, and lng are required"})
 		}
 
-		// Corte 3: leitura do entregador atribuído direto do Postgres.
+		// Corte 3: leitura do entregador atribuído direto do Postgres. Tipo
+		// E id: o cliente 5 não publica a "posição do entregador 5".
 		var solicitation deliveryModels.DeliverySolicitation
 		err = deliveryModels.DB.Where("order_id = ?", req.OrderID).First(&solicitation).Error
-		if err != nil || solicitation.DeliveryManID != tokenUserID {
+		if err != nil || solicitation.DeliveryManID == 0 ||
+			!middlewares.IsOwnAccount(c, middlewares.AccountDeliveryMan, solicitation.DeliveryManID) {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Not the assigned deliveryman for this order"})
 		}
 

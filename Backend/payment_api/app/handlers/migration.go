@@ -8,17 +8,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// walletTypeForUser descobre o user_type da carteira existente do usuário
-// (qualquer tipo). Default "customer" quando não há carteira ainda — usado
-// nos fluxos de estorno, onde o tipo real vem da carteira já semeada.
-func walletTypeForUser(userID int64) string {
-	var wallet models.Wallet
-	if err := models.DB.Where("user_id = ?", userID).First(&wallet).Error; err == nil && wallet.UserType != "" {
-		return wallet.UserType
-	}
-	return "customer"
-}
-
 // findPaymentByAbacatePayID localiza o pagamento pelo ID externo do gateway.
 func findPaymentByAbacatePayID(abacatepayID string) (*models.Payment, error) {
 	var payment models.Payment

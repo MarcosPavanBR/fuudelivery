@@ -350,11 +350,10 @@ func TestPasswordResetFlow(t *testing.T) {
 
 		// Tentar errar 5 vezes (maxPasswordResetAttempts = 5)
 		for i := 0; i < 5; i++ {
-			// Zera a cada volta: o balde por IP é COMPARTILHADO entre rotas
-			// (getIPLimiter indexa só pelo IP), então o POST de geração de
-			// código acima já consumiu um token e o limite de 5/min estouraria
-			// no meio do laço. O que este subteste mede é o bloqueio do CÓDIGO
-			// depois de 5 tentativas erradas, não o rate limit.
+			// Zera a cada volta: o limite de 5/min do reset estouraria no
+			// meio do laço junto com o balde por identificador. O que este
+			// subteste mede é o bloqueio do CÓDIGO depois de 5 tentativas
+			// erradas, não o rate limit.
 			zeraRateLimits()
 			resp = doJSON(http.MethodPost, "/auth/reset-password", map[string]string{
 				"user_type":    "client",

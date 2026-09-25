@@ -74,6 +74,21 @@ func TestRegisterPushToken_IdentidadeDoToken(t *testing.T) {
 		t.Fatalf("usuário de loja deveria ser 'restaurant': %v", err)
 	}
 
+	// Tipo pelo account_type: usuário de loja com role vazio não vira
+	// "deliveryman"; entregador com token novo continua "deliveryman".
+	lojaSemRole := pushJWT(t, jwt.MapClaims{"id": 4, "role": "", "account_type": "user", "establishment_id": 43})
+	doIDOR(t, app, "/notifications/register", lojaSemRole, `{"push_token":"ExponentPushToken[l4]"}`)
+	var l4 models.PushToken
+	if err := db.Where("user_id = 4 AND user_type = 'restaurant'").First(&l4).Error; err != nil {
+		t.Fatalf("loja com role vazio deveria ser 'restaurant': %v", err)
+	}
+	entregador := pushJWT(t, jwt.MapClaims{"id": 6, "account_type": "deliveryman"})
+	doIDOR(t, app, "/notifications/register", entregador, `{"push_token":"ExponentPushToken[e6]"}`)
+	var e6 models.PushToken
+	if err := db.Where("user_id = 6 AND user_type = 'deliveryman'").First(&e6).Error; err != nil {
+		t.Fatalf("entregador deveria ser 'deliveryman': %v", err)
+	}
+
 	if got := doIDOR(t, app, "/notifications/register", "", body); got != 401 {
 		t.Errorf("sem token: got %d, want 401", got)
 	}

@@ -217,11 +217,15 @@ func AdjustWalletBalance(db *gorm.DB, userID int64, userType, txnType, kind stri
 //
 // Com o lançamento em mãos, o chamador compara o valor e recusa a divergência
 // em vez de confirmá-la.
-func FindLedgerEntry(db *gorm.DB, referenceID, txnType string, userID int64) (*WalletTxn, error) {
+//
+// A carteira é (user_id, user_type): a loja 5, o cliente 5 e o entregador 5
+// têm carteiras diferentes com o mesmo user_id.
+func FindLedgerEntry(db *gorm.DB, referenceID, txnType string, userID int64, userType string) (*WalletTxn, error) {
 	var entry WalletTxn
 	err := db.Model(&WalletTxn{}).
 		Joins("JOIN wallets ON wallets.id = wallet_transactions.wallet_id").
-		Where("wallet_transactions.reference_id = ? AND wallet_transactions.type = ? AND wallets.user_id = ?", referenceID, txnType, userID).
+		Where("wallet_transactions.reference_id = ? AND wallet_transactions.type = ? AND wallets.user_id = ? AND wallets.user_type = ?",
+			referenceID, txnType, userID, userType).
 		First(&entry).Error
 	if err != nil {
 		return nil, err
@@ -240,11 +244,16 @@ func SameAmount(a, b float64) bool {
 // referência? Usado pelo webhook.go (crédito de split) para não duplicar num
 // reprocesso do webhook — segunda camada além da constraint única
 // uq_wallet_txns_credit_ref em AdjustWalletBalance.
-func HasLedgerEntry(db *gorm.DB, referenceID, txnType string, userID int64) bool {
+//
+// Por (user_id, user_type): só pelo user_id, o estorno que debitava a loja 5
+// fazia o débito do cliente 5 na mesma referência parecer já feito — e o
+// top-up do cliente nunca era revertido.
+func HasLedgerEntry(db *gorm.DB, referenceID, txnType string, userID int64, userType string) bool {
 	var count int64
 	err := db.Model(&WalletTxn{}).
 		Joins("JOIN wallets ON wallets.id = wallet_transactions.wallet_id").
-		Where("wallet_transactions.reference_id = ? AND wallet_transactions.type = ? AND wallets.user_id = ?", referenceID, txnType, userID).
+		Where("wallet_transactions.reference_id = ? AND wallet_transactions.type = ? AND wallets.user_id = ? AND wallets.user_type = ?",
+			referenceID, txnType, userID, userType).
 		Count(&count).Error
 	if err != nil {
 		log.Printf("[LEDGER] WARNING: falha ao checar idempotência ref=%s user=%d: %v", referenceID, userID, err)

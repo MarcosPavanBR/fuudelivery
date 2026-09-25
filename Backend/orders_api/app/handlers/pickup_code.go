@@ -39,10 +39,6 @@ func canValidatePickupCode(c *fiber.Ctx, doc *models.OrderDocument) bool {
 	if canManagePickupCode(c, doc.EstablishmentID) {
 		return true
 	}
-	tokenUserID, err := middlewares.GetUserIDFromToken(c)
-	if err != nil {
-		return false
-	}
 	var payload struct {
 		DeliveryMan struct {
 			Id int64 `json:"id"`
@@ -51,7 +47,9 @@ func canValidatePickupCode(c *fiber.Ctx, doc *models.OrderDocument) bool {
 	if err := json.Unmarshal(doc.Payload, &payload); err != nil {
 		return false
 	}
-	return payload.DeliveryMan.Id != 0 && payload.DeliveryMan.Id == tokenUserID
+	// Tipo E id: o cliente ou a loja de mesmo número não é o entregador.
+	return payload.DeliveryMan.Id != 0 &&
+		middlewares.IsOwnAccount(c, middlewares.AccountDeliveryMan, payload.DeliveryMan.Id)
 }
 
 func GeneratePickupCode(c *fiber.Ctx) error {

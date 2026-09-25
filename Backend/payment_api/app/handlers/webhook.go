@@ -123,7 +123,12 @@ func establishmentShare(rules models.SplitRules) float64 {
 //
 // Nota: nunca deixa saldo negativo; se a carteira não existe ou o saldo é
 // insuficiente, o débito é recusado e logado.
-func reverseWalletCredit(userID int64, amount float64, abacatepayID, description string, now time.Time) bool {
+//
+// userType é explícito ("establishment" para a fatia da loja, "customer"
+// para o top-up): a loja 5 e o cliente 5 têm carteiras diferentes com o
+// mesmo user_id, e adivinhar o tipo pela primeira carteira achada debitava a
+// pessoa errada.
+func reverseWalletCredit(userID int64, userType string, amount float64, abacatepayID, description string, now time.Time) bool {
 	if amount <= 0 {
 		return false
 	}
@@ -131,12 +136,12 @@ func reverseWalletCredit(userID int64, amount float64, abacatepayID, description
 	// Idempotency: skip if this reference was already debited. Prevents
 	// double-debit on concurrent REFUNDED webhooks (debits have no DB-level
 	// unique constraint like credits do).
-	if models.HasLedgerEntry(models.DB, abacatepayID, "debit", userID) {
+	if models.HasLedgerEntry(models.DB, abacatepayID, "debit", userID, userType) {
 		log.Printf("[REFUND] Debit already exists for %s, skipping", abacatepayID)
 		return true
 	}
 
-	wallet, err := ensureWalletSeeded(models.DB, userID, walletTypeForUser(userID))
+	wallet, err := ensureWalletSeeded(models.DB, userID, userType)
 	if err != nil {
 		log.Printf("[REFUND] Carteira do usuário %d NAO debitada em %.2f (falha ao carregar carteira): %v", userID, amount, err)
 		return false
@@ -194,7 +199,7 @@ func processPaymentRefund(abacatepayID string) {
 		// carteira interna tiraria a fatia do saldo de OUTROS pedidos dela.
 		if !payment.SplitAtOrigin {
 			reverseWalletCredit(
-				payment.EstablishmentID,
+				payment.EstablishmentID, "establishment",
 				establishmentShare(payment.SplitRules),
 				abacatepayID,
 				"Refund/chargeback: estorno do pagamento "+payment.OrderID,
@@ -208,7 +213,7 @@ func processPaymentRefund(abacatepayID string) {
 		// (o crédito do top-up é o valor total do pagamento).
 		if payment.WalletCreditedAt != nil {
 			reverseWalletCredit(
-				payment.CustomerID,
+				payment.CustomerID, "customer",
 				payment.Amount,
 				abacatepayID,
 				"Refund/chargeback: reversão do top-up do pagamento "+payment.OrderID,

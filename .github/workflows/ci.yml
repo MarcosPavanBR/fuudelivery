@@ -50,10 +50,12 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      # -race: o CourierStore do despacho escrevia sob RLock e devolvia
+      # ponteiros internos — corrida de dados que só o detector mostra.
       - name: Test
         env:
           CGO_ENABLED: "1"
-        run: go test ./... -count=1 -timeout 60s -coverprofile=coverage.out
+        run: go test ./... -race -count=1 -timeout 180s -coverprofile=coverage.out
 
       - name: Upload coverage
         if: always()
@@ -89,7 +91,8 @@ jobs:
           for i in $(seq 1 30); do
             if docker exec pg-it psql -U test -d postgres \
               -c "CREATE DATABASE it_password_reset" -c "CREATE DATABASE it_split_metrics" -c "CREATE DATABASE it_admin_bootstrap" \
-              -c "CREATE DATABASE it_auth_api" -c "CREATE DATABASE it_upload"; then break; fi
+              -c "CREATE DATABASE it_auth_api" -c "CREATE DATABASE it_upload" \
+              -c "CREATE DATABASE it_courier_flow"; then break; fi
             sleep 2
           done
           echo "Services ready."
@@ -117,6 +120,14 @@ jobs:
         env:
           POSTGRES_TEST_URI: postgres://test:test@localhost:5432/it_admin_bootstrap?sslmode=disable
         run: go test -tags=integration -v -count=1 -timeout 10m -run 'TestAdminBootstrap' ./
+
+      # Fluxo do entregador de ponta a ponta (pedido → fila → aceite → etapas
+      # → pedido finalizado → extrato) e o chat do pedido. Ficou desligado
+      # desde a saída do RabbitMQ sem nenhum teste perceber.
+      - name: Run TestCourierFlow
+        env:
+          POSTGRES_TEST_URI: postgres://test:test@localhost:5432/it_courier_flow?sslmode=disable
+        run: go test -tags=integration -v -count=1 -timeout 10m -run 'TestCourierFlow' ./
 
       # Pacotes inteiros, sem -run: um nome errado não deixa o passo verde à
       # toa. Os testes de Postgres destes pacotes (horários com dia fechado,

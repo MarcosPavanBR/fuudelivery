@@ -64,10 +64,9 @@ func (p *ProductList) Scan(src interface{}) error {
 }
 
 type DeliverySolicitation struct {
-	ID        int64     `gorm:"primaryKey;column:id" json:"id"`
-	OrderID   string    `gorm:"column:order_id;uniqueIndex" json:"order_id"`
-	Status    string    `gorm:"column:status" json:"status"`
-	Operation time.Time `gorm:"column:updated_at" json:"operation_date"` // espelha o antigo campo operationDate do Mongo
+	ID      int64  `gorm:"primaryKey;column:id" json:"id"`
+	OrderID string `gorm:"column:order_id;uniqueIndex" json:"order_id"`
+	Status  string `gorm:"column:status" json:"status"`
 
 	EstablishmentID      int64   `gorm:"column:establishment_id" json:"establishment_id"`
 	EstablishmentName    string  `gorm:"column:establishment_name" json:"establishment_name"`
@@ -94,7 +93,10 @@ type DeliverySolicitation struct {
 	ZoneID *int64 `gorm:"column:zone_id" json:"zone_id"`
 
 	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt time.Time `gorm:"column:updated_at" json:"-"`
+	// UpdatedAt é o antigo operationDate do Mongo. Havia um segundo campo
+	// (Operation) na mesma coluna: o GORM mapeava updated_at só para ele e
+	// este ficava sempre zerado na leitura.
+	UpdatedAt time.Time `gorm:"column:updated_at" json:"operation_date"`
 }
 
 // TableName fixa o nome da tabela (evita surpresa de pluralização do GORM).

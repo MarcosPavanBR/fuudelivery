@@ -102,8 +102,11 @@ func CreateDeliveryRegion(c *fiber.Ctx) error {
 }
 
 func UpdateDeliveryRegion(c *fiber.Ctx) error {
+	if !validID(c.Params("id")) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ID inválido"})
+	}
 	var existente models.DeliveryRegionFee
-	if err := models.DB.First(&existente, c.Params("id")).Error; err != nil {
+	if err := models.DB.First(&existente, "id = ?", c.Params("id")).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Região não encontrada"})
 	}
 
@@ -131,8 +134,11 @@ func UpdateDeliveryRegion(c *fiber.Ctx) error {
 }
 
 func DeleteDeliveryRegion(c *fiber.Ctx) error {
+	if !validID(c.Params("id")) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ID inválido"})
+	}
 	var existente models.DeliveryRegionFee
-	if err := models.DB.First(&existente, c.Params("id")).Error; err != nil {
+	if err := models.DB.First(&existente, "id = ?", c.Params("id")).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Região não encontrada"})
 	}
 	if err := models.DB.Delete(&existente).Error; err != nil {

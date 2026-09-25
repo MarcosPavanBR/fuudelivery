@@ -10,12 +10,8 @@ import (
 	"os"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/golang-jwt/jwt/v5"
 
 	// Models (database initialization)
-	"github.com/carloshomar/fuudelivery/auth_api/app/models"
-	deliveryModels "github.com/carloshomar/fuudelivery/delivery_api/app/models"
-	ordersModels "github.com/carloshomar/fuudelivery/orders_api/app/models"
 
 	// Handlers
 	authHandlers "github.com/carloshomar/fuudelivery/auth_api/app/handlers"
@@ -146,10 +142,10 @@ func setupOrdersRoutes(app *fiber.App) {
 	// Rate limit 30/min na criação de pedidos: é a rota que grava, notifica
 	// e dispara dispatch — abuso direto impacta o banco e a fila.
 	app.Post("/orders", protectedRoute, rateLimitMiddleware(30), func(c *fiber.Ctx) error {
-		return ordersHandlers.CreateOrder(c, sendMessageToClient)
+		return ordersHandlers.CreateOrder(c, sendToEstablishment)
 	})
 	app.Put("/orders/status", protectedRoute, func(c *fiber.Ctx) error {
-		return ordersHandlers.UpdateOrderStatus(c, sendMessageToClient)
+		return ordersHandlers.UpdateOrderStatus(c, sendToEstablishment)
 	})
 	app.Get("/orders/all", adminRequired, ordersHandlers.ListAllOrders)
 	app.Get("/orders/repeat/:orderId", protectedRoute, ordersHandlers.RepeatOrder)
@@ -179,7 +175,9 @@ func setupOrdersRoutes(app *fiber.App) {
 	app.Get("/reviews/user/:phone", protectedRoute, ordersHandlers.GetUserReviews)
 	app.Get("/reviews/rating/:establishmentId", protectedRoute, ordersHandlers.GetEstablishmentRating)
 	app.Post("/orders/pickup-code/generate", protectedRoute, ordersHandlers.GeneratePickupCode)
-	app.Post("/orders/pickup-code/validate", protectedRoute, ordersHandlers.ValidatePickupCode)
+	// Código de 6 dígitos: sem teto, o entregador do pedido testava o milhão
+	// de combinações.
+	app.Post("/orders/pickup-code/validate", protectedRoute, rateLimitMiddleware(10), ordersHandlers.ValidatePickupCode)
 	app.Get("/orders/pickup-code/:id", protectedRoute, ordersHandlers.GetPickupCode)
 
 	// === Rotas de Batch (batching de pedidos) ===
@@ -198,7 +196,7 @@ func setupDeliveryRoutes(app *fiber.App) {
 	app.Put("/solicitation-orders/hand-shake", protectedRoute, deliveryHandlers.HandShakeDeliveryman)
 	app.Get("/deliveryman/has-active/:id", protectedRoute, deliveryHandlers.GetOrdersByDeliverymanID)
 	app.Post("/deliveryman/status", protectedRoute, func(c *fiber.Ctx) error {
-		return deliveryHandlers.UpdateOrderStatusByDeliverymanID(c, sendMessageToClient)
+		return deliveryHandlers.UpdateOrderStatusByDeliverymanID(c, sendToEstablishment)
 	})
 	app.Get("/deliveryman/extrato/:id", protectedRoute, deliveryHandlers.GetExtrato)
 }
@@ -364,8 +362,12 @@ func setupSubscriptionRoutes(app *fiber.App) {
 }
 
 func setupChatRoutes(app *fiber.App) {
+	// Mesma regra do WebSocket (wsCanAccessOrder). Antes esta rota lia a
+	// tabela "orders" antiga com First(&order, orderID) — o :orderId da URL
+	// ia cru para o GORM, que trata string não numérica como SQL literal
+	// (injeção de SQL) — e comparava ids de tabelas diferentes.
 	app.Get("/chat/messages/:orderId", protectedRoute, func(c *fiber.Ctx) error {
-		tokenUserID, err := middlewares.GetUserIDFromToken(c)
+		claims, err := tokenClaims(c)
 		if err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
 		}
@@ -373,47 +375,20 @@ func setupChatRoutes(app *fiber.App) {
 		if orderID == "" {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "orderId is required"})
 		}
-
-		var order ordersModels.Order
-		if qErr := ordersModels.DB.First(&order, orderID).Error; qErr == nil {
-			if uint(tokenUserID) == order.UserID {
-				return chatHandlers.GetMessages(c)
-			}
-			var user models.User
-			if uErr := models.DB.First(&user, tokenUserID).Error; uErr == nil {
-				if user.EstablishmentID != 0 && user.EstablishmentID == order.EstablishmentID {
-					return chatHandlers.GetMessages(c)
-				}
-			}
+		if !wsCanAccessOrder(claims, orderID) {
+			log.Printf("[CHAT IDOR] GetMessages denied: order=%s", orderID)
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "You are not a participant of this order"})
 		}
-
-		// Corte 3: leitura do entregador atribuído direto do Postgres.
-		var solicitation deliveryModels.DeliverySolicitation
-		_ = deliveryModels.DB.Where("order_id = ?", orderID).First(&solicitation).Error
-		if solicitation.DeliveryManID != 0 && solicitation.DeliveryManID == tokenUserID {
-			return chatHandlers.GetMessages(c)
-		}
-
-		role, _ := middlewares.GetUserRoleFromToken(c)
-		if role == "admin" {
-			return chatHandlers.GetMessages(c)
-		}
-
-		log.Printf("[CHAT IDOR] GetMessages denied: user=%d order=%s", tokenUserID, orderID)
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "You are not a participant of this order"})
+		return chatHandlers.GetMessages(c)
 	})
 	// IDOR + anti-spoofing: antes qualquer usuário autenticado podia postar
 	// como QUALQUER remetente em QUALQUER pedido (o handler confiava 100% no
 	// corpo da requisição). Agora: só participantes do pedido e o remetente é
 	// sempre quem o token diz que é.
 	app.Post("/chat/message", protectedRoute, rateLimitMiddleware(30), func(c *fiber.Ctx) error {
-		token, tErr := middlewares.ValidateJWT(c)
+		claims, tErr := tokenClaims(c)
 		if tErr != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
-		}
-		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token claims"})
 		}
 		var req struct {
 			OrderID string `json:"order_id"`
@@ -431,12 +406,12 @@ func setupChatRoutes(app *fiber.App) {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid body"})
 		}
 		// Remetente vem SEMPRE do token — nunca do corpo. Nome resolvido do
-		// banco para não exibir o nome forjado pelo cliente.
+		// banco (na tabela do tipo da conta) para não exibir o nome forjado.
+		// O tipo também: antes só era trocado quando o token tinha role, e o
+		// entregador (sem role) postava como "restaurant" ou "admin".
 		body["sender_id"] = tokenUserID
-		body["sender_name"] = senderNameForChat(tokenUserID)
-		if role, _ := middlewares.GetUserRoleFromToken(c); role != "" {
-			body["sender_type"] = role
-		}
+		body["sender_name"] = senderNameForChat(claims)
+		body["sender_type"] = chatUserTypeFromClaims(claims)
 		fixedBody, _ := json.Marshal(body)
 		c.Request().SetBody(fixedBody)
 		return chatHandlers.SendMessage(c)
@@ -456,19 +431,17 @@ func setupChatRoutes(app *fiber.App) {
 		}
 		// Autorização por recurso: só participantes do pedido podem marcar
 		// mensagens como lidas — mesma regra do POST /chat/message (IDOR).
-		token, tErr := middlewares.ValidateJWT(c)
+		claims, tErr := tokenClaims(c)
 		if tErr != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
-		}
-		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token claims"})
 		}
 		orderID := c.Params("orderId")
 		if !wsCanAccessOrder(claims, orderID) {
 			log.Printf("[CHAT IDOR] MarkAsRead denied: order=%s user=%d", orderID, tokenUserID)
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "You are not a participant of this order"})
 		}
-		return chatHandlers.MarkAsRead(c)
+		// "As minhas" são pelo id E pelo tipo: o cliente 5 lendo não pula as
+		// mensagens do entregador 5.
+		return chatHandlers.MarkAsReadAs(c, chatUserTypeFromClaims(claims))
 	})
 }

@@ -170,7 +170,10 @@ func rateLimitMiddleware(maxPerMinute int) fiber.Handler {
 		}
 
 		// Sem Redis (ou erro de conexao): fallback no token bucket em memoria.
-		limiter := getIPLimiter(ip, rps, maxPerMinute)
+		// Chave (limite, ip), como no Redis: só o ip fazia o primeiro limite
+		// que o IP encontrasse valer para todas as rotas (o balde de 5/min do
+		// reset de senha passava a cortar o /dispatch/location de 120/min).
+		limiter := getIPLimiter(rateLimitKey(ip, maxPerMinute), rps, maxPerMinute)
 		if !limiter.Allow() {
 			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
 				"error": "Muitas requisicoes. Tente novamente mais tarde.",

@@ -106,6 +106,9 @@ func CreateDeliveryMan(c *fiber.Ctx) error {
 // opcional. Campos nao enviados permanecem inalterados.
 func UpdateDeliveryMan(c *fiber.Ctx) error {
 	deliveryManID := c.Params("id")
+	if !validID(deliveryManID) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ID inválido"})
+	}
 	if deliveryManID == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid delivery man ID"})
 	}
@@ -124,7 +127,7 @@ func UpdateDeliveryMan(c *fiber.Ctx) error {
 	}
 
 	var deliveryMan models.DeliveryMan
-	if err := models.DB.First(&deliveryMan, deliveryManID).Error; err != nil {
+	if err := models.DB.First(&deliveryMan, "id = ?", deliveryManID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Delivery man not found"})
 	}
 
@@ -172,12 +175,15 @@ func UpdateDeliveryMan(c *fiber.Ctx) error {
 // DeleteDeliveryMan remove um entregador (DELETE /delivery-man/:id). Admin.
 func DeleteDeliveryMan(c *fiber.Ctx) error {
 	deliveryManID := c.Params("id")
+	if !validID(deliveryManID) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ID inválido"})
+	}
 	if deliveryManID == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid delivery man ID"})
 	}
 
 	var deliveryMan models.DeliveryMan
-	if err := models.DB.First(&deliveryMan, deliveryManID).Error; err != nil {
+	if err := models.DB.First(&deliveryMan, "id = ?", deliveryManID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Delivery man not found"})
 	}
 
@@ -190,6 +196,9 @@ func DeleteDeliveryMan(c *fiber.Ctx) error {
 
 func UpdateDeliveryManWallet(c *fiber.Ctx) error {
 	deliveryManID := c.Params("id")
+	if !validID(deliveryManID) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ID inválido"})
+	}
 	if deliveryManID == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid delivery man ID"})
 	}
@@ -199,13 +208,15 @@ func UpdateDeliveryManWallet(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
 	}
 
-	tokenUserID, tokenErr := middlewares.GetUserIDFromToken(c)
+	_, tokenErr := middlewares.GetUserIDFromToken(c)
 	if role != "admin" {
 		if tokenErr != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
 		}
 		dmID, _ := strconv.ParseInt(deliveryManID, 10, 64)
-		if tokenUserID != dmID {
+		// Tipo E id: o cliente/usuário 5 não pode apontar a carteira de
+		// recebimento do entregador 5 (tabelas com ids independentes).
+		if !middlewares.IsOwnAccount(c, middlewares.AccountDeliveryMan, dmID) {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Forbidden"})
 		}
 	}
@@ -222,7 +233,7 @@ func UpdateDeliveryManWallet(c *fiber.Ctx) error {
 	}
 
 	var deliveryMan models.DeliveryMan
-	if err := models.DB.First(&deliveryMan, deliveryManID).Error; err != nil {
+	if err := models.DB.First(&deliveryMan, "id = ?", deliveryManID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Delivery man not found"})
 	}
 

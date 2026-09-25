@@ -84,21 +84,27 @@ func derivedWithdrawKeyCandidates(estID int64, amount float64, destination strin
 // Mongo é semeado na primeira movimentação (ensureWalletSeeded).
 // ============================================================================
 
+// replayOf diz se a carteira (userID, userType) já tem débito com esta
+// referência — ou seja, se a requisição é um replay.
+func replayOf(ref string, userID int64, userType string) bool {
+	_, err := models.FindLedgerEntry(models.DB, ref, "debit", userID, userType)
+	return err == nil
+}
+
 // GetBalance retorna o saldo da carteira do próprio usuário autenticado.
 func GetBalance(c *fiber.Ctx) error {
-	tokenUserID, err := middlewares.GetUserIDFromToken(c)
-	if err != nil {
+	if _, err := middlewares.GetUserIDFromToken(c); err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
 	}
 
-	userIDStr := c.Params("user_id")
-
-	var reqUserID int64
-	if _, scanErr := fmt.Sscanf(userIDStr, "%d", &reqUserID); scanErr != nil {
+	reqUserID, pErr := strconv.ParseInt(c.Params("user_id"), 10, 64)
+	if pErr != nil || reqUserID <= 0 {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid user_id"})
 	}
 
-	if tokenUserID != reqUserID {
+	// A carteira "customer" é do CLIENTE: tipo E id. Só o id deixava o
+	// entregador 5 ou a loja 5 ler (e semear) a carteira do cliente 5.
+	if !middlewares.IsOwnAccount(c, middlewares.AccountClient, reqUserID) {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot view another user's balance"})
 	}
 
@@ -136,8 +142,8 @@ func TopUp(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "payment_id is required for wallet top-up"})
 	}
 
-	if tokenUserID != req.UserID {
-		log.Printf("[WALLET] TopUp rejected: token user %d != body user %d", tokenUserID, req.UserID)
+	if !middlewares.IsOwnAccount(c, middlewares.AccountClient, req.UserID) {
+		log.Printf("[WALLET] TopUp rejected: token user %d não é o cliente %d", tokenUserID, req.UserID)
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot top up another user's wallet"})
 	}
 
@@ -155,6 +161,17 @@ func TopUp(c *fiber.Ctx) error {
 	if payment.CustomerID != req.UserID {
 		log.Printf("[WALLET] TopUp rejected: payment %s belongs to user %d, requested by user %d", req.PaymentID, payment.CustomerID, req.UserID)
 		return c.Status(403).JSON(fiber.Map{"error": "Payment does not belong to this user"})
+	}
+
+	// Pagamento de PEDIDO não vira saldo. Toda cobrança nasce de um pedido
+	// (GeneratePIX/ProcessPayment exigem order_id e conferem o total) e o
+	// settle já repassou o valor à loja: aceitar aqui era pagar o pedido e
+	// receber o mesmo valor de volta como saldo — que pagava o pedido
+	// seguinte. Recarga exige uma cobrança própria de recarga (sem pedido),
+	// que ainda não existe; nenhum app chama esta rota.
+	if payment.OrderID != "" || payment.EstablishmentCreditedAt != nil || payment.SplitAtOrigin {
+		log.Printf("[WALLET] TopUp rejected: payment %s é de pedido (%s) — não vira saldo (user=%d)", req.PaymentID, payment.OrderID, req.UserID)
+		return c.Status(409).JSON(fiber.Map{"error": "Pagamento de pedido não pode virar saldo de carteira"})
 	}
 
 	// Claim atômico: só UMA requisição consegue marcar wallet_credited_at
@@ -221,8 +238,8 @@ func DeductFromWallet(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Amount must be greater than zero"})
 	}
 
-	if tokenUserID != req.UserID {
-		log.Printf("[WALLET] Deduct rejected: token user %d != body user %d", tokenUserID, req.UserID)
+	if !middlewares.IsOwnAccount(c, middlewares.AccountClient, req.UserID) {
+		log.Printf("[WALLET] Deduct rejected: token user %d não é o cliente %d", tokenUserID, req.UserID)
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot deduct from another user's wallet"})
 	}
 
@@ -262,7 +279,10 @@ func DeductFromWallet(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Pedido não pertence a este usuário"})
 	}
 
-	walletType := walletTypeForUser(req.UserID)
+	// Carteira do CLIENTE, sempre. walletTypeForUser pegava a primeira
+	// carteira com esse user_id, de qualquer tipo — com a loja 5 e o cliente
+	// 5 no banco, o pedido do cliente podia sair da carteira da loja.
+	walletType := "customer"
 	ref := deductRef(req.UserID, req.OrderID)
 
 	// Compatibilidade com lançamentos anteriores ao namespacing.
@@ -274,7 +294,7 @@ func DeductFromWallet(c *fiber.Ctx) error {
 	// estreita (um retry atravessando o deploy), mas é dinheiro.
 	//
 	// Some sozinho quando não houver mais lançamento em formato antigo.
-	if legacy, lErr := models.FindLedgerEntry(models.DB, req.OrderID, "debit", req.UserID); lErr == nil {
+	if legacy, lErr := models.FindLedgerEntry(models.DB, req.OrderID, "debit", req.UserID, walletType); lErr == nil {
 		if !models.SameAmount(legacy.Amount, req.Amount) {
 			log.Printf("[WALLET] Deduct: pedido %s já debitado (formato legado) com valor diferente: registrado=%.2f pedido=%.2f",
 				req.OrderID, legacy.Amount, req.Amount)
@@ -304,6 +324,13 @@ func DeductFromWallet(c *fiber.Ctx) error {
 		"Wallet deduction",
 		"",
 	)
+	if dErr == models.ErrInsufficientBalance && replayOf(ref, req.UserID, walletType) {
+		// AdjustWalletBalance recusa pelo saldo ANTES de chegar ao índice
+		// único: o replay de um pedido já pago, com o que sobrou na carteira
+		// menor que o valor, virava 400 "saldo insuficiente" — e o app dava
+		// por não pago um pedido que foi pago. É o mesmo replay.
+		dErr = models.ErrDuplicateDebit
+	}
 	if dErr == models.ErrInsufficientBalance {
 		return c.Status(400).JSON(fiber.Map{"error": "Insufficient balance or wallet not found"})
 	}
@@ -315,7 +342,7 @@ func DeductFromWallet(c *fiber.Ctx) error {
 		// isso deveria ser sempre verdade — mas "deveria ser verdade por
 		// construção" é exatamente o tipo de suposição que transforma colisão
 		// de índice em falso sucesso. Se não bater, é erro, não replay.
-		entry, eErr := models.FindLedgerEntry(models.DB, ref, "debit", req.UserID)
+		entry, eErr := models.FindLedgerEntry(models.DB, ref, "debit", req.UserID, walletType)
 		if eErr != nil {
 			log.Printf("[WALLET] Deduct: violação de idempotência sem lançamento próprio: user=%d ref=%s: %v", req.UserID, ref, eErr)
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to deduct from wallet"})
@@ -543,7 +570,7 @@ func EstablishmentWithdraw(c *fiber.Ctx) error {
 		// operação financeira. A resposta honesta é 409 — o cliente sabe que
 		// o segundo saque NÃO aconteceu e que o primeiro está em andamento.
 		for _, candidate := range derivedWithdrawKeyCandidates(estID, req.Amount, req.Destination, time.Now()) {
-			if models.HasLedgerEntry(models.DB, withdrawRef(estID, candidate), "debit", estID) {
+			if models.HasLedgerEntry(models.DB, withdrawRef(estID, candidate), "debit", estID, "establishment") {
 				log.Printf("[WALLET] Saque duplicado na janela derivada (sem Idempotency-Key): establishment=%d", estID)
 				return c.Status(fiber.StatusConflict).JSON(fiber.Map{
 					"error":               "Saque idêntico já solicitado há menos de 1 minuto. Aguarde a confirmação ou envie uma Idempotency-Key para repetir de forma segura.",
@@ -563,6 +590,11 @@ func EstablishmentWithdraw(c *fiber.Ctx) error {
 		description,
 		req.Destination,
 	)
+	if dErr == models.ErrInsufficientBalance && replayOf(ref, estID, "establishment") {
+		// Mesmo caso do débito de pedido: sacar o saldo todo e repetir com a
+		// mesma Idempotency-Key dava "saldo insuficiente" em vez do replay.
+		dErr = models.ErrDuplicateDebit
+	}
 	if dErr == models.ErrInsufficientBalance {
 		return c.Status(400).JSON(fiber.Map{"error": "Saldo insuficiente para este saque"})
 	}
@@ -575,7 +607,7 @@ func EstablishmentWithdraw(c *fiber.Ctx) error {
 		// referência já inclui o estID, mas se por algum motivo a colisão vier
 		// de outro dono, responder "saque efetuado" seria mentira — e o saque
 		// real teria sido silenciosamente descartado.
-		entry, eErr := models.FindLedgerEntry(models.DB, ref, "debit", estID)
+		entry, eErr := models.FindLedgerEntry(models.DB, ref, "debit", estID, "establishment")
 		if eErr != nil {
 			log.Printf("[WALLET] Saque: violação de idempotência sem lançamento próprio: establishment=%d: %v", estID, eErr)
 			return c.Status(500).JSON(fiber.Map{"error": "Falha ao processar saque"})

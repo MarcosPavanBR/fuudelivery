@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/carloshomar/fuudelivery/auth_api/app/dto"
+	"github.com/carloshomar/fuudelivery/auth_api/app/middlewares"
 	"github.com/carloshomar/fuudelivery/auth_api/app/models"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
@@ -134,6 +135,8 @@ func generateClientJWT(client *models.Client) (string, error) {
 		"phone": client.Phone,
 		"role":  "client",
 		"exp":   expirationTime,
+		// De qual tabela é o "id" — ver middlewares.AccountTypeFromClaims.
+		"account_type": middlewares.AccountClient,
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

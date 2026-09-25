@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"strconv"
 	"time"
 
@@ -24,7 +25,7 @@ func ListSubscriptions(c *fiber.Ctx) error {
 func GetUserSubscription(c *fiber.Ctx) error {
 	userID, err := getUserID(c)
 	if err != nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+		return subscriptionAuthError(c, err)
 	}
 
 	var sub models.Subscription
@@ -39,7 +40,7 @@ func GetUserSubscription(c *fiber.Ctx) error {
 func CreateSubscription(c *fiber.Ctx) error {
 	userID, err := getUserID(c)
 	if err != nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+		return subscriptionAuthError(c, err)
 	}
 
 	var req struct {
@@ -96,7 +97,7 @@ func CreateSubscription(c *fiber.Ctx) error {
 func CancelSubscription(c *fiber.Ctx) error {
 	userID, err := getUserID(c)
 	if err != nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+		return subscriptionAuthError(c, err)
 	}
 
 	var sub models.Subscription
@@ -233,7 +234,28 @@ func AdminUpdateSubscription(c *fiber.Ctx) error {
 	})
 }
 
-// getUserID extrai o ID do usuario do token JWT.
+// errNotClient: assinatura é de cliente (dá frete grátis no pedido).
+var errNotClient = errors.New("assinatura é só de conta de cliente")
+
+// getUserID extrai do token o id do CLIENTE. O id sozinho não basta: o
+// entregador 5 ou o usuário de loja 5 liam, criavam e cancelavam a
+// assinatura do cliente 5 (tabelas diferentes, mesmo número).
 func getUserID(c *fiber.Ctx) (int64, error) {
+	accountType, err := middlewares.GetAccountTypeFromToken(c)
+	if err != nil {
+		return 0, err
+	}
+	if accountType != middlewares.AccountClient {
+		return 0, errNotClient
+	}
 	return middlewares.GetUserIDFromToken(c)
+}
+
+// subscriptionAuthError responde o erro de getUserID: 403 para quem não é
+// cliente, 401 para token inválido.
+func subscriptionAuthError(c *fiber.Ctx, err error) error {
+	if errors.Is(err, errNotClient) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Assinatura é só para clientes"})
+	}
+	return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
 }

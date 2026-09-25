@@ -33,6 +33,13 @@ func TestClaimsParticipateInSolicitation(t *testing.T) {
 		{"usuário de outra loja com id = cliente", jwt.MapClaims{"id": float64(7), "role": "user", "establishment_id": float64(6)}, false},
 		{"entregador com telefone do cliente", jwt.MapClaims{"id": float64(99), "phone": "+55119"}, false},
 		{"outra loja", jwt.MapClaims{"id": float64(1), "role": "user", "establishment_id": float64(6)}, false},
+
+		// Tokens novos (account_type): o tipo vem do claim, não do role.
+		{"entregador atribuído (token novo)", jwt.MapClaims{"id": float64(9), "account_type": "deliveryman"}, true},
+		{"cliente dono (token novo)", jwt.MapClaims{"id": float64(7), "role": "client", "account_type": "client"}, true},
+		{"usuário da loja com role vazio", jwt.MapClaims{"id": float64(9), "role": "", "account_type": "user", "establishment_id": float64(5)}, true},
+		{"usuário sem loja com id do entregador e role vazio", jwt.MapClaims{"id": float64(9), "role": "", "account_type": "user"}, false},
+		{"loja com telefone do cliente", jwt.MapClaims{"id": float64(33), "role": "user", "account_type": "user", "phone": "+55119", "establishment_id": float64(6)}, false},
 	}
 	for _, c := range casos {
 		if got := claimsParticipateInSolicitation(c.claims, solicitacaoTeste); got != c.quer {
@@ -44,15 +51,22 @@ func TestClaimsParticipateInSolicitation(t *testing.T) {
 // O sender_type do chat vem do token: um cliente não se apresenta como loja
 // ou suporte trocando o :userType da URL.
 func TestChatUserTypeFromClaims(t *testing.T) {
-	casos := map[string]jwt.MapClaims{
-		"client":      {"id": float64(7), "role": "client"},
-		"restaurant":  {"id": float64(3), "role": "user", "establishment_id": float64(42)},
-		"deliveryman": {"id": float64(9)},
-		"admin":       {"id": float64(1), "role": "admin"},
+	casos := []struct {
+		quer   string
+		claims jwt.MapClaims
+	}{
+		{"client", jwt.MapClaims{"id": float64(7), "role": "client"}},
+		{"restaurant", jwt.MapClaims{"id": float64(3), "role": "user", "establishment_id": float64(42)}},
+		{"deliveryman", jwt.MapClaims{"id": float64(9)}},
+		{"admin", jwt.MapClaims{"id": float64(1), "role": "admin"}},
+		// Tokens novos: role vazio de um usuário de loja não vira "deliveryman".
+		{"restaurant", jwt.MapClaims{"id": float64(3), "role": "", "account_type": "user", "establishment_id": float64(42)}},
+		{"deliveryman", jwt.MapClaims{"id": float64(9), "account_type": "deliveryman"}},
+		{"client", jwt.MapClaims{"id": float64(7), "role": "client", "account_type": "client"}},
 	}
-	for want, claims := range casos {
-		if got := chatUserTypeFromClaims(claims); got != want {
-			t.Errorf("%v: got %q, want %q", claims, got, want)
+	for _, c := range casos {
+		if got := chatUserTypeFromClaims(c.claims); got != c.quer {
+			t.Errorf("%v: got %q, want %q", c.claims, got, c.quer)
 		}
 	}
 }

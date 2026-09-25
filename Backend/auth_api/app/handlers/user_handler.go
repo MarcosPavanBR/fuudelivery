@@ -249,8 +249,11 @@ func Login(c *fiber.Ctx) error {
 
 func GetUser(c *fiber.Ctx) error {
 	userID := c.Params("id")
+	if !validID(userID) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ID inválido"})
+	}
 
-	tokenUserID, err := middlewares.GetUserIDFromToken(c)
+	_, err := middlewares.GetUserIDFromToken(c)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
 	}
@@ -261,12 +264,13 @@ func GetUser(c *fiber.Ctx) error {
 	}
 
 	role, _ := middlewares.GetUserRoleFromToken(c)
-	if tokenUserID != int64(reqUserID) && role != "admin" {
+	// Mesmo id não basta: o cliente 5 não é o usuário 5 (tabelas diferentes).
+	if role != "admin" && !middlewares.IsOwnAccount(c, middlewares.AccountUser, int64(reqUserID)) {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot view another user's profile"})
 	}
 
 	var user models.User
-	if err := models.DB.First(&user, userID).Error; err != nil {
+	if err := models.DB.First(&user, "id = ?", userID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
 	}
 
@@ -279,8 +283,11 @@ func GetUser(c *fiber.Ctx) error {
 // (nome/email — a senha passa por ChangePassword).
 func UpdateUser(c *fiber.Ctx) error {
 	userID := c.Params("id")
+	if !validID(userID) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ID inválido"})
+	}
 
-	tokenUserID, err := middlewares.GetUserIDFromToken(c)
+	_, err := middlewares.GetUserIDFromToken(c)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
 	}
@@ -303,15 +310,16 @@ func UpdateUser(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to parse request body"})
 	}
 
+	// Autoriza ANTES de consultar: senão 404 x 403 revela quais ids existem.
+	role, _ := middlewares.GetUserRoleFromToken(c)
+	isAdmin := role == "admin"
+	if !isAdmin && !middlewares.IsOwnAccount(c, middlewares.AccountUser, int64(reqUserID)) {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot update another user's account"})
+	}
+
 	var user models.User
 	if err := models.DB.First(&user, reqUserID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
-	}
-
-	role, _ := middlewares.GetUserRoleFromToken(c)
-	isAdmin := role == "admin"
-	if tokenUserID != int64(reqUserID) && !isAdmin {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot update another user's account"})
 	}
 
 	updates := map[string]interface{}{}
@@ -356,8 +364,11 @@ func UpdateUser(c *fiber.Ctx) error {
 // Requer a senha atual (para confirmar identidade) e a nova senha (minimo 6 caracteres).
 func ChangePassword(c *fiber.Ctx) error {
 	userID := c.Params("id")
+	if !validID(userID) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ID inválido"})
+	}
 
-	tokenUserID, err := middlewares.GetUserIDFromToken(c)
+	_, err := middlewares.GetUserIDFromToken(c)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
 	}
@@ -367,7 +378,7 @@ func ChangePassword(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid user ID"})
 	}
 
-	if tokenUserID != int64(reqUserID) {
+	if !middlewares.IsOwnAccount(c, middlewares.AccountUser, int64(reqUserID)) {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot change another user's password"})
 	}
 
@@ -405,8 +416,11 @@ func ChangePassword(c *fiber.Ctx) error {
 // Apenas o proprio usuario ou um admin podem deletar a conta.
 func DeleteUser(c *fiber.Ctx) error {
 	userID := c.Params("id")
+	if !validID(userID) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ID inválido"})
+	}
 
-	tokenUserID, err := middlewares.GetUserIDFromToken(c)
+	_, err := middlewares.GetUserIDFromToken(c)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
 	}
@@ -417,7 +431,7 @@ func DeleteUser(c *fiber.Ctx) error {
 	}
 
 	role, _ := middlewares.GetUserRoleFromToken(c)
-	if tokenUserID != int64(reqUserID) && role != "admin" {
+	if role != "admin" && !middlewares.IsOwnAccount(c, middlewares.AccountUser, int64(reqUserID)) {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot delete another user's account"})
 	}
 
@@ -547,7 +561,7 @@ func RefreshToken(c *fiber.Ctx) error {
 
 	// Busca o usuário
 	var user models.User
-	if err := models.DB.First(&user, userID).Error; err != nil {
+	if err := models.DB.First(&user, "id = ?", userID).Error; err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "User not found"})
 	}
 

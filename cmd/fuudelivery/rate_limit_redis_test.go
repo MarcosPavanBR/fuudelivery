@@ -133,6 +133,35 @@ func TestRateLimitMiddleware_FallbackMemoria(t *testing.T) {
 	require.Equal(t, fiber.StatusTooManyRequests, resp.StatusCode, "3a requisicao deveria ser 429 no fallback")
 }
 
+// No fallback em memória cada limite tem o seu balde por IP. Antes o balde
+// era só por IP: o primeiro limite que o IP encontrava valia para todas as
+// rotas — 2/min no login cortava a rota de 5/min, e vice-versa.
+func TestRateLimitMiddleware_FallbackMemoria_BaldePorLimite(t *testing.T) {
+	resetRedisLimiterClient()
+
+	app := testApp()
+	app.Post("/login", rateLimitMiddleware(2), func(c *fiber.Ctx) error { return c.SendString("ok") })
+	app.Post("/location", rateLimitMiddleware(5), func(c *fiber.Ctx) error { return c.SendString("ok") })
+	post := func(path string) int {
+		req := httptest.NewRequest("POST", path, nil)
+		req.Header.Set("X-Forwarded-For", "10.0.0.77")
+		resp, err := app.Test(req, 500)
+		require.NoError(t, err)
+		return resp.StatusCode
+	}
+
+	// Esgota o login (2/min)...
+	require.Equal(t, fiber.StatusOK, post("/login"))
+	require.Equal(t, fiber.StatusOK, post("/login"))
+	require.Equal(t, fiber.StatusTooManyRequests, post("/login"))
+
+	// ...e a rota de 5/min continua com os 5 dela.
+	for i := 1; i <= 5; i++ {
+		require.Equal(t, fiber.StatusOK, post("/location"), "req %d em /location", i)
+	}
+	require.Equal(t, fiber.StatusTooManyRequests, post("/location"))
+}
+
 // TestRedisAllow_RedisIndisponivelCaiNoFallback verifica que, quando o Redis
 // configurado fica fora do ar, o middleware nao bloqueia o request (o fallback
 // em memoria assume) — nunca derruba o login por culpa do Redis.

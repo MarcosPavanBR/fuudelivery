@@ -47,9 +47,12 @@ func ListAdditional(c *fiber.Ctx) error {
 
 func UpdateAdditional(c *fiber.Ctx) error {
 	additionalID := c.Params("id")
+	if !validID(additionalID) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ID inválido"})
+	}
 
 	var existingAdditional models.Additional
-	if err := models.DB.First(&existingAdditional, additionalID).Error; err != nil {
+	if err := models.DB.First(&existingAdditional, "id = ?", additionalID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Additional item not found"})
 	}
 
@@ -129,9 +132,12 @@ func CreateProductToAdditional(c *fiber.Ctx) error {
 
 func DeleteAdditional(c *fiber.Ctx) error {
 	additionalID := c.Params("id")
+	if !validID(additionalID) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ID inválido"})
+	}
 
 	var existingAdditional models.Additional
-	if err := models.DB.First(&existingAdditional, additionalID).Error; err != nil {
+	if err := models.DB.First(&existingAdditional, "id = ?", additionalID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Additional item not found"})
 	}
 

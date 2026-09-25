@@ -208,9 +208,12 @@ func CreateEstablishment(c *fiber.Ctx) error {
 
 func GetEstablishments(c *fiber.Ctx) error {
 	establishmentId := c.Params("id")
+	if !validID(establishmentId) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ID inválido"})
+	}
 
 	var establishment models.Establishment
-	if err := models.DB.First(&establishment, establishmentId).Error; err != nil {
+	if err := models.DB.First(&establishment, "id = ?", establishmentId).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Establishment not found"})
 	}
 	return c.JSON(establishment)
@@ -263,9 +266,12 @@ func GetUserByEstablishment(c *fiber.Ctx) error {
 
 func HandlerEstablishmentStatus(c *fiber.Ctx) error {
 	establishmentID := c.Params("id")
+	if !validID(establishmentID) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ID inválido"})
+	}
 
 	var establishment models.Establishment
-	if err := models.DB.First(&establishment, establishmentID).Error; err != nil {
+	if err := models.DB.First(&establishment, "id = ?", establishmentID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Establishment not found"})
 	}
 
@@ -296,6 +302,9 @@ func HandlerEstablishmentStatus(c *fiber.Ctx) error {
 
 func UpdateEstablishment(c *fiber.Ctx) error {
 	establishmentID := c.Params("id")
+	if !validID(establishmentID) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ID inválido"})
+	}
 
 	if establishmentID == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid establishment ID"})
@@ -303,7 +312,7 @@ func UpdateEstablishment(c *fiber.Ctx) error {
 
 	existingEstablishment := models.Establishment{}
 
-	if err := models.DB.First(&existingEstablishment, establishmentID).Error; err != nil {
+	if err := models.DB.First(&existingEstablishment, "id = ?", establishmentID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Establishment not found"})
 	}
 
@@ -315,6 +324,11 @@ func UpdateEstablishment(c *fiber.Ctx) error {
 	}
 	role, _ := middlewares.GetUserRoleFromToken(c)
 	if role != "admin" {
+		// O id do token só é de users se a conta for de users: sem isto, o
+		// cliente 5 herdava a loja do usuário 5 e editava o estabelecimento.
+		if t, _ := middlewares.GetAccountTypeFromToken(c); t != middlewares.AccountUser {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot update another user's establishment"})
+		}
 		var authUser models.User
 		if uErr := models.DB.First(&authUser, tokenUserID).Error; uErr != nil {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Cannot update another user's establishment"})
@@ -361,6 +375,9 @@ func UpdateEstablishment(c *fiber.Ctx) error {
 
 func UpdateEstablishmentWallet(c *fiber.Ctx) error {
 	establishmentID := c.Params("id")
+	if !validID(establishmentID) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ID inválido"})
+	}
 	if establishmentID == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid establishment ID"})
 	}
@@ -377,7 +394,7 @@ func UpdateEstablishmentWallet(c *fiber.Ctx) error {
 	}
 
 	var establishment models.Establishment
-	if err := models.DB.First(&establishment, establishmentID).Error; err != nil {
+	if err := models.DB.First(&establishment, "id = ?", establishmentID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Establishment not found"})
 	}
 
@@ -408,12 +425,15 @@ func UpdateEstablishmentWallet(c *fiber.Ctx) error {
 
 func DeleteEstablishment(c *fiber.Ctx) error {
 	id := c.Params("id")
+	if !validID(id) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ID inválido"})
+	}
 	if id == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid establishment ID"})
 	}
 
 	var establishment models.Establishment
-	if err := models.DB.First(&establishment, id).Error; err != nil {
+	if err := models.DB.First(&establishment, "id = ?", id).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Establishment not found"})
 	}
 

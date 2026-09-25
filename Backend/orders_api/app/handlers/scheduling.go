@@ -41,9 +41,10 @@ func ScheduleOrder(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Scheduled time must be in the future"})
 	}
 
-	err = patchOrderDoc(doc, func(p *dto.RequestPayload) {
+	err = patchOrderDoc(doc, func(_ *models.OrderDocument, p *dto.RequestPayload) error {
 		p.ScheduledAt = &scheduledTime
 		p.IsScheduled = true
+		return nil
 	})
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to schedule"})

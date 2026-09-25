@@ -14,6 +14,8 @@ import (
 
 	"github.com/carloshomar/fuudelivery/orders_api/app/dto"
 	"github.com/carloshomar/fuudelivery/orders_api/app/models"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // newLegacyOrderID gera um novo identificador público no MESMO formato que os
@@ -68,28 +70,54 @@ func findOrderByLegacyID(legacyID string) (*models.OrderDocument, error) {
 	return &doc, nil
 }
 
-// patchOrderDoc aplica mutações no documento (colunas + payload espelhado)
-// e persiste no Postgres.
-func patchOrderDoc(doc *models.OrderDocument, mutate func(p *dto.RequestPayload)) error {
-	var p dto.RequestPayload
-	if err := json.Unmarshal(doc.Payload, &p); err != nil {
-		return fmt.Errorf("desserializando payload do pedido %s: %w", doc.LegacyID, err)
-	}
-	mutate(&p)
+// patchOrderDoc aplica mutate ao pedido e grava (colunas + payload).
+//
+// A linha é RECARREGADA sob lock (SELECT ... FOR UPDATE) dentro de uma
+// transação e mutate recebe essa versão, não a que o chamador leu antes: a
+// loja mudando o status e o entregador avançando a entrega ao mesmo tempo não
+// apagam a mudança um do outro (o payload inteiro é regravado). Um erro de
+// mutate desfaz tudo e volta para o chamador. *doc fica com o que foi gravado.
+func patchOrderDoc(doc *models.OrderDocument, mutate func(d *models.OrderDocument, p *dto.RequestPayload) error) error {
+	var saved models.OrderDocument
+	err := models.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("legacy_id = ?", doc.LegacyID).First(&saved).Error; err != nil {
+			return fmt.Errorf("recarregando pedido %s: %w", doc.LegacyID, err)
+		}
+		var p dto.RequestPayload
+		if err := json.Unmarshal(saved.Payload, &p); err != nil {
+			return fmt.Errorf("desserializando payload do pedido %s: %w", doc.LegacyID, err)
+		}
+		if err := mutate(&saved, &p); err != nil {
+			return err
+		}
 
-	raw, err := json.Marshal(p)
+		raw, err := json.Marshal(p)
+		if err != nil {
+			return err
+		}
+		// Vazio no payload não apaga a coluna (o upsert antigo, com Assign de
+		// struct, também pulava zero): loja, telefone e status só mudam
+		// quando o payload diz algo.
+		if p.Status != "" {
+			saved.Status = p.Status
+		}
+		if p.User.Phone != "" {
+			saved.UserPhone = p.User.Phone
+		}
+		if p.EstablishmentId != 0 {
+			saved.EstablishmentID = p.EstablishmentId
+		}
+		saved.ScheduledAt = p.ScheduledAt
+		saved.IsScheduled = p.IsScheduled
+		saved.Payload = raw
+		return tx.Save(&saved).Error
+	})
 	if err != nil {
 		return err
 	}
-
-	doc.Status = p.Status
-	doc.ScheduledAt = p.ScheduledAt
-	doc.IsScheduled = p.IsScheduled
-	doc.UserPhone = p.User.Phone
-	doc.EstablishmentID = p.EstablishmentId
-	doc.Payload = raw
-
-	return saveOrderPrimary(doc)
+	*doc = saved
+	return nil
 }
 
 func docToResponseMap(doc *models.OrderDocument) map[string]interface{} {

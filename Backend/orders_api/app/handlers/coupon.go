@@ -417,9 +417,23 @@ func ValidateCouponInternal(req dto.ValidateCouponRequest) dto.ValidateCouponRes
 	}
 }
 
+// isEstablishmentAccount: conta de loja = conta de users com establishment_id
+// no token.
+func isEstablishmentAccount(c *fiber.Ctx) bool {
+	accountType, err := middlewares.GetAccountTypeFromToken(c)
+	if err != nil || accountType != middlewares.AccountUser {
+		return false
+	}
+	estID, err := middlewares.GetEstablishmentIDFromToken(c)
+	return err == nil && estID > 0
+}
+
 func ListCoupons(c *fiber.Ctx) error {
+	// Loja é quem tem establishment_id no token — não existe role
+	// "establishment" (o role do dono é "user"/"restaurant"), e a checagem
+	// antiga barrava toda loja.
 	role, roleErr := middlewares.GetUserRoleFromToken(c)
-	if roleErr != nil || (role != "admin" && role != "establishment") {
+	if roleErr != nil || (role != "admin" && !isEstablishmentAccount(c)) {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Admin or establishment access required"})
 	}
 
@@ -448,9 +462,12 @@ func ListCoupons(c *fiber.Ctx) error {
 
 func GetCoupon(c *fiber.Ctx) error {
 	id := c.Params("id")
+	if !validID(id) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ID inválido"})
+	}
 
 	var coupon models.Coupon
-	if err := models.DB.First(&coupon, id).Error; err != nil {
+	if err := models.DB.First(&coupon, "id = ?", id).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Cupom não encontrado"})
 	}
 
@@ -462,7 +479,7 @@ func GetCoupon(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Acesso negado"})
 	}
 	if role != "admin" {
-		if role == "establishment" {
+		if isEstablishmentAccount(c) {
 			tokenEstID, eErr := middlewares.GetEstablishmentIDFromToken(c)
 			if eErr != nil || (coupon.EstablishmentID != 0 && tokenEstID != int64(coupon.EstablishmentID)) {
 				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Acesso negado"})
@@ -477,9 +494,12 @@ func GetCoupon(c *fiber.Ctx) error {
 
 func DeleteCoupon(c *fiber.Ctx) error {
 	id := c.Params("id")
+	if !validID(id) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ID inválido"})
+	}
 
 	var coupon models.Coupon
-	if err := models.DB.First(&coupon, id).Error; err != nil {
+	if err := models.DB.First(&coupon, "id = ?", id).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Cupom não encontrado"})
 	}
 

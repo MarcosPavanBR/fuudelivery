@@ -71,6 +71,8 @@ func GenerateJWT(user *models.User, establishment *models.Establishment) (string
 		"phone":      user.Phone,
 		"avatar_url": user.AvatarURL,
 		"exp":        expirationTime,
+		// De qual tabela é o "id" acima — ver AccountTypeFromClaims.
+		"account_type": AccountUser,
 	}
 
 	if establishment != nil {
@@ -112,6 +114,59 @@ func GetUserIDFromToken(c *fiber.Ctx) (int64, error) {
 	}
 
 	return int64(idFloat), nil
+}
+
+// Tipos de conta. Clientes (clients), usuários de loja/admin (users) e
+// entregadores (delivery_men) vivem em tabelas com sequências de id
+// INDEPENDENTES: o claim "id" sozinho não identifica ninguém — o cliente 5,
+// o usuário 5 e o entregador 5 são três pessoas. Toda comparação entre o id
+// do token e um id de recurso precisa conferir antes o tipo da conta.
+const (
+	AccountUser        = "user"
+	AccountClient      = "client"
+	AccountDeliveryMan = "deliveryman"
+)
+
+// AccountTypeFromClaims diz de qual tabela é o "id" do token. Tokens novos
+// trazem o claim "account_type"; os emitidos antes dele (clientes vivem 7
+// dias) são classificados pelo "role": "client" → cliente; sem role → o
+// entregador (GenerateJWTDeliveryMan nunca pôs role); qualquer outro → users.
+func AccountTypeFromClaims(claims jwt.MapClaims) string {
+	switch t, _ := claims["account_type"].(string); t {
+	case AccountUser, AccountClient, AccountDeliveryMan:
+		return t
+	}
+	switch role, _ := claims["role"].(string); role {
+	case "client":
+		return AccountClient
+	case "", "deliveryman", "delivery_man":
+		return AccountDeliveryMan
+	}
+	return AccountUser
+}
+
+// GetAccountTypeFromToken é AccountTypeFromClaims para o token da requisição.
+func GetAccountTypeFromToken(c *fiber.Ctx) (string, error) {
+	token, err := ValidateJWT(c)
+	if err != nil {
+		return "", err
+	}
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return "", fiber.NewError(fiber.StatusUnauthorized, "Invalid token claims")
+	}
+	return AccountTypeFromClaims(claims), nil
+}
+
+// IsOwnAccount diz se o token é a própria conta (accountType, id) — o tipo E
+// o id batem. É a checagem que substitui o "tokenUserID == id" solto.
+func IsOwnAccount(c *fiber.Ctx, accountType string, id int64) bool {
+	tokenID, err := GetUserIDFromToken(c)
+	if err != nil || tokenID <= 0 || tokenID != id {
+		return false
+	}
+	t, err := GetAccountTypeFromToken(c)
+	return err == nil && t == accountType
 }
 
 // GetEstablishmentIDFromToken extrai o ID do estabelecimento do token JWT.
@@ -287,11 +342,12 @@ func GenerateJWTDeliveryMan(user *models.DeliveryMan) (string, error) {
 	expirationTime := time.Now().UTC().Add(ACCESS_TOKEN_DURATION).Unix()
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"id":    user.ID,
-		"name":  user.Name,
-		"email": user.Email,
-		"phone": user.Phone,
-		"exp":   expirationTime,
+		"id":           user.ID,
+		"name":         user.Name,
+		"email":        user.Email,
+		"phone":        user.Phone,
+		"exp":          expirationTime,
+		"account_type": AccountDeliveryMan,
 	})
 
 	tokenString, err := token.SignedString([]byte(secret))

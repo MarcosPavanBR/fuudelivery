@@ -156,6 +156,11 @@ func SessionMe(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Not authenticated"})
 	}
+	// Sessão é de users. Um token de cliente/entregador com o mesmo id
+	// devolveria o perfil do usuário de loja com aquele número.
+	if t, _ := middlewares.GetAccountTypeFromToken(c); t != middlewares.AccountUser {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Not authenticated"})
+	}
 
 	var user models.User
 	if err := models.DB.First(&user, userID).Error; err != nil {

@@ -105,6 +105,17 @@ func (s *CourierStore) SetOrdersCount(deliverymanID int64, count int) {
 	}
 }
 
+// IncrementOrders soma um pedido ativo ao entregador, sob o lock. Com
+// SetOrdersCount(id, lido+1) dois matches simultâneos liam o mesmo valor e o
+// entregador ficava com um pedido a menos na conta (e recebia além do teto).
+func (s *CourierStore) IncrementOrders(deliverymanID int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if c, ok := s.couriers[deliverymanID]; ok {
+		c.CurrentOrders++
+	}
+}
+
 // haversineKm calcula distancia em km entre dois pontos.
 func haversineKm(lat1, lng1, lat2, lng2 float64) float64 {
 	const R = 6371.0
@@ -145,8 +156,14 @@ func (s *CourierStore) FindNearby(lat, lng, radiusKm float64, limit int) []*Cour
 		idleHours := float64(now-c.LastUpdate) / 3600000.0
 		idleScore := math.Min(idleHours/2.0, 1.0)
 
-		c.score = distScore*0.6 + capScore*0.3 - idleScore*0.1
-		candidates = append(candidates, c)
+		// Cópia: esta função roda só com o lock de LEITURA, então várias
+		// buscas simultâneas escreviam o mesmo c.score (e a ordenação saía
+		// com o score de outra busca), e quem recebia o ponteiro interno o
+		// lia fora do lock enquanto UpdateLocation o alterava — corrida de
+		// dados que o -race pega nos testes de concorrência.
+		cp := *c
+		cp.score = distScore*0.6 + capScore*0.3 - idleScore*0.1
+		candidates = append(candidates, &cp)
 	}
 
 	// Ordena por score (menor = melhor)

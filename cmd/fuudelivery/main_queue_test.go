@@ -29,7 +29,7 @@ func TestProcessStatusUpdateSemDestinatario(t *testing.T) {
 }
 
 // TestProcessStatusUpdateClienteOffline: destinatário resolvido mas sem
-// conexão WebSocket ativa — sendMessageToClient loga e retorna nil.
+// conexão WebSocket ativa — sendToWS loga e retorna nil.
 func TestProcessStatusUpdateClienteOffline(t *testing.T) {
 	err := processStatusUpdate("delivery_updates", []byte(
 		`{"type":"order_matched","order_id":"42","courier_id":99}`))

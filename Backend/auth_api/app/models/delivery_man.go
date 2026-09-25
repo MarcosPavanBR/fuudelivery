@@ -7,7 +7,7 @@ type DeliveryMan struct {
 	Password string `json:"-"`
 	Phone    string `json:"phone"`
 
-	PaymentWalletID string `json:"payment_wallet_id,omitempty" gorm:"size:100"`
+	PaymentWalletID string `json:"-" gorm:"size:100"` // fora do JSON do modelo; PUT /delivery-man/:id/wallet devolve ao dono
 
 	// === Campos do motor de despacho ===
 	// Vinculo com a zona de atuacao principal

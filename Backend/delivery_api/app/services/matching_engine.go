@@ -303,7 +303,7 @@ func (m *MatchingEngine) AttemptMatch(order *dto.OrderDTO) *MatchResult {
 		result.CourierName = bestCandidate.Name
 		result.DistanceKm = bestDistance
 
-		m.CourierStore.SetOrdersCount(bestCandidate.DeliverymanID, bestCandidate.CurrentOrders+1)
+		m.CourierStore.IncrementOrders(bestCandidate.DeliverymanID)
 
 		if m.OnMatch != nil {
 			m.OnMatch(order.OrderId, bestCandidate.DeliverymanID)

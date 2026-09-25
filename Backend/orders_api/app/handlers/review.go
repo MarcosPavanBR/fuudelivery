@@ -199,6 +199,9 @@ func GetProductReviews(c *fiber.Ctx) error {
 
 func RespondToReview(c *fiber.Ctx) error {
 	reviewID := c.Params("id")
+	if !validID(reviewID) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ID inválido"})
+	}
 
 	var req dto.RespondReviewRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -210,7 +213,7 @@ func RespondToReview(c *fiber.Ctx) error {
 	}
 
 	var review models.Review
-	if err := models.DB.First(&review, reviewID).Error; err != nil {
+	if err := models.DB.First(&review, "id = ?", reviewID).Error; err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Review not found"})
 	}
 

@@ -64,6 +64,9 @@ func UpdateProduct(c *fiber.Ctx) error {
 	}
 
 	productID := c.Params("id")
+	if !validID(productID) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ID inválido"})
+	}
 	if productID == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Product ID is required"})
 	}
@@ -140,9 +143,12 @@ func GetByEstablishmentIdWithRelations(c *fiber.Ctx) error {
 
 func DeleteProduct(c *fiber.Ctx) error {
 	productID := c.Params("id")
+	if !validID(productID) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ID inválido"})
+	}
 
 	var existingProduct models.Product
-	if err := models.DB.First(&existingProduct, productID).Error; err != nil {
+	if err := models.DB.First(&existingProduct, "id = ?", productID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Product not found"})
 	}
 

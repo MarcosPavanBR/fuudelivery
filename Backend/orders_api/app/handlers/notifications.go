@@ -38,16 +38,26 @@ func pushIdentity(c *fiber.Ctx) (int64, string, bool) {
 	if err != nil || userID <= 0 {
 		return 0, "", false
 	}
-	role, _ := middlewares.GetUserRoleFromToken(c)
-	switch {
-	case role == "client":
+	// O tipo vem de AccountTypeFromClaims: clientes, lojas e entregadores
+	// têm ids de tabelas diferentes, e o par (user_id, user_type) é o que
+	// separa o token de push do cliente 5 do entregador 5. Pelo role, um
+	// usuário de loja com role vazio virava "deliveryman".
+	accountType, aErr := middlewares.GetAccountTypeFromToken(c)
+	if aErr != nil {
+		return 0, "", false
+	}
+	switch accountType {
+	case middlewares.AccountClient:
 		return userID, "client", true
-	case role == "":
-		// GenerateJWTDeliveryMan não põe role no token.
+	case middlewares.AccountDeliveryMan:
 		return userID, "deliveryman", true
 	}
 	if estID, eErr := middlewares.GetEstablishmentIDFromToken(c); eErr == nil && estID > 0 {
 		return userID, "restaurant", true
+	}
+	role, _ := middlewares.GetUserRoleFromToken(c)
+	if role == "" {
+		role = "user"
 	}
 	return userID, role, true
 }

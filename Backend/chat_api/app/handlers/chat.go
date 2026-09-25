@@ -287,6 +287,27 @@ func SendMessage(c *fiber.Ctx) error {
 	return c.JSON(msg)
 }
 
+// MarkAsReadAs é MarkAsRead sabendo o tipo de quem lê: "as minhas" mensagens
+// são as de (sender_id, sender_type). Só pelo id, o cliente 5 lendo o chat
+// deixava sem ler as mensagens do entregador 5 (tabelas diferentes, mesmo
+// número).
+func MarkAsReadAs(c *fiber.Ctx, senderType string) error {
+	orderID := c.Params("orderId")
+	userID, err := strconv.ParseInt(c.Params("userId"), 10, 64)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "userId inválido"})
+	}
+	if models.DB == nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Banco indisponível"})
+	}
+	if err := models.DB.Model(&models.ChatMessage{}).
+		Where("order_id = ? AND NOT (sender_id = ? AND sender_type = ?) AND read_at IS NULL", orderID, userID, senderType).
+		Update("read_at", time.Now()).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Erro ao marcar como lido"})
+	}
+	return c.JSON(fiber.Map{"message": "Mensagens marcadas como lidas"})
+}
+
 func MarkAsRead(c *fiber.Ctx) error {
 	orderID := c.Params("orderId")
 	userIDStr := c.Params("userId")

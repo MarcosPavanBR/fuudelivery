@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/golang-jwt/jwt/v5"
 
 	// Models (database initialization)
 
@@ -28,6 +29,19 @@ func protectedRoute(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
 	}
 	return c.Next()
+}
+
+// tokenClaims devolve os claims do token da requisição.
+func tokenClaims(c *fiber.Ctx) (jwt.MapClaims, error) {
+	token, err := middlewares.ValidateJWT(c)
+	if err != nil {
+		return nil, err
+	}
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return nil, fiber.NewError(fiber.StatusUnauthorized, "Invalid token claims")
+	}
+	return claims, nil
 }
 
 func adminRequired(c *fiber.Ctx) error {

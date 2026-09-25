@@ -133,9 +133,12 @@ func GetCategoriesWithProducts(c *fiber.Ctx) error {
 
 func DeleteCategory(c *fiber.Ctx) error {
 	categoryID := c.Params("id")
+	if !validID(categoryID) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ID inválido"})
+	}
 
 	var existingCategory models.Category
-	if err := models.DB.First(&existingCategory, categoryID).Error; err != nil {
+	if err := models.DB.First(&existingCategory, "id = ?", categoryID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Category not found"})
 	}
 
@@ -162,9 +165,12 @@ func UpdateCategory(c *fiber.Ctx) error {
 	}
 
 	categoryID := c.Params("id")
+	if !validID(categoryID) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ID inválido"})
+	}
 
 	var existingCategory models.Category
-	if err := models.DB.First(&existingCategory, categoryID).Error; err != nil {
+	if err := models.DB.First(&existingCategory, "id = ?", categoryID).Error; err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Category not found"})
 	}
 

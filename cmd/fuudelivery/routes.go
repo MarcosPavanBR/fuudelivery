@@ -53,6 +53,12 @@ func setupAuthRoutes(app *fiber.App) {
 		if len(auth) > 7 && auth[:7] == "Bearer " {
 			auth = auth[7:]
 		}
+		// Painéis web autenticam por cookie HttpOnly (sem header): sem este
+		// fallback o site da loja nunca obtinha ticket e ficava sem avisos em
+		// tempo real (pedido novo só aparecia no polling).
+		if auth == "" {
+			auth = c.Cookies("access_token")
+		}
 		ticket, tErr := IssueWSTicket(auth)
 		if tErr != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})

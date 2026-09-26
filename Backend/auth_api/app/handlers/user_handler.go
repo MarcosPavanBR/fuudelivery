@@ -83,12 +83,8 @@ func CreateUser(c *fiber.Ctx) error {
 			tx.Rollback()
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create user"})
 		}
-		var roleVal string
-		tx.QueryRow("SELECT enumlabel FROM pg_enum WHERE enumtypid = '\"Role\"'::regtype LIMIT 1").Scan(&roleVal)
-		if roleVal == "" {
-			roleVal = "user"
-		}
-		_, err = tx.Exec("INSERT INTO users (id, name, email, password, phone, role, \"createdAt\", \"updatedAt\") VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())", userID, user.Name, user.Email, user.Password, user.Phone, roleVal)
+		roleVal := userRoleValue(tx)
+		_, err = tx.Exec(insertUserSQL(tx, true), userID, user.Name, user.Email, user.Password, roleVal, user.Phone)
 		if err != nil {
 			tx.Rollback()
 			if strings.Contains(err.Error(), "duplicate key value violates unique constraint") && strings.Contains(err.Error(), "users_email_key") {
@@ -194,7 +190,13 @@ func CreateUserAdmin(c *fiber.Ctx) error {
 
 func ListAllUsers(c *fiber.Ctx) error {
 	var results []map[string]interface{}
-	result := models.DB.Raw("SELECT id, name, email, establishment_id, COALESCE(role, 'user') as role, COALESCE(status, 'active') as status, \"createdAt\" FROM users").Scan(&results)
+	// "createdAt" só existe no schema de produção (schema_compat.go).
+	createdCol := "NULL"
+	if sqlDB, dbErr := models.DB.DB(); dbErr == nil && usersHasCamelTimestamps(sqlDB) {
+		createdCol = `"createdAt"`
+	}
+	result := models.DB.Raw("SELECT id, name, email, phone, establishment_id, COALESCE(role::text, 'user') as role, COALESCE(status, 'active') as status, " +
+		createdCol + " AS \"createdAt\" FROM users ORDER BY id").Scan(&results)
 	if result.Error != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to query users: " + result.Error.Error()})
 	}

@@ -17,6 +17,7 @@ import {
 import { toast } from "react-toastify";
 import Texts from "../../constants/Texts";
 import restaurantModel from "../../services/restaurant.model";
+import { uploadImage } from "../../helpers/imageUpload";
 import BusinessHoursEditor from "../../components/BusinessHoursEditor";
 import {
   defaultHours,
@@ -47,6 +48,7 @@ function Perfil() {
   const [savedAddress, setSavedAddress] = useState("");
   const [locating, setLocating] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const sessionUser = getUser();
   const estId = establishmentIdOf(sessionUser);
 
@@ -87,58 +89,40 @@ function Perfil() {
     setLoading(false);
   };
 
+  // Avatar e logo: reduzidos no navegador (helpers/imageUpload.js) e gravados
+  // NA HORA. Antes a logo esperava o "Salvar alterações" — que o navegador
+  // bloqueava em silêncio com campo obrigatório vazio, e a logo se perdia.
   const handleAvatarUpload = async (e) => {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      toast.error("Selecione um arquivo de imagem");
-      return;
-    }
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error("Imagem muito grande (máx. 2MB)");
-      return;
-    }
+    setUploadingAvatar(true);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const { data } = await api.post("/upload/avatars", fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      if (!data?.url) throw new Error("Upload sem URL");
-      await api.put(`/users/${getUser()?.id}`, { avatar_url: data.url });
-      setAvatar(data.url);
-      localStorage.setItem("fuu_restaurant_avatar", data.url);
+      const url = await uploadImage("avatars", file, 512);
+      await api.put(`/users/${sessionUser?.id}`, { avatar_url: url });
+      setAvatar(url);
+      localStorage.setItem("fuu_restaurant_avatar", url);
       toast.success("Foto atualizada!");
     } catch (err) {
-      toast.error(err?.response?.data?.error || "Erro ao enviar foto");
+      toast.error(err.message || "Erro ao enviar foto");
     }
+    setUploadingAvatar(false);
   };
 
-  // Logo da loja por upload (antes era um campo de URL para colar).
   const handleLogoUpload = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    if (!file.type.startsWith("image/") || file.type.includes("svg")) {
-      toast.error("Selecione uma imagem JPG, PNG ou WEBP");
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Imagem muito grande (máx. 5MB)");
-      return;
-    }
     setUploadingLogo(true);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const { data } = await api.post(`/upload/restaurants/${estId}`, fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      if (!data?.url) throw new Error("Upload sem URL");
-      setEstablishment((prev) => ({ ...prev, image: data.url }));
-      toast.info("Logo enviada. Clique em Salvar alterações para aplicar.");
+      const url = await uploadImage(`restaurants/${estId}`, file, 512);
+      const next = { ...establishment, image: url };
+      const ok = await restaurantModel.updateEstablishment(estId, establishmentPayload(next, hours));
+      if (!ok) throw new Error("A logo foi enviada, mas não foi possível salvar na loja.");
+      setEstablishment((prev) => ({ ...prev, image: url }));
+      toast.success("Logo atualizada!");
     } catch (err) {
-      toast.error(err?.response?.data?.error || "Erro ao enviar a logo");
+      toast.error(err.message || "Erro ao enviar a logo");
     }
     setUploadingLogo(false);
   };
@@ -226,7 +210,7 @@ function Perfil() {
                 className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-gray-900 text-white flex items-center justify-center hover:bg-gray-700 transition-colors shadow"
                 title="Alterar foto"
               >
-                <FiCamera className="h-3.5 w-3.5" />
+                {uploadingAvatar ? <FiLoader className="h-3.5 w-3.5 animate-spin" /> : <FiCamera className="h-3.5 w-3.5" />}
               </button>
               <input
                 ref={fileInputRef}
@@ -254,11 +238,11 @@ function Perfil() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Nome</label>
-              <input disabled value={user.name} className={inputClass} />
+              <input disabled value={user.name ?? ""} className={inputClass} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">E-mail</label>
-              <input disabled value={user.email} className={inputClass} />
+              <input disabled value={user.email ?? ""} className={inputClass} />
             </div>
           </div>
           <div className="mt-4">
@@ -283,33 +267,33 @@ function Perfil() {
               <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
                 Nome <RequiredMark />
               </label>
-              <input name="name" maxLength={80} required onChange={({ target }) => handlerEstablishment(target)} value={establishment.name} className={inputClass} />
+              <input name="name" maxLength={80} required onChange={({ target }) => handlerEstablishment(target)} value={establishment.name ?? ""} className={inputClass} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
-                Descrição <RequiredMark />
+                Descrição
               </label>
-              <input name="description" maxLength={150} required onChange={({ target }) => handlerEstablishment(target)} value={establishment.description} className={inputClass} />
+              <input name="description" maxLength={150} placeholder="Ex.: Pizzas artesanais no forno a lenha" onChange={({ target }) => handlerEstablishment(target)} value={establishment.description ?? ""} className={inputClass} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
                 Cor Primária <RequiredMark />
               </label>
-              <input type="color" name="primary_color" required onChange={({ target }) => handlerEstablishment(target)} value={establishment.primary_color}
+              <input type="color" name="primary_color" required onChange={({ target }) => handlerEstablishment(target)} value={establishment.primary_color || "#DC2626"}
                 className="w-full h-12 rounded-lg border border-gray-200 cursor-pointer dark:border-gray-700" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
                 Cor Secundária <RequiredMark />
               </label>
-              <input type="color" name="secondary_color" required onChange={({ target }) => handlerEstablishment(target)} value={establishment.secondary_color}
+              <input type="color" name="secondary_color" required onChange={({ target }) => handlerEstablishment(target)} value={establishment.secondary_color || "#F59E0B"}
                 className="w-full h-12 rounded-lg border border-gray-200 cursor-pointer dark:border-gray-700" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
                 Dist. Máxima (km) <RequiredMark />
               </label>
-              <input type="number" min={1} max={100} name="max_distance_delivery" required onChange={({ target }) => handlerEstablishment(target)} value={establishment.max_distance_delivery} className={inputClass} />
+              <input type="number" min={1} max={100} name="max_distance_delivery" required onChange={({ target }) => handlerEstablishment(target)} value={establishment.max_distance_delivery ?? ""} className={inputClass} />
             </div>
           </div>
 
@@ -328,9 +312,9 @@ function Perfil() {
                   {uploadingLogo ? <FiLoader className="h-4 w-4 animate-spin" /> : <FiCamera className="h-4 w-4" />}
                   {establishment.image ? "Trocar logo" : "Enviar logo"}
                 </button>
-                <p className="mt-1 text-xs text-gray-500">JPG, PNG ou WEBP até 5MB. Aparece para o cliente no app.</p>
+                <p className="mt-1 text-xs text-gray-500">JPG, PNG ou WEBP. Foto do celular pode: reduzimos automaticamente. Aparece para o cliente no app.</p>
               </div>
-              <input ref={logoInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={handleLogoUpload} className="hidden" />
+              <input ref={logoInputRef} type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
             </div>
           </div>
         </div>
@@ -347,7 +331,7 @@ function Perfil() {
             <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
               Endereço Completo <RequiredMark />
             </label>
-            <input name="location_string" maxLength={250} required onChange={({ target }) => handlerEstablishment(target)} value={establishment.location_string} className={inputClass} />
+            <input name="location_string" maxLength={250} required onChange={({ target }) => handlerEstablishment(target)} value={establishment.location_string ?? ""} className={inputClass} />
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <button type="button" className="btn btn-ghost" disabled={locating || !establishment.location_string}

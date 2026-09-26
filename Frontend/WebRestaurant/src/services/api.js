@@ -111,9 +111,12 @@ api.interceptors.response.use(
 );
 
 // API genérica com interceptors já aplicados
-// WebSocket ticket: trocado via HTTP antes do upgrade.
+// WebSocket ticket: trocado via HTTP antes do upgrade. A rota é
+// POST /auth/ws-ticket (o cookie de sessão autentica); GET /ws/ticket não
+// existe — caía no endpoint de WebSocket e voltava 426, e o site nunca
+// conectava em tempo real.
 export async function requestWsTicket() {
-  const res = await api.get("/ws/ticket", { withCredentials: true });
+  const res = await api.post("/auth/ws-ticket", {}, { withCredentials: true });
   return res.data.ticket;
 }
 

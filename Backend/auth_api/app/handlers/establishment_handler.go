@@ -60,23 +60,17 @@ func RegisterEstablishment(c *fiber.Ctx) error {
 
 	var userID, estID uint
 
-	// Role: prefere 'restaurant' no enum; senão o primeiro label (compat).
-	var roleVal string
-	tx.QueryRow("SELECT enumlabel FROM pg_enum WHERE enumtypid = '\"Role\"'::regtype AND enumlabel = 'restaurant'").Scan(&roleVal)
-	if roleVal == "" {
-		tx.QueryRow("SELECT enumlabel FROM pg_enum WHERE enumtypid = '\"Role\"'::regtype LIMIT 1").Scan(&roleVal)
-	}
-	if roleVal == "" {
-		roleVal = "user"
-	}
+	// Role: 'restaurant' no enum de produção; "user" no banco novo
+	// (schema_compat.go).
+	roleVal := userRoleValue(tx)
 
 	tx.Exec("CREATE SEQUENCE IF NOT EXISTS users_id_seq OWNED BY users.id")
 	if err := tx.QueryRow("SELECT nextval('users_id_seq')").Scan(&userID); err != nil {
 		tx.Rollback()
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
-	if _, err := tx.Exec("INSERT INTO users (id, name, email, password, role, \"createdAt\", \"updatedAt\") VALUES ($1, $2, $3, $4, $5, NOW(), NOW())",
-		userID, req.OwnerName, req.Email, string(hashedPassword), roleVal); err != nil {
+	if _, err := tx.Exec(insertUserSQL(tx, true),
+		userID, req.OwnerName, req.Email, string(hashedPassword), roleVal, req.Phone); err != nil {
 		tx.Rollback()
 		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Email already registered"})

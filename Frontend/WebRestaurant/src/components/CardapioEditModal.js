@@ -7,7 +7,8 @@ import Texts from "../constants/Texts";
 import helper from "../helpers/helper";
 import ModalAddItens from "./ModalAddItens";
 import productsModel from "../services/products.model";
-import { FiX, FiSave, FiTrash2 } from "react-icons/fi";
+import { FiX, FiSave, FiTrash2, FiCamera, FiLoader } from "react-icons/fi";
+import { uploadImage } from "../helpers/imageUpload";
 import { establishmentIdOf } from "../helpers/session";
 
 const getInitialFormData = (item) => ({
@@ -31,6 +32,24 @@ const CardapioEditModal = ({
   const [formData, setFormData] = useState(getInitialFormData(item));
   const [isOpenModal, setIsOpenModal] = useState(false);
   const [isCategory, setIsCategory] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  // Foto do produto por upload (antes era um campo para colar link). O
+  // servidor exige o id do produto (/upload/products/:id confere o dono).
+  const handleImage = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !formData.ID) return;
+    setUploading(true);
+    try {
+      const url = await uploadImage(`products/${formData.ID}`, file, 1200);
+      setFormData((prev) => ({ ...prev, Image: url }));
+      toast.info("Foto enviada. Clique em Salvar para aplicar no produto.");
+    } catch (err) {
+      toast.error(err.message || "Erro ao enviar a foto");
+    }
+    setUploading(false);
+  };
 
   useEffect(() => {
     if (item) {
@@ -181,19 +200,28 @@ const CardapioEditModal = ({
           </div>
 
           <div className="mb-4">
-            <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
-              Imagem URL
-            </label>
-            <input
-              type="text"
-              id="Image"
-              maxLength={450}
-              name="Image"
-              value={formData.Image}
-              onChange={handleChange}
-              placeholder="https://..."
-              className="block w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white"
-            />
+            <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Foto</label>
+            {formData.ID ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                  {uploading ? <FiLoader className="h-4 w-4 animate-spin" /> : <FiCamera className="h-4 w-4" />}
+                  {formData.Image ? "Trocar foto" : "Enviar foto"}
+                  <input type="file" accept="image/*" className="hidden" disabled={uploading} onChange={handleImage} />
+                </label>
+                {formData.Image && (
+                  <button
+                    type="button"
+                    className="rounded-xl px-3 py-2 text-sm text-gray-500 hover:bg-gray-50"
+                    onClick={() => setFormData((prev) => ({ ...prev, Image: "" }))}
+                  >
+                    Remover foto
+                  </button>
+                )}
+                <span className="text-xs text-gray-500">Foto do celular pode: reduzimos automaticamente.</span>
+              </div>
+            ) : (
+              <p className="text-xs text-gray-500">Salve o produto primeiro; depois abra de novo para enviar a foto.</p>
+            )}
           </div>
 
           <div className="mb-4">

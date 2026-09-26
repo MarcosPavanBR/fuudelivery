@@ -129,7 +129,8 @@ function Taxes() {
                 porcentagens incidem sobre o TOTAL pago (com o frete). A loja
                 fica com a parte dela, a plataforma com a comissão, e o que
                 sobra paga a entrega — sobra de novo vai para a plataforma;
-                frete maior que a sobra sai da parte da loja. Mostrar só "5%"
+                frete maior que a sobra sai da comissão da plataforma
+                (só quando nem zerando a comissão cabe é que a loja cede). Mostrar só "5%"
                 e "85%" fazia parecer que 10% sumiam. */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-3">
               <div>
@@ -149,7 +150,7 @@ function Taxes() {
             </div>
             <p className="text-xs text-gray-500 mb-4">
               Sobre o total pago pelo cliente em pedidos online. A parte "Entrega" paga o frete do entregador; se sobrar,
-              fica com a plataforma, e se o frete for maior, a diferença sai da sua parte.
+              fica com a plataforma. Se o frete for maior, a diferença sai da comissão da plataforma, não da sua parte.
             </p>
 
             {!zoneFee.has_zone && (

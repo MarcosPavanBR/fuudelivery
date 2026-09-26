@@ -34,7 +34,8 @@ const TopMenu = ({ toggleMenu, isOpen }) => {
       if (res) toast.success(Texts.establishment_open);
       else toast.error("Seu estabelecimento foi fechado.");
     } catch (e) {
-      toast.error("Não foi possível alterar o status agora.");
+      // Ex.: "Loja desativada pelo administrador" — mostrar o motivo real.
+      toast.error(e?.response?.data?.error || "Não foi possível alterar o status agora.");
     }
   };
 

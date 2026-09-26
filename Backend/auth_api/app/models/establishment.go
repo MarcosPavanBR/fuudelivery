@@ -1,5 +1,7 @@
 package models
 
+import "time"
+
 type Establishment struct {
 	ID                   uint   `gorm:"primaryKey;autoIncrement" json:"id"`
 	Name                 string `json:"name"`
@@ -16,6 +18,11 @@ type Establishment struct {
 	MaxDistanceDelivery float64 `json:"max_distance_delivery"`
 
 	OpenData *string `json:"open_data,omitempty"`
+
+	// DisabledAt: loja desativada pelo admin. Some da vitrine, não recebe
+	// pedidos e a própria loja não consegue abrir; o histórico fica intacto
+	// (excluir só é permitido para loja sem pedidos — DeleteEstablishment).
+	DisabledAt *time.Time `gorm:"column:disabled_at" json:"disabled_at,omitempty"`
 
 	PaymentWalletID string `json:"-" gorm:"size:100"` // fora do JSON: GET /establishments e /establishments/:id são públicas
 

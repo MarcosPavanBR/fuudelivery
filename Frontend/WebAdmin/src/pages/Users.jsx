@@ -68,8 +68,10 @@ export default function Users() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const estId = parseInt(formData.establishment_id, 10);
-    if (formData.role !== "admin" && !estId) {
-      toast.error("Escolha a loja deste usuário.");
+    // Sem loja é permitido (tirar alguém da equipe sem apagar a conta), mas
+    // essa pessoa não consegue usar o site do restaurante até ser vinculada.
+    if (formData.role !== "admin" && !estId &&
+        !confirm("Sem loja, esta pessoa não consegue usar o site do restaurante até ser vinculada a uma. Continuar?")) {
       return;
     }
     // establishment_id vai como número: o texto "1" fazia o servidor recusar o JSON.
@@ -79,7 +81,8 @@ export default function Users() {
       phone: formData.phone.trim(),
       role: formData.role,
       status: formData.status,
-      ...(estId ? { establishment_id: estId } : {}),
+      // Na edição manda sempre: 0 tira da loja (admin também fica sem loja).
+      ...(editing || estId ? { establishment_id: formData.role === "admin" ? 0 : estId || 0 } : {}),
       ...(formData.password ? { password: formData.password } : {}),
     };
     setSaving(true);
@@ -193,7 +196,7 @@ export default function Users() {
                     <td className="px-6 py-4"><span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${roleColor(u.role)}`}>{roleLabel(u.role)}</span></td>
                     <td className="px-6 py-4"><span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${st?.color || "bg-gray-100 text-gray-800"}`}>{st?.label || u.status}</span></td>
                     <td className="px-6 py-4 text-sm text-gray-600">
-                      {u.establishment_id ? (establishments.find((e) => e.id === u.establishment_id)?.name || `#${u.establishment_id} (removida)`) : "—"}
+                      {u.establishment_id ? (establishments.find((e) => e.id === u.establishment_id)?.name || `#${u.establishment_id} (removida)`) : isAdminRole(u.role) ? "—" : <span className="text-amber-600">Sem loja</span>}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500">{u.createdAt ? new Date(u.createdAt).toLocaleDateString("pt-BR") : "—"}</td>
                     <td className="px-6 py-4">
@@ -244,9 +247,9 @@ export default function Users() {
               </div>
               {formData.role !== "admin" && (
                 <div>
-                  <label className={labelCls}>Loja *</label>
+                  <label className={labelCls}>Loja</label>
                   <select value={formData.establishment_id} onChange={set("establishment_id")} className={inputCls}>
-                    <option value="">Escolha...</option>
+                    <option value="">Sem loja (sem acesso ao site do restaurante)</option>
                     {establishments.map((e) => <option key={e.id} value={String(e.id)}>{e.name}</option>)}
                   </select>
                 </div>

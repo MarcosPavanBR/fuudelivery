@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"log"
 	"strings"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/carloshomar/fuudelivery/auth_api/app/models"
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 // RegisterEstablishment cadastra um restaurante e a conta do dono em uma
@@ -290,6 +292,8 @@ func HandlerEstablishmentStatus(c *fiber.Ctx) error {
 
 	if establishment.OpenData != nil {
 		establishment.OpenData = nil
+	} else if establishment.DisabledAt != nil {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Loja desativada pelo administrador. Fale com o suporte FuuDelivery."})
 	} else {
 		currentTime := time.Now()
 		currentTimeString := currentTime.Format(time.RFC3339)
@@ -426,13 +430,26 @@ func UpdateEstablishmentWallet(c *fiber.Ctx) error {
 	})
 }
 
+// Tabelas com histórico que não pode sumir: loja com qualquer linha nelas só
+// pode ser desativada, nunca excluída.
+var establishmentHistoryTables = []string{"order_documents", "orders", "payments", "establishment_debts"}
+
+// Dados da loja que saem junto quando ela é excluída (não há histórico).
+var establishmentOwnedTables = []string{
+	"business_hours", "coupons", "deliveries", "delivery_solicitations",
+	"sponsor_bookings", "sponsored_listings", "reviews",
+}
+
+// DeleteEstablishment exclui a loja — só quando ela não tem pedidos nem
+// movimento financeiro (409 com has_history, e o painel oferece desativar).
+// Antes apagava só a linha de establishments: produtos, horários e cupons
+// ficavam órfãos e o dono não conseguia mais entrar no painel. Agora o
+// cardápio e as configurações saem juntos, e os usuários da loja ficam sem
+// loja (a conta continua; o admin pode vinculá-la a outra).
 func DeleteEstablishment(c *fiber.Ctx) error {
 	id := c.Params("id")
 	if !validID(id) {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ID inválido"})
-	}
-	if id == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid establishment ID"})
 	}
 
 	var establishment models.Establishment
@@ -440,11 +457,103 @@ func DeleteEstablishment(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Establishment not found"})
 	}
 
-	if err := models.DB.Delete(&establishment).Error; err != nil {
+	err := models.DB.Transaction(func(tx *gorm.DB) error {
+		for _, t := range establishmentHistoryTables {
+			if !tableExists(tx, t) {
+				continue
+			}
+			var n int64
+			if err := tx.Table(t).Where("establishment_id = ?", establishment.ID).Count(&n).Error; err != nil {
+				return err
+			}
+			if n > 0 {
+				return errEstablishmentHasHistory
+			}
+		}
+
+		// Cardápio: tabelas de ligação primeiro (FK para products/categories/additionals).
+		links := []struct{ table, col, parent string }{
+			{"category_products", "product_id", "products"},
+			{"category_products", "category_id", "categories"},
+			{"additional_products", "product_id", "products"},
+			{"additional_products", "additional_id", "additionals"},
+		}
+		for _, l := range links {
+			if !tableExists(tx, l.table) || !tableExists(tx, l.parent) {
+				continue
+			}
+			if err := tx.Exec("DELETE FROM "+l.table+" WHERE "+l.col+" IN (SELECT id FROM "+l.parent+" WHERE establishment_id = ?)", establishment.ID).Error; err != nil {
+				return err
+			}
+		}
+		for _, t := range append([]string{"products", "categories", "additionals"}, establishmentOwnedTables...) {
+			if !tableExists(tx, t) {
+				continue
+			}
+			if err := tx.Exec("DELETE FROM "+t+" WHERE establishment_id = ?", establishment.ID).Error; err != nil {
+				return err
+			}
+		}
+		if tableExists(tx, "refresh_tokens") {
+			if err := tx.Exec("UPDATE refresh_tokens SET revoked = true WHERE revoked = false AND user_id IN (SELECT id FROM users WHERE establishment_id = ?)", establishment.ID).Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.Exec("UPDATE users SET establishment_id = 0 WHERE establishment_id = ?", establishment.ID).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&establishment).Error
+	})
+	if errors.Is(err, errEstablishmentHasHistory) {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+			"error":       "Esta loja tem pedidos ou movimento financeiro e não pode ser excluída. Desative-a: ela sai do app e o histórico fica guardado.",
+			"has_history": true,
+		})
+	}
+	if err != nil {
+		log.Printf("[ADMIN] excluir loja %d: %v", establishment.ID, err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete establishment"})
 	}
 
 	return c.JSON(fiber.Map{"message": "Establishment deleted successfully"})
+}
+
+var errEstablishmentHasHistory = errors.New("establishment has history")
+
+func tableExists(tx *gorm.DB, table string) bool {
+	var reg *string
+	tx.Raw("SELECT to_regclass(?)::text", table).Scan(&reg)
+	return reg != nil && *reg != ""
+}
+
+// SetEstablishmentDisabled — PUT /establishments/:id/disabled (adminRequired)
+// com {"disabled": true|false}. Desativar fecha a loja e impede que ela se
+// reabra (HandlerEstablishmentStatus); reativar só libera — quem abre é a
+// loja.
+func SetEstablishmentDisabled(c *fiber.Ctx) error {
+	id := c.Params("id")
+	if !validID(id) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "ID inválido"})
+	}
+	var req struct {
+		Disabled *bool `json:"disabled"`
+	}
+	if err := c.BodyParser(&req); err != nil || req.Disabled == nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Informe disabled: true ou false"})
+	}
+	var est models.Establishment
+	if err := models.DB.First(&est, "id = ?", id).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Establishment not found"})
+	}
+	updates := map[string]interface{}{"disabled_at": nil}
+	if *req.Disabled {
+		updates["disabled_at"] = time.Now()
+		updates["open_data"] = nil
+	}
+	if err := models.DB.Model(&est).Updates(updates).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update establishment"})
+	}
+	return c.JSON(fiber.Map{"message": "ok", "disabled": *req.Disabled})
 }
 
 // AdminEstablishment é a linha da tela de estabelecimentos do painel admin:

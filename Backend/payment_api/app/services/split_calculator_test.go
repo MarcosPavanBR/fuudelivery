@@ -193,3 +193,25 @@ func TestCalculateSplitRules_NaoSuperAloca(t *testing.T) {
 		})
 	}
 }
+
+// Frete acima da sobra (100% - loja - plataforma): quem cede é a plataforma
+// (decisão de 2026-09-26). A loja só perde quando nem zerando a comissão cabe.
+func TestCalculateSplitRules_FreteAltoSaiDaPlataforma(t *testing.T) {
+	// R$ 100 com frete de R$ 14, 5%/85%: loja 85 (cheio), entrega 14,
+	// plataforma fica com o 1 que sobra — antes a loja recebia 81.
+	r, err := CalculateSplitRules(&models.Payment{Amount: 100, DeliveryAmount: 14, CustomerID: 1}, 5, 85)
+	assert.NoError(t, err)
+	assert.InDelta(t, 85, r.EstablishmentAmt, 0.001)
+	assert.InDelta(t, 14, r.DeliveryAmt, 0.001)
+	assert.InDelta(t, 1, r.PlatformFee, 0.001)
+
+	// Frete de R$ 4 em R$ 100: tudo cabe; a sobra (6) fica com a plataforma.
+	r, _ = CalculateSplitRules(&models.Payment{Amount: 100, DeliveryAmount: 4, CustomerID: 1}, 5, 85)
+	assert.InDelta(t, 85, r.EstablishmentAmt, 0.001)
+	assert.InDelta(t, 11, r.PlatformFee, 0.001)
+
+	// Frete tão alto que loja + entrega passam do total: aí a loja cede.
+	r, _ = CalculateSplitRules(&models.Payment{Amount: 20, DeliveryAmount: 19, CustomerID: 1}, 10, 85)
+	assert.InDelta(t, 0, r.PlatformFee, 0.001)
+	assert.InDelta(t, 1, r.EstablishmentAmt, 0.001)
+}

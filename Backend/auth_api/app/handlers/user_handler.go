@@ -351,7 +351,7 @@ func UpdateUser(c *fiber.Ctx) error {
 		Password        string  `json:"password"`   // só admin (redefinir senha)
 		Role            string  `json:"role"`
 		Status          string  `json:"status"`
-		EstablishmentID uint    `json:"establishment_id"`
+		EstablishmentID *uint   `json:"establishment_id"` // 0 = tira o usuário da loja
 	}
 	if err := c.BodyParser(&request); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to parse request body"})
@@ -412,8 +412,17 @@ func UpdateUser(c *fiber.Ctx) error {
 		if request.Status != "" {
 			updates["status"] = request.Status
 		}
-		if request.EstablishmentID != 0 {
-			updates["establishment_id"] = request.EstablishmentID
+		// Ponteiro: 0 explícito desvincula (antes o 0 era ignorado e não
+		// havia como tirar alguém de uma loja).
+		if request.EstablishmentID != nil {
+			if estID := *request.EstablishmentID; estID != 0 {
+				var n int64
+				models.DB.Model(&models.Establishment{}).Where("id = ?", estID).Count(&n)
+				if n == 0 {
+					return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Estabelecimento não encontrado"})
+				}
+			}
+			updates["establishment_id"] = *request.EstablishmentID
 		}
 	}
 
@@ -424,9 +433,14 @@ func UpdateUser(c *fiber.Ctx) error {
 	if err := models.DB.Model(&user).Updates(updates).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update user"})
 	}
-	// Senha redefinida pelo admin: derruba as sessões abertas com a antiga.
-	if _, changed := updates["password"]; changed {
-		models.DB.Model(&models.RefreshToken{}).Where("user_id = ? AND revoked = false", user.ID).Update("revoked", true)
+	// Senha, loja, papel ou status mudados pelo admin: derruba as sessões
+	// abertas. O token de acesso carrega loja e papel e dura 15 min; sem
+	// revogar o refresh, quem saiu da loja seguia renovando o acesso a ela.
+	for _, k := range []string{"password", "establishment_id", "role", "status"} {
+		if _, changed := updates[k]; changed {
+			models.DB.Model(&models.RefreshToken{}).Where("user_id = ? AND revoked = false", user.ID).Update("revoked", true)
+			break
+		}
 	}
 
 	return c.JSON(fiber.Map{"message": "User updated successfully", "id": user.ID})

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { FiPlus, FiSearch, FiEdit, FiTrash2, FiMapPin, FiFilter, FiActivity, FiX, FiPower, FiPhone, FiMail } from "react-icons/fi";
+import { FiPlus, FiSearch, FiEdit, FiTrash2, FiMapPin, FiFilter, FiActivity, FiX, FiPower, FiPhone, FiMail, FiSlash } from "react-icons/fi";
 import api from "../services/api";
 import { toast } from "react-toastify";
 import {
@@ -91,13 +91,43 @@ export default function Establishments() {
     }
   };
 
-  const handleDelete = async (est) => {
-    if (!confirm(`Excluir "${est.name}"? Essa ação não pode ser desfeita.`)) return;
+  const setDisabled = async (est, disabled) => {
+    const msg = disabled
+      ? `Desativar "${est.name}"? Ela sai do app, para de receber pedidos e não consegue se abrir. Pedidos e repasses antigos ficam guardados.`
+      : `Reativar "${est.name}"? A loja volta a poder se abrir para pedidos.`;
+    if (!confirm(msg)) return;
     try {
-      await api.delete(`/establishments/${est.id}`);
-      toast.success("Excluído");
+      await api.put(`/establishments/${est.id}/disabled`, { disabled });
+      toast.success(disabled ? "Loja desativada" : "Loja reativada");
       loadEstablishments();
     } catch (e) {
+      toast.error(e.response?.data?.error || "Erro ao mudar a loja");
+    }
+  };
+
+  // Excluir só vale para loja sem pedidos; com histórico o servidor responde
+  // 409 e a saída é desativar.
+  const handleDelete = async (est) => {
+    if (!confirm(`Excluir "${est.name}" de vez? O cardápio e os horários saem junto e os usuários dela ficam sem loja. Não dá para desfazer.`)) return;
+    try {
+      await api.delete(`/establishments/${est.id}`);
+      toast.success("Loja excluída");
+      loadEstablishments();
+    } catch (e) {
+      if (e.response?.status === 409) {
+        if (!est.disabled_at && confirm(`${e.response.data.error}\n\nDesativar agora?`)) {
+          try {
+            await api.put(`/establishments/${est.id}/disabled`, { disabled: true });
+            toast.success("Loja desativada");
+            loadEstablishments();
+          } catch (err) {
+            toast.error(err.response?.data?.error || "Erro ao desativar");
+          }
+        } else if (est.disabled_at) {
+          toast.info("Esta loja tem histórico e já está desativada.");
+        }
+        return;
+      }
       toast.error(e.response?.data?.error || "Erro ao excluir");
     }
   };
@@ -162,6 +192,7 @@ export default function Establishments() {
               <option value="">Todos</option>
               <option value="open">Abertos</option>
               <option value="closed">Fechados</option>
+              <option value="disabled">Desativadas</option>
             </select>
           </div>
         </div>
@@ -227,16 +258,27 @@ export default function Establishments() {
                       {est.location_string && (!est.lat || !est.long) && <p className="text-xs text-amber-600 mt-1">Sem coordenadas</p>}
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${est.accepting_orders ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-700"}`}>
-                        {est.accepting_orders ? "Aberto" : "Fechado"}
-                      </span>
+                      {est.disabled_at ? (
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">Desativada</span>
+                      ) : (
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${est.accepting_orders ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-700"}`}>
+                          {est.accepting_orders ? "Aberto" : "Fechado"}
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">
                       até {Number(est.max_distance_delivery || 0).toLocaleString("pt-BR")} km
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-1 justify-end">
-                        <button onClick={() => handleToggle(est)} className={`p-2 rounded-lg transition-colors ${est.accepting_orders ? "text-green-600 hover:bg-green-50" : "text-gray-400 hover:bg-gray-100"}`} title={est.accepting_orders ? "Fechar para pedidos" : "Abrir para pedidos"}><FiPower className="h-4 w-4" /></button>
+                        {est.disabled_at ? (
+                          <button onClick={() => setDisabled(est, false)} className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-green-700 hover:bg-green-50" title="Reativar loja">Reativar</button>
+                        ) : (
+                          <>
+                            <button onClick={() => handleToggle(est)} className={`p-2 rounded-lg transition-colors ${est.accepting_orders ? "text-green-600 hover:bg-green-50" : "text-gray-400 hover:bg-gray-100"}`} title={est.accepting_orders ? "Fechar para pedidos" : "Abrir para pedidos"}><FiPower className="h-4 w-4" /></button>
+                            <button onClick={() => setDisabled(est, true)} className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors" title="Desativar loja"><FiSlash className="h-4 w-4" /></button>
+                          </>
+                        )}
                         <button onClick={() => openEdit(est)} className="p-2 text-gray-400 hover:text-fuu-red hover:bg-fuu-red-light rounded-lg transition-colors" title="Editar"><FiEdit className="h-4 w-4" /></button>
                         <button onClick={() => handleDelete(est)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Excluir"><FiTrash2 className="h-4 w-4" /></button>
                       </div>

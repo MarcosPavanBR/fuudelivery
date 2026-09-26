@@ -74,8 +74,9 @@ export function matchesSearch(est, term) {
 }
 
 export function matchesStatus(est, status) {
+  if (status === "disabled") return !!est.disabled_at;
   if (status === "open") return !!est.accepting_orders;
-  if (status === "closed") return !est.accepting_orders;
+  if (status === "closed") return !est.accepting_orders && !est.disabled_at;
   return true;
 }
 

@@ -20,8 +20,11 @@ const Cardapio = () => {
   const [loadError, setLoadError] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
 
+  // Spinner só na primeira carga: recarregar trocando a lista pelo spinner
+  // DESMONTAVA o modal aberto — vincular uma categoria fechava o produto e
+  // perdia o que não estava salvo.
   async function start() {
-    setLoad(true);
+    if (items.length === 0) setLoad(true);
     try {
       const establishmentId = establishmentIdOf(getUser());
       const products = await productsModel.getProducts(establishmentId);

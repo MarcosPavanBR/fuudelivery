@@ -43,18 +43,31 @@ const CardapioEditModal = ({
     setUploading(true);
     try {
       const url = await uploadImage(`products/${formData.ID}`, file, 1200);
+      // Grava na hora (como a logo): a foto não depende do "Salvar".
+      await api.put(`/products/update/${formData.ID}`, {
+        name: formData.Name,
+        description: formData.Description,
+        price: parseFloat(formData.Price) || 0,
+        image: url,
+      });
       setFormData((prev) => ({ ...prev, Image: url }));
-      toast.info("Foto enviada. Clique em Salvar para aplicar no produto.");
+      onRefreshItens();
+      toast.success("Foto do produto atualizada!");
     } catch (err) {
       toast.error(err.message || "Erro ao enviar a foto");
     }
     setUploading(false);
   };
 
+  // Mesmo produto atualizado (vínculo de categoria/adicional): troca só as
+  // listas e preserva o que está sendo editado. Produto diferente: recarrega.
   useEffect(() => {
-    if (item) {
-      setFormData(getInitialFormData(item));
-    }
+    if (!item) return;
+    setFormData((prev) =>
+      prev.ID && prev.ID === item.ID
+        ? { ...prev, Categories: item.Categories ?? [], Additional: item.Additional ?? [] }
+        : getInitialFormData(item)
+    );
   }, [item]);
 
   const handleChange = (e) => {
@@ -101,6 +114,7 @@ const CardapioEditModal = ({
   };
 
   const deleteProduct = async () => {
+    if (!window.confirm(`Remover "${formData.Name}" do cardápio? Isto não pode ser desfeito.`)) return;
     const resp = await productsModel.deleteProduct(item.ID);
     if (resp) {
       toast.success(Texts.removido_produto);

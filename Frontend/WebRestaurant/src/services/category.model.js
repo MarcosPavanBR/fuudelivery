@@ -26,8 +26,9 @@ async function createCategory(items, editItem, establishmentId) {
       ...items.filter((e) => e.ID !== Strings.id_default),
     ];
   } catch (e) {
+    // Falha vira null: antes devolvia a lista e a tela dizia "sucesso".
     console.error(e);
-    return items;
+    return null;
   }
 }
 
@@ -46,7 +47,7 @@ async function updateCategory(items, editItem, establishmentId) {
       return e;
     });
   } catch (e) {
-    return items;
+    return null;
   }
 }
 

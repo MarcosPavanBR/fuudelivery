@@ -24,6 +24,8 @@ const ModalAddItens = ({
   const { getUser } = useAuth();
   const [selectedItems, setSelectedItems] = useState([]);
   const [editItem, setEditItem] = useState(null);
+  // A busca existia na tela mas não filtrava nada.
+  const [search, setSearch] = useState("");
 
   const init = async () => {
     const myid = establishmentIdOf(getUser());
@@ -46,6 +48,7 @@ const ModalAddItens = ({
       finalItem = isCreate
         ? await categoryModel.createCategory(items, editItem, establishmentIdOf(getUser()))
         : await categoryModel.updateCategory(items, editItem, establishmentIdOf(getUser()));
+      if (!finalItem) { toast.error(Texts.erro_cardapio); return; }
     }
     const tag = isCategory ? "Categories" : "Additional";
     if (item[tag].find((e) => e.ID === editItem.ID))
@@ -105,6 +108,8 @@ const ModalAddItens = ({
   };
 
   const deleteItem = async (id) => {
+    const alvo = items.find((e) => e.ID === id);
+    if (!window.confirm(`Excluir ${isCategory ? "a categoria" : "o adicional"} "${alvo?.Name || ""}"? Sai de todos os produtos.`)) return;
     const newItem = isCategory
       ? await categoryModel.deleteCategory(items, id)
       : await additionalsModel.deleteAdditional(items, id);
@@ -146,6 +151,8 @@ const ModalAddItens = ({
         <div className="px-6 py-4 flex gap-3">
           <input
             type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder={Texts.search_placeholer}
             className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white"
           />
@@ -173,7 +180,9 @@ const ModalAddItens = ({
               </tr>
             </thead>
             <tbody>
-              {items.map((myItem) => (
+              {items
+                .filter((it) => it.edit || !search || String(it.Name || "").toLowerCase().includes(search.toLowerCase()))
+                .map((myItem) => (
                 <tr key={myItem.ID} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
                   <td className="py-3 px-3 text-sm font-medium" style={{ color: "#DC2626" }}>
                     {myItem.ID !== Strings.id_default ? myItem.ID : "-"}

@@ -1,6 +1,8 @@
 package models
 
 import (
+	"database/sql/driver"
+	"fmt"
 	"time"
 )
 
@@ -39,7 +41,7 @@ type OrderDocument struct {
 	IsScheduled     bool `gorm:"column:is_scheduled"`
 
 	// Payload é o documento completo (dto.RequestPayload serializado).
-	Payload []byte `gorm:"type:jsonb;column:payload"`
+	Payload JSONB `gorm:"type:jsonb;column:payload"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -48,3 +50,31 @@ type OrderDocument struct {
 // TableName fixa o nome da tabela (GORM pluralizaria para "order_documents"
 // por padrão, mas deixamos explícito para auditoria e clareza).
 func (OrderDocument) TableName() string { return "order_documents" }
+
+// JSONB é o payload do pedido. Vai ao banco como TEXTO: a conexão usa
+// default_query_exec_mode=simple_protocol (pgbouncer do Supabase), e nesse
+// modo o pgx manda []byte como bytea ('\x7b22...') — o jsonb recusa com
+// "invalid input syntax for type json" e NENHUM pedido era gravado. Mesmo
+// padrão de SplitRules (payment_api) e ProductList (delivery_api).
+type JSONB []byte
+
+func (j JSONB) Value() (driver.Value, error) {
+	if len(j) == 0 {
+		return nil, nil
+	}
+	return string(j), nil
+}
+
+func (j *JSONB) Scan(src interface{}) error {
+	switch v := src.(type) {
+	case nil:
+		*j = nil
+	case []byte:
+		*j = append((*j)[:0], v...)
+	case string:
+		*j = JSONB(v)
+	default:
+		return fmt.Errorf("payload: tipo inesperado %T", src)
+	}
+	return nil
+}

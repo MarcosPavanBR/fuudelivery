@@ -109,6 +109,35 @@ func issueSponsorPix(ctx context.Context, b *authModels.SponsorBooking) error {
 
 var errSponsorSlotsGone = errors.New("vagas ocupadas")
 
+// refundSponsorToWallet cancela a reserva (se ainda não estiver) e devolve o
+// valor à carteira da loja. Idempotente pelo índice único do crédito.
+func refundSponsorToWallet(id uint, now time.Time) error {
+	return models.DB.Transaction(func(tx *gorm.DB) error {
+		var b authModels.SponsorBooking
+		if err := tx.First(&b, id).Error; err != nil {
+			return err
+		}
+		upd := map[string]interface{}{"paid_at": now}
+		if b.Status != authModels.SponsorBookingCancelled {
+			upd["status"] = authModels.SponsorBookingCancelled
+			upd["cancelled_at"] = now
+		}
+		if b.PaidAt != nil {
+			delete(upd, "paid_at")
+		}
+		if err := tx.Model(&b).Updates(upd).Error; err != nil {
+			return err
+		}
+		desc := fmt.Sprintf("Devolução do destaque %s a %s (pago sem vaga)", b.StartDay, b.EndDay)
+		_, err := models.AdjustWalletBalance(tx, int64(b.EstablishmentID), sponsorWalletType,
+			"credit", "sponsor", b.Total, sponsorRefundRef(b.ID), desc, "")
+		if errors.Is(err, models.ErrDuplicateCredit) {
+			return nil
+		}
+		return err
+	})
+}
+
 // activateSponsorBooking liga uma reserva pendente como paga. Idempotente.
 // Reserva expirada só liga se as vagas ainda estiverem livres; senão devolve
 // errSponsorSlotsGone (o chamador decide o que fazer com o dinheiro).
@@ -159,19 +188,19 @@ func settleSponsorCharge(chargeID string, paidCents int64, now time.Time) (handl
 		}
 		return activateSponsorBooking(tx, &b, now)
 	})
-	switch {
-	case err == nil:
+	if err == nil {
 		log.Printf("[SPONSOR] reserva %d paga por PIX — destaque ativo", b.ID)
-	case errors.Is(err, errSponsorSlotsGone):
-		// Pagou depois de a vaga expirar e ser vendida: fica registrado como
-		// pago e pendente, e o admin estorna ou remarca (tela Destaques).
-		models.DB.Model(&b).Update("paid_at", now)
-		log.Printf("[SPONSOR] reserva %d PAGA mas as vagas foram ocupadas — estornar/remarcar", b.ID)
-	default:
-		// Ex.: a loja cancelou a reserva e pagou o PIX mesmo assim. O
-		// dinheiro entrou: registra para o admin estornar.
-		models.DB.Model(&b).Update("paid_at", now)
-		log.Printf("[SPONSOR] reserva %d PAGA mas não ligou (%v) — estornar", b.ID, err)
+		return true
+	}
+	// Pagou mas não dá para ligar: a vaga expirou e foi vendida, ou a loja
+	// cancelou e pagou mesmo assim. O dinheiro entrou: volta como crédito na
+	// carteira da loja, na hora (serve para outra reserva ou saque), e a
+	// reserva fica cancelada. Ref sponsor-refund:<id> é a mesma do
+	// cancelamento: nunca devolve duas vezes.
+	if rErr := refundSponsorToWallet(b.ID, now); rErr != nil {
+		log.Printf("[SPONSOR] reserva %d PAGA e sem vaga (%v); crédito falhou: %v", b.ID, err, rErr)
+	} else {
+		log.Printf("[SPONSOR] reserva %d paga sem vaga (%v) — valor devolvido à carteira", b.ID, err)
 	}
 	return true
 }
@@ -183,8 +212,11 @@ func ReconcileSponsorPixOnce(now time.Time) {
 		return
 	}
 	var pending []authModels.SponsorBooking
-	if err := models.DB.Where("status = ? AND gateway_charge_id <> '' AND paid_at IS NULL AND created_at BETWEEN ? AND ?",
-		authModels.SponsorBookingPending, now.Add(-48*time.Hour), now.Add(-reconcileGracePeriod)).
+	// Cancelada também entra: PIX pago depois do cancelamento com webhook
+	// perdido ainda precisa voltar à carteira.
+	if err := models.DB.Where("status IN ? AND gateway_charge_id <> '' AND paid_at IS NULL AND created_at BETWEEN ? AND ?",
+		[]string{authModels.SponsorBookingPending, authModels.SponsorBookingCancelled},
+		now.Add(-48*time.Hour), now.Add(-reconcileGracePeriod)).
 		Limit(200).Find(&pending).Error; err != nil {
 		return
 	}

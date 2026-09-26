@@ -237,7 +237,8 @@ func CreateSponsorBooking(c *fiber.Ctx) error {
 }
 
 // CancelSponsorBooking — cancela uma reserva que ainda não começou. Se foi
-// paga pela carteira, o valor volta para ela (uma vez só: ref única).
+// paga (carteira ou PIX), o valor volta para a carteira da loja (uma vez só:
+// ref única).
 // POST /sponsored/bookings/:id/cancel (dono da loja ou admin)
 func CancelSponsorBooking(c *fiber.Ctx) error {
 	id, err := strconv.ParseUint(c.Params("id"), 10, 64)
@@ -265,7 +266,8 @@ func CancelSponsorBooking(c *fiber.Ctx) error {
 		if !admin && booking.StartDay <= today {
 			return fiber.NewError(fiber.StatusConflict, "O destaque já começou e não pode ser cancelado")
 		}
-		wasPaidByWallet := booking.Status == authModels.SponsorBookingActive && booking.PayWith == authModels.SponsorPayWallet
+		// Pago (carteira ou PIX) e ainda não começou: devolve à carteira.
+		wasPaid := booking.Status == authModels.SponsorBookingActive
 		cancelled := now
 		if err := tx.Model(&booking).Updates(map[string]interface{}{
 			"status": authModels.SponsorBookingCancelled, "cancelled_at": cancelled,
@@ -274,7 +276,7 @@ func CancelSponsorBooking(c *fiber.Ctx) error {
 		}
 		booking.Status = authModels.SponsorBookingCancelled
 		booking.CancelledAt = &cancelled
-		if wasPaidByWallet && booking.StartDay > today {
+		if wasPaid && booking.StartDay > today {
 			desc := fmt.Sprintf("Estorno do destaque %s a %s", booking.StartDay, booking.EndDay)
 			if _, err := models.AdjustWalletBalance(tx, int64(booking.EstablishmentID), sponsorWalletType,
 				"credit", "sponsor", booking.Total, sponsorRefundRef(booking.ID), desc, ""); err != nil &&

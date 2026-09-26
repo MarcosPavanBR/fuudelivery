@@ -114,10 +114,8 @@ export default function Destaques() {
                     <td className="px-4 py-3">
                       <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${st.cls}`}>{st.text}</span>
                       {expired && !b.paid_at && <span className="ml-2 text-xs text-red-600">vaga liberada</span>}
-                      {b.paid_at && b.status !== "active" && (
-                        <span className="ml-2 text-xs font-semibold text-red-600">
-                          PIX pago sem destaque ativo — estornar à loja
-                        </span>
+                      {b.paid_at && b.status === "cancelled" && (
+                        <span className="ml-2 text-xs text-gray-500">valor devolvido à carteira da loja</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
@@ -139,8 +137,8 @@ export default function Destaques() {
                             act(
                               b.id,
                               "cancel",
-                              b.status === "active" && b.pay_with === "pix"
-                                ? "Cancelar? Destaque pago por PIX: o estorno ao lojista é manual."
+                              b.status === "active"
+                                ? "Cancelar? Se ainda não começou, o valor volta para a carteira da loja."
                                 : "Cancelar esta reserva?"
                             )
                           }

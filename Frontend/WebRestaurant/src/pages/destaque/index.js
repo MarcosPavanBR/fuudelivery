@@ -76,7 +76,7 @@ function Destaque() {
     if (!window.confirm(`Cancelar o destaque de ${shortDay(b.start_day)} a ${shortDay(b.end_day)}?`)) return;
     try {
       await cancelBooking(b.id);
-      toast.success(b.pay_with === "wallet" && b.status === "active" ? "Cancelado. O valor voltou para a carteira." : "Reserva cancelada.");
+      toast.success(b.status === "active" ? "Cancelado. O valor voltou para a sua carteira." : "Reserva cancelada.");
       await load(days);
     } catch (e) {
       toast.error(e?.response?.data?.error || "Não foi possível cancelar.");
@@ -173,7 +173,7 @@ function Destaque() {
           {payWith === "pix" && (
             <p className="mt-3 text-xs text-gray-500">
               A vaga fica guardada por 24 h. Depois de reservar aparece o QR Code do PIX; o destaque liga sozinho
-              quando o pagamento cair.
+              quando o pagamento cair. Se cancelar antes de começar, o valor volta para a sua carteira.
             </p>
           )}
 

@@ -303,8 +303,8 @@ func TestSponsorPix_VarreduraCobreWebhookPerdido(t *testing.T) {
 	require.Equal(t, authModels.SponsorBookingActive, reload(t, id).Status)
 }
 
-// Pagou depois de a vaga expirar e ser vendida: não liga, fica registrado
-// como pago para o admin estornar. Gateway fora: reserva segue, sem PIX.
+// Pagou depois de a vaga expirar e ser vendida: não liga e o valor volta à
+// carteira da loja uma vez só. Gateway fora: reserva segue, sem PIX.
 func TestSponsorPix_PagoSemVagaEGatewayFora(t *testing.T) {
 	app := setupSponsor(t)
 	stubSponsorPix(t, nil)
@@ -321,10 +321,14 @@ func TestSponsorPix_PagoSemVagaEGatewayFora(t *testing.T) {
 		require.Equal(t, 201, code, "%v", o)
 	}
 	b := reload(t, pixID)
-	require.True(t, settleSponsorCharge(b.GatewayChargeID, 1500, time.Now()))
+	before := currentBalance(t, 4, "establishment")
+	for i := 0; i < 2; i++ { // webhook repetido
+		require.True(t, settleSponsorCharge(b.GatewayChargeID, 1500, time.Now()))
+	}
 	b = reload(t, pixID)
-	require.Equal(t, authModels.SponsorBookingPending, b.Status)
-	require.NotNil(t, b.PaidAt, "pagamento registrado para o admin estornar")
+	require.Equal(t, authModels.SponsorBookingCancelled, b.Status, "sem vaga: não liga")
+	require.NotNil(t, b.PaidAt)
+	require.InDelta(t, before+15, currentBalance(t, 4, "establishment"), 0.001, "o valor volta à carteira, uma vez")
 
 	createSponsorPix = func(context.Context, *gateway.TransactionRequest) (*gateway.TransactionResponse, error) {
 		return nil, fmt.Errorf("gateway fora")
@@ -333,4 +337,41 @@ func TestSponsorPix_PagoSemVagaEGatewayFora(t *testing.T) {
 	require.Equal(t, 201, code, "%v", out)
 	require.Contains(t, out["message"], "fora do ar")
 	require.Empty(t, reload(t, bookingID(out)).GatewayChargeID)
+}
+
+// Destaque pago por PIX e cancelado pela loja antes de começar: o valor
+// volta à carteira (antes era estorno manual); PIX pago de reserva que a
+// loja já cancelou também volta, uma vez.
+func TestSponsorPix_CancelamentoDevolveNaCarteira(t *testing.T) {
+	app := setupSponsor(t)
+	stubSponsorPix(t, nil)
+	seedStore(t, 7, 0)
+
+	_, out := book(t, app, 7, dayFromToday(3), 2, "pix") // R$ 30
+	id := bookingID(out)
+	require.True(t, settleSponsorCharge(reload(t, id).GatewayChargeID, 3000, time.Now()))
+	require.Equal(t, authModels.SponsorBookingActive, reload(t, id).Status)
+	code, o := call(t, app, http.MethodPost, fmt.Sprintf("/sponsorship/bookings/%d/cancel", id), storeToken(t, 7), "")
+	require.Equal(t, 200, code, "%v", o)
+	require.InDelta(t, 30.0, currentBalance(t, 7, "establishment"), 0.001)
+
+	// Cancela ainda pendente e depois paga o PIX.
+	_, out = book(t, app, 7, dayFromToday(5), 1, "pix") // R$ 15
+	id2 := bookingID(out)
+	code, _ = call(t, app, http.MethodPost, fmt.Sprintf("/sponsorship/bookings/%d/cancel", id2), storeToken(t, 7), "")
+	require.Equal(t, 200, code)
+	for i := 0; i < 2; i++ {
+		require.True(t, settleSponsorCharge(reload(t, id2).GatewayChargeID, 1500, time.Now()))
+	}
+	require.Equal(t, authModels.SponsorBookingCancelled, reload(t, id2).Status)
+	require.InDelta(t, 45.0, currentBalance(t, 7, "establishment"), 0.001, "30 + 15, cada um uma vez")
+
+	// Webhook perdido de PIX pago após cancelar: a varredura devolve.
+	_, out = book(t, app, 7, dayFromToday(7), 1, "pix")
+	id3 := bookingID(out)
+	call(t, app, http.MethodPost, fmt.Sprintf("/sponsorship/bookings/%d/cancel", id3), storeToken(t, 7), "")
+	checkSponsorPix = func(string) (bool, int64, error) { return true, 1500, nil }
+	ReconcileSponsorPixOnce(time.Now().Add(5 * time.Minute))
+	ReconcileSponsorPixOnce(time.Now().Add(6 * time.Minute))
+	require.InDelta(t, 60.0, currentBalance(t, 7, "establishment"), 0.001, "varredura devolve uma vez")
 }

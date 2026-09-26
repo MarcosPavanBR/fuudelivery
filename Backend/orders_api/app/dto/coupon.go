@@ -38,8 +38,3 @@ type ApplyCouponRequest struct {
 	EstablishmentID uint    `json:"establishment_id"`
 	OrderValue      float64 `json:"order_value"`
 }
-
-type ReferralCouponRequest struct {
-	ReferrerPhone string `json:"referrer_phone"`
-	NewUserPhone  string `json:"new_user_phone"`
-}

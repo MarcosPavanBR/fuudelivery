@@ -70,6 +70,8 @@ func ConnectPostgresDatabase() {
 		&CouponUsage{},
 		&LoyaltyPoints{},
 		&LoyaltyTransaction{},
+		&ReferralCode{},
+		&Referral{},
 		&Review{},
 		&Batch{},
 		// Corte 1 da migração banco-único: push tokens agora em Postgres

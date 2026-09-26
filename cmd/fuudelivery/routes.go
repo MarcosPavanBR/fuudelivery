@@ -163,7 +163,8 @@ func setupOrdersRoutes(app *fiber.App) {
 	app.Get("/coupons", protectedRoute, ordersHandlers.ListCoupons)
 	app.Get("/coupons/:id", protectedRoute, ordersHandlers.GetCoupon)
 	app.Delete("/coupons/:id", protectedRoute, ordersHandlers.DeleteCoupon)
-	app.Post("/coupons/referral", protectedRoute, ordersHandlers.GenerateReferralCoupon)
+	// Indicação: código pessoal do cliente (o amigo usa no campo de cupom).
+	app.Get("/referral/me", protectedRoute, ordersHandlers.GetMyReferral)
 	app.Post("/coupons/calculate", protectedRoute, ordersHandlers.CalculateDiscount)
 	app.Get("/qrcode/:establishmentId", ordersHandlers.GenerateTableQRCode)
 	app.Post("/orders/schedule", protectedRoute, ordersHandlers.ScheduleOrder)

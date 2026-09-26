@@ -153,6 +153,15 @@ func ValidateCoupon(c *fiber.Ctx) error {
 		request.UserPhone = tokenPhone
 	}
 
+	// Código de indicação ("AMIGO..."): confere o cupom de boas-vindas deste
+	// cliente — o mesmo que o checkout vai aplicar (referral.go).
+	if welcome, matched, rErr := resolveReferralCode(request.Code, request.UserPhone); matched {
+		if rErr != nil {
+			return c.JSON(dto.ValidateCouponResponse{Valid: false, Message: rErr.Error()})
+		}
+		request.Code = welcome
+	}
+
 	var coupon models.Coupon
 	if err := models.DB.Where("code = ?", request.Code).First(&coupon).Error; err != nil {
 		return c.JSON(dto.ValidateCouponResponse{
@@ -519,108 +528,6 @@ func DeleteCoupon(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"message": "Cupom desativado com sucesso"})
-}
-
-func GenerateReferralCoupon(c *fiber.Ctx) error {
-	var request dto.ReferralCouponRequest
-	if err := c.BodyParser(&request); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Erro ao fazer parsing do corpo da requisição"})
-	}
-
-	// Você só indica por si mesmo. O telefone do indicador vinha do CORPO da
-	// requisição, sem nenhuma checagem: dava para chamar em loop com números
-	// arbitrários e cunhar cupons de R$10 à vontade (os códigos são
-	// determinísticos — "GANHOU-<telefone>" — então também dava para gerar e
-	// usar o cupom de boas-vindas de outra pessoa).
-	//
-	// Admin segue podendo gerar para qualquer um (campanha manual).
-	if role, rErr := middlewares.GetUserRoleFromToken(c); rErr != nil || role != "admin" {
-		tokenPhone, pErr := middlewares.GetUserPhoneFromToken(c)
-		if pErr != nil || tokenPhone == "" || tokenPhone != request.ReferrerPhone {
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-				"error": "Você só pode gerar cupom de indicação para o seu próprio telefone",
-			})
-		}
-	}
-
-	// Normaliza ANTES da checagem de dono: com espaço ou maiúsculas
-	// estragadas no corpo, o código cunhado embutia o lixo (INDICOU-"
-	// +5511 9999-9999") e o cupom nunca casava com o telefone de verdade.
-	request.ReferrerPhone = strings.TrimSpace(request.ReferrerPhone)
-	request.NewUserPhone = strings.TrimSpace(request.NewUserPhone)
-	if request.ReferrerPhone == "" || request.NewUserPhone == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Telefone do indicador e do novo usuário são obrigatórios",
-		})
-	}
-
-	now := time.Now()
-	referrerExpiry := now.AddDate(0, 3, 0)
-	newUserExpiry := now.AddDate(0, 3, 0)
-
-	referrerCode := "INDICOU-" + strings.ToUpper(request.ReferrerPhone)
-	newUserCode := "GANHOU-" + strings.ToUpper(request.NewUserPhone)
-
-	referrerCoupon := models.Coupon{
-		Code:           referrerCode,
-		Description:    "Cupom de indicação - Você indicou um amigo!",
-		DiscountType:   "PERCENTAGE",
-		DiscountValue:  10,
-		MinOrderValue:  0,
-		MaxUses:        1,
-		MaxUsesPerUser: 1,
-		StartDate:      now,
-		ExpiryDate:     referrerExpiry,
-		IsActive:       true,
-		// O cupom é DE quem indicou: só o telefone dele resgata. O código é
-		// determinístico, então sem esta marca qualquer um que chutasse
-		// "INDICOU-<tel>" de outra pessoa usava o cupom alheio.
-		OwnerPhone: request.ReferrerPhone,
-		// Quem banca: a indicação é programa da plataforma (o dono do app
-		// escolhe recompensar crescimento); o restaurante não pactuou nada.
-		FundedBy: models.CouponFundedByPlatform,
-	}
-
-	if err := models.DB.Create(&referrerCoupon).Error; err != nil {
-		// Código determinístico + vigência de 3 meses: indicar de novo é caso
-		// real, e o cliente merece saber disso — não um 500 com segredo de
-		// banco vazando no log.
-		if strings.Contains(strings.ToLower(err.Error()), "duplicate") ||
-			strings.Contains(strings.ToLower(err.Error()), "unique") {
-			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
-				"error": "Você já tem um cupom de indicação ativo",
-			})
-		}
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Erro ao criar cupom do indicador"})
-	}
-
-	newUserCoupon := models.Coupon{
-		Code:           newUserCode,
-		Description:    "Cupom de indicação - Seja bem-vindo!",
-		DiscountType:   "FIXED",
-		DiscountValue:  10,
-		MinOrderValue:  0,
-		MaxUses:        1,
-		MaxUsesPerUser: 1,
-		StartDate:      now,
-		ExpiryDate:     newUserExpiry,
-		IsActive:       true,
-		// Boas-vindas é pessoal do convidado: quem tem o telefone é quem usa.
-		OwnerPhone: request.NewUserPhone,
-		FundedBy:   models.CouponFundedByPlatform,
-	}
-
-	if err := models.DB.Create(&newUserCoupon).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Erro ao criar cupom do novo usuário"})
-	}
-
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"message":              "Cupons de indicação criados com sucesso",
-		"referrer_coupon_code": referrerCoupon.Code,
-		"new_user_coupon_code": newUserCoupon.Code,
-		"referrer_coupon":      referrerCoupon,
-		"new_user_coupon":      newUserCoupon,
-	})
 }
 
 func CalculateDiscount(c *fiber.Ctx) error {

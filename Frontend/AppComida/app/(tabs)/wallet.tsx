@@ -6,15 +6,21 @@ import {
   RefreshControl,
   Alert,
   ActivityIndicator,
+  Share,
 } from "react-native";
 import { useApi } from "@/contexts/ApiContext";
 import { Text, View } from "@/components/Themed";
 import Colors from "@/constants/Colors";
 import { Ionicons } from "@expo/vector-icons";
 import api from "@/services/api";
+import { useCartApi } from "@/contexts/ApiCartContext";
 
 export default function WalletScreen() {
   const { getUserData } = useApi();
+  // Cupom resgatado/validado já vai para o carrinho (antes o cliente tinha
+  // de anotar o código e digitar no checkout).
+  const { setCouponCode: setCartCoupon } = useCartApi();
+  const [referral, setReferral] = useState<any>(null);
   const [user, setUser] = useState<any>(null);
   const [walletBalance, setWalletBalance] = useState<number>(0);
   const [loyalty, setLoyalty] = useState<any>({ points: 0, tier: "bronze", total_orders: 0, total_spent: 0 });
@@ -34,11 +40,13 @@ export default function WalletScreen() {
       // /wallet/balance espera user_id; /loyalty/* espera o telefone (user_phone).
       const userId = String(u.id);
       const userPhone = u.phone ? String(u.phone) : userId;
-      const [walletRes, loyaltyRes, historyRes] = await Promise.all([
+      const [walletRes, loyaltyRes, historyRes, referralRes] = await Promise.all([
         api.get(`/wallets/balance/${userId}`).catch(() => null),
         api.get(`/loyalty/balance/${userPhone}`).catch(() => null),
         api.get(`/loyalty/history/${userPhone}`).catch(() => null),
+        api.get("/referral/me").catch(() => null),
       ]);
+      if (referralRes?.data?.code) setReferral(referralRes.data);
 
       if (walletRes?.data?.balance !== undefined) {
         setWalletBalance(walletRes.data.balance);
@@ -90,9 +98,10 @@ export default function WalletScreen() {
         order_id: "",
       });
       if (res.data.coupon_code) {
+        setCartCoupon(res.data.coupon_code);
         Alert.alert(
           "Cashback resgatado!",
-          `Use o cupom ${res.data.coupon_code} no seu próximo pedido.\nValidade: ${res.data.coupon_expires}`,
+          `Cupom ${res.data.coupon_code} de R$ ${Number(res.data.discount_value).toFixed(2).replace(".", ",")} já está no seu carrinho: o desconto entra no próximo pedido.\nValidade: ${res.data.coupon_expires}`,
           [{ text: "OK" }]
         );
         fetchData();
@@ -116,9 +125,10 @@ export default function WalletScreen() {
         order_value: 0,
       });
       if (res.data?.valid) {
+        setCartCoupon(couponCode.trim().toUpperCase());
         Alert.alert(
           "Cupom válido!",
-          `Desconto: ${res.data.discount_type === "FIXED" ? `R$ ${res.data.discount_value.toFixed(2)}` : `${res.data.discount_value}%`}`,
+          `Desconto: ${res.data.discount_type === "FIXED" ? `R$ ${res.data.discount_value.toFixed(2)}` : `${res.data.discount_value}%`}. Já está no seu carrinho.`,
           [{ text: "OK" }]
         );
       } else {
@@ -215,6 +225,32 @@ export default function WalletScreen() {
         </TouchableOpacity>
       </View>
 
+      {referral ? (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="gift" size={24} color={Colors.light.tint} />
+            <Text style={styles.sectionTitle}>Indique e ganhe</Text>
+          </View>
+          <Text style={styles.referralText}>
+            Seu amigo ganha R$ {Number(referral.welcome_value).toFixed(0)} no primeiro pedido (a partir de R${" "}
+            {Number(referral.min_order).toFixed(0)}). Quando o pedido dele for entregue, você ganha{" "}
+            {referral.reward_points} pontos (R$ {(referral.reward_points / 10).toFixed(0)} de desconto).
+          </Text>
+          <View style={styles.referralCodeBox}>
+            <Text style={styles.referralCode}>{referral.code}</Text>
+            <TouchableOpacity
+              style={styles.validateButton}
+              onPress={() => Share.share({ message: referral.share_text }).catch(() => {})}
+            >
+              <Text style={styles.validateButtonText}>Compartilhar</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.referralStats}>
+            {referral.invited} amigo(s) usaram seu código · {referral.rewarded} já renderam pontos
+          </Text>
+        </View>
+      ) : null}
+
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="pricetag" size={24} color={Colors.light.tint} />
@@ -270,6 +306,10 @@ export default function WalletScreen() {
 import { TextInput } from "react-native";
 
 const styles = StyleSheet.create({
+  referralText: { fontSize: 13, color: Colors.light.secondaryText, marginBottom: 10 },
+  referralCodeBox: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  referralCode: { fontSize: 22, fontWeight: "700", letterSpacing: 2, color: Colors.light.text },
+  referralStats: { fontSize: 12, color: Colors.light.secondaryText, marginTop: 8 },
   container: { flex: 1, backgroundColor: Colors.light.background },
   centerContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   section: {

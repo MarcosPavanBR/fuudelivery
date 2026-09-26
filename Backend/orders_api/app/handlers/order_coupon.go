@@ -77,6 +77,15 @@ func applyCouponToOrder(code, orderID, tokenPhone string, establishmentID int64,
 		return couponApplication{}, fmt.Errorf("banco indisponível para validar o cupom")
 	}
 
+	// Código de indicação de um amigo ("AMIGO...") vira o cupom de
+	// boas-vindas pessoal deste cliente (referral.go).
+	if welcome, matched, rErr := resolveReferralCode(code, tokenPhone); matched {
+		if rErr != nil {
+			return couponApplication{}, rErr
+		}
+		code = welcome
+	}
+
 	var coupon models.Coupon
 	if err := models.DB.Where("code = ?", code).First(&coupon).Error; err != nil {
 		return couponApplication{}, fmt.Errorf("cupom não encontrado")

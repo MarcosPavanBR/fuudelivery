@@ -23,6 +23,8 @@ import (
 var OnOrderStatusChanged func(doc *models.OrderDocument)
 
 func notifyOrderStatusChanged(doc *models.OrderDocument) {
+	// Indicação: prêmio no 1º pedido entregue / devolução do cupom se cancelar.
+	handleReferralOnStatus(doc)
 	if OnOrderStatusChanged != nil {
 		OnOrderStatusChanged(doc)
 	}

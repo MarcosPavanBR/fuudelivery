@@ -10,8 +10,9 @@
 //     só recusa ACIMA de 100) para o establishment_id que escolhesse;
 //   - DELETE /coupons/:id: qualquer logado desativava qualquer cupom pelo id,
 //     inclusive a promoção de um concorrente;
-//   - POST /coupons/referral: o telefone do indicador vinha do corpo, então dava
-//     para cunhar cupons de R$10 em loop com números arbitrários.
+//   - POST /coupons/referral (aposentado — indicação agora em referral.go): o
+//     telefone do indicador vinha do corpo, então dava para cunhar cupons de
+//     R$10 em loop com números arbitrários.
 //
 // É a regra sempre ativa do projeto: autorização por recurso em todo handler,
 // sem exceção (esquadrao/rules/common/security.md).
@@ -57,7 +58,6 @@ func setupCouponAuthz(t *testing.T) *fiber.App {
 	app.Get("/coupons/:id", GetCoupon)
 	app.Delete("/coupons/:id", DeleteCoupon)
 	app.Post("/coupons/apply", ApplyCoupon)
-	app.Post("/coupons/referral", GenerateReferralCoupon)
 	return app
 }
 
@@ -173,42 +173,6 @@ func TestDeleteCoupon_ClienteNaoDesativaPromocaoAlheia(t *testing.T) {
 	models.DB.First(&depois, cupom.ID)
 	if !depois.IsActive {
 		t.Fatal("o cupom continua ativo — a promoção não pode ser derrubada por terceiro")
-	}
-}
-
-// ── Indicação ──
-
-func TestReferralCoupon_SoParaOProprioTelefone(t *testing.T) {
-	app := setupCouponAuthz(t)
-
-	body := `{"referrer_phone":"+5511988887777","new_user_phone":"+5511977776666"}`
-	resp := doCoupon(t, app, "POST", "/coupons/referral",
-		tokenFor(t, "client", 0, "+5511900000000"), body)
-
-	if resp.StatusCode != fiber.StatusForbidden {
-		t.Fatalf("não pode gerar indicação para telefone alheio, veio %d", resp.StatusCode)
-	}
-	var n int64
-	models.DB.Model(&models.Coupon{}).Count(&n)
-	if n != 0 {
-		t.Fatalf("nenhum cupom deveria ter sido cunhado, há %d", n)
-	}
-}
-
-func TestReferralCoupon_ProprioTelefoneFunciona(t *testing.T) {
-	app := setupCouponAuthz(t)
-
-	body := `{"referrer_phone":"+5511900000000","new_user_phone":"+5511977776666"}`
-	resp := doCoupon(t, app, "POST", "/coupons/referral",
-		tokenFor(t, "client", 0, "+5511900000000"), body)
-
-	if resp.StatusCode != fiber.StatusCreated {
-		t.Fatalf("indicação para o próprio telefone deveria funcionar, veio %d", resp.StatusCode)
-	}
-	var out map[string]interface{}
-	_ = json.NewDecoder(resp.Body).Decode(&out)
-	if out["referrer_coupon_code"] == nil {
-		t.Error("esperava os códigos gerados na resposta")
 	}
 }
 

@@ -55,7 +55,7 @@ func SetupRoutes(app *fiber.App, sendMessageToClient func(clientID int64, messag
 	app.Get("/coupons", handlers.ListCoupons)
 	app.Get("/coupons/:id", handlers.GetCoupon)
 	app.Delete("/coupons/:id", handlers.DeleteCoupon)
-	app.Post("/coupons/referral", handlers.GenerateReferralCoupon)
+	app.Get("/referral/me", handlers.GetMyReferral)
 	app.Post("/coupons/calculate", handlers.CalculateDiscount)
 
 	app.Get("/qrcode/:establishmentId", handlers.GenerateTableQRCode)

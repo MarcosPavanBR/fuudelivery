@@ -45,7 +45,11 @@ const INITIAL_ERRORS = {
 
 // Máscara de telefone brasileiro progressiva: (XX) XXXXX-XXXX
 function maskPhone(value) {
-  const digits = (value || "").replace(/\D/g, "").slice(0, 11);
+  // "+55 11 99999-9999" vindo do banco: tira o 55 do país antes da máscara
+  // (antes virava "(55) 11999-9999").
+  let digits = (value || "").replace(/\D/g, "");
+  if (digits.length > 11 && digits.startsWith("55")) digits = digits.slice(2);
+  digits = digits.slice(0, 11);
   if (digits.length === 0) return "";
   if (digits.length <= 2) return `(${digits}`;
   if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;

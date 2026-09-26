@@ -260,6 +260,15 @@ func main() {
 	paymentRouter = gateway.NewRouter(buildPaymentGateways()...)
 	paymentRouter.SetStrategy(gateway.StrategyOrdered)
 	setupPaymentRoutes(app, paymentRouter)
+	app.Get("/admin/system-status", adminRequired, func(c *fiber.Ctx) error {
+		dbOK := false
+		if models.DB != nil {
+			if sqlDB, err := models.DB.DB(); err == nil && sqlDB.Ping() == nil {
+				dbOK = true
+			}
+		}
+		return c.JSON(buildSystemStatus(os.Getenv, paymentRouter.Gateways(), upload.Configured(), dbOK))
+	})
 	setupChatRoutes(app)
 
 	// Upload de imagens (Supabase Storage)

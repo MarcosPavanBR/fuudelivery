@@ -1,123 +1,122 @@
 import React, { useState, useEffect } from "react";
-import {
-  FiSettings,
-  FiUser,
-  FiBell,
-  FiShield,
-  FiSave,
-  FiLoader,
-  FiGlobe,
-  FiKey,
-  FiCreditCard,
-  FiTrash2,
-  FiPlus,
-  FiLogOut,
-} from "react-icons/fi";
+import { FiUser, FiShield, FiLoader, FiKey, FiLogOut, FiActivity, FiCheckCircle, FiAlertTriangle, FiRefreshCw } from "react-icons/fi";
 import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
 import { toast } from "react-toastify";
 import ProfileSettings from "./ProfileSettings";
 
+// As abas "Notificações", "Aparência" e "Integrações" eram de mentira: o
+// salvar esperava 600 ms e dizia "salvo", e as integrações mostravam
+// "Conectado" fixo no código. No lugar, "Status do sistema" pergunta ao
+// servidor o que está de fato ligado (GET /admin/system-status).
 const tabs = [
   { id: "profile", label: "Perfil", icon: FiUser },
   { id: "security", label: "Segurança", icon: FiShield },
-  { id: "notifications", label: "Notificações", icon: FiBell },
-  { id: "appearance", label: "Aparência", icon: FiSettings },
-  { id: "integrations", label: "Integrações", icon: FiCreditCard },
+  { id: "status", label: "Status do sistema", icon: FiActivity },
 ];
 
-const inputClass = "input";
-const inputErrorClass = "input is-invalid";
+const emptyPasswords = { currentPassword: "", newPassword: "", confirmPassword: "" };
 
-export default function Settings() {
-  const { user, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState("profile");
-  const [loading, setLoading] = useState(false);
+function SecurityTab({ user }) {
+  const [form, setForm] = useState(emptyPasswords);
   const [saving, setSaving] = useState(false);
-  const [errors, setErrors] = useState({});
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
-    language: "pt-BR",
-    timezone: "America/Sao_Paulo",
-    emailNotifications: true,
-    pushNotifications: true,
-    orderUpdates: true,
-    marketingEmails: false,
-    theme: "system",
-    compactMode: false,
-    autoRefresh: true,
-    refreshInterval: 30,
-  });
+  const set = (f) => (e) => setForm({ ...form, [f]: e.target.value });
 
-  useEffect(() => {
-    if (user) {
-      setFormData((prev) => ({
-        ...prev,
-        name: user.name || "",
-        email: user.email || "",
-      }));
-    }
-  }, [user]);
-
-  const validateProfile = () => {
-    const next = {};
-    if (!formData.name.trim()) next.name = "O nome é obrigatório";
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!formData.email.trim()) {
-      next.email = "O e-mail é obrigatório";
-    } else if (!emailRegex.test(formData.email)) {
-      next.email = "E-mail inválido";
-    }
-    setErrors(next);
-    return Object.keys(next).length === 0;
-  };
-
-  const handleSave = async (e) => {
+  const submit = async (e) => {
     e.preventDefault();
+    if (form.newPassword.length < 6) return toast.error("A nova senha precisa de pelo menos 6 caracteres");
+    if (form.newPassword !== form.confirmPassword) return toast.error("As senhas não conferem");
     setSaving(true);
     try {
-      if (activeTab === "profile") {
-        if (!validateProfile()) {
-          setSaving(false);
-          return;
-        }
-        await api.put(`/users/${user?.id}`, {
-          name: formData.name,
-          email: formData.email,
-          phone: formData.phone.replace(/\D/g, ""),
-        });
-        toast.success("Perfil atualizado com sucesso!");
-      } else if (activeTab === "security") {
-        if (formData.newPassword !== formData.confirmPassword) {
-          toast.error("As senhas não conferem");
-          return;
-        }
-        if (formData.newPassword && formData.newPassword.length < 6) {
-          toast.error("A nova senha deve ter pelo menos 6 caracteres");
-          return;
-        }
-        await api.put(`/users/${user?.id}/password`, {
-          current_password: formData.currentPassword,
-          new_password: formData.newPassword,
-        });
-        toast.success("Senha atualizada com sucesso!");
-      } else {
-        // Preferências locais (notificações/aparência) — sem backend
-        await new Promise((r) => setTimeout(r, 600));
-        toast.success("Configurações salvas com sucesso!");
-      }
+      await api.put(`/users/${user?.id}/password`, { current_password: form.currentPassword, new_password: form.newPassword });
+      toast.success("Senha atualizada!");
+      setForm(emptyPasswords);
     } catch (err) {
-      toast.error(err?.response?.data?.error || "Erro ao salvar");
+      toast.error(err?.response?.data?.error || "Erro ao atualizar a senha");
     }
     setSaving(false);
   };
 
-  const handleLogout = () => logout();
+  return (
+    <div className="card p-6 animate-fade-in">
+      <h2 className="text-xl font-bold text-gray-900 mb-6">Trocar senha</h2>
+      <form onSubmit={submit} className="space-y-6 max-w-2xl">
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Senha atual <span className="text-red-500">*</span></label>
+          <input type="password" required autoComplete="current-password" value={form.currentPassword} onChange={set("currentPassword")} className="input" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Nova senha <span className="text-red-500">*</span></label>
+            <input type="password" required autoComplete="new-password" value={form.newPassword} onChange={set("newPassword")} className="input" placeholder="Mínimo 6 caracteres" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Confirmar senha <span className="text-red-500">*</span></label>
+            <input type="password" required autoComplete="new-password" value={form.confirmPassword} onChange={set("confirmPassword")} className="input" />
+          </div>
+        </div>
+        <div className="pt-4 border-t border-gray-100 flex justify-end">
+          <button type="submit" disabled={saving} className="btn btn-primary">
+            {saving ? <FiLoader className="h-4 w-4 animate-spin" /> : <FiKey className="h-4 w-4" />}
+            {saving ? " Atualizando..." : " Atualizar senha"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function StatusTab() {
+  const [items, setItems] = useState(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const { data } = await api.get("/admin/system-status");
+      setItems(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setError(e?.response?.data?.error || "Não foi possível consultar o servidor");
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const problems = (items || []).filter((i) => !i.ok).length;
+
+  return (
+    <div className="card p-6 animate-fade-in">
+      <div className="flex items-center justify-between mb-2 gap-4">
+        <h2 className="text-xl font-bold text-gray-900">Status do sistema</h2>
+        <button onClick={load} disabled={loading} className="btn btn-ghost text-xs"><FiRefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /> Verificar de novo</button>
+      </div>
+      <p className="text-sm text-gray-500 mb-6">
+        O que está ligado no servidor agora. {items && (problems ? `${problems} item(ns) precisam de atenção.` : "Tudo certo.")}
+      </p>
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      {!items && !error && <div className="skeleton h-24 w-full" />}
+      <div className="space-y-3">
+        {(items || []).map((it) => (
+          <div key={it.key} className={`flex items-start gap-3 p-4 rounded-xl border ${it.ok ? "bg-gray-50 border-gray-100" : "bg-amber-50 border-amber-200"}`}>
+            {it.ok ? <FiCheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" /> : <FiAlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />}
+            <div className="min-w-0">
+              <p className="font-medium text-gray-900">{it.label}</p>
+              <p className="text-sm text-gray-600">{it.detail}</p>
+              {it.fix && <p className="text-xs text-amber-800 mt-1">Como resolver: {it.fix}</p>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function Settings() {
+  const { user, logout } = useAuth();
+  const [activeTab, setActiveTab] = useState("profile");
 
   return (
     <div className="animate-fade-in">
@@ -125,14 +124,10 @@ export default function Settings() {
         <div className="mb-8 px-1">
           <p className="text-sm text-gray-500">Configurações da conta</p>
           <h1 className="text-2xl font-bold text-gray-900 mt-1">Configurações</h1>
-          <p className="text-gray-500 mt-1">
-            Gerencie suas preferências e configurações da conta
-          </p>
         </div>
       )}
 
       <div className="flex flex-col lg:flex-row gap-8">
-        {/* Sidebar */}
         <aside className="lg:w-64 flex-shrink-0">
           <nav className="bg-white rounded-2xl shadow-card border border-gray-100 overflow-hidden">
             {tabs.map((tab) => (
@@ -140,23 +135,16 @@ export default function Settings() {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`relative w-full flex items-center gap-2 px-6 py-4 transition-all duration-200 border-b border-gray-100 last:border-0 ${
-                  activeTab === tab.id
-                    ? "bg-fuu-red-light text-fuu-red font-semibold"
-                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                  activeTab === tab.id ? "bg-fuu-red-light text-fuu-red font-semibold" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                 }`}
               >
-                {activeTab === tab.id && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-7 bg-fuu-red rounded-r-full" />
-                )}
+                {activeTab === tab.id && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-7 bg-fuu-red rounded-r-full" />}
                 <tab.icon className="h-5 w-5 flex-shrink-0" />
                 {tab.label}
               </button>
             ))}
             <div className="border-t border-gray-100 p-4">
-              <button
-                onClick={handleLogout}
-                className="w-full flex items-center gap-2 px-4 py-4 text-red-600 hover:bg-red-50 rounded-xl transition-colors font-medium"
-              >
+              <button onClick={() => logout()} className="w-full flex items-center gap-2 px-4 py-4 text-red-600 hover:bg-red-50 rounded-xl transition-colors font-medium">
                 <FiLogOut className="h-5 w-5" />
                 Sair da conta
               </button>
@@ -164,278 +152,10 @@ export default function Settings() {
           </nav>
         </aside>
 
-        {/* Content */}
         <main className="flex-1 min-w-0">
           {activeTab === "profile" && <ProfileSettings />}
-
-          {activeTab === "security" && (
-            <div className="card p-6 animate-fade-in">
-              <h2 className="text-xl font-bold text-gray-900 mb-6">Segurança</h2>
-              <form onSubmit={handleSave} className="space-y-6 max-w-2xl">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
-                    Senha atual <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="password"
-                    name="currentPassword"
-                    value={formData.currentPassword}
-                    onChange={(e) =>
-                      setFormData({ ...formData, currentPassword: e.target.value })
-                    }
-                    className={inputClass}
-                  />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
-                      Nova senha <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="password"
-                      name="newPassword"
-                      value={formData.newPassword}
-                      onChange={(e) =>
-                        setFormData({ ...formData, newPassword: e.target.value })
-                      }
-                      className={inputClass}
-                      placeholder="Mínimo 6 caracteres"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">
-                      Confirmar senha <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="password"
-                      name="confirmPassword"
-                      value={formData.confirmPassword}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          confirmPassword: e.target.value,
-                        })
-                      }
-                      className={inputClass}
-                    />
-                  </div>
-                </div>
-                <div className="pt-4 border-t border-gray-100 flex justify-end">
-                  <button type="submit" disabled={saving} className="btn btn-primary">
-                    {saving ? (
-                      <FiLoader className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <FiKey className="h-4 w-4" />
-                    )}
-                    {saving ? " Atualizando..." : " Atualizar senha"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
-
-          {activeTab === "notifications" && (
-            <div className="card p-6 animate-fade-in">
-              <h2 className="text-xl font-bold text-gray-900 mb-6">
-                Notificações
-              </h2>
-              <form onSubmit={handleSave} className="space-y-4 max-w-xl">
-                {[
-                  { id: "emailNotifications", label: "Notificações por e-mail", desc: "Receba atualizações por e-mail" },
-                  { id: "pushNotifications", label: "Notificações push", desc: "Receba notificações no navegador" },
-                  { id: "orderUpdates", label: "Atualizações de pedidos", desc: "Novos pedidos e mudanças de status" },
-                  { id: "marketingEmails", label: "E-mails de marketing", desc: "Promoções e novidades" },
-                ].map((n) => (
-                  <label
-                    key={n.id}
-                    className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
-                  >
-                    <div>
-                      <p className="font-medium text-gray-900">{n.label}</p>
-                      <p className="text-sm text-gray-500">{n.desc}</p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      name={n.id}
-                      checked={formData[n.id]}
-                      onChange={(e) =>
-                        setFormData({ ...formData, [n.id]: e.target.checked })
-                      }
-                      className="w-5 h-5 rounded border-gray-300 text-fuu-red focus:ring-fuu-red"
-                    />
-                  </label>
-                ))}
-                <div className="pt-4 border-t border-gray-100 flex justify-end">
-                  <button type="submit" disabled={saving} className="btn btn-primary">
-                    {saving ? (
-                      <FiLoader className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <FiSave className="h-4 w-4" />
-                    )}
-                    {saving ? " Salvando..." : " Salvar preferências"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
-
-          {activeTab === "appearance" && (
-            <div className="card p-6 animate-fade-in">
-              <h2 className="text-xl font-bold text-gray-900 mb-6">Aparência</h2>
-              <form onSubmit={handleSave} className="space-y-6 max-w-xl">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
-                    Tema
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {["light", "dark", "system"].map((t) => (
-                      <label
-                        key={t}
-                        className={`relative cursor-pointer p-4 rounded-xl border-2 transition-all ${
-                          formData.theme === t
-                            ? "border-fuu-red bg-fuu-red-light"
-                            : "border-gray-200 hover:border-gray-300"
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="theme"
-                          value={t}
-                          checked={formData.theme === t}
-                          onChange={(e) =>
-                            setFormData({ ...formData, theme: e.target.value })
-                          }
-                          className="sr-only"
-                        />
-                        <div className="text-center">
-                          <p className="font-medium text-gray-900 capitalize">
-                            {t}
-                          </p>
-                          <p className="text-xs text-gray-500 mt-1">
-                            {t === "light"
-                              ? "Claro"
-                              : t === "dark"
-                              ? "Escuro"
-                              : "Padrão do sistema"}
-                          </p>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  {[
-                    { id: "compactMode", label: "Modo compacto", desc: "Reduz espaçamento para ver mais conteúdo" },
-                    { id: "autoRefresh", label: "Atualização automática", desc: "Atualiza dados automaticamente" },
-                  ].map((o) => (
-                    <label
-                      key={o.id}
-                      className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
-                    >
-                      <div>
-                        <p className="font-medium text-gray-900">{o.label}</p>
-                        <p className="text-sm text-gray-500">{o.desc}</p>
-                      </div>
-                      <input
-                        type="checkbox"
-                        name={o.id}
-                        checked={formData[o.id]}
-                        onChange={(e) =>
-                          setFormData({ ...formData, [o.id]: e.target.checked })
-                        }
-                        className="w-5 h-5 rounded border-gray-300 text-fuu-red focus:ring-fuu-red"
-                      />
-                    </label>
-                  ))}
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
-                    Intervalo de atualização (segundos)
-                  </label>
-                  <select
-                    name="refreshInterval"
-                    value={formData.refreshInterval}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        refreshInterval: parseInt(e.target.value),
-                      })
-                    }
-                    className={inputClass + " w-40"}
-                  >
-                    <option value={15}>15s</option>
-                    <option value={30}>30s</option>
-                    <option value={60}>60s</option>
-                    <option value={120}>2min</option>
-                  </select>
-                </div>
-                <div className="pt-4 border-t border-gray-100 flex justify-end">
-                  <button type="submit" disabled={saving} className="btn btn-primary">
-                    {saving ? (
-                      <FiLoader className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <FiSave className="h-4 w-4" />
-                    )}
-                    {saving ? " Salvando..." : " Salvar aparência"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
-
-          {activeTab === "integrations" && (
-            <div className="card p-6 animate-fade-in">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-gray-900">Integrações</h2>
-                <button className="btn btn-primary">
-                  <FiPlus className="h-4 w-4" /> Nova integração
-                </button>
-              </div>
-              <div className="space-y-4">
-                {[
-                  { name: "Mercado Pago", desc: "Pagamentos via PIX, cartão e boleto", status: "connected", icon: FiCreditCard },
-                  { name: "AbacatePay", desc: "Pagamentos via PIX instantâneo", status: "connected", icon: FiCreditCard },
-                  { name: "WhatsApp Business API", desc: "Notificações e chat automático", status: "disconnected", icon: FiGlobe },
-                  { name: "Google Maps API", desc: "Cálculo de rotas e distâncias", status: "connected", icon: FiGlobe },
-                ].map((int) => (
-                  <div
-                    key={int.name}
-                    className="flex items-center justify-between p-4 bg-gray-50 rounded-xl"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-fuu-red-light flex items-center justify-center">
-                        <int.icon className="h-6 w-6 text-fuu-red" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">{int.name}</p>
-                        <p className="text-sm text-gray-500">{int.desc}</p>
-                      </div>
-                    </div>                      <div className="flex items-center gap-2">
-                      <span
-                        className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                          int.status === "connected"
-                            ? "bg-green-100 text-green-800"
-                            : "bg-gray-100 text-gray-600"
-                        }`}
-                      >
-                        {int.status === "connected"
-                          ? "Conectado"
-                          : "Desconectado"}
-                      </span>
-                      <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-lg cursor-pointer">
-                        <FiSettings className="h-4 w-4" />
-                      </button>
-                      {int.status === "connected" && (
-                        <button className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg cursor-pointer">
-                          <FiTrash2 className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {activeTab === "security" && <SecurityTab user={user} />}
+          {activeTab === "status" && <StatusTab />}
         </main>
       </div>
     </div>

@@ -461,7 +461,7 @@ func ChangePassword(c *fiber.Ctx) error {
 	}
 
 	if len(request.NewPassword) < 6 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "New password must be at least 6 characters"})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "A nova senha precisa de pelo menos 6 caracteres"})
 	}
 
 	var user models.User
@@ -470,7 +470,7 @@ func ChangePassword(c *fiber.Ctx) error {
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(request.CurrentPassword)); err != nil {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Current password is incorrect"})
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Senha atual incorreta"})
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(request.NewPassword), bcrypt.DefaultCost)

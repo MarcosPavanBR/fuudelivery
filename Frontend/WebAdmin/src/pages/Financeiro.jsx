@@ -9,9 +9,15 @@ const statusOptions = [
   { value: "PENDING", label: "Pendente" },
   { value: "REFUNDED", label: "Estornado" },
   { value: "REJECTED", label: "Rejeitado" },
+  { value: "REFUSED", label: "Recusado (cartão)" },
   { value: "EXPIRED", label: "Expirado" },
   { value: "CANCELLED", label: "Cancelado" },
 ];
+
+const brl = (v) => (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const statusLabel = (s) => statusOptions.find((o) => o.value === s)?.label || s || "—";
+const METHOD_LABEL = { pix: "PIX", card: "Cartão", credit_card: "Cartão", money: "Dinheiro", wallet: "Carteira" };
+const WALLET_OWNER = { restaurant: "Loja", establishment: "Loja", delivery: "Entregador", customer: "Cliente" };
 
 // Identificador do cliente: o backend enriquece o payload com user.nome
 // (buscado no Postgres por customer_id). Fallbacks: customer_phone e #id.
@@ -100,12 +106,14 @@ export default function Financeiro() {
   }
 
   async function approvePayment(id) {
+    // Aprovar manualmente credita as carteiras: só com o dinheiro na conta.
+    if (!confirm("Confirmar este pagamento manualmente? Use só se o dinheiro já entrou na conta — as carteiras serão creditadas.")) return;
     setIsProcessing(true);
     try {
       await paymentApi.post("/payments/" + id + "/approve");
       toast.success("Pagamento aprovado");
       await loadData();
-    } catch (e) { toast.error(e.message); }
+    } catch (e) { toast.error(e?.response?.data?.error || e.message); }
     setIsProcessing(false);
   }
 
@@ -153,10 +161,11 @@ export default function Financeiro() {
     );
   }
 
-  const totalAmount = payments.reduce((s, p) => s + (p.amount || 0), 0);
+  // Total recebido = só o que foi confirmado (antes somava pendentes e recusados).
+  const totalAmount = payments.filter(p => p.status === "CONFIRMED").reduce((s, p) => s + (p.amount || 0), 0);
   const pending = payments.filter(p => p.status === "PENDING");
   const approved = payments.filter(p => p.status === "CONFIRMED");
-  const rejected = payments.filter(p => p.status === "REJECTED");
+  const rejected = payments.filter(p => ["REJECTED", "REFUSED", "EXPIRED", "CANCELLED"].includes(p.status));
 
   const filteredPayments = payments.filter(p => {
     const idStr = (p.id || p._id || "").toString();
@@ -190,10 +199,10 @@ export default function Financeiro() {
 
       {tab === "stats" && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard icon={FiDollarSign} label="Total" value={"R$ " + totalAmount.toFixed(2)} color="#6366f1" bg="#EEF2FF" />
+          <StatCard icon={FiDollarSign} label="Total recebido" value={brl(totalAmount)} color="#6366f1" bg="#EEF2FF" />
           <StatCard icon={FiClock} label="Pendentes" value={pending.length} color="#D97706" bg="#FFFBEB" />
-          <StatCard icon={FiCheck} label="Aprovados" value={approved.length} color="#16A34A" bg="#F0FDF4" />
-          <StatCard icon={FiAlertTriangle} label="Rejeitados" value={rejected.length} color="#DC2626" bg="#FEF2F2" />
+          <StatCard icon={FiCheck} label="Confirmados" value={approved.length} color="#16A34A" bg="#F0FDF4" />
+          <StatCard icon={FiAlertTriangle} label="Recusados / expirados" value={rejected.length} color="#DC2626" bg="#FEF2F2" />
         </div>
       )}
 
@@ -231,7 +240,7 @@ export default function Financeiro() {
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
-                  {["ID", "Cliente", "Pedido", "Valor", "Status", "Data", "Ações"].map(h => (
+                  {["ID", "Cliente", "Pedido", "Valor", "Forma", "Status", "Data", "Ações"].map(h => (
                     <th key={h} className="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
                   ))}
                 </tr>
@@ -245,7 +254,8 @@ export default function Financeiro() {
                     <td className="px-4 py-2 text-sm font-mono">{String(p.id ?? p._id ?? "").slice(0, 8)}</td>
                     <td className="px-4 py-2 text-sm">{customerLabel(p)}</td>
                     <td className="px-4 py-2 text-sm">{p.orderId || p.order_id || "-"}</td>
-                    <td className="px-4 py-2 text-sm font-semibold">R$ {(p.amount || 0).toFixed(2)}</td>
+                    <td className="px-4 py-2 text-sm font-semibold whitespace-nowrap">{brl(p.amount)}</td>
+                    <td className="px-4 py-2 text-sm">{METHOD_LABEL[p.method] || p.method || "—"}</td>
                     <td className="px-4 py-2">
                       <span
                         className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold"
@@ -254,7 +264,7 @@ export default function Financeiro() {
                           color: p.status === "CONFIRMED" ? "#065F46" : p.status === "PENDING" ? "#92400E" : "#991B1B",
                         }}
                       >
-                        {p.status}
+                        {statusLabel(p.status)}
                       </span>
                     </td>
                     <td className="px-4 py-2 text-sm text-gray-500">
@@ -274,8 +284,11 @@ export default function Financeiro() {
                     </td>
                   </tr>
                 ))}
+                {filteredPayments.length > 50 && (
+                  <tr><td colSpan={8} className="px-4 py-3 text-center text-xs text-gray-500">Mostrando 50 de {filteredPayments.length}. Use a busca ou o filtro para achar os outros.</td></tr>
+                )}
                 {filteredPayments.length === 0 && (
-                  <tr><td colSpan={7} className="px-4 py-16 text-center text-gray-400">Nenhum pagamento encontrado</td></tr>
+                  <tr><td colSpan={8} className="px-4 py-16 text-center text-gray-400">Nenhum pagamento encontrado</td></tr>
                 )}
               </tbody>
             </table>
@@ -288,9 +301,9 @@ export default function Financeiro() {
           {wallets.map((w, i) => (
             <div key={w.id || w._id || i} className="card p-6">                      <div className="flex items-center gap-2 mb-2">
                 <FiCreditCard className="h-5 w-5 text-fuu-red" />
-                <span className="font-semibold text-gray-900">{w.ownerName || w.owner_type || "Carteira"}</span>
+                <span className="font-semibold text-gray-900">{WALLET_OWNER[w.user_type] || "Carteira"} #{w.user_id}</span>
               </div>
-              <div className="text-3xl font-bold text-green-600">R$ {(w.balance || 0).toFixed(2)}</div>
+              <div className="text-3xl font-bold text-green-600">{brl(w.balance)}</div>
               <div className="text-xs text-gray-500 mt-1">ID: {String(w.id ?? w._id ?? "").slice(0, 8)}</div>
             </div>
           ))}
@@ -303,9 +316,9 @@ export default function Financeiro() {
       {tab === "chargebacks" && (
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <StatCard icon={FiCheck} label="Total de créditos" value={"R$ " + (cbSummary?.credit_total || 0).toFixed(2)} color="#16A34A" bg="#F0FDF4" />
-            <StatCard icon={FiAlertTriangle} label="Total de débitos" value={"R$ " + (cbSummary?.debit_total || 0).toFixed(2)} color="#DC2626" bg="#FEF2F2" />
-            <StatCard icon={FiDollarSign} label="Saldo líquido" value={"R$ " + (cbSummary?.net || 0).toFixed(2)} color="#6366f1" bg="#EEF2FF" />
+            <StatCard icon={FiCheck} label="Total de créditos" value={brl(cbSummary?.credit_total)} color="#16A34A" bg="#F0FDF4" />
+            <StatCard icon={FiAlertTriangle} label="Total de débitos" value={brl(cbSummary?.debit_total)} color="#DC2626" bg="#FEF2F2" />
+            <StatCard icon={FiDollarSign} label="Saldo líquido" value={brl(cbSummary?.net)} color="#6366f1" bg="#EEF2FF" />
           </div>
 
           <div className="flex flex-wrap gap-2 items-center">
@@ -363,10 +376,10 @@ export default function Financeiro() {
                         </span>
                       </td>
                       <td className="px-4 py-2 text-sm font-semibold" style={{ color: c.type === "debit" ? "#DC2626" : "#059669" }}>
-                        {c.type === "debit" ? "-" : "+"}R$ {(c.amount || 0).toFixed(2)}
+                        {c.type === "debit" ? "-" : "+"}{brl(c.amount)}
                       </td>
                       <td className="px-4 py-2 text-xs font-mono text-gray-500">{c.payment_id || "-"}</td>
-                      <td className="px-4 py-2 text-sm">R$ {(c.balance_after || 0).toFixed(2)}</td>
+                      <td className="px-4 py-2 text-sm">{brl(c.balance_after)}</td>
                       <td className="px-4 py-2 text-sm text-gray-600">{c.description || "-"}</td>
                       <td className="px-4 py-2 text-xs text-gray-500">{c.created_at ? new Date(c.created_at).toLocaleString("pt-BR") : "-"}</td>
                     </tr>

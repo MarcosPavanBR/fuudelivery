@@ -86,6 +86,7 @@ export default function Cupons() {
   const [salvando, setSalvando] = useState(false);
   const [form, setForm] = useState(formaVazia);
   const [mostrarForm, setMostrarForm] = useState(false);
+  const [lojas, setLojas] = useState([]);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -102,6 +103,10 @@ export default function Cupons() {
 
   useEffect(() => {
     carregar();
+    // Lista de lojas para escolher pelo nome (antes era digitar o id).
+    api.get("/admin/establishments")
+      .then(({ data }) => setLojas(Array.isArray(data) ? data : []))
+      .catch(() => setLojas([]));
   }, [carregar]);
 
   const alterar = (campo) => (e) =>
@@ -390,17 +395,19 @@ export default function Cupons() {
 
             <div>
               <label htmlFor="cupom-estabelecimento" className="block text-sm font-medium text-gray-700 mb-1">
-                Restaurante (id)
+                Vale em
               </label>
-              <input
-                type="number"
-                min="0"
+              <select
                 id="cupom-estabelecimento"
                 value={form.establishment_id}
                 onChange={alterar("establishment_id")}
-                placeholder="0 = vale em todos"
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-fuu-red focus:outline-none"
-              />
+              >
+                <option value="">Todos os restaurantes</option>
+                {lojas.map((l) => (
+                  <option key={l.id} value={String(l.id)}>{l.name}</option>
+                ))}
+              </select>
             </div>
 
             <div>
@@ -501,6 +508,8 @@ export default function Cupons() {
                 const ativo = c.IsActive ?? c.is_active;
                 const validade = c.ExpiryDate ?? c.expiry_date;
                 const expirado = validade && new Date(validade) < new Date();
+                const lojaId = c.EstablishmentID ?? c.establishment_id ?? 0;
+                const lojaNome = lojaId ? (lojas.find((l) => l.id === lojaId)?.name || `Loja #${lojaId}`) : "";
 
                 let descontoTexto = "—";
                 if (tipo === "PERCENTAGE") descontoTexto = `${valor}%`;
@@ -509,8 +518,9 @@ export default function Cupons() {
 
                 return (
                   <tr key={id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-mono font-medium text-gray-900">
-                      {code}
+                    <td className="px-4 py-3">
+                      <span className="font-mono font-medium text-gray-900">{code}</span>
+                      <p className="text-xs text-gray-500">{lojaNome || "Todos os restaurantes"}</p>
                     </td>
                     <td className="px-4 py-3 text-gray-700">{descontoTexto}</td>
                     <td className="px-4 py-3">

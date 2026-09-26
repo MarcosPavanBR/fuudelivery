@@ -194,3 +194,6 @@ func parseUint(s string, out *uint) error {
 	*out = v
 	return nil
 }
+
+// Configured diz se o armazenamento de imagens está ligado (status do painel).
+func Configured() bool { return store != nil }

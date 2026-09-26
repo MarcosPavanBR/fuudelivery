@@ -190,7 +190,7 @@ export default function Layout() {
                 )}
               </div>
               <div className="relative min-w-0">
-                <button onClick={() => navigate("/profile")} title="Meu perfil" className="flex items-center gap-2 p-2 rounded-xl hover:bg-gray-100 transition-colors min-w-0">
+                <button onClick={() => navigate("/settings")} title="Meu perfil" className="flex items-center gap-2 p-2 rounded-xl hover:bg-gray-100 transition-colors min-w-0">
                   <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}>
                     {user?.avatar_url ? (
                       <img src={user.avatar_url} alt="" className="w-full h-full object-cover" />

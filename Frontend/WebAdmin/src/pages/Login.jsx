@@ -155,15 +155,14 @@ export default function Login() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-fuu-red focus:ring-fuu-red" />
-                <span className="text-sm text-gray-600">Lembrar-me</span>
-              </label>
-              <a href="#" className="text-sm font-medium text-gray-500 hover:text-gray-700 hover:underline">
-                Esqueceu a senha?
-              </a>
-            </div>
+            {/* Antes: "Lembrar-me" sem efeito e "Esqueceu a senha?" com href="#". */}
+            <details className="text-sm text-gray-500">
+              <summary className="cursor-pointer font-medium hover:text-gray-700 text-right list-none">Esqueceu a senha?</summary>
+              <p className="mt-2 text-xs leading-relaxed bg-gray-50 border border-gray-100 rounded-lg p-3">
+                Peça a outro administrador um código em <b>Reset de Senha</b> (tipo "Estabelecimento/Admin")
+                e use-o na página <b>/resetar-senha</b> do site do restaurante.
+              </p>
+            </details>
 
             <button
               type="submit"
@@ -185,11 +184,9 @@ export default function Login() {
           </form>
 
           <div className="mt-8 text-center">
+            {/* O painel não tem cadastro público: o botão "Cadastre-se" não fazia nada. */}
             <p className="text-sm text-gray-500">
-              Não tem uma conta?{" "}
-              <button className="font-semibold text-gray-600 hover:text-fuu-red hover:underline">
-                Cadastre-se
-              </button>
+              Acesso restrito à equipe FuuDelivery. Contas novas são criadas por um administrador em <b>Usuários</b>.
             </p>
           </div>
         </div>

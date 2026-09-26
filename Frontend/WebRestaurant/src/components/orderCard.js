@@ -139,3 +139,12 @@ export function newPendingIds(previousIds, orders) {
     .filter((o) => displayColumn(o.data?.status) === "AWAIT_APPROVE" && !previousIds.has(o.id))
     .map((o) => o.id);
 }
+
+// "+5511988887777" → "(11) 98888-7777" para a loja ler e discar. Formato
+// desconhecido volta como veio.
+export function formatPhone(raw) {
+  const d = String(raw || "").replace(/\D/g, "").replace(/^55(?=\d{10,11}$)/, "");
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return String(raw || "");
+}

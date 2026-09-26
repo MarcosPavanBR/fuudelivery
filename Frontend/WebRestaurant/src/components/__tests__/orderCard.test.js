@@ -7,6 +7,7 @@ import {
   isLate,
   itemName,
   itemNote,
+  formatPhone,
   newPendingIds,
   orderTotal,
   paymentType,
@@ -130,5 +131,14 @@ describe("itemNote", () => {
     expect(itemNote({ note: "" })).toBe("");
     expect(itemNote({})).toBe("");
     expect(itemNote(null)).toBe("");
+  });
+});
+
+describe("formatPhone", () => {
+  it("formata celular e fixo brasileiros", () => {
+    expect(formatPhone("+5511988887777")).toBe("(11) 98888-7777");
+    expect(formatPhone("1133334444")).toBe("(11) 3333-4444");
+    expect(formatPhone("+351 912 345 678")).toBe("+351 912 345 678");
+    expect(formatPhone(undefined)).toBe("");
   });
 });

@@ -251,7 +251,8 @@ func computeOrderTotal(cart []dto.CartItem, loc dto.Location, establishmentID in
 	defer cancel()
 
 	subtotal := 0.0
-	for _, ci := range cart {
+	for i := range cart {
+		ci := cart[i]
 		if ci.Quantity <= 0 {
 			return 0, 0, fmt.Errorf("quantidade inválida para o produto %s", ci.Item.Name)
 		}
@@ -267,6 +268,12 @@ func computeOrderTotal(cart []dto.CartItem, loc dto.Location, establishmentID in
 		}
 		subtotal += p.Price * float64(ci.Quantity)
 
+		// O item gravado no pedido (e mostrado à cozinha, ao entregador e ao
+		// cliente) vem do CARDÁPIO, não do corpo: antes ia a cópia que o
+		// cliente mandou — nome/preço vazios ou inventados ("Pizza grátis")
+		// apareciam no quadro da loja, embora o total já fosse do banco.
+		chosen := make([]dto.Additional, 0, len(ci.Additionals))
+
 		for _, addID := range ci.Additionals {
 			var a models.Additional
 			if err := authModels.DB.WithContext(ctx).First(&a, addID).Error; err != nil {
@@ -278,6 +285,18 @@ func computeOrderTotal(cart []dto.CartItem, loc dto.Location, establishmentID in
 			// Por unidade: os apps (cliente e loja) mostram
 			// quantidade × (preço + adicionais), e é esse o total cobrado.
 			subtotal += a.Price * float64(ci.Quantity)
+			chosen = append(chosen, dto.Additional{
+				ID: int(a.ID), Name: a.Name, Price: a.Price, Image: a.Image, Description: a.Description,
+			})
+		}
+		cart[i].Item = dto.Item{
+			ID:              int(p.ID),
+			Name:            p.Name,
+			Description:     p.Description,
+			Price:           p.Price,
+			Image:           p.Image,
+			EstablishmentID: int(p.EstablishmentID),
+			Additional:      chosen,
 		}
 	}
 

@@ -8,6 +8,7 @@ import {
   isLate,
   itemName,
   itemNote,
+  formatPhone,
   orderTotal,
   paymentType,
   selectedAdditionals,
@@ -80,7 +81,10 @@ const Task = ({ task, index, onAction, now }) => {
             <p className="font-bold text-sm text-gray-900">{data.user?.nome || "Cliente"}</p>
             {data.user?.phone && (
               <p className="flex items-center gap-1 text-xs text-gray-500">
-                <FiPhone className="h-3 w-3" /> {data.user.phone}
+                <FiPhone className="h-3 w-3" />{" "}
+                <a href={`tel:${String(data.user.phone).replace(/[^\d+]/g, "")}`} className="hover:underline" onClick={(e) => e.stopPropagation()}>
+                  {formatPhone(data.user.phone)}
+                </a>
               </p>
             )}
           </div>
@@ -153,10 +157,12 @@ const Task = ({ task, index, onAction, now }) => {
 
           {/* Ações: botões grandes, para tablet na cozinha (arrastar continua valendo). */}
           {actions.length > 0 && (
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3 flex flex-wrap gap-2">
               {actions.map((a) => {
                 const isConfirming = confirming === a.to;
-                const base = "flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors disabled:opacity-50";
+                // flex-wrap + largura mínima: em coluna estreita o botão
+                // secundário desce de linha em vez de vazar para fora do card.
+                const base = "flex-1 min-w-[6.5rem] whitespace-nowrap rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors disabled:opacity-50";
                 const style =
                   a.kind === "danger"
                     ? isConfirming

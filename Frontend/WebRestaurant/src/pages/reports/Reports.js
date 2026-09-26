@@ -26,6 +26,7 @@ const Reports = () => {
     deliveryRevenue: 0,
     ordersByStatus: {},
     revenueByDay: [],
+    byPayment: {},
   });
 
   useEffect(() => {
@@ -39,7 +40,7 @@ const Reports = () => {
       const { data } = await api.get(
         `/payments/reports/establishment/${establishmentId}?period=${period}`
       );
-      setStats(data);
+      setStats({ ordersByStatus: {}, revenueByDay: [], byPayment: {}, ...data });
       setLoadError(false);
     } catch (err) {
       // Antes zerava tudo em silêncio: R$ 0,00 aparecia como dado real.
@@ -55,6 +56,16 @@ const Reports = () => {
       currency: "BRL",
     }).format(value);
   };
+
+  // "2026-09-25" → "25/09 (sex)".
+  const dayLabel = (iso) => {
+    const [y, m, d] = String(iso || "").split("-").map(Number);
+    if (!y) return iso;
+    const wd = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"][new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+    return `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")} (${wd})`;
+  };
+
+  const PAYMENT_LABEL = { pix: "PIX", credit: "Cartão de crédito", debit: "Cartão de débito", money: "Dinheiro", wallet: "Carteira", outros: "Outros" };
 
   const periodLabels = {
     week: "Esta Semana",
@@ -224,7 +235,7 @@ const Reports = () => {
             return (
               <div key={index} className="flex items-center gap-4">
                 <span className="text-xs font-medium text-gray-500 w-12">
-                  {day.date}
+                  {dayLabel(day.date)}
                 </span>
                 <div className="flex-1 bg-gray-100 rounded-full h-6 overflow-hidden">
                   <div
@@ -268,6 +279,26 @@ const Reports = () => {
           </div>
         </div>
       </div>
+
+      {/* Por forma de pagamento (pedidos entregues) */}
+      {Object.keys(stats.byPayment || {}).length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-card p-6">
+          <h2 className="text-sm font-semibold text-gray-900 mb-4">Por forma de pagamento</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {Object.entries(stats.byPayment)
+              .sort((a, b) => b[1].revenue - a[1].revenue)
+              .map(([kind, v]) => (
+                <div key={kind} className="flex items-center justify-between rounded-xl bg-gray-50 p-4">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">{PAYMENT_LABEL[kind] || kind}</p>
+                    <p className="text-xs text-gray-500">{v.count} pedido{v.count > 1 ? "s" : ""}</p>
+                  </div>
+                  <p className="text-lg font-bold text-gray-900">{formatCurrency(v.revenue)}</p>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
     </div>
     </MenuLayout>
   );

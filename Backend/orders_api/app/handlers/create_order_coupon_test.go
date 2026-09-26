@@ -392,3 +392,26 @@ func TestCreateOrder_ForaDoHorarioRecusa(t *testing.T) {
 		t.Fatalf("esperava 200 dentro do horário, veio %d (%v)", r2.StatusCode, o2)
 	}
 }
+
+// O item gravado (e mostrado à cozinha) vem do cardápio, não do corpo.
+func TestCreateOrder_ItemGravadoVemDoCardapio(t *testing.T) {
+	app := setupCreateOrder(t)
+	token := tokenComTelefone(t, "+5511999900003")
+	body := `{"cart":[{"item":{"ID":100,"Name":"Pizza grátis","Price":0.01},"quantity":2}],"distance":3,"establishmentId":1,
+		"location":{"cep":"01310100","localidade":"São Paulo","uf":"SP"},"user":{"phone":"+5511999900003"}}`
+	resp, out := postPedido(t, app, token, "{"+body[1:])
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status %d (%v)", resp.StatusCode, out)
+	}
+	doc, err := findOrderByLegacyID(fmt.Sprint(out["orderId"]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var p dto.RequestPayload
+	if err := json.Unmarshal(doc.Payload, &p); err != nil {
+		t.Fatal(err)
+	}
+	if got := p.Cart[0].Item; got.Name != "Produto" || got.Price != 30 {
+		t.Fatalf("item gravado veio do cliente: %+v", got)
+	}
+}

@@ -110,10 +110,11 @@ const AuthProvider = ({ children }: any) => {
       setUser(decodeToken(token));
       nav.navigate("index" as never);
       setIsLoading(false);
-    } catch (error) {
+    } catch (error: any) {
       Alert.alert(
         "",
-        "Tivemos um problema ao fazer o cadastro, verifique se o e-mail já está cadastrado e tente novamente."
+        error?.response?.data?.error ||
+          "Tivemos um problema ao fazer o cadastro, verifique se o e-mail já está cadastrado e tente novamente."
       );
       throw error;
     }

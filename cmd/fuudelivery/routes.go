@@ -85,6 +85,7 @@ func setupAuthRoutes(app *fiber.App) {
 	app.Put("/users/:id/password", protectedRoute, authHandlers.ChangePassword)
 
 	app.Get("/establishments", authHandlers.ListEstablishments)
+	app.Get("/admin/establishments", adminRequired, authHandlers.ListEstablishmentsAdmin)
 	app.Get("/establishments/:id", authHandlers.GetEstablishments)
 	app.Post("/establishments", adminRequired, authHandlers.CreateEstablishment)
 	app.Put("/establishments/status/handler/:id", protectedRoute, authHandlers.HandlerEstablishmentStatus)

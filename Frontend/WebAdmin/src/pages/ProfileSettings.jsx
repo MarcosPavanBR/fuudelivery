@@ -13,6 +13,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
 import { toast } from "react-toastify";
+import { uploadImage, checkImageFile } from "../helpers/imageUpload";
 
 /* ============================================================
    ProfileSettings — Tela de Perfil / Configurações da Conta
@@ -56,14 +57,15 @@ function maskPhone(value) {
 const unmaskPhone = (value) => (value || "").replace(/\D/g, "");
 
 export default function ProfileSettings() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const [form, setForm] = useState(INITIAL_FORM);
   const [original, setOriginal] = useState(INITIAL_FORM);
   const [errors, setErrors] = useState(INITIAL_ERRORS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [avatar, setAvatar] = useState(
-    () => localStorage.getItem("fuu_admin_avatar") || user?.avatar_url || ""
+    () => user?.avatar_url || ""
   );
   const fileInputRef = useRef(null);
 
@@ -83,7 +85,6 @@ export default function ProfileSettings() {
           setOriginal(mapped);
           if (data.avatar_url) {
             setAvatar(data.avatar_url);
-            localStorage.setItem("fuu_admin_avatar", data.avatar_url);
           }
         } else {
           // Sem sessão — formulário vazio (raro: painel sempre tem sessão)
@@ -122,12 +123,9 @@ export default function ProfileSettings() {
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      setErrors((prev) => ({ ...prev, avatar: "Apenas imagens (JPG, PNG, GIF) são permitidas." }));
-      return;
-    }
-    if (file.size > 2 * 1024 * 1024) {
-      setErrors((prev) => ({ ...prev, avatar: "A imagem deve ter no máximo 2MB." }));
+    const problem = checkImageFile(file);
+    if (problem) {
+      setErrors((prev) => ({ ...prev, avatar: problem }));
       return;
     }
     setErrors((prev) => ({ ...prev, avatar: "" }));
@@ -135,37 +133,37 @@ export default function ProfileSettings() {
     // Preview instantâneo
     const url = URL.createObjectURL(file);
     setAvatar(url);
+    setUploading(true);
 
-    // Upload real: POST /upload/avatars → {url} → PUT /users/:id {avatar_url}
+    // Reduz no navegador (foto de celular tem vários MB) → /upload/avatars →
+    // PUT /users/:id {avatar_url}.
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const { data } = await api.post("/upload/avatars", fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      if (!data?.url) throw new Error("Upload sem URL");
-      await api.put(`/users/${user?.id}`, { avatar_url: data.url });
-      setAvatar(data.url);
-      localStorage.setItem("fuu_admin_avatar", data.url);
+      const publicUrl = await uploadImage("avatars", file, 512);
+      await api.put(`/users/${user?.id}`, { avatar_url: publicUrl });
+      setAvatar(publicUrl);
+      updateUser?.({ avatar_url: publicUrl });
       toast.success("Foto atualizada!");
     } catch (err) {
       console.error("Erro no upload do avatar:", err);
-      setAvatar((prev) =>
-        prev === url ? localStorage.getItem("fuu_admin_avatar") || user?.avatar_url || "" : prev
-      );
-      toast.error(err?.response?.data?.error || "Erro ao enviar foto");
+      setAvatar(user?.avatar_url || "");
+      setErrors((prev) => ({ ...prev, avatar: err?.response?.data?.error || err.message || "Erro ao enviar foto" }));
+      toast.error(err?.response?.data?.error || err.message || "Erro ao enviar foto");
     } finally {
+      URL.revokeObjectURL(url);
+      setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
   const handleRemoveAvatar = async () => {
+    const before = avatar;
     setAvatar("");
-    localStorage.removeItem("fuu_admin_avatar");
     try {
       await api.put(`/users/${user?.id}`, { avatar_url: "" });
+      updateUser?.({ avatar_url: "" });
       toast.success("Foto removida");
     } catch (err) {
+      setAvatar(before);
       toast.error(err?.response?.data?.error || "Erro ao remover foto");
     }
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -217,6 +215,7 @@ export default function ProfileSettings() {
 
       const updated = { ...form, telefone: maskPhone(form.telefone) };
       setOriginal(updated);
+      updateUser?.({ name: form.nome.trim(), email: form.email.trim() });
       toast.success("Perfil atualizado com sucesso!");
     } catch (err) {
       console.error("Erro ao salvar:", err);
@@ -318,16 +317,17 @@ export default function ProfileSettings() {
             <button
               type="button"
               onClick={handleAvatarClick}
+              disabled={uploading}
               className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-fuu-red text-white flex items-center justify-center border-[3px] border-white cursor-pointer hover:bg-fuu-red-dark transition-colors"
               style={{ boxShadow: "0 2px 8px rgba(234, 29, 44, 0.3)" }}
               title="Alterar foto"
             >
-              <FiCamera className="w-3.5 h-3.5" />
+              {uploading ? <FiLoader className="w-3.5 h-3.5 animate-spin" /> : <FiCamera className="w-3.5 h-3.5" />}
             </button>
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/jpeg,image/png,image/gif"
+              accept="image/*"
               onChange={handleFileChange}
               className="hidden"
             />
@@ -335,7 +335,7 @@ export default function ProfileSettings() {
 
           <div className="min-w-0">
             <h3 className="text-base font-semibold text-gray-900">Foto de perfil</h3>
-            <p className="text-sm text-gray-500 mt-1">JPG, PNG ou GIF. Máximo 2MB.</p>
+            <p className="text-sm text-gray-500 mt-1">JPG, PNG ou WEBP. Fotos grandes são reduzidas automaticamente.</p>
             {errors.avatar && <p className="text-xs text-red-600 mt-1">{errors.avatar}</p>}
             <div className="flex items-center gap-2 mt-4">
               <button type="button" onClick={handleAvatarClick} className="btn btn-ghost text-xs">

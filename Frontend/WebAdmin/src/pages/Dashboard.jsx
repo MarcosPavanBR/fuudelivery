@@ -1,24 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { FiUsers, FiShoppingBag, FiTruck, FiDollarSign, FiTrendingUp, FiActivity, FiHome, FiMapPin, FiClock } from "react-icons/fi";
+import { FiUsers, FiShoppingBag, FiTruck, FiActivity, FiHome } from "react-icons/fi";
 import api from "../services/api";
+import { normalizeOrder, statusInfo, money, isToday } from "../helpers/orders";
 
-const statCards = [
-  { label: "Restaurantes Ativos", value: "0", icon: FiHome, color: "#DC2626", bg: "#FEF2F2" },
-  { label: "Total de Usuários", value: "0", icon: FiUsers, color: "#F59E0B", bg: "#FFFBEB" },
-  { label: "Pedidos Hoje", value: "0", icon: FiShoppingBag, color: "#10B981", bg: "#ECFDF5" },
-  { label: "Entregadores Online", value: "0", icon: FiTruck, color: "#3B82F6", bg: "#DBEAFE" },
-];
 
-const deliveryStatusColors = {
-  pending: { bg: "#FEF3C7", text: "#B45309", label: "Pendente" },
-  approved: { bg: "#DBEAFE", text: "#1D4ED8", label: "Aprovado" },
-  preparing: { bg: "#FEF3C7", text: "#B45309", label: "Preparando" },
-  ready: { bg: "#DBEAFE", text: "#1D4ED8", label: "Pronto" },
-  delivering: { bg: "#FEF3C7", text: "#B45309", label: "Em Rota" },
-  delivered: { bg: "#ECFDF5", text: "#047857", label: "Entregue" },
-  cancelled: { bg: "#FEE2E2", text: "#B91C1C", label: "Cancelado" },
-};
 
 export default function Dashboard() {
   const [stats, setStats] = useState({ restaurants: 0, users: 0, todayOrders: 0, onlineDrivers: 0 });
@@ -31,17 +17,19 @@ export default function Dashboard() {
 
   const loadDashboard = async () => {
     try {
-      const [establishments, users, orders, drivers] = await Promise.all([
+      // allSettled: uma rota fora do ar não zera o painel inteiro.
+      const [establishments, users, orders, drivers] = (await Promise.allSettled([
         api.get("/establishments"),
         api.get("/users"),
         api.get("/orders/all"),
         api.get("/delivery-man"),
-      ]);
+      ])).map((r) => (r.status === "fulfilled" ? r.value : { data: [] }));
 
-      const today = new Date().toDateString();
-      const todayOrders = orders.data?.filter(o => new Date(o.createdAt).toDateString() === today) || [];
+      const allOrders = (Array.isArray(orders.data) ? orders.data : []).map(normalizeOrder);
+      const todayOrders = allOrders.filter((o) => isToday(o.createdAt));
 
-      const activeDrivers = drivers.data?.filter(d => d.status === "online" || d.status === "available") || [];
+      // Online = disponível ou em entrega (status do motor de despacho).
+      const activeDrivers = (Array.isArray(drivers.data) ? drivers.data : []).filter((d) => d.status === "available" || d.status === "busy");
 
       setStats({
         restaurants: establishments.data?.length || 0,
@@ -50,14 +38,7 @@ export default function Dashboard() {
         onlineDrivers: activeDrivers.length,
       });
 
-      const recent = orders.data?.slice(0, 10).map(order => ({
-        id: order._id || order.id,
-        customer: order.user?.nome || order.customer?.name || "Cliente",
-        establishment: order.establishment?.name || "Restaurante",
-        status: order.status || "pending",
-        total: order.total || 0,
-        createdAt: order.createdAt,
-      })) || [];
+      const recent = allOrders.slice(0, 10);
 
       setRecentOrders(recent);
     } catch (e) {
@@ -112,8 +93,8 @@ export default function Dashboard() {
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
           {[
-            { label: "Restaurantes Ativos", value: stats.restaurants, IconComp: FiHome, color: "#DC2626", bg: "#FEF2F2", accent: "linear-gradient(135deg, #DC2626, #FF6B35)" },
-            { label: "Total de Usuarios", value: stats.users, IconComp: FiUsers, color: "#F59E0B", bg: "#FFFBEB", accent: "linear-gradient(135deg, #F59E0B, #FBBF24)" },
+            { label: "Restaurantes Abertos", value: stats.restaurants, IconComp: FiHome, color: "#DC2626", bg: "#FEF2F2", accent: "linear-gradient(135deg, #DC2626, #FF6B35)" },
+            { label: "Total de Usuários", value: stats.users, IconComp: FiUsers, color: "#F59E0B", bg: "#FFFBEB", accent: "linear-gradient(135deg, #F59E0B, #FBBF24)" },
             { label: "Pedidos Hoje", value: stats.todayOrders, IconComp: FiShoppingBag, color: "#10B981", bg: "#ECFDF5", accent: "linear-gradient(135deg, #10B981, #34D399)" },
             { label: "Entregadores Online", value: stats.onlineDrivers, IconComp: FiTruck, color: "#3B82F6", bg: "#DBEAFE", accent: "linear-gradient(135deg, #3B82F6, #60A5FA)" },
           ].map((stat, i) => (
@@ -144,7 +125,7 @@ export default function Dashboard() {
                 <th className="px-6 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Restaurante</th>
                 <th className="px-6 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                 <th className="px-6 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Total</th>
-                <th className="px-6 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Hora</th>
+                <th className="px-6 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Quando</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -176,22 +157,16 @@ export default function Dashboard() {
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600">{order.establishment}</td>
                     <td className="px-6 py-4">
-                      {(deliveryStatusColors[order.status] ? (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium"
-                          style={{ background: deliveryStatusColors[order.status].bg, color: deliveryStatusColors[order.status].text }}>
-                          {deliveryStatusColors[order.status].label}
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-                          {order.status}
-                        </span>
-                      ))}
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium"
+                        style={{ background: statusInfo(order.status).bg, color: statusInfo(order.status).text }}>
+                        {statusInfo(order.status).label}
+                      </span>
                     </td>
                     <td className="px-6 py-4 font-semibold text-gray-900">
-                      R$ {order.total?.toFixed(2) || "0,00"}
+                      {money(order.total)}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500">
-                      {order.createdAt ? new Date(order.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "-"}
+                      {order.createdAt ? new Date(order.createdAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "-"}
                     </td>
                   </tr>
                 )))}

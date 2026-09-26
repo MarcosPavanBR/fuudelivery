@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/carloshomar/fuudelivery/auth_api/app/models"
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 func ListAllDeliveryMen(c *fiber.Ctx) error {
@@ -30,8 +32,19 @@ func LoginDeliveryMan(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to parse request body"})
 	}
 
+	// E-mail vazio não pode casar: Where com struct ignora o campo vazio e
+	// devolvia o primeiro entregador da tabela. Senha vazia também nunca
+	// entra (contas antigas criadas pelo painel sem senha).
+	email := strings.TrimSpace(request.Email)
+	if email == "" || request.Password == "" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Incorrect credentials"})
+	}
 	var user models.DeliveryMan
-	if err := models.DB.Where(&models.DeliveryMan{Email: request.Email}).First(&user).Error; err != nil {
+	err := models.DB.Where("email = ?", email).First(&user).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		err = models.DB.Where("LOWER(email) = ?", strings.ToLower(email)).Order("id").First(&user).Error
+	}
+	if err != nil {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Incorrect credentials"})
 	}
 
@@ -57,10 +70,29 @@ func CreateDeliveryMan(c *fiber.Ctx) error {
 	if err := c.BodyParser(&request); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to parse request body"})
 	}
+	request.Name = strings.TrimSpace(request.Name)
+	request.Email = strings.ToLower(strings.TrimSpace(request.Email))
+	if request.Name == "" || request.Email == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Nome e e-mail são obrigatórios"})
+	}
+	if len(request.Password) < 6 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "A senha precisa de pelo menos 6 caracteres"})
+	}
+	// A mesma função atende o cadastro público (/delivery-man/register) e o
+	// painel admin (/delivery-man). Status, zona e limite de pedidos só o
+	// admin define: pelo cadastro público o entregador entrava já
+	// "available" na fila de despacho.
+	if role, rErr := middlewares.GetUserRoleFromToken(c); rErr != nil || role != "admin" {
+		request.Status, request.ZoneID, request.MaxOrders = "", nil, 0
+	}
+	if request.Status != "" && !validCourierStatus(request.Status) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Status inválido: available, busy ou offline"})
+	}
 
-	var existingUser models.DeliveryMan
-	if err := models.DB.Where(&models.DeliveryMan{Email: request.Email}).First(&existingUser).Error; err == nil {
-		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Email already exists"})
+	var dup int64
+	models.DB.Model(&models.DeliveryMan{}).Where("LOWER(email) = ?", request.Email).Count(&dup)
+	if dup > 0 {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Este e-mail já está cadastrado"})
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(request.Password), bcrypt.DefaultCost)
@@ -142,6 +174,9 @@ func UpdateDeliveryMan(c *fiber.Ctx) error {
 		updates["phone"] = request.Phone
 	}
 	if request.Status != "" {
+		if !validCourierStatus(request.Status) {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Status inválido: available, busy ou offline"})
+		}
 		updates["status"] = request.Status
 	}
 	if request.MaxOrders > 0 {
@@ -170,6 +205,17 @@ func UpdateDeliveryMan(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"message": "Delivery man updated successfully", "id": deliveryMan.ID})
+}
+
+// validCourierStatus: os valores que o motor de despacho entende
+// (models.DeliveryMan.Status). O painel mandava "online"/"on_delivery", que
+// o despacho não reconhece — o entregador sumia da fila.
+func validCourierStatus(s string) bool {
+	switch s {
+	case "available", "busy", "offline":
+		return true
+	}
+	return false
 }
 
 // DeleteDeliveryMan remove um entregador (DELETE /delivery-man/:id). Admin.

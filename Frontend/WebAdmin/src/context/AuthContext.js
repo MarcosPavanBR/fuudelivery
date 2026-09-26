@@ -43,8 +43,11 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  // Atualiza o usuário da sessão depois de editar o perfil (nome/foto no topo).
+  const updateUser = (patch) => setUser((u) => (u ? { ...u, ...patch } : u));
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

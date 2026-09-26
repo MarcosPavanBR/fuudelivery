@@ -26,6 +26,10 @@ const RegisterScreen = ({ setRegister }: any) => {
       Alert.alert("", "Preencha todos os campos para se cadastrar.");
       return;
     }
+    if (password.length < 6) {
+      Alert.alert("", "A senha precisa de pelo menos 6 caracteres.");
+      return;
+    }
     setLoad(true);
     try {
       await register(email, password, name, phone);

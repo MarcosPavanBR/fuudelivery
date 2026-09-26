@@ -134,6 +134,7 @@ func CreateUserAdmin(c *fiber.Ctx) error {
 	var request struct {
 		Name            string `json:"name"`
 		Email           string `json:"email"`
+		Phone           string `json:"phone"`
 		Password        string `json:"password"`
 		Role            string `json:"role"`
 		Status          string `json:"status"`
@@ -142,17 +143,32 @@ func CreateUserAdmin(c *fiber.Ctx) error {
 	if err := c.BodyParser(&request); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to parse request body"})
 	}
+	request.Name = strings.TrimSpace(request.Name)
+	request.Email = strings.ToLower(strings.TrimSpace(request.Email))
 	if request.Name == "" || request.Email == "" || request.Password == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "name, email e password sao obrigatorios"})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Nome, e-mail e senha são obrigatórios"})
 	}
 	if len(request.Password) < 6 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Password must be at least 6 characters"})
-	}
-	if request.Role == "" {
-		request.Role = "client"
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "A senha precisa de pelo menos 6 caracteres"})
 	}
 	if request.Status == "" {
 		request.Status = "active"
+	}
+
+	sqlDB, err := models.DB.DB()
+	if err != nil || sqlDB == nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Database not available"})
+	}
+	roleVal, ok := adminRoleValue(sqlDB, request.Role)
+	if !ok {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Papel inválido: use admin ou restaurant (clientes e entregadores têm cadastro próprio)"})
+	}
+	if request.EstablishmentID != 0 {
+		var n int64
+		models.DB.Model(&models.Establishment{}).Where("id = ?", request.EstablishmentID).Count(&n)
+		if n == 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Estabelecimento não encontrado"})
+		}
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(request.Password), bcrypt.DefaultCost)
@@ -160,32 +176,62 @@ func CreateUserAdmin(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to hash password"})
 	}
 
-	var userID uint
-	if err := models.DB.Exec("CREATE SEQUENCE IF NOT EXISTS users_id_seq OWNED BY users.id").Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	// SQL cru pelo mesmo caminho do cadastro (schema_compat.go): o Create do
+	// GORM não preenche "createdAt"/"updatedAt" nem conhece o enum "Role" do
+	// banco de produção — criar usuário pelo painel falhava lá.
+	tx, err := sqlDB.Begin()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to start transaction"})
 	}
-	if err := models.DB.Raw("SELECT nextval('users_id_seq')").Scan(&userID).Error; err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+	defer tx.Rollback() //nolint:errcheck // no-op depois do Commit
+
+	// Nem todo banco tem o índice único de e-mail (o AutoMigrate não cria):
+	// confere antes, senão o login passa a escolher entre duas contas.
+	var dup int
+	if err := tx.QueryRow("SELECT COUNT(*) FROM users WHERE LOWER(email) = $1", request.Email).Scan(&dup); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create user"})
+	}
+	if dup > 0 {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Este e-mail já está cadastrado"})
 	}
 
-	user := models.User{
-		ID:              userID,
-		Name:            request.Name,
-		Email:           request.Email,
-		Password:        string(hashedPassword),
-		Role:            request.Role,
-		Status:          request.Status,
-		EstablishmentID: request.EstablishmentID,
+	var userID uint
+	tx.Exec("CREATE SEQUENCE IF NOT EXISTS users_id_seq OWNED BY users.id")
+	if err := tx.QueryRow("SELECT nextval('users_id_seq')").Scan(&userID); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create user"})
 	}
-	if err := models.DB.Create(&user).Error; err != nil {
+	if _, err := tx.Exec(insertUserSQL(tx, true), userID, request.Name, request.Email, string(hashedPassword), roleVal, request.Phone); err != nil {
 		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
-			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Email already registered"})
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Este e-mail já está cadastrado"})
 		}
+		log.Printf("[ADMIN] criar usuário: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create user"})
+	}
+	if _, err := tx.Exec("UPDATE users SET status = $1, establishment_id = $2 WHERE id = $3", request.Status, request.EstablishmentID, userID); err != nil {
+		log.Printf("[ADMIN] status/loja do usuário: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create user"})
+	}
+	if err := tx.Commit(); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create user"})
 	}
 
-	request.Password = ""
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"user": request, "id": user.ID})
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"id": userID, "user": fiber.Map{
+		"id": userID, "name": request.Name, "email": request.Email, "role": roleVal,
+		"status": request.Status, "establishment_id": request.EstablishmentID,
+	}})
+}
+
+// adminRoleValue traduz o papel escolhido no painel para o valor gravado em
+// users.role. A tabela só guarda admin e equipe de loja; o papel de loja vira
+// o rótulo do enum de produção (userRoleValue). "" = loja.
+func adminRoleValue(q rowQueryer, role string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(role)) {
+	case "admin":
+		return "admin", true
+	case "", "restaurant", "user":
+		return userRoleValue(q), true
+	}
+	return "", false
 }
 
 func ListAllUsers(c *fiber.Ctx) error {
@@ -212,10 +258,8 @@ func Login(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to parse request body"})
 	}
 
-	var user models.User
-	if err := models.DB.Where(&models.User{
-		Email: request.Email,
-	}).First(&user).Error; err != nil {
+	user, err := findUserByLoginEmail(request.Email)
+	if err != nil {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Incorrect credentials"})
 	}
 
@@ -300,13 +344,14 @@ func UpdateUser(c *fiber.Ctx) error {
 	}
 
 	var request struct {
-		Name            string `json:"name"`
-		Email           string `json:"email"`
-		Phone           string `json:"phone"`
-		AvatarURL       string `json:"avatar_url"`
-		Role            string `json:"role"`
-		Status          string `json:"status"`
-		EstablishmentID uint   `json:"establishment_id"`
+		Name            string  `json:"name"`
+		Email           string  `json:"email"`
+		Phone           string  `json:"phone"`
+		AvatarURL       *string `json:"avatar_url"` // "" remove a foto
+		Password        string  `json:"password"`   // só admin (redefinir senha)
+		Role            string  `json:"role"`
+		Status          string  `json:"status"`
+		EstablishmentID uint    `json:"establishment_id"`
 	}
 	if err := c.BodyParser(&request); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to parse request body"})
@@ -334,13 +379,35 @@ func UpdateUser(c *fiber.Ctx) error {
 	if request.Phone != "" {
 		updates["phone"] = request.Phone
 	}
-	if request.AvatarURL != "" {
-		updates["avatar_url"] = request.AvatarURL
+	if request.AvatarURL != nil {
+		updates["avatar_url"] = *request.AvatarURL
 	}
-	// Somente admin altera role, status e vinculo de estabelecimento.
+	// Somente admin altera role, status, senha e vinculo de estabelecimento.
 	if isAdmin {
 		if request.Role != "" {
-			updates["role"] = request.Role
+			sqlDB, dbErr := models.DB.DB()
+			if dbErr != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Database not available"})
+			}
+			roleVal, ok := adminRoleValue(sqlDB, request.Role)
+			if !ok {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Papel inválido: use admin ou restaurant"})
+			}
+			// Rebaixar o último admin trancaria todo mundo fora do painel.
+			if user.Role == "admin" && roleVal != "admin" && countAdmins() <= 1 {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Este é o único administrador; crie outro antes de mudar o papel dele"})
+			}
+			updates["role"] = roleVal
+		}
+		if request.Password != "" {
+			if len(request.Password) < 6 {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "A senha precisa de pelo menos 6 caracteres"})
+			}
+			hash, hErr := bcrypt.GenerateFromPassword([]byte(request.Password), bcrypt.DefaultCost)
+			if hErr != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to hash password"})
+			}
+			updates["password"] = string(hash)
 		}
 		if request.Status != "" {
 			updates["status"] = request.Status
@@ -356,6 +423,10 @@ func UpdateUser(c *fiber.Ctx) error {
 
 	if err := models.DB.Model(&user).Updates(updates).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update user"})
+	}
+	// Senha redefinida pelo admin: derruba as sessões abertas com a antiga.
+	if _, changed := updates["password"]; changed {
+		models.DB.Model(&models.RefreshToken{}).Where("user_id = ? AND revoked = false", user.ID).Update("revoked", true)
 	}
 
 	return c.JSON(fiber.Map{"message": "User updated successfully", "id": user.ID})
@@ -442,11 +513,39 @@ func DeleteUser(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
 	}
 
+	if user.Role == "admin" && countAdmins() <= 1 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Não é possível excluir o único administrador"})
+	}
+
 	if err := models.DB.Delete(&user).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to delete user"})
 	}
 
 	return c.JSON(fiber.Map{"message": "Account deleted successfully"})
+}
+
+// findUserByLoginEmail acha a conta do login. O teclado do celular põe a
+// primeira letra em maiúscula ("Loja@...") e o login falhava; o e-mail exato
+// vem primeiro para não trocar de conta onde houver duas que só diferem na
+// caixa. E-mail vazio nunca casa (Where com struct ignorava o campo vazio e
+// devolvia o primeiro usuário da tabela).
+func findUserByLoginEmail(email string) (models.User, error) {
+	var user models.User
+	email = strings.TrimSpace(email)
+	if email == "" {
+		return user, gorm.ErrRecordNotFound
+	}
+	err := models.DB.Where("email = ?", email).First(&user).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		err = models.DB.Where("LOWER(email) = ?", strings.ToLower(email)).Order("id").First(&user).Error
+	}
+	return user, err
+}
+
+func countAdmins() int64 {
+	var n int64
+	models.DB.Model(&models.User{}).Where("role = ?", "admin").Count(&n)
+	return n
 }
 
 // BootstrapAdmin cria o primeiro admin (instalação nova) OU promove um usuário

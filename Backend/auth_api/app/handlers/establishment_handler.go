@@ -149,6 +149,9 @@ func CreateEstablishment(c *fiber.Ctx) error {
 		MinOrder     float64 `json:"min_order"`
 		DeliveryTime int     `json:"delivery_time"`
 		ZoneID       *uint   `json:"zone_id,omitempty"`
+		// Campos com o nome do modelo (painel admin).
+		Description         string   `json:"description"`
+		MaxDistanceDelivery *float64 `json:"max_distance_delivery"`
 	}
 
 	if err := c.BodyParser(&req); err != nil {
@@ -174,10 +177,13 @@ func CreateEstablishment(c *fiber.Ctx) error {
 	if req.DeliveryTime > 0 {
 		maxDist = float64(req.DeliveryTime) / 5.0
 	}
+	if req.MaxDistanceDelivery != nil && *req.MaxDistanceDelivery > 0 {
+		maxDist = *req.MaxDistanceDelivery
+	}
 
 	establishment := models.Establishment{
 		Name:                req.Name,
-		Description:         "",
+		Description:         req.Description,
 		Image:               "",
 		PrimaryColor:        "#EA1D2C",
 		SecondaryColor:      "#FFFFFF",
@@ -439,4 +445,53 @@ func DeleteEstablishment(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"message": "Establishment deleted successfully"})
+}
+
+// AdminEstablishment é a linha da tela de estabelecimentos do painel admin:
+// o estabelecimento inteiro (inclusive os fechados, que GET /establishments —
+// a vitrine — esconde) e o contato do responsável, que mora em users.
+type AdminEstablishment struct {
+	models.Establishment
+	AcceptingOrders bool   `json:"accepting_orders"`
+	OwnerName       string `json:"owner_name"`
+	OwnerEmail      string `json:"owner_email"`
+	OwnerPhone      string `json:"owner_phone"`
+}
+
+// ListEstablishmentsAdmin — GET /admin/establishments (adminRequired).
+func ListEstablishmentsAdmin(c *fiber.Ctx) error {
+	var ests []models.Establishment
+	if err := models.DB.Order("id asc").Find(&ests).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to list establishments"})
+	}
+
+	type owner struct {
+		EstablishmentID uint
+		Name            string
+		Email           string
+		Phone           *string
+	}
+	var owners []owner
+	// Um responsável por loja: o usuário mais antigo vinculado a ela.
+	if err := models.DB.Raw(`SELECT DISTINCT ON (establishment_id) establishment_id, name, email, phone
+		FROM users WHERE establishment_id > 0 ORDER BY establishment_id, id`).Scan(&owners).Error; err != nil {
+		log.Printf("[ADMIN] responsáveis das lojas: %v", err)
+	}
+	byEst := make(map[uint]owner, len(owners))
+	for _, o := range owners {
+		byEst[o.EstablishmentID] = o
+	}
+
+	out := make([]AdminEstablishment, 0, len(ests))
+	for _, e := range ests {
+		row := AdminEstablishment{Establishment: e, AcceptingOrders: e.OpenData != nil}
+		if o, ok := byEst[e.ID]; ok {
+			row.OwnerName, row.OwnerEmail = o.Name, o.Email
+			if o.Phone != nil {
+				row.OwnerPhone = *o.Phone
+			}
+		}
+		out = append(out, row)
+	}
+	return c.JSON(out)
 }

@@ -119,8 +119,8 @@ func SessionLogin(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Failed to parse request body"})
 	}
 
-	var user models.User
-	if err := models.DB.Where(&models.User{Email: request.Email}).First(&user).Error; err != nil {
+	user, err := findUserByLoginEmail(request.Email)
+	if err != nil {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Incorrect credentials"})
 	}
 

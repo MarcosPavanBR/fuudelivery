@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Outlet, NavLink, useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { FiMenu, FiX, FiHome, FiUsers, FiShoppingBag, FiTruck, FiCreditCard, FiSettings, FiLogOut, FiBarChart2, FiChevronLeft, FiKey, FiTag, FiMapPin, FiTrendingUp } from "react-icons/fi";
 
@@ -44,6 +44,16 @@ export default function Layout() {
   const logout = auth?.logout;
   const user = auth?.user;
   const navigate = useNavigate();
+  const location = useLocation();
+  const [query, setQuery] = useState("");
+
+  // No celular o menu é gaveta: fecha ao trocar de página.
+  useEffect(() => { setMobileMenuOpen(false); }, [location.pathname]);
+
+  // Busca do topo = atalho para as telas do painel.
+  const norm = (t) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const matches = query.trim() ? menuItems.filter((m) => norm(m.label).includes(norm(query.trim()))) : [];
+  const go = (path) => { setQuery(""); navigate(path); };
 
   const handleLogout = () => {
     if (logout) logout();
@@ -127,24 +137,20 @@ export default function Layout() {
         </nav>
 
         <div className={`border-t border-white/10 p-4 transition-all duration-300 ${!sidebarOpen ? "px-2" : ""}`}>
-          <div className={`flex items-center gap-3 rounded-xl p-2 ${sidebarOpen ? "hover:bg-white/10" : "justify-center"}`}>
+          <button onClick={handleLogout} title="Sair" className={`w-full flex items-center gap-3 rounded-xl p-2 text-left hover:bg-white/10 ${sidebarOpen ? "" : "justify-center"}`}>
             <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-fuu-red to-fuu-red-dark">
               <FiLogOut className="h-4 w-4 text-white" />
             </div>
-            {sidebarOpen && (
-              <button onClick={handleLogout} className="flex-1 text-left text-sm font-medium text-gray-300 hover:text-white transition-colors">
-                Sair
-              </button>
-            )}
-          </div>
+            {sidebarOpen && <span className="flex-1 text-sm font-medium text-gray-300">Sair</span>}
+          </button>
         </div>
       </aside>
 
       <div className={`flex-1 min-w-0 flex flex-col transition-all duration-300 overflow-hidden ${sidebarOpen ? "lg:ml-64" : "lg:ml-20"}`} style={{ maxWidth: '100%' }}>
-        <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/80 backdrop-blur-sm overflow-hidden">
+        <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/80 backdrop-blur-sm">
           <div className="flex items-center justify-between px-6 py-4">
             <div className="flex items-center gap-4">
-              <button onClick={() => setSidebarOpen(!sidebarOpen)} className="lg:hidden p-2 rounded-xl hover:bg-gray-100 transition-colors">
+              <button onClick={() => { setSidebarOpen(true); setMobileMenuOpen(true); }} className="lg:hidden p-2 rounded-xl hover:bg-gray-100 transition-colors" aria-label="Abrir menu">
                 <FiMenu className="h-6 w-6 text-gray-700" />
               </button>
               <button onClick={() => setSidebarOpen(!sidebarOpen)} className="hidden lg:flex p-2 rounded-xl hover:bg-gray-100 transition-colors">
@@ -153,19 +159,48 @@ export default function Layout() {
             </div>
             <div className="flex items-center gap-4 min-w-0">
               <div className="hidden md:block relative flex-shrink-0">
-                <input type="text" placeholder="Buscar..." className="w-56 pl-10 pr-4 py-2 bg-gray-100 border-none rounded-xl text-sm text-gray-700 placeholder-gray-400 focus:bg-white focus:ring-2 transition-all" style={{ outline: "none" }} />
+                <input
+                  type="text"
+                  placeholder="Ir para..."
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && matches[0]) go(matches[0].path);
+                    if (e.key === "Escape") setQuery("");
+                  }}
+                  onBlur={() => setTimeout(() => setQuery(""), 150)}
+                  className="w-56 pl-10 pr-4 py-2 bg-gray-100 border-none rounded-xl text-sm text-gray-700 placeholder-gray-400 focus:bg-white focus:ring-2 transition-all"
+                  style={{ outline: "none" }}
+                />
                 <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
+                {query.trim() && (
+                  <ul className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50">
+                    {matches.length === 0 ? (
+                      <li className="px-4 py-2 text-sm text-gray-400">Nenhuma tela encontrada</li>
+                    ) : matches.map((m) => (
+                      <li key={m.path}>
+                        <button type="button" onMouseDown={() => go(m.path)} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                          <SidebarIcon iconKey={m.iconKey} className="h-4 w-4 text-gray-400" />{m.label}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
               <div className="relative min-w-0">
-                <button className="flex items-center gap-2 p-2 rounded-xl hover:bg-gray-100 transition-colors min-w-0">
-                  <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}>
-                    <span className="text-white font-bold text-sm">{user?.name?.charAt(0) || "A"}</span>
+                <button onClick={() => navigate("/profile")} title="Meu perfil" className="flex items-center gap-2 p-2 rounded-xl hover:bg-gray-100 transition-colors min-w-0">
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}>
+                    {user?.avatar_url ? (
+                      <img src={user.avatar_url} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-white font-bold text-sm">{user?.name?.charAt(0)?.toUpperCase() || "A"}</span>
+                    )}
                   </div>
                   <div className="hidden sm:block text-left min-w-0">
                     <p className="text-sm font-semibold text-gray-900 truncate max-w-[220px]">{user?.name || "Admin"}</p>
-                    <p className="text-xs text-gray-500 truncate max-w-[220px]">{user?.establishment_name || "Sistema"}</p>
+                    <p className="text-xs text-gray-500 truncate max-w-[220px]">{user?.establishment_name || "Meu perfil"}</p>
                   </div>
                 </button>
               </div>

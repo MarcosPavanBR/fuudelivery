@@ -15,6 +15,7 @@ const PasswordResets = lazy(() => import("./pages/PasswordResets.jsx"));
 const Cupons = lazy(() => import("./pages/Cupons.jsx"));
 const Destaques = lazy(() => import("./pages/Destaques.jsx"));
 const Regioes = lazy(() => import("./pages/Regioes.jsx"));
+const ProfileSettings = lazy(() => import("./pages/ProfileSettings.jsx"));
 import Layout from "./components/Layout.jsx";
 import { FiLoader } from "react-icons/fi";
 import { ToastContainer } from "react-toastify";
@@ -98,6 +99,7 @@ function AppRoutes() {
         <Route path="/regioes" element={<Regioes />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/password-resets" element={<PasswordResets />} />
+        <Route path="/profile" element={<ProfileSettings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

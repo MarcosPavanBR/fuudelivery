@@ -4,7 +4,6 @@ import {
   getExtract,
   requestWithdraw,
   newIdempotencyKey,
-  getPaymentHealth,
 } from "../../services/payment.model";
 import {
   FaWallet,
@@ -79,10 +78,9 @@ export default function MinhaCarteira() {
       setLoading(true);
       setError(null);
 
-      const [walletData, extractData, health] = await Promise.all([
+      const [walletData, extractData] = await Promise.all([
         getWallet().catch(() => null),
-        getExtract(20, "").catch(() => ({ data: [] })),
-        getPaymentHealth().catch(() => ({ status: "offline" })),
+        getExtract(20, "").catch(() => null),
       ]);
 
       if (walletData) {
@@ -92,11 +90,11 @@ export default function MinhaCarteira() {
       setTransactions(extractData?.data || []);
       setCursor(extractData?.next_cursor || "");
       setHasMore(!!extractData?.next_cursor);
-      // /health do monolito responde "up" ou "degraded" (Redis fora) —
-      // ambos significam que a API de pagamentos está acessível.
-      setPaymentOnline(
-        health?.status === "up" || health?.status === "degraded"
-      );
+      // Online = a própria carteira respondeu. Antes olhava o /health geral,
+      // que vira 503 por qualquer dependência (Redis, gateway sem chave) e
+      // mostrava "não foi possível falar com o servidor de pagamentos" com a
+      // carteira carregada normalmente.
+      setPaymentOnline(!!walletData && !!extractData);
     } catch (err) {
       console.error("Erro ao carregar carteira:", err);
       setError(

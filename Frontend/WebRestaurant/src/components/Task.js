@@ -59,10 +59,10 @@ const Task = ({ task, index, onAction, now }) => {
           } ${snapshot.isDragging ? "shadow-modal scale-[1.02] rotate-1" : "shadow-card hover:shadow-card-hover"}`}
         >
           {/* Número, hora e tempo decorrido */}
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 mb-2">
             <span className="text-xs font-bold tracking-wider text-gray-400">{shortOrderId(task.id)}</span>
             <span
-              className={`inline-flex items-center gap-1 text-xs font-medium ${late ? "text-red-600" : "text-gray-500"}`}
+              className={`inline-flex items-center gap-1 text-xs font-medium whitespace-nowrap ${late ? "text-red-600" : "text-gray-500"}`}
               title={data.created_at ? new Date(data.created_at).toLocaleString("pt-BR") : ""}
             >
               <FiClock className="h-3 w-3" />
@@ -90,11 +90,11 @@ const Task = ({ task, index, onAction, now }) => {
           </div>
 
           {/* Pagamento e total */}
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
             <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
               {paymentLabel}
             </span>
-            <span className="text-lg font-bold text-gray-900">{helper.formatCurrency(orderTotal(data))}</span>
+            <span className="text-lg font-bold text-gray-900 whitespace-nowrap">{helper.formatCurrency(orderTotal(data))}</span>
           </div>
 
           {/* Código de retirada: o entregador informa este código ao retirar. */}
@@ -121,12 +121,15 @@ const Task = ({ task, index, onAction, now }) => {
           <button
             type="button"
             onClick={() => setShowItems(!showItems)}
-            className="w-full flex items-center justify-between p-2.5 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors text-sm"
+            className="w-full flex items-center justify-between gap-2 p-2.5 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors text-sm text-left"
           >
-            <span className="font-medium text-gray-700">
-              Itens do pedido ({itemsCount}){cart.some(itemNote) ? " · com observação" : ""}
+            <span className="min-w-0">
+              <span className="block font-medium text-gray-700">Itens ({itemsCount})</span>
+              {cart.some(itemNote) && (
+                <span className="mt-0.5 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800">com observação</span>
+              )}
             </span>
-            {showItems ? <FiChevronUp className="h-4 w-4 text-gray-500" /> : <FiChevronDown className="h-4 w-4 text-gray-500" />}
+            {showItems ? <FiChevronUp className="h-4 w-4 flex-shrink-0 text-gray-500" /> : <FiChevronDown className="h-4 w-4 flex-shrink-0 text-gray-500" />}
           </button>
           {showItems && (
             <div className="mt-2 space-y-1.5 animate-slide-up">

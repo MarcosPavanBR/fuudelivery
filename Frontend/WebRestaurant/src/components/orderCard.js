@@ -11,7 +11,10 @@ const pick = (obj, ...keys) => {
   return undefined;
 };
 
-export const itemName = (cartItem) => pick(cartItem?.item, "Name", "name") ?? "Item";
+// Pedidos gravados antes de o servidor preencher o item pelo cardápio podem
+// ter Name "" — aparecia uma linha sem nome em "Mais vendidos".
+export const itemName = (cartItem) =>
+  String(pick(cartItem?.item, "Name", "name") ?? "").trim() || "Item sem nome";
 // Observação do cliente no item ("sem cebola"). Só texto — o React escapa.
 export const itemNote = (cartItem) => String(cartItem?.note || "").trim();
 const itemPrice = (cartItem) => Number(pick(cartItem?.item, "Price", "price") ?? 0);

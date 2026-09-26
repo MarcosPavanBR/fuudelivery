@@ -12,7 +12,7 @@ const Column = ({ column, tasks, onAction, now }) => {
           background: column.background,
         }}
       >
-        <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+        <h3 className="text-sm font-bold text-white uppercase tracking-wider truncate" title={column.title}>
           {column.title}
         </h3>
         <span className="bg-white/20 text-white text-xs font-bold px-2.5 py-1 rounded-full">

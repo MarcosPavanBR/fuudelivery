@@ -21,7 +21,8 @@ export async function getDelivery(establishmentId) {
     );
     return data;
   } catch (e) {
-    console.error(e);
+    // 404 = loja ainda não configurou as taxas: não é erro.
+    if (e?.response?.status !== 404) console.error(e);
     return { fixedTaxa: 0, perKm: 0 };
   }
 }

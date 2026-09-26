@@ -60,8 +60,8 @@ export default {
   comissao_plataforma: "Comissão da Plataforma",
   comissao_desc:
     "Essa é a taxa que a FuuDelivery cobra em cada pedido — sem mensalidade, sem taxa de adesão.",
-  taxa_atual_plataforma: "Taxa atual da plataforma",
-  sua_parte_pedido: "Sua parte por pedido",
+  taxa_atual_plataforma: "Comissão da plataforma",
+  sua_parte_pedido: "Você recebe",
   comissao_sem_zona:
     "Sua região ainda não tem uma faixa de comissão configurada — está sendo aplicada a taxa padrão.",
   comissao_no_target: "Você já está na taxa final para esta região.",

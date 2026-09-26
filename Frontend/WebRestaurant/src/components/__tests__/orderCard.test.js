@@ -142,3 +142,11 @@ describe("formatPhone", () => {
     expect(formatPhone(undefined)).toBe("");
   });
 });
+
+describe("itemName", () => {
+  it("nome vazio de pedido antigo não vira linha em branco", () => {
+    expect(itemName({ item: { Name: "" } })).toBe("Item sem nome");
+    expect(itemName({ item: { name: "Pizza" } })).toBe("Pizza");
+    expect(itemName({})).toBe("Item sem nome");
+  });
+});

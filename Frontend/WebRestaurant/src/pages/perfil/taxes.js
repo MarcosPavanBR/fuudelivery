@@ -125,20 +125,32 @@ function Taxes() {
               </div>
             ) : (
               <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+            {/* Repasse real (payment_api services/split_calculator.go): as
+                porcentagens incidem sobre o TOTAL pago (com o frete). A loja
+                fica com a parte dela, a plataforma com a comissão, e o que
+                sobra paga a entrega — sobra de novo vai para a plataforma;
+                frete maior que a sobra sai da parte da loja. Mostrar só "5%"
+                e "85%" fazia parecer que 10% sumiam. */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-3">
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
-                  {Texts.taxa_atual_plataforma}
-                </label>
+                <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">{Texts.sua_parte_pedido}</label>
+                <p className="text-2xl font-bold text-green-700">{zoneFee.current_establishment_pct}%</p>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">{Texts.taxa_atual_plataforma}</label>
                 <p className="text-2xl font-bold text-gray-900">{zoneFee.current_platform_pct}%</p>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
-                  {Texts.sua_parte_pedido}
-                </label>
-                <p className="text-2xl font-bold text-gray-900">{zoneFee.current_establishment_pct}%</p>
+                <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Entrega</label>
+                <p className="text-2xl font-bold text-gray-900">
+                  {Math.max(0, Math.round((100 - Number(zoneFee.current_establishment_pct || 0) - Number(zoneFee.current_platform_pct || 0)) * 100) / 100)}%
+                </p>
               </div>
             </div>
+            <p className="text-xs text-gray-500 mb-4">
+              Sobre o total pago pelo cliente em pedidos online. A parte "Entrega" paga o frete do entregador; se sobrar,
+              fica com a plataforma, e se o frete for maior, a diferença sai da sua parte.
+            </p>
 
             {!zoneFee.has_zone && (
               <p className="text-sm text-gray-500">{Texts.comissao_sem_zona}</p>

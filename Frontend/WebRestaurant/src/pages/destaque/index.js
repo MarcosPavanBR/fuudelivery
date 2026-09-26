@@ -21,6 +21,9 @@ function Destaque() {
       const data = await getOffer(d);
       setOffer(data);
       setStart((s) => s || data.next_available || data.today);
+      // Sem saldo para 1 dia, começa no PIX: antes abria em "Saldo da
+      // carteira (R$ 0,00)" com o botão travado.
+      if (!(Number(data.wallet_balance) >= Number(data.price_per_day || 0))) setPayWith((p) => (p === "wallet" ? "pix" : p));
     } catch (e) {
       toast.error("Não foi possível carregar o destaque.");
     }

@@ -3,6 +3,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 
 	authModels "github.com/carloshomar/fuudelivery/auth_api/app/models"
 	"github.com/carloshomar/fuudelivery/payment_api/app/models"
+	"github.com/carloshomar/fuudelivery/pkg/gateway"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
@@ -223,4 +225,112 @@ func TestSponsor_DisputaConcorrenteRespeitaVagas(t *testing.T) {
 	}
 	require.Equal(t, 3, ok, "codes=%v", codes)
 	require.Equal(t, 3, charged, "só quem levou a vaga paga")
+}
+
+// ── PIX automático ──
+
+func stubSponsorPix(t *testing.T, paid map[string]int64) *int {
+	t.Helper()
+	calls := 0
+	prevCreate, prevCheck := createSponsorPix, checkSponsorPix
+	createSponsorPix = func(_ context.Context, req *gateway.TransactionRequest) (*gateway.TransactionResponse, error) {
+		calls++
+		return &gateway.TransactionResponse{
+			GatewayID: "pix_" + req.Metadata["sponsor_booking"], PIXCopyPaste: "00020126BRCODE", PIXQRCodeBase64: "iVBOR",
+		}, nil
+	}
+	checkSponsorPix = func(id string) (bool, int64, error) {
+		c, ok := paid[id]
+		return ok, c, nil
+	}
+	t.Cleanup(func() { createSponsorPix, checkSponsorPix = prevCreate, prevCheck })
+	return &calls
+}
+
+func reload(t *testing.T, id uint) authModels.SponsorBooking {
+	t.Helper()
+	var b authModels.SponsorBooking
+	require.NoError(t, models.DB.First(&b, id).Error)
+	return b
+}
+
+// Reserva por PIX: sai com copia-e-cola; o pagamento confirmado liga o
+// destaque (uma vez), valor divergente não liga, e nada vai para payments
+// nem para a carteira da loja.
+func TestSponsorPix_PagamentoLigaODestaque(t *testing.T) {
+	app := setupSponsor(t)
+	stubSponsorPix(t, nil)
+	seedStore(t, 7, 0)
+
+	code, out := book(t, app, 7, dayFromToday(1), 2, "pix") // R$ 30
+	require.Equal(t, 201, code, "%v", out)
+	id := bookingID(out)
+	b := reload(t, id)
+	require.Equal(t, fmt.Sprintf("pix_%d", id), b.GatewayChargeID)
+	require.Equal(t, "00020126BRCODE", out["booking"].(map[string]interface{})["pix_copy_paste"])
+
+	require.True(t, settleSponsorCharge(b.GatewayChargeID, 2999, time.Now()), "cobrança de destaque é tratada aqui")
+	require.Equal(t, authModels.SponsorBookingPending, reload(t, id).Status, "valor divergente não liga")
+
+	for i := 0; i < 2; i++ {
+		require.True(t, settleSponsorCharge(b.GatewayChargeID, 3000, time.Now()))
+	}
+	require.Equal(t, authModels.SponsorBookingActive, reload(t, id).Status)
+
+	var payments int64
+	models.DB.Model(&models.Payment{}).Count(&payments)
+	require.Zero(t, payments, "PIX do destaque não pode virar pagamento de pedido")
+	var wallets int64
+	models.DB.Model(&models.WalletTxn{}).Count(&wallets)
+	require.Zero(t, wallets, "a loja não recebe crédito pelo próprio destaque")
+
+	require.False(t, settleSponsorCharge("cobranca_de_pedido", 3000, time.Now()), "cobrança que não é de destaque segue o fluxo de pedidos")
+}
+
+// Webhook perdido: a varredura consulta o gateway e liga.
+func TestSponsorPix_VarreduraCobreWebhookPerdido(t *testing.T) {
+	app := setupSponsor(t)
+	paid := map[string]int64{}
+	stubSponsorPix(t, paid)
+	seedStore(t, 7, 0)
+	_, out := book(t, app, 7, dayFromToday(1), 1, "pix")
+	id := bookingID(out)
+	paid[fmt.Sprintf("pix_%d", id)] = 1500
+	// Dentro da janela de graça não mexe (o webhook pode estar rodando).
+	ReconcileSponsorPixOnce(time.Now())
+	require.Equal(t, authModels.SponsorBookingPending, reload(t, id).Status)
+	ReconcileSponsorPixOnce(time.Now().Add(5 * time.Minute))
+	require.Equal(t, authModels.SponsorBookingActive, reload(t, id).Status)
+}
+
+// Pagou depois de a vaga expirar e ser vendida: não liga, fica registrado
+// como pago para o admin estornar. Gateway fora: reserva segue, sem PIX.
+func TestSponsorPix_PagoSemVagaEGatewayFora(t *testing.T) {
+	app := setupSponsor(t)
+	stubSponsorPix(t, nil)
+	for id := uint(1); id <= 4; id++ {
+		seedStore(t, id, 100)
+	}
+	start := dayFromToday(2)
+	_, out := book(t, app, 4, start, 1, "pix")
+	pixID := bookingID(out)
+	require.NoError(t, models.DB.Model(&authModels.SponsorBooking{}).Where("id = ?", pixID).
+		Update("expires_at", time.Now().Add(-time.Minute)).Error)
+	for id := uint(1); id <= 3; id++ {
+		code, o := book(t, app, id, start, 1, "wallet")
+		require.Equal(t, 201, code, "%v", o)
+	}
+	b := reload(t, pixID)
+	require.True(t, settleSponsorCharge(b.GatewayChargeID, 1500, time.Now()))
+	b = reload(t, pixID)
+	require.Equal(t, authModels.SponsorBookingPending, b.Status)
+	require.NotNil(t, b.PaidAt, "pagamento registrado para o admin estornar")
+
+	createSponsorPix = func(context.Context, *gateway.TransactionRequest) (*gateway.TransactionResponse, error) {
+		return nil, fmt.Errorf("gateway fora")
+	}
+	code, out := book(t, app, 1, dayFromToday(3), 1, "pix")
+	require.Equal(t, 201, code, "%v", out)
+	require.Contains(t, out["message"], "fora do ar")
+	require.Empty(t, reload(t, bookingID(out)).GatewayChargeID)
 }

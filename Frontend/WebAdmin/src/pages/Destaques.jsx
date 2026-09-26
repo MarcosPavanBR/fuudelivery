@@ -76,7 +76,8 @@ export default function Destaques() {
 
       <p className="text-sm text-gray-600">
         A loja reserva dias no topo do app (preço por dia em <code>SPONSOR_DAILY_PRICE</code>, vagas por dia em{" "}
-        <code>SPONSOR_SLOTS_PER_DAY</code>). Reserva por PIX segura a vaga por 24 h: confirme aqui quando o PIX cair.
+        <code>SPONSOR_SLOTS_PER_DAY</code>). O PIX é confirmado sozinho pelo webhook do gateway; confirme aqui só se o
+        PIX automático estiver fora do ar e o pagamento vier por outro meio.
       </p>
 
       <div className="rounded-xl border border-gray-100 bg-white">
@@ -112,7 +113,12 @@ export default function Destaques() {
                     <td className="px-4 py-3">{b.pay_with === "wallet" ? "Carteira" : "PIX"}</td>
                     <td className="px-4 py-3">
                       <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${st.cls}`}>{st.text}</span>
-                      {expired && <span className="ml-2 text-xs text-red-600">vaga liberada</span>}
+                      {expired && !b.paid_at && <span className="ml-2 text-xs text-red-600">vaga liberada</span>}
+                      {b.paid_at && b.status !== "active" && (
+                        <span className="ml-2 text-xs font-semibold text-red-600">
+                          PIX pago sem destaque ativo — estornar à loja
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       {b.status === "pending_payment" && (

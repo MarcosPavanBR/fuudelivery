@@ -14,6 +14,7 @@ function Destaque() {
   const [start, setStart] = useState("");
   const [payWith, setPayWith] = useState("wallet");
   const [sending, setSending] = useState(false);
+  const [showPix, setShowPix] = useState(null);
 
   const load = useCallback(async (d = days) => {
     try {
@@ -29,6 +30,15 @@ function Destaque() {
   useEffect(() => {
     load(days);
   }, [days]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Com PIX aguardando pagamento, atualiza sozinho: o destaque liga quando o
+  // webhook do gateway confirma, sem a loja precisar recarregar a página.
+  const waitingPix = (offer?.bookings || []).some((b) => b.status === "pending_payment" && b.pix_copy_paste);
+  useEffect(() => {
+    if (!waitingPix) return undefined;
+    const t = setInterval(() => load(days), 5000);
+    return () => clearInterval(t);
+  }, [waitingPix, days]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading || !offer) {
     return (
@@ -50,6 +60,7 @@ function Destaque() {
     try {
       const data = await book({ startDay: start, days, payWith });
       toast.success(data.message || "Destaque reservado!");
+      if (data.booking?.pix_copy_paste) setShowPix(data.booking.id);
       setStart("");
       await load(days);
     } catch (e) {
@@ -161,8 +172,8 @@ function Destaque() {
           )}
           {payWith === "pix" && (
             <p className="mt-3 text-xs text-gray-500">
-              A vaga fica guardada por 24 h. Pague por PIX e envie o comprovante ao suporte; o destaque liga quando o
-              pagamento for confirmado.
+              A vaga fica guardada por 24 h. Depois de reservar aparece o QR Code do PIX; o destaque liga sozinho
+              quando o pagamento cair.
             </p>
           )}
 
@@ -206,12 +217,46 @@ function Destaque() {
                     >
                       {STATUS_LABEL[b.status] || b.status}
                     </span>
+                    {b.status === "pending_payment" && b.pix_copy_paste && (
+                      <button type="button" className="btn btn-primary" onClick={() => setShowPix(showPix === b.id ? null : b.id)}>
+                        {showPix === b.id ? "Ocultar PIX" : "Pagar PIX"}
+                      </button>
+                    )}
                     {canCancel(b, offer.today) && (
                       <button type="button" className="btn btn-ghost" onClick={() => cancel(b)}>
                         <FiX className="h-4 w-4" /> Cancelar
                       </button>
                     )}
                   </div>
+                  {showPix === b.id && b.pix_copy_paste && (
+                    <div className="w-full mt-3 flex flex-col sm:flex-row items-center gap-4 rounded-lg bg-gray-50 p-4">
+                      {b.pix_qr_base64 && (
+                        <img
+                          src={`data:image/png;base64,${b.pix_qr_base64}`}
+                          alt="QR Code PIX"
+                          className="h-40 w-40 rounded bg-white p-2"
+                        />
+                      )}
+                      <div className="flex-1 w-full">
+                        <p className="text-sm font-semibold text-gray-900">
+                          PIX de {helper.formatCurrency(b.total)} — o destaque liga sozinho quando o pagamento cair.
+                        </p>
+                        <textarea readOnly className="input mt-2 h-20 text-xs font-mono" value={b.pix_copy_paste} />
+                        <button
+                          type="button"
+                          className="btn btn-ghost mt-2"
+                          onClick={() => {
+                            navigator.clipboard?.writeText(b.pix_copy_paste).then(
+                              () => toast.success("Código PIX copiado."),
+                              () => toast.error("Não foi possível copiar.")
+                            );
+                          }}
+                        >
+                          Copiar código
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>

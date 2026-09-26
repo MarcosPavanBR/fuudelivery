@@ -26,8 +26,9 @@ import (
 //   - Loja fechada ou fora do raio não ganha nada com o topo: a vitrine só
 //     destaca quem está aberto (o app do cliente ordena).
 //
-// Pagamento (payment_api): débito na carteira da loja, na hora, ou reserva
-// "aguardando pagamento" por 24 h, confirmada pelo admin quando o PIX cai.
+// Pagamento (payment_api): débito na carteira da loja, na hora, ou PIX com a
+// reserva "aguardando pagamento" por 24 h — o webhook do gateway liga o
+// destaque quando o PIX cai (o admin confirma à mão só se o gateway falhar).
 // A reserva pendente segura a vaga só enquanto não expira.
 //
 // Substitui o patrocínio mensal (SponsoredListing), que só o admin criava e
@@ -72,6 +73,12 @@ type SponsorBooking struct {
 	Status          string     `gorm:"size:20;not null;index" json:"status"`
 	PayWith         string     `gorm:"size:10;not null" json:"pay_with"`
 	PaidAt          *time.Time `json:"paid_at,omitempty"`
+	// PIX automático (payment_api/app/handlers/sponsor_pix.go): a cobrança
+	// fica ligada à reserva e o webhook liga o destaque quando cai. O id da
+	// cobrança não sai no JSON.
+	GatewayChargeID string     `gorm:"size:100;index" json:"-"`
+	PixCopyPaste    string     `gorm:"type:text" json:"pix_copy_paste,omitempty"`
+	PixQRBase64     string     `gorm:"type:text" json:"pix_qr_base64,omitempty"`
 	ExpiresAt       *time.Time `json:"expires_at,omitempty"` // só pendente
 	CancelledAt     *time.Time `json:"cancelled_at,omitempty"`
 	CreatedAt       time.Time  `json:"created_at"`

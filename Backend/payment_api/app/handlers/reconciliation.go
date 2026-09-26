@@ -194,9 +194,12 @@ func StartPaymentReconciliation(interval time.Duration) {
 	// Uma passada logo na subida: o restart pode ter sido exatamente o que
 	// interrompeu uma liquidação no meio.
 	ReconcilePaymentsOnce()
+	ReconcileSponsorPixOnce(time.Now())
 
 	ticker := time.NewTicker(interval)
 	for range ticker.C {
 		ReconcilePaymentsOnce()
+		// PIX do destaque com webhook perdido (sponsor_pix.go).
+		ReconcileSponsorPixOnce(time.Now())
 	}
 }

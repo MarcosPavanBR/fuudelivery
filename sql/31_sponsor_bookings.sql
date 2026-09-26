@@ -33,6 +33,12 @@ CREATE TABLE IF NOT EXISTS sponsor_bookings (
     updated_at       TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 
+-- PIX automático: cobrança ligada à reserva (o webhook liga o destaque).
+ALTER TABLE sponsor_bookings ADD COLUMN IF NOT EXISTS gateway_charge_id VARCHAR(100) NOT NULL DEFAULT '';
+ALTER TABLE sponsor_bookings ADD COLUMN IF NOT EXISTS pix_copy_paste TEXT NOT NULL DEFAULT '';
+ALTER TABLE sponsor_bookings ADD COLUMN IF NOT EXISTS pix_qr_base64 TEXT NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS idx_sponsor_bookings_gateway_charge_id ON sponsor_bookings (gateway_charge_id);
+
 CREATE INDEX IF NOT EXISTS idx_sponsor_bookings_establishment_id ON sponsor_bookings (establishment_id);
 CREATE INDEX IF NOT EXISTS idx_sponsor_bookings_zone_id ON sponsor_bookings (zone_id);
 CREATE INDEX IF NOT EXISTS idx_sponsor_bookings_start_day ON sponsor_bookings (start_day);

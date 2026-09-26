@@ -576,6 +576,11 @@ func HandlePaymentWebhook(c *fiber.Ctx) error {
 		// e marca o pagamento como REFUNDED.
 		processPaymentRefund(chargeID)
 	} else if abacatepayStatus == "CONFIRMED" {
+		// PIX do destaque patrocinado: não é pedido — liga a reserva e para
+		// aqui (o fluxo de pedidos creditaria a própria loja com o dinheiro).
+		if settleSponsorCharge(chargeID, chargeAmountCents(apiCharge), time.Now()) {
+			return c.Status(200).JSON(fiber.Map{"status": "processed", "message": "sponsorship payment"})
+		}
 		// Only confirm if not already refunded — prevents late CONFIRMED
 		// webhooks from re-crediting a refunded payment.
 		payment, pErr := findPaymentByAbacatePayID(chargeID)

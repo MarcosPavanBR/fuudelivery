@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"strconv"
 	"time"
@@ -222,7 +223,13 @@ func CreateSponsorBooking(c *fiber.Ctx) error {
 
 	resp := fiber.Map{"booking": booking}
 	if booking.Status == authModels.SponsorBookingPending {
-		resp["message"] = "Reserva guardada por 24 h. Pague por PIX e envie o comprovante ao suporte; o destaque liga quando o pagamento for confirmado."
+		if err := issueSponsorPix(c.Context(), &booking); err != nil {
+			log.Printf("[SPONSOR] reserva %d: PIX automático indisponível (%v) — confirmação manual", booking.ID, err)
+			resp["message"] = "Reserva guardada por 24 h. O PIX automático está fora do ar: pague por PIX e envie o comprovante ao suporte; o destaque liga quando o pagamento for confirmado."
+		} else {
+			resp["message"] = "Reserva guardada por 24 h. Pague o PIX abaixo: o destaque liga sozinho quando o pagamento cair."
+		}
+		resp["booking"] = booking
 	} else {
 		resp["message"] = "Destaque reservado e pago com o saldo da carteira."
 	}
@@ -312,6 +319,7 @@ func ListSponsorBookings(c *fiber.Ctx) error {
 	}
 	rows := make([]fiber.Map, 0, len(out))
 	for _, b := range out {
+		b.PixQRBase64 = "" // imagem pesada; o admin não precisa
 		rows = append(rows, fiber.Map{"booking": b, "establishment_name": names[b.EstablishmentID]})
 	}
 	return c.JSON(rows)
@@ -331,30 +339,16 @@ func ConfirmSponsorPayment(c *fiber.Ctx) error {
 		if err := tx.First(&booking, id).Error; err != nil {
 			return fiber.ErrNotFound
 		}
-		if booking.Status == authModels.SponsorBookingActive {
-			return nil // idempotente
-		}
-		if booking.Status != authModels.SponsorBookingPending {
+		if booking.Status == authModels.SponsorBookingCancelled {
 			return fiber.NewError(fiber.StatusConflict, "Reserva cancelada não pode ser confirmada")
 		}
-		if err := lockSponsorZone(tx, booking.ZoneID); err != nil {
-			return err
-		}
-		if booking.ExpiresAt != nil && !booking.ExpiresAt.After(now) {
-			days, _ := authModels.SponsorDayRange(booking.StartDay, booking.Days)
-			// A própria reserva expirada não segura vaga, então a contagem é
-			// só das outras.
-			if _, aErr := authModels.SponsorCheckAvailability(tx, booking.EstablishmentID, booking.ZoneID, days, now); aErr != nil {
+		if err := activateSponsorBooking(tx, &booking, now); err != nil {
+			if errors.Is(err, errSponsorSlotsGone) {
 				return fiber.NewError(fiber.StatusConflict, "A reserva expirou e as vagas desses dias já foram ocupadas")
 			}
+			return err
 		}
-		paid := now
-		booking.Status = authModels.SponsorBookingActive
-		booking.PaidAt = &paid
-		booking.ExpiresAt = nil
-		return tx.Model(&booking).Updates(map[string]interface{}{
-			"status": booking.Status, "paid_at": paid, "expires_at": nil,
-		}).Error
+		return nil
 	})
 	var fe *fiber.Error
 	if errors.As(txErr, &fe) {
